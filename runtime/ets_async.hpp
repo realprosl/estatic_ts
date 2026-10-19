@@ -1,0 +1,373 @@
+#pragma once
+
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <coroutine>
+#include <cstdlib>
+#include <deque>
+#include <fcntl.h>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <thread>
+#include <utility>
+#include <vector>
+#include <unistd.h>
+
+// El EventLoop se selecciona via ets_event_loop.hpp. V29.3: libuv
+// es el unico backend soportado (ver runtime/libuv/).
+#include "ets_event_loop.hpp"
+
+namespace ets {
+
+// CancellationToken, CancellationSource y WaitResult se declaran en
+// ets_event_loop_iface.hpp y vienen incluidos vía ets_event_loop.hpp.
+
+#ifndef ETS_RESULT_DEFINED
+#define ETS_RESULT_DEFINED 1
+template <typename T>
+class [[nodiscard]] Result {
+public:
+    static Result success(T value) { return Result{std::move(value), {}}; }
+    static Result failure(std::string error) { return Result{{}, std::move(error)}; }
+    bool isOk() const noexcept { return value_.has_value(); }
+    T& value() & noexcept { if (!value_) std::abort(); return *value_; }
+    const T& value() const & noexcept { if (!value_) std::abort(); return *value_; }
+    T&& value() && noexcept { if (!value_) std::abort(); return std::move(*value_); }
+    const std::string& error() const noexcept { return error_; }
+
+private:
+    Result(std::optional<T> value, std::string error) : value_(std::move(value)), error_(std::move(error)) {}
+    std::optional<T> value_;
+    std::string error_;
+};
+#endif
+
+template <typename T>
+Result<T> ok(T value) { return Result<T>::success(std::move(value)); }
+
+template <typename T>
+Result<T> err(std::string message) { return Result<T>::failure(std::move(message)); }
+
+// La clase EventLoop es un alias de LibuvEventLoop. Se declara en
+// runtime/ets_event_loop.hpp. La instancia thread_local defaultEventLoop
+// tambien vive en ese header.
+
+inline thread_local EventLoop defaultEventLoop;
+
+inline CancellationSource createCancellation() { return CancellationSource{}; }
+inline CancellationToken cancellationToken(const CancellationSource& source) { return source.token(); }
+inline void cancel(const CancellationSource& source) { source.cancel(); defaultEventLoop.notify(); }
+inline bool isCancelled(const CancellationToken& token) noexcept { return token.isCancelled(); }
+
+class BlockingExecutor {
+public:
+    BlockingExecutor() {
+        const auto detected = std::thread::hardware_concurrency();
+        const std::size_t count = detected == 0 ? 2 : std::max<std::size_t>(2, std::min<std::size_t>(4, detected));
+        workers_.reserve(count);
+        for (std::size_t index = 0; index < count; ++index) workers_.emplace_back([this] { work(); });
+    }
+    BlockingExecutor(const BlockingExecutor&) = delete;
+    BlockingExecutor& operator=(const BlockingExecutor&) = delete;
+    ~BlockingExecutor() {
+        {
+            std::lock_guard lock(mutex_);
+            stopping_ = true;
+        }
+        available_.notify_all();
+        for (auto& worker : workers_) if (worker.joinable()) worker.join();
+    }
+    void submit(std::function<void()> job) {
+        {
+            std::lock_guard lock(mutex_);
+            jobs_.push_back(std::move(job));
+        }
+        available_.notify_one();
+    }
+private:
+    void work() {
+        for (;;) {
+            std::function<void()> job;
+            {
+                std::unique_lock lock(mutex_);
+                available_.wait(lock, [this] { return stopping_ || !jobs_.empty(); });
+                if (stopping_ && jobs_.empty()) return;
+                job = std::move(jobs_.front());
+                jobs_.pop_front();
+            }
+            job();
+        }
+    }
+    std::mutex mutex_;
+    std::condition_variable available_;
+    std::deque<std::function<void()>> jobs_;
+    std::vector<std::thread> workers_;
+    bool stopping_ = false;
+};
+
+inline BlockingExecutor& blockingExecutor() {
+    static BlockingExecutor executor;
+    return executor;
+}
+
+template <typename T, typename Function>
+class BlockingAwaiter {
+public:
+    explicit BlockingAwaiter(Function function) : function_(std::move(function)), state_(std::make_shared<State>()) {}
+    bool await_ready() const noexcept { return false; }
+    void await_suspend(std::coroutine_handle<> handle) {
+        auto state = state_;
+        auto function = std::move(function_);
+        EventLoop* loop = &defaultEventLoop;
+        blockingExecutor().submit([state, function = std::move(function), loop, handle]() mutable {
+            state->result.emplace(function());
+            loop->post(handle);
+        });
+    }
+    T await_resume() noexcept { return std::move(*state_->result); }
+private:
+    struct State { std::optional<T> result; };
+    Function function_;
+    std::shared_ptr<State> state_;
+};
+
+template <typename Function>
+auto runBlocking(Function function) {
+    using T = decltype(function());
+    return BlockingAwaiter<T, Function>{std::move(function)};
+}
+
+struct FinalAwaiter {
+    bool await_ready() const noexcept { return false; }
+    template <typename Promise>
+    std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> current) const noexcept { return current.promise().continuation; }
+    void await_resume() const noexcept {}
+};
+
+template <typename T>
+class [[nodiscard]] Task {
+public:
+    struct promise_type {
+        std::optional<T> value;
+        std::coroutine_handle<> continuation = std::noop_coroutine();
+        Task get_return_object() noexcept { return Task{handle_type::from_promise(*this)}; }
+        std::suspend_always initial_suspend() const noexcept { return {}; }
+        FinalAwaiter final_suspend() const noexcept { return {}; }
+        template <typename U> void return_value(U&& returned) noexcept { value.emplace(std::forward<U>(returned)); }
+        [[noreturn]] void unhandled_exception() const noexcept { std::abort(); }
+    };
+    using handle_type = std::coroutine_handle<promise_type>;
+    explicit Task(handle_type handle) noexcept : handle_(handle) {}
+    Task(const Task&) = delete;
+    Task& operator=(const Task&) = delete;
+    Task(Task&& other) noexcept : handle_(std::exchange(other.handle_, {})) {}
+    ~Task() { if (handle_) handle_.destroy(); }
+    bool await_ready() const noexcept { return !handle_ || handle_.done(); }
+    std::coroutine_handle<> await_suspend(std::coroutine_handle<> continuation) const noexcept { handle_.promise().continuation = continuation; return handle_; }
+    T await_resume() const noexcept { return std::move(*handle_.promise().value); }
+    bool done() const noexcept { return !handle_ || handle_.done(); }
+    void start() const { if (handle_ && !handle_.done()) handle_.resume(); }
+    std::coroutine_handle<> release() noexcept { return std::exchange(handle_, {}); }
+private:
+    handle_type handle_{};
+};
+
+template <>
+class [[nodiscard]] Task<void> {
+public:
+    struct promise_type {
+        std::coroutine_handle<> continuation = std::noop_coroutine();
+        Task get_return_object() noexcept { return Task{handle_type::from_promise(*this)}; }
+        std::suspend_always initial_suspend() const noexcept { return {}; }
+        FinalAwaiter final_suspend() const noexcept { return {}; }
+        void return_void() const noexcept {}
+        [[noreturn]] void unhandled_exception() const noexcept { std::abort(); }
+    };
+    using handle_type = std::coroutine_handle<promise_type>;
+    explicit Task(handle_type handle) noexcept : handle_(handle) {}
+    Task(const Task&) = delete;
+    Task& operator=(const Task&) = delete;
+    Task(Task&& other) noexcept : handle_(std::exchange(other.handle_, {})) {}
+    ~Task() { if (handle_) handle_.destroy(); }
+    bool await_ready() const noexcept { return !handle_ || handle_.done(); }
+    std::coroutine_handle<> await_suspend(std::coroutine_handle<> continuation) const noexcept { handle_.promise().continuation = continuation; return handle_; }
+    void await_resume() const noexcept {}
+    bool done() const noexcept { return !handle_ || handle_.done(); }
+    void start() const { if (handle_ && !handle_.done()) handle_.resume(); }
+    std::coroutine_handle<> release() noexcept { return std::exchange(handle_, {}); }
+private:
+    handle_type handle_{};
+};
+
+template <typename T>
+T syncWait(Task<T>& task) { task.start(); while (!task.done()) defaultEventLoop.runOne(); return task.await_resume(); }
+template <typename T>
+T syncWait(Task<T>&& task) { task.start(); while (!task.done()) defaultEventLoop.runOne(); return task.await_resume(); }
+template <typename T>
+T syncWait(const Task<T>& task) { task.start(); while (!task.done()) defaultEventLoop.runOne(); return task.await_resume(); }
+inline void syncWait(Task<void>&& task) { task.start(); while (!task.done()) defaultEventLoop.runOne(); }
+inline void syncWait(Task<void>& task) { task.start(); while (!task.done()) defaultEventLoop.runOne(); }
+inline void syncWait(const Task<void>& task) { task.start(); while (!task.done()) defaultEventLoop.runOne(); }
+
+inline void spawn(Task<void>&& task) {
+    auto handle = task.release();
+    if (!handle) return;
+    defaultEventLoop.detach(handle);
+    handle.resume();
+}
+
+// `all(tasks...)`: espera a que todas las tareas terminen y devuelve un
+// `std::vector<T>` con los resultados en el mismo orden. Se implementa
+// como un awaiter que suspende hasta que la última tarea completa. Cada
+// tarea se lanza al event loop con `spawn`-like (start) y se espera
+// secuencialmente con `syncWait` (no paraleliza el orden, pero sí
+// respeta el modelo secuencial del dialecto para los ejemplos).
+template <typename T>
+std::vector<T> all(const std::vector<Task<T>>& tasks) {
+    std::vector<T> results;
+    results.reserve(tasks.size());
+    for (const auto& task : tasks) results.push_back(syncWait(task));
+    return results;
+}
+
+// `race(tasks...)`: espera a la primera tarea que complete y devuelve su
+// resultado. El EventLoop toma ownership de los frames perdedores para que
+// puedan terminar de forma segura; destruirlos al salir de `race` dejaria
+// handles colgantes en timers, polls o trabajos bloqueantes. Para `Task<void>`
+// se devuelve `void`. Sin throw (el dialecto no permite excepciones); un array
+// vacio aborta.
+template <typename T>
+T race(std::vector<Task<T>>& tasks) {
+    if (tasks.empty()) std::abort();
+    for (auto& t : tasks) t.start();
+    while (true) {
+        for (std::size_t index = 0; index < tasks.size(); ++index) {
+            if (!tasks[index].done()) continue;
+            T result = tasks[index].await_resume();
+            for (std::size_t loser = 0; loser < tasks.size(); ++loser) {
+                if (loser == index) continue;
+                auto handle = tasks[loser].release();
+                if (handle) defaultEventLoop.detach(handle);
+            }
+            return result;
+        }
+        defaultEventLoop.runOne();
+    }
+}
+template <>
+inline void race<void>(std::vector<Task<void>>& tasks) {
+    if (tasks.empty()) std::abort();
+    for (auto& t : tasks) t.start();
+    while (true) {
+        for (std::size_t index = 0; index < tasks.size(); ++index) {
+            if (!tasks[index].done()) continue;
+            tasks[index].await_resume();
+            for (std::size_t loser = 0; loser < tasks.size(); ++loser) {
+                if (loser == index) continue;
+                auto handle = tasks[loser].release();
+                if (handle) defaultEventLoop.detach(handle);
+            }
+            return;
+        }
+        defaultEventLoop.runOne();
+    }
+}
+
+template <typename T>
+T race(std::vector<Task<T>>&& tasks) {
+    return race<T>(tasks);
+}
+
+struct SleepAwaiter {
+    double milliseconds;
+    bool await_ready() const noexcept { return milliseconds <= 0; }
+    void await_suspend(std::coroutine_handle<> handle) const { defaultEventLoop.waitUntil(std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<long long>(milliseconds)), handle); }
+    void await_resume() const noexcept {}
+};
+
+inline Task<void> sleep(double milliseconds) { co_await SleepAwaiter{milliseconds}; }
+
+// V29.3: FdAwaiter / CancellableFdAwaiter (backend poll) eliminados.
+// Solo existen UvFdAwaiter / UvCancellableFdAwaiter (backend libuv),
+// declarados en runtime/ets_net_libuv_api.hpp y exportados por
+// runtime/ets_net.hpp.
+
+// V30.18: combinators async. `delay(ms)` es un alias de `sleep(ms)`.
+// Lo expongo bajo `ets::` namespace para que el codegen pueda
+// emitirlo como `::ets::delay(...)` (mismo patron que los demas
+// combinators).
+inline Task<void> delay(double ms) { return sleep(ms); }
+// Task que contiene el resultado de `all`/`race` respectivamente. Esto
+// permite encadenarlos con `await` igual que cualquier otra Task. La
+// Task resultante se puede usar tanto dentro de una funcion async
+// (vía `co_await`) como en un top-level await (vía `ets::syncWait`).
+template <typename T>
+Task<std::vector<T>> task_all(std::vector<Task<T>> tasks) {
+    co_return all(tasks);
+}
+
+template <typename T>
+Task<T> task_race(std::vector<Task<T>> tasks) {
+    co_return race(tasks);
+}
+
+// V30.17: `make_task_vector<T>(arr)` mueve los elementos de un
+// `std::vector<T>` (donde T es convertible a Task<U>) a un
+// `std::vector<Task<T>>`. Util para `Promise.all<T>` que toma un
+// array de tasks como argumento. El truco es construir el vector
+// destino con `reserve` y `push_back(std::move(x))` para no requerir
+// que `Task<U>` sea copiable.
+template <typename Container>
+auto make_task_vector(Container&& values) {
+    using SrcT = typename std::decay_t<Container>::value_type;
+    using DstT = std::decay_t<SrcT>;
+    std::vector<DstT> out;
+    out.reserve(values.size());
+    for (auto& v : values) out.push_back(std::move(v));
+    return out;
+}
+
+// V30.18: `timeout<T>(task, ms, sentinel)` espera a la task con un
+// timeout. Si no completa en `ms` milisegundos, devuelve `sentinel`.
+// Implementacion: race entre la task y una task "delay-then-sentinel"
+// que duerme `ms` y devuelve el sentinel. Como el race es cooperativo,
+// se ejecutan en paralelo: la task hace progreso via co_await a sus
+// awaitables, y la task de delay hace progreso via el SleepAwaiter.
+template <typename T>
+Task<T> timeout(Task<T> task, double ms, T sentinel) {
+    // Task de "delay-then-sentinel": duerme ms, luego devuelve sentinel.
+    auto delayTask = [](double d, T s) -> Task<T> {
+        co_await sleep(d);
+        co_return s;
+    };
+    if (task.done()) co_return co_await task;
+    std::vector<Task<T>> candidates;
+    candidates.reserve(2);
+    candidates.push_back(std::move(task));
+    candidates.push_back(delayTask(ms, sentinel));
+    co_return race<T>(candidates);
+}
+
+// V30.18: `retry<T>(fn, times, delayMs, sentinel)` reintenta la
+// task hasta `times` veces si el resultado es `sentinel`. `fn` es
+// un callable que produce una Task<T> cada vez (e.g. una lambda
+// `() => task()`). Esto es necesario porque Task<T> no es copiable
+// ni movible despues de iniciar; el lambda nos permite crear una
+// task fresca en cada intento. Si agota los intentos, devuelve
+// `sentinel`.
+template <typename T>
+Task<T> retry(std::function<Task<T>()> fn, int times, double delayMs, T sentinel) {
+    for (int i = 0; i < times; i++) {
+        T result = co_await timeout<T>(fn(), delayMs, sentinel);
+        if (!(result == sentinel)) co_return result;
+        if (i < times - 1) co_await sleep(delayMs);
+    }
+    co_return sentinel;
+}
+
+} // namespace ets

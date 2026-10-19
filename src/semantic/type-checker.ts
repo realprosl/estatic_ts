@@ -1,0 +1,4523 @@
+import { TERMINAL_METHODS } from "./terminal-methods.ts";
+import { isNumericName, promoteBinary, promoteUnary } from "../types/numeric-semantics.ts";
+import type { Program, Statement, Expression, TypeName, Parameter, TypeParameter, FunctionDeclaration, InterfaceDeclaration, InterfaceMethod, ClassDeclaration, ClassMethod, ArrowFunctionExpression, TypeAliasDeclaration, EnumDeclaration, UnionDeclaration, EnumMember, MatchExpression, LiteralExpression, BlockStatement } from "../ast/nodes.ts";
+import { DiagnosticError, withGeneratedSource, type Diagnostic } from "../core/diagnostic.ts";
+import { Scope, type FunctionSignature, type FunctionSymbol, type SymbolInfo } from "./symbols.ts";
+import { arrayElement, arrayType, fixedArrayElement, fixedArraySize, functionParameters, functionResult, functionType, genericArguments, genericBase, genericType, intersectionMembers, isArrayType, isFixedArrayType, isFunctionType, isGenericType, isIntersectionType, isMapType, isNumericType, isPrimitive, isPromiseType, isReadonlyType, isSetType, isTupleType, isTypeofType, isUnionType, numericBitWidth, numericKind, numericSign, promiseResult, readonlyInner, readonlyType, registerFixedArray, resolvedTypeToTypeName, toResolvedRuntimeType, toResolvedType, tupleElements, tupleType, typeMatches, typeofTarget, unionMembers } from "../types/type-system.ts";
+import { HELPER_METADATA } from "./helpers.ts";
+import { registerBuiltins } from "./builtin-registry.ts";
+import { exactIntegerLiteral, I64_MIN, I64_MAX, U64_MAX } from "../types/integer64.ts";
+import { ClosureReturnSafety, isClosureReturnCarrier } from "./closure-return-safety.ts";
+
+interface ClosureContext {
+  node: ArrowFunctionExpression;
+  parentScope: Scope;
+  parent?: ClosureContext;
+  captures: Map<string, SymbolInfo>;
+}
+
+// Tabla de métodos del built-in `fs` (estilo Node). Las versiones `*Sync`
+// devuelven `Result<T>` o `boolean`; las versiones sin sufijo son asíncronas y
+// devuelven `Promise<Result<T>>`. El runtime mapea cada llamada al overload
+// correspondiente de `readFile`/`writeFile`/.../`*Async`.
+const FILESYSTEM_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
+  readFileSync:   { params: ["string"], returnType: "Result<string>" },
+  writeFileSync:  { params: ["string", "string"], returnType: "Result<boolean>" },
+  appendFileSync: { params: ["string", "string"], returnType: "Result<boolean>" },
+  copyFileSync:   { params: ["string", "string"], returnType: "Result<boolean>" },
+  renameSync:     { params: ["string", "string"], returnType: "Result<boolean>" },
+  unlinkSync:     { params: ["string"], returnType: "Result<boolean>" },
+  existsSync:     { params: ["string"], returnType: "boolean" },
+  readFile:       { params: ["string"], returnType: "Promise<Result<string>>" },
+  writeFile:      { params: ["string", "string"], returnType: "Promise<Result<boolean>>" },
+  appendFile:     { params: ["string", "string"], returnType: "Promise<Result<boolean>>" },
+  copyFile:       { params: ["string", "string"], returnType: "Promise<Result<boolean>>" },
+  rename:         { params: ["string", "string"], returnType: "Promise<Result<boolean>>" },
+  unlink:         { params: ["string"], returnType: "Promise<Result<boolean>>" },
+};
+
+// Tabla de métodos del built-in `path`. Delega en `std::filesystem`. Las
+// funciones que en Node reciben rest args (`join`, `resolve`) aquí toman un
+// `string[]` para mantener tipos concretos.
+const PATH_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
+  dirname:    { params: ["string"], returnType: "string" },
+  basename:   { params: ["string"], returnType: "string" },
+  extname:    { params: ["string"], returnType: "string" },
+  isAbsolute: { params: ["string"], returnType: "boolean" },
+  normalize:  { params: ["string"], returnType: "string" },
+  join:       { params: ["string[]"], returnType: "string" },
+  resolve:    { params: ["string[]"], returnType: "string" },
+};
+
+// Tabla de métodos del built-in `process`. Mapea a `argument`, `argumentCount`,
+// `exitProcess` y `std::filesystem::current_path`.
+const PROCESS_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
+  argc: { params: [], returnType: "number" },
+  argv: { params: [], returnType: "string[]" },
+  cwd:  { params: [], returnType: "string" },
+  exit: { params: ["number"], returnType: "void" },
+};
+
+// Tabla de métodos del built-in `JSON`. `parse` (legacy) devuelve `string`
+// y solo maneja escalares JSON. `parseValue` (nuevo) devuelve `JsonValue`,
+// un tipo opaco (variant) que el usuario manipula con helpers globales
+// (jsonIsString, jsonAsString, jsonArrayGet, etc.). Ambos coexisten para
+// mantener compatibilidad: código existente con `JSON.parse(s): string`
+// sigue funcionando.
+const JSON_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
+  stringify: { params: ["string"], returnType: "string" },
+  stringifyNumber: { params: ["number"], returnType: "string" },
+  stringifyBool: { params: ["boolean"], returnType: "string" },
+  stringifyValue: { params: ["JsonValue"], returnType: "string" },
+  // `parse` legacy: devuelve `std::string` con la representación textual
+  // canónica del escalar JSON. Para datos estructurados, usar `parseValue`.
+  parse: { params: ["string"], returnType: "string" },
+  // `parseValue` nuevo: devuelve el árbol completo (recursivo).
+  parseValue: { params: ["string"], returnType: "JsonValue" },
+};
+
+// Funciones helper globales para manipular JsonValue. El dialecto no tiene
+// `Object`/`any`/`unknown`, así que se accede a campos vía funciones libres.
+// Todas devuelven tipos primitivos (string/number/boolean) excepto las que
+// devuelven JsonValue (array/object get).
+const JSON_HELPERS: Record<string, { params: TypeName[]; returnType: TypeName }> = Object.assign(Object.create(null), {
+  jsonIsString: { params: ["JsonValue"], returnType: "boolean" },
+  jsonIsNumber: { params: ["JsonValue"], returnType: "boolean" },
+  jsonIsBool: { params: ["JsonValue"], returnType: "boolean" },
+  jsonIsArray: { params: ["JsonValue"], returnType: "boolean" },
+  jsonIsObject: { params: ["JsonValue"], returnType: "boolean" },
+  jsonIsNull: { params: ["JsonValue"], returnType: "boolean" },
+  jsonAsString: { params: ["JsonValue"], returnType: "string" },
+  jsonAsNumber: { params: ["JsonValue"], returnType: "number" },
+  jsonAsBool: { params: ["JsonValue"], returnType: "boolean" },
+  jsonArrayLength: { params: ["JsonValue"], returnType: "number" },
+  jsonArrayGet: { params: ["JsonValue", "number"], returnType: "JsonValue" },
+  jsonObjectGet: { params: ["JsonValue", "string"], returnType: "JsonValue" },
+});
+
+// Helpers para filesystem (Issue #13). Exponen runtime/ets_file.hpp como
+// funciones globales del dialecto. Sin tipos ricos (Result<FileContent,
+// FileError>) — eso llega en V1 (tagged unions). Por ahora devuelven
+// primitivos: string/boolean.
+const FILE_HELPERS: Record<string, { minParams: number; paramTypes?: TypeName[]; returnType: TypeName }> = Object.assign(Object.create(null), {
+  fileRead:    { minParams: 1, paramTypes: ["string"],         returnType: "string"  },  // (path) -> string
+  fileWrite:   { minParams: 2, paramTypes: ["string", "string"], returnType: "boolean" },  // (path, content) -> boolean
+  fileAppend:  { minParams: 2, paramTypes: ["string", "string"], returnType: "boolean" },
+  fileExists:  { minParams: 1, paramTypes: ["string"],         returnType: "boolean" },
+  fileCopy:    { minParams: 2, paramTypes: ["string", "string"], returnType: "boolean" },
+  fileMove:    { minParams: 2, paramTypes: ["string", "string"], returnType: "boolean" },
+  fileRemove:  { minParams: 1, paramTypes: ["string"],         returnType: "boolean" },
+  // V26: factory de FileReader. Devuelve un reader (puntero raw en C++)
+  // que mantiene el descriptor abierto. Aborta con stderr+exit si el
+  // archivo no existe; para error handling explicito, hacer check con
+  // fileExists() antes.
+  openFileReader: { minParams: 1, paramTypes: ["string"],    returnType: "FileReader" },
+});
+
+// Helpers para networking (Issue #14). Wrappers síncronos sobre POSIX sockets
+// (runtime/ets_net_sync.hpp). Devuelven fd numéricos o string vacío en error.
+// V1 (tagged unions) reemplazará estos por `Result<TcpConn, NetError>`.
+const NET_HELPERS: Record<string, { minParams: number; paramTypes?: TypeName[]; returnType: TypeName }> = Object.assign(Object.create(null), {
+  tcpListen:        { minParams: 2, paramTypes: ["string", "number"], returnType: "number"  },  // (host, port) -> fd
+  tcpAccept:        { minParams: 1, paramTypes: ["number"],          returnType: "number"  },  // (listenerFd) -> clientFd
+  tcpConnect:       { minParams: 2, paramTypes: ["string", "number"], returnType: "number"  },  // (host, port) -> fd
+  tcpRead:          { minParams: 2, paramTypes: ["number", "number"], returnType: "string"  },  // (fd, maxBytes) -> data
+  tcpWrite:         { minParams: 2, paramTypes: ["number", "string"], returnType: "boolean" },  // (fd, data) -> ok
+  tcpClose:         { minParams: 1, paramTypes: ["number"],          returnType: "void"    },  // (fd)
+  // Helper de alto nivel: server en background + cliente en foreground.
+  // Usado por los tests E2E hasta que V1 introduzca tagged unions.
+  etsNetSyncEcho:   { minParams: 4, paramTypes: ["string", "number", "string", "number"], returnType: "string" },  // (host, port, request, maxBytes) -> response
+  etsNetSyncLarge:  { minParams: 3, paramTypes: ["string", "number", "number"], returnType: "string" },  // (host, port, payloadBytes) -> response
+});
+// Helpers para `Optional<T>`. El dialecto aún no soporta métodos sobre
+// tipos genéricos como `Optional<T>.some(...)`, así que se exponen como
+// funciones libres. Cada helper preserva el tipo genérico a través
+// de la firma del type-checker (que infiere del contexto).
+const OPTIONAL_HELPERS: Record<string, { minParams: number; returnsGeneric: boolean }> = Object.assign(Object.create(null), {
+  optionalSome: { minParams: 1, returnsGeneric: true },        // (T) → Optional<T>
+  optionalNone: { minParams: 0, returnsGeneric: true },        // <T>() → Optional<T>
+  optionalIsPresent: { minParams: 1, returnsGeneric: false },  // (Optional<T>) → boolean
+  optionalValueOr: { minParams: 2, returnsGeneric: false },    // (Optional<T>, T) → T
+  optionalMap: { minParams: 2, returnsGeneric: true },         // (Optional<T>, T→U) → Optional<U>
+  optionalAndThen: { minParams: 2, returnsGeneric: true },     // (Optional<T>, T→Optional<U>) → Optional<U>
+  optionalOrElse: { minParams: 2, returnsGeneric: true },      // (Optional<T>, Optional<T>) → Optional<T>
+});
+
+// Helpers sobre `Un<T>` (unique_ptr). Mismo patrón que OPTIONAL_HELPERS:
+// helpers globales para evitar `Un<T>.some(...)` que el dialecto no soporta
+// en genéricos. `unSome` y `unNone` requieren un `expected` contextual para
+// inferir T. `unIsSome` devuelve boolean; `unValue` devuelve T& (asume no vacío).
+const UN_HELPERS: Record<string, { minParams: number; returnsGeneric: boolean }> = Object.assign(Object.create(null), {
+  unSome: { minParams: 1, returnsGeneric: true },              // (T) → Un<T>
+  unNone: { minParams: 0, returnsGeneric: true },              // <T>() → Un<T>
+  unIsSome: { minParams: 1, returnsGeneric: false },           // (Un<T>) → boolean
+  unValue: { minParams: 1, returnsGeneric: false },            // (Un<T>) → T
+});
+
+// Helpers sobre `Rc<T>` (shared_ptr).
+const RC_HELPERS: Record<string, { minParams: number; returnsGeneric: boolean }> = Object.assign(Object.create(null), {
+  rcShare: { minParams: 1, returnsGeneric: true },             // (T) → Rc<T>
+  rcStrongCount: { minParams: 1, returnsGeneric: false },      // (Rc<T>) → number
+  rcValue: { minParams: 1, returnsGeneric: false },            // (Rc<T>) → T
+});
+
+// Helpers sobre `MutRef<T>` (referencia mutable) y `Mut<T>` (puntero crudo
+// mutable constante). Solo constructores; el dialecto no tiene métodos sobre
+// estos (la sintaxis `ptr.some()` no funciona para genéricos).
+// NOTA: desde Issue #3-mut-as-modifier, `Mut<T>` y `MutRef<T>` se
+// resuelven directamente a `T*` y `T&` en el codegen (sin envoltorios).
+// Los helpers `mutOf`, `mutFrom`, `mutValue`, `mutIsSome`, `mutRefOf`,
+// `mutRefFrom`, `mutRefValue` ya no existen — el user usa `&x` directamente.
+// Esta tabla queda vacía por compat histórica.
+const REF_HELPERS: Record<string, { minParams: number; returnsGeneric: boolean; returnsRef?: boolean }> = Object.assign(Object.create(null), {
+});
+
+// Helpers sobre `Task<T>[]` (Promise-like arrays). El dialecto expone
+// `all(tasks)` y `race(tasks)` que devuelven el T del array (o `T[]` para
+// `all`). Se modelan con un tipo contextual: el user declara `const x: T =
+// race([delay(1), delay(2)])` y el helper propaga `T` desde el array.
+const ASYNC_HELPERS: Record<string, { returnsElement: boolean; returnsArray: boolean }> = Object.assign(Object.create(null), {
+  all: { returnsElement: false, returnsArray: true },
+  race: { returnsElement: true, returnsArray: false },
+});
+
+// `sleep` y `spawn` ya están registradas en runtime como funciones top-level.
+const ASYNC_PRIMITIVE_HELPERS: Record<string, { params: TypeName[]; returnType: TypeName }> = Object.assign(Object.create(null), {
+  sleep: { params: ["number"], returnType: "Promise<void>" },
+  spawn: { params: ["Promise<void>"], returnType: "void" },
+});
+
+// Bloque E: tabla de métodos de `Math`. Todos reciben y devuelven `number`
+// (mapeado a `double` en C++). Las funciones que en JavaScript aceptan
+// número variable de argumentos (`Math.max(...args)`) se limitan a dos
+// argumentos aquí por la restricción del dialecto (variadics no uniformes).
+const MATH_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
+  floor: { params: ["number"], returnType: "number" },
+  ceil:  { params: ["number"], returnType: "number" },
+  round: { params: ["number"], returnType: "number" },
+  abs:   { params: ["number"], returnType: "number" },
+  sqrt:  { params: ["number"], returnType: "number" },
+  pow:   { params: ["number", "number"], returnType: "number" },
+  min:   { params: ["number", "number"], returnType: "number" },
+  max:   { params: ["number", "number"], returnType: "number" },
+  // V30.22.2: random() devuelve un numero en [0, 1). Se compila a
+  // `ets::random()` que envuelve `std::rand() / RAND_MAX` o usa el
+  // generador de C++11 <random>.
+  random: { params: [], returnType: "number" },
+};
+// V30.22.2: propiedades de `Math` (constantes). `PI` y `E` son las mas
+// comunes. Se accede como `Math.PI` (no `Math.PI()`) y el codegen
+// emite `ets::math_pi()` directamente.
+const MATH_PROPERTIES: Record<string, TypeName> = {
+  PI: "number",
+  E: "number",
+};
+
+// Bloque E: tabla de métodos de `Date`. La API es mínima: solo timestamps.
+// Fechas estructuradas (year/month/day getters, formatos) requieren tipos
+// compuestos que este dialecto evita por ahora.
+const DATE_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
+  now: { params: [], returnType: "number" },
+  utc: { params: ["number", "number", "number"], returnType: "number" },
+};
+
+// Tabla de métodos de `Map<K, V>`. Las firmas son plantillas que se materializan
+// sustituyendo `K`/`V` por los argumentos de tipo reales del objeto en cada llamada.
+// `get` devuelve `V | void` porque un valor ausente se representa como `void` en
+// este lenguaje (no hay `undefined`/`null`).
+const MAP_METHODS: Record<string, { params: (typeArgs: TypeName[]) => TypeName[]; returnType: (typeArgs: TypeName[]) => TypeName }> = {
+  get:     { params: ([K]) => [K],                                          returnType: ([, V]) => `${V} | void` },
+  set:     { params: ([K, V]) => [K, V],                                    returnType: () => "void" },
+  has:     { params: ([K]) => [K],                                          returnType: () => "boolean" },
+  delete:  { params: ([K]) => [K],                                          returnType: () => "boolean" },
+  size:    { params: () => [],                                              returnType: () => "number" },
+  clear:   { params: () => [],                                              returnType: () => "void" },
+  forEach: { params: ([K, V]) => [`(${V},${K})=>void`],                     returnType: () => "void" },
+};
+
+// Tabla de métodos de `Set<T>` con el mismo patrón. `forEach` recibe un callback
+// `(value)` ya que no hay par clave/valor.
+const SET_METHODS: Record<string, { params: (typeArgs: TypeName[]) => TypeName[]; returnType: (typeArgs: TypeName[]) => TypeName }> = {
+  add:     { params: ([T]) => [T],                                          returnType: () => "boolean" },
+  has:     { params: ([T]) => [T],                                          returnType: () => "boolean" },
+  delete:  { params: ([T]) => [T],                                          returnType: () => "boolean" },
+  size:    { params: () => [],                                              returnType: () => "number" },
+  clear:   { params: () => [],                                              returnType: () => "void" },
+  forEach: { params: ([T]) => [`(${T})=>void`],                             returnType: () => "void" },
+};
+
+// V7: tabla de métodos sobre `T[]` (arrays). `typeArgs = [T]` (elemento del
+// array). Para `map`/`reduce` se introduce un parámetro de tipo adicional `U`
+// (tipo de retorno o acumulador). El primer typeArgument declarado por el
+// usuario, si lo hay, lo propagamos al codegen vía `inferredCallTypeArguments`
+// para que la llamada C++ se materialice con los tipos correctos. Esto
+// habilita las cadenas `arr.filter(p).map(f).reduce(init, op)` que V7.1
+// fusionará en un único bucle.
+const ARRAY_METHODS: Record<string, { arity: number; paramKinds: ("array" | "fn" | "value")[]; returnType: (typeArgs: TypeName[]) => TypeName; userTypeArgument?: number; variadic?: boolean }> = {
+  filter: { arity: 1, paramKinds: ["fn"], returnType: ([T]) => `${T}[]` },
+  map:    { arity: 1, paramKinds: ["fn"], returnType: () => "void[]", userTypeArgument: 0 },
+  reduce: { arity: 2, paramKinds: ["value", "fn"], returnType: () => "void", userTypeArgument: 0 },
+  // Métodos añadidos en V11: predicados y extracción.
+  forEach: { arity: 1, paramKinds: ["fn"], returnType: () => "void" },
+  // V22-gap-#2: `push` añade un elemento al final del array (muta in-place).
+  // Devuelve `void` (estilo JS, aunque TS lo tipa como `number` opcional).
+  // El elemento es del mismo tipo que el array.
+  push:    { arity: 1, paramKinds: ["value"], returnType: () => "void" },
+  // V22-gap-#2: `length` es propiedad, no método. La manejamos aquí
+  // por compatibilidad — el codegen emitirá `obj.size()` en C++.
+  // Devuelve `number`.
+  // (Ver dispatch en cpp-generator para esta rama.)
+// V13: `find` devuelve `Optional<T>` (puede no haber resultado). El usuario
+// debe discriminar con `?.`, `match` o `value()` (que aborta si vacío).
+  find:    { arity: 1, paramKinds: ["fn"], returnType: ([T]) => `Optional<${T}>` },
+  some:    { arity: 1, paramKinds: ["fn"], returnType: () => "boolean" },
+  every:   { arity: 1, paramKinds: ["fn"], returnType: () => "boolean" },
+  // V14: métodos adicionales.
+  slice:   { arity: 2, paramKinds: ["value", "value"], returnType: ([T]) => `${T}[]` },
+  // `sort` muta in-place y devuelve el mismo array (estilo Array.prototype.sort).
+  sort:    { arity: 1, paramKinds: ["fn"], returnType: ([T]) => `${T}[]` },
+  // `flatMap` aplica una función que devuelve arrays y los concatena (1 nivel).
+  flatMap: { arity: 1, paramKinds: ["fn"], returnType: () => "void[]", userTypeArgument: 0 },
+  // `concat` une este array con N arrays adicionales y devuelve un nuevo array.
+  // Acepta aridad variable (1..N argumentos). El tipo de retorno es el
+  // mismo tipo de elemento que el receptor.
+  concat:  { arity: 1, paramKinds: ["value"], returnType: ([T]) => `${T}[]`, variadic: true },
+  // `includes` busca por igualdad.
+  includes: { arity: 1, paramKinds: ["value"], returnType: () => "boolean" },
+  // V30.13.2: `pop` elimina el último elemento del array (muta in-place).
+  // Devuelve `void` (estilo JS, aunque TS lo tipa como `T | undefined`).
+  pop:     { arity: 0, paramKinds: [], returnType: () => "void" },
+  // V30.24: `join(separator)` une los elementos del array en un string,
+  // separados por el separator. Solo valido para arrays de strings
+  // (`T = string`); el codegen emite un error claro si T no es string.
+  join:    { arity: 1, paramKinds: ["value"], returnType: () => "string" },
+};
+
+// V28: metodos de la API de string estilo TypeScript. El dialecto los
+// expone como llamadas tipo metodo (`s.charAt(i)`) y el codegen los
+// traduce 1:1 a `ets::string_*` (byte-level, ver runtime/ets_string.hpp).
+// `arity` es el numero de argumentos; el receptor `s` no cuenta.
+const STRING_METHODS: Record<string, { arity: number; paramTypes: TypeName[]; returnType: TypeName }> = {
+  charAt:        { arity: 1, paramTypes: ["number"],  returnType: "string" },
+  charCodeAt:    { arity: 1, paramTypes: ["number"],  returnType: "number" },
+  indexOf:       { arity: 2, paramTypes: ["string", "number"], returnType: "number" },
+  lastIndexOf:   { arity: 1, paramTypes: ["string"],  returnType: "number" },
+  includes:      { arity: 2, paramTypes: ["string", "number"], returnType: "boolean" },
+  startsWith:    { arity: 1, paramTypes: ["string"],  returnType: "boolean" },
+  endsWith:      { arity: 1, paramTypes: ["string"],  returnType: "boolean" },
+  slice:         { arity: 2, paramTypes: ["number", "number"], returnType: "string" },
+  substring:     { arity: 2, paramTypes: ["number", "number"], returnType: "string" },
+  substr:        { arity: 2, paramTypes: ["number", "number"], returnType: "string" },
+  split:         { arity: 1, paramTypes: ["string"],  returnType: "string[]" },
+  trim:          { arity: 0, paramTypes: [],          returnType: "string" },
+  trimStart:     { arity: 0, paramTypes: [],          returnType: "string" },
+  trimEnd:       { arity: 0, paramTypes: [],          returnType: "string" },
+  toLowerCase:   { arity: 0, paramTypes: [],          returnType: "string" },
+  toUpperCase:   { arity: 0, paramTypes: [],          returnType: "string" },
+  repeat:        { arity: 1, paramTypes: ["number"],  returnType: "string" },
+  padStart:      { arity: 2, paramTypes: ["number", "string"], returnType: "string" },
+  padEnd:        { arity: 2, paramTypes: ["number", "string"], returnType: "string" },
+  replace:       { arity: 2, paramTypes: ["string", "string"], returnType: "string" },
+  replaceAll:    { arity: 2, paramTypes: ["string", "string"], returnType: "string" },
+  localeCompare: { arity: 1, paramTypes: ["string"],  returnType: "number" },
+  toString:      { arity: 0, paramTypes: [],          returnType: "string" },
+};
+
+/** Distancia Levenshtein entre dos strings (número mínimo de inserciones,
+ *  borrados o sustituciones para convertir `a` en `b`). Implementación
+ *  iterativa con matriz 2D; O(|a|·|b|) tiempo, O(min(|a|,|b|)) espacio. */
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const previous: number[] = new Array(b.length + 1).fill(0);
+  const current: number[] = new Array(b.length + 1).fill(0);
+  for (let j = 0; j <= b.length; j++) previous[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    current[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(current[j - 1] + 1, previous[j] + 1, previous[j - 1] + cost);
+    }
+    for (let j = 0; j <= b.length; j++) previous[j] = current[j];
+  }
+  return previous[b.length];
+}
+
+export class TypeChecker {
+  // V30.14.1: programa actual + mapa de type aliases post-check.
+  // El codegen usa esto para expandir type arguments en generic types
+  // (e.g. `Array<SvgChild>` -> `Array<Line | MultiLine>`).
+  private currentProgram: Program | undefined = undefined;
+  private typeAliasMap = new Map<string, string>();
+  private readonly diagnostics: Diagnostic[] = [];
+  private readonly types = new WeakMap<Expression, TypeName>();
+  private readonly functionDeclarations = new WeakMap<FunctionSignature, FunctionDeclaration>();
+  private readonly selectedFunctions = new WeakMap<Expression, FunctionDeclaration>();
+  // V22: mapa de variables locales `ptr<T>` que han sido movidas (`moved` o
+  // `maybe-moved`). Cualquier uso posterior genera un diagnóstico E4102 o
+  // E4103. El mapa se rellena al procesar `move(x)` y se consulta en
+  // `expression()` cuando se referencia un identificador. El mapa es
+  // mutable (no readonly) porque IfStatement hace snapshots y los restaura
+  // para implementar el join de estados entre ramas.
+  private moved = new Map<string, "moved" | "maybe-moved">();
+  // V22 PR#134 + V30.7 NLL: stack de borrows activos por scope. La clave
+  // es el NOMBRE DEL BORROW (e.g. `a` en `const a: ref<User> = ref(u)`),
+  // no la fuente. Esto permite actualizar el `lastUseLine` de la fuente
+  // cuando se lee el borrow (no la fuente). NLL (Non-Lexical Lifetimes):
+  // un borrow termina en su ultimo uso, no al final del scope.
+  private borrowStack: Map<string, { mode: "mut" | "shared"; lastUseLine: number; declared: number; sourceName: string }>[] = [new Map()];
+  // V30.7 NLL: registro de TODOS los borrows vistos durante el check
+  // (incluidos los que ya hicieron pop del scope). Se usa en
+  // resolveBorrowConflicts para detectar solapamientos con
+  // informacion completa de usos futuros.
+  private borrowLog: Array<{ mode: "mut" | "shared"; lastUseLine: number; declared: number; sourceName: string; borrowName: string }> = [];
+  private currentReturn: TypeName | undefined;
+  private currentAsync: boolean | undefined;
+  private inConstructor = false;
+  // V19: nombre de la clase/método actual para detectar accesos privados.
+  // El checker usa esto para enforzar `private` y `protected`.
+  private currentClass: string | undefined;
+  private currentMethod: string | undefined;
+  private readonly interfaces = new Map<string, InterfaceDeclaration>();
+  private readonly classes = new Map<string, ClassDeclaration>();
+  private readonly aliases = new Map<string, TypeAliasDeclaration>();
+  private readonly enums = new Map<string, EnumDeclaration>();
+  private readonly unions = new Map<string, UnionDeclaration>();
+  // V30.14.2: expansion cache para type aliases (`type X = A | B` -> "A | B").
+  private readonly aliasExpansions = new Map<string, TypeName>();
+  // V30.14.2: mapa inverso de union expandida a nombre de type alias.
+  // "A | B" -> "X". Usado por el codegen para saber que un type literal
+  // `A | B` realmente es `X` (y emitir `X_Union` en vez de `std::variant<A,B>`).
+  public readonly unionAliasReverseMap = new Map<string, string>();
+  // V30.12.0: forward declarations. Cuando un tipo se referencia antes de
+  // su declaracion (p.ej. `class A { b: B }` antes de `class B { ... }`),
+  // validateType lo encola aqui en vez de reportar error inmediato. Al
+  // final de check() se hace una segunda pasada que re-valida cada entrada.
+  // Si el tipo sigue sin existir, se reporta el error. No resuelve ciclos
+  // (A usa B, B usa A) — solo el orden de declaracion.
+  private readonly forwardRefs: Array<{
+    type: TypeName;
+    node: { span: import("../core/span.ts").Span };
+    interfaceAllowed: boolean;
+    primitiveOnly: boolean;
+    scope?: Scope;
+  }> = [];
+  // Flag anti-recursion: durante la segunda pasada no se reencolan tipos.
+  private resolvingForwardRefs = false;
+  // V1.4: mapa de narrowing para tagged unions. Cuando entramos en un
+  // `thenBranch` con condición `expr.tag == literal`, marcamos el nombre
+  // `expr` como "narrowed" con la lista de variantes que cumplen el
+  // discriminador. `MemberExpression` consulta esto para разрешar
+  // campos exclusivos de la variante. Se restaura al salir del bloque.
+  private narrowed = new Map<string, { unionType: TypeName; discriminator: { field: string; value: string | number | boolean }; variants: string[] }>();
+  // Nombres de variables que colisionan con singletons del runtime o con
+  // símbolos globales heredados por los headers C/POSIX. Si el usuario
+  // declara uno, el codegen lo renombra para evitar errores en C++.
+  private static readonly RUNTIME_GLOBAL_NAMES = new Set(["console", "fs", "path", "process", "JSON", "index"]);
+  // V6: si `type` es un array fijo `T[N]` con `N` siendo un identificador
+  // ligado a un `const` con valor literal conocido, reescribe el tamaño a
+  // ese valor literal. Si no, devuelve el tipo sin cambios.
+  private propagateConstantArraySize(type: TypeName, scope: Scope): TypeName {
+    const match = type.match(/^([^\s\[\]]+)\[([^\]]+)\]$/);
+    if (!match) return type;
+    const element = match[1];
+    const sizeExpr = match[2];
+    // El lexer parsea N como identifier (no como número). Lo buscamos en el scope.
+    const symbol = scope.resolve(sizeExpr);
+    if (!symbol || symbol.kind !== "variable" || symbol.mutable || !("constValue" in symbol)) return type;
+    const constValue = (symbol as { constValue?: number | string | boolean | null }).constValue;
+    if (typeof constValue !== "number" || !Number.isInteger(constValue) || constValue <= 0) return type;
+    return `${element}[${constValue}]`;
+  }
+
+  // V0.2: helper para registrar un símbolo variable. Marca `fromRuntime=true`
+  // si el nombre coincide con un singleton del runtime C++; el codegen usa
+  // este flag para renombrar y evitar colisiones de identificadores.
+  // También anota el AST si el `target` es VariableDeclaration o Parameter.
+  private defineVariable(scope: Scope, name: string, type: TypeName, mutable: boolean, extra: { variadic?: boolean; mutableReference?: boolean; constValue?: number | string | boolean | null } = {}, target?: { fromRuntime?: boolean; constValue?: number | string | boolean | null }): boolean {
+    const symbol: import("./symbols.ts").VariableSymbol = { kind: "variable", type, mutable, ...extra };
+    if (TypeChecker.RUNTIME_GLOBAL_NAMES.has(name)) {
+      symbol.fromRuntime = true;
+      if (target) target.fromRuntime = true;
+    }
+    if (extra.constValue !== undefined && target) {
+      // V6: propagamos el valor literal del initializer al symbol para que
+      // las referencias posteriores (tamaños de arrays, branches constantes)
+      // puedan consultarlo en compile-time.
+      target.constValue = extra.constValue;
+      symbol.constValue = extra.constValue;
+    }
+    return scope.define(name, symbol);
+  }
+  private activeTypeParameters = new Set<string>();
+  private activeTypeConstraints = new Map<string, TypeName>();
+  private activeTypeDefaults = new Map<string, TypeName>();
+  private readonly variadicExpressions = new WeakSet<Expression>();
+  private readonly inferredCallTypeArguments = new WeakMap<Expression, TypeName[]>();
+  private currentClosure: ClosureContext | undefined;
+  private closureReturns = new ClosureReturnSafety();
+  private loopDepth = 0;
+
+  // Construye el mapa nombre→constraint a partir de los `TypeParameter[]` que
+  // vienen del parser. Solo los parámetros con `constraint` definido entran al
+  // mapa; el resto se ignora (no restringen nada).
+  private static constraintsOf(parameters: TypeParameter[]): Record<string, TypeName> {
+    const result: Record<string, TypeName> = {};
+    for (const parameter of parameters) if (parameter.constraint) result[parameter.name] = parameter.constraint;
+    return result;
+  }
+
+  // Construye el mapa nombre→default a partir de los `TypeParameter[]`. Solo
+  // los parámetros con `default` definido entran al mapa.
+  private static defaultsOf(parameters: TypeParameter[]): Record<string, TypeName> {
+    const result: Record<string, TypeName> = {};
+    for (const parameter of parameters) if (parameter.default) result[parameter.name] = parameter.default;
+    return result;
+  }
+
+  // Extrae los nombres de los parámetros para alimentar las estructuras internas
+  // (FunctionSignature, etc.) que siguen trabajando con `string[]`.
+  private static namesOf(parameters: TypeParameter[]): string[] {
+    return parameters.map(parameter => parameter.name);
+  }
+
+  check(program: Program): void {
+    this.closureReturns = new ClosureReturnSafety();
+    this.currentProgram = program;
+    const global = new Scope();
+    // V30.30: los built-ins del dialecto (funciones globales, interfaces
+    // y clases como `print`, `Request`, `Server`, `Promise`,
+    // `setTimeout`, `readFile`, `listenTcp`, etc.) se registran
+    // desde un modulo dedicado. Asi anadir un nuevo builtin no
+    // requiere tocar el TypeChecker.
+    registerBuiltins(global, this.interfaces, this.classes);
+    // V1.4: `Result<T, E = string>` se modela como una tagged union sintética
+    // del runtime con dos variantes:
+    //   { ok: true,  value: T }
+    //   { ok: false, error: E }
+    // El discriminador es el campo `ok` (boolean). Esto REEMPLAZA el wrapper
+    // `ets::Result<T>` como type alias real: el codegen emite el mismo
+    // `std::variant` que cualquier tagged union del dialecto. La clase
+    // `ets::Result<T>` del runtime queda marcada deprecated pero se conserva
+    // para no romper callers que aún la usen como tipo C++ directo.
+    this.declareResultSyntheticUnion(global);
+    for (const statement of program.statements) if (statement.kind === "ClassDeclaration") this.declareClassName(statement, global);
+    for (const statement of program.statements) if (statement.kind === "InterfaceDeclaration") this.declareInterface(statement, global);
+    for (const statement of program.statements) if (statement.kind === "TypeAliasDeclaration") this.declareTypeAlias(statement, global);
+    for (const statement of program.statements) if (statement.kind === "EnumDeclaration") this.declareEnum(statement, global);
+    for (const statement of program.statements) if (statement.kind === "UnionDeclaration") this.declareUnion(statement, global);
+    // Tras declarar los alias, expandimos en el AST cualquier referencia a un
+    // nombre de alias (o a su instanciación genérica) por su forma canónica.
+    // Así codegen ve directamente `number[]` en vez de `NumberArray`.
+    this.expandAliasesInProgram(program);
+    // `export default` envuelve una declaración; hacemos unwrap para que las
+    // declaraciones internas se declaren igual que las top-level.
+    const unwrap = (stmt: Statement): Statement => stmt.kind === "ExportDefaultDeclaration" ? unwrap(stmt.declaration as Statement) : stmt;
+    for (const statement of program.statements) if (statement.kind === "ClassDeclaration") this.validateClass(statement, global);
+    for (const statement of program.statements) if (unwrap(statement).kind === "FunctionDeclaration") this.declareFunction(unwrap(statement) as FunctionDeclaration, global);
+    for (const statement of program.statements) this.statement(statement, global);
+    // V30.7 NLL (Non-Lexical Lifetimes) — segunda pasada para resolver
+    // borrows con información completa de usos futuros.
+    //
+    // Por que doble pasada: durante la primera pasada, cuando
+    // declaramos `const b = ref(u)` despues de `const a = ref(u); print(a.name)`,
+    // no sabemos todavia que `a` se va a usar despues. Sin esa
+    // información, declaramos `b` como "OK" (porque `a.lastUse=2 < 3`).
+    //
+    // Aqui hacemos un recorrido del AST anotando en cada
+    // VariableDeclaration (que sea un borrow) los usos futuros de su
+    // nombre, y luego revisamos los conflictos.
+    this.resolveBorrowConflicts();
+    // V30.12.0: segunda pasada para resolver forward refs. Tomamos una
+    // copia del array (mismo-reference bug) y los reprocesamos con el
+    // flag resolvingForwardRefs=true para que NO se reencolen.
+    if (this.forwardRefs.length > 0) {
+      const pending = this.forwardRefs.slice();
+      this.forwardRefs.length = 0;
+      this.resolvingForwardRefs = true;
+      for (const ref of pending) {
+        this.validateType(ref.type, ref.node, ref.interfaceAllowed, ref.primitiveOnly, ref.scope);
+      }
+      this.resolvingForwardRefs = false;
+    }
+    this.diagnostics.push(...this.closureReturns.diagnostics());
+    if (this.diagnostics.length) throw new DiagnosticError(this.diagnostics.map(diagnostic => withGeneratedSource(diagnostic, program.generatedSources)));
+  }
+
+  /**
+   * V30.7 NLL: para cada declaracion de borrow del programa, recalcula
+   * su `lastUseLine` con todos los IdentifierExpression del scope
+   * visibles, y luego verifica conflictos entre borrows sobre la misma
+   * fuente. Si dos borrows `a` y `b` con la misma fuente tienen
+   * `lastUseLine` superpuestos y al menos uno es `mut`, emite E4206/E4207.
+   */
+  private resolveBorrowConflicts(): void {
+    // Recorremos borrowLog (todos los borrows vistos durante el check)
+    // y, para cada par con la misma sourceName, comprobamos solapamiento.
+    for (let i = 0; i < this.borrowLog.length; i++) {
+      for (let j = i + 1; j < this.borrowLog.length; j++) {
+        const a = this.borrowLog[i];
+        const b = this.borrowLog[j];
+        if (a.sourceName !== b.sourceName) continue;
+        const first = a.declared <= b.declared ? a : b;
+        const second = a.declared <= b.declared ? b : a;
+        const overlap = first.lastUseLine >= second.declared;
+        if (!overlap) continue;
+        const mut = first.mode === "mut" || second.mode === "mut";
+        if (!mut) continue;
+        const code = first.mode === "mut" && second.mode === "mut" ? "E4206" : "E4207";
+        const sourceName = first.sourceName;
+        const msg = code === "E4206"
+          ? `E4206: mutable borrow conflict. '${sourceName}' is borrowed as 'ref<T>' at line ${first.declared} and again as 'ref<T>' at line ${second.declared}; the two borrows overlap in their lifetimes. Use 'constRef(${sourceName})' if shared access is enough.`
+          : `E4207: mutable/shared borrow conflict. '${sourceName}' is borrowed ${first.mode === "mut" ? "as 'ref<T>' (mutable)" : "as 'constRef<T>' (shared)"} at line ${first.declared} and ${second.mode === "mut" ? "as 'ref<T>' (mutable)" : "as 'constRef<T>' (shared)"} at line ${second.declared}; the two borrows overlap in their lifetimes.`;
+        this.report({ span: { start: { line: second.declared, column: 1, offset: 0 }, end: { line: second.declared, column: 1, offset: 0 } } } as any, msg);
+      }
+    }
+  }
+
+  typeOf(expression: Expression): TypeName | undefined {
+    // V0.1: si el nodo tiene `resolvedType` adjuntado, lo usamos directamente
+    // y lo convertimos a `TypeName` para mantener la API existente.
+    if (expression.resolvedType) {
+      const resolvedAsString = resolvedTypeToTypeName(expression.resolvedType);
+      if (resolvedAsString) return this.unwrapMutLike(resolvedAsString);
+    }
+    const stored = this.types.get(expression);
+    if (!stored) return undefined;
+    return this.unwrapMutLike(stored);
+  }
+
+  /**
+   * Devuelve el `ResolvedType` de una expresión, sin convertir a string.
+   * Usado por el codegen cuando quiere inspeccionar estructura (genéricos,
+   * argumentos, etc.) sin parsear.
+   */
+  resolvedTypeOf(expression: Expression): import("../types/type-system.ts").ResolvedType | undefined {
+    return expression.resolvedType ?? toResolvedType(this.types.get(expression));
+  }
+
+  private unwrapMutLike(stored: TypeName): TypeName {
+    // V22 (Memory Model v2): `Mut<T>` y `MutRef<T>` ya no existen en el
+    // dialecto. El type-checker los rechaza con E4401/E4402 antes de
+    // llegar aquí, así que esta función es ahora un pass-through.
+    return stored;
+  }
+  isVariadic(expression: Expression): boolean { return this.variadicExpressions.has(expression); }
+  typeArgumentsOf(expression: Expression): TypeName[] { return this.inferredCallTypeArguments.get(expression) ?? []; }
+
+  /** Selected source declaration for static evaluation, without AST back-links. */
+  functionOf(expression: Expression): FunctionDeclaration | undefined { return this.selectedFunctions.get(expression); }
+
+  private dispatchBuiltin(global: string, methods: Record<string, { params: TypeName[]; returnType: TypeName }>, node: { method: string; args: Expression[]; span: import("../core/span.ts").Span }, scope: Scope): TypeName {
+    const signature = methods[node.method];
+    if (!signature) {
+      this.report(node, `${global}.${node.method} no es una API válida (usa ${Object.keys(methods).join(", ")})`);
+      node.args.forEach(arg => this.expression(arg, scope));
+      return "void";
+    }
+    if (node.args.length !== signature.params.length) this.report(node, `${global}.${node.method} espera ${signature.params.length} argumentos, recibió ${node.args.length}`);
+    // V30.35: si la cantidad no coincide, NO seguimos validando args
+    // individuales (signature.params[index] seria `undefined` y
+    // typeMatches() crashearia con "Cannot read properties of
+    // undefined"). El reporte de cantidad ya se hizo arriba; los
+    // args se typecheckean sin expected para que el usuario pueda
+    // ver otros errores si los hay.
+    if (node.args.length !== signature.params.length) {
+      node.args.forEach(arg => this.expression(arg, scope));
+      return signature.returnType;
+    }
+    node.args.forEach((arg, index) => this.require(this.expression(arg, scope, signature.params[index]), signature.params[index], arg));
+    return signature.returnType;
+  }
+
+  // Variante de `dispatchBuiltin` para tipos genéricos (`Map<K,V>`, `Set<T>`): la firma
+  // se materializa a partir de los argumentos de tipo reales del objeto receptor.
+  private dispatchGenericBuiltin(global: string, methods: Record<string, { params: (typeArgs: TypeName[]) => TypeName[]; returnType: (typeArgs: TypeName[]) => TypeName }>, node: { method: string; args: Expression[]; span: import("../core/span.ts").Span }, scope: Scope, typeArgs: TypeName[]): TypeName {
+    const signature = methods[node.method];
+    if (!signature) {
+      this.report(node, `${global}.${node.method} no es una API válida (usa ${Object.keys(methods).join(", ")})`);
+      node.args.forEach(arg => this.expression(arg, scope));
+      return "void";
+    }
+    const params = signature.params(typeArgs);
+    const returnType = signature.returnType(typeArgs);
+    if (node.args.length !== params.length) this.report(node, `${global}.${node.method} espera ${params.length} argumentos, recibió ${node.args.length}`);
+    node.args.forEach((arg, index) => this.require(this.expression(arg, scope, params[index]), params[index], arg));
+    return returnType;
+  }
+
+  // Resuelve una llamada a método cuando el receptor es un parámetro genérico `T`
+  // con constraint intersección `A & B & ...`. Los métodos se obtienen de TODAS
+  // las interfaces miembro y se emparejan contra los argumentos reales.
+  private resolveInterfaceMethodCall(methods: InterfaceMethod[], node: { method: string; args: Expression[]; typeArguments: TypeName[]; span: import("../core/span.ts").Span }, scope: Scope, expected?: TypeName): TypeName | undefined {
+    const argumentTypes = node.args.map(arg => this.expression(arg, scope));
+    const matches = methods.map(method => {
+      const signature: FunctionSignature = {
+        typeParameters: TypeChecker.namesOf(method.typeParameters ?? []),
+        variadicTypeParameters: [],
+        typeConstraints: TypeChecker.constraintsOf(method.typeParameters ?? []),
+        defaults: TypeChecker.defaultsOf(method.typeParameters ?? []),
+        params: method.params.map(parameter => ({ type: parameter.type, out: parameter.out, mutableReference: parameter.passing === "mut", variadic: parameter.variadic, defaultValue: parameter.defaultValue, optional: parameter.optional })),
+        returnType: method.returnType
+      };
+      const match = this.matchOverload(signature, argumentTypes, node.typeArguments, expected);
+      return match ? { match, method } : undefined;
+    }).filter((candidate): candidate is { match: NonNullable<ReturnType<TypeChecker["matchOverload"]>>; method: InterfaceMethod } => !!candidate)
+      .sort((left, right) => right.match.score - left.match.score);
+    if (methods.length && !matches.length) this.report(node, `Ninguna sobrecarga de método '${node.method}' acepta (${argumentTypes.join(", ")})`);
+    if (matches.length > 1 && matches[0].match.score === matches[1].match.score) this.report(node, `Llamada ambigua al método '${node.method}'`);
+    if (!matches.length) return undefined;
+    const selected = matches[0].match;
+    node.typeArguments.forEach(argument => this.validateType(argument, node, false, false, scope));
+    node.args.forEach((argument, index) => {
+      const selectedParameter = selected.signature.params[index];
+      if (!selectedParameter?.out && !selectedParameter?.mutableReference) return;
+      const mode = selectedParameter.out ? "out" : "mut";
+      if (argument.kind !== "IdentifierExpression") this.report(argument, `Un argumento ${mode} debe ser una variable mutable`);
+      else { const target = scope.resolve(argument.name); if (!target || target.kind !== "variable" || !target.mutable) this.report(argument, `Un argumento ${mode} debe ser una variable mutable`); else this.markCapturedMutation(argument, scope); }
+    });
+    const inferred = selected.signature.typeParameters.map(parameter => selected.substitutions.get(parameter));
+    if (!node.typeArguments.length && inferred.length && inferred.every((type): type is TypeName => !!type)) this.inferredCallTypeArguments.set(node, inferred);
+    return this.substituteType(selected.signature.returnType, selected.substitutions);
+  }
+
+  private declareFunction(node: FunctionDeclaration, scope: Scope): void {
+    this.withTypeParameters(node.typeParameters, () => {
+      for (const parameter of node.params) this.validateType(parameter.type, parameter, true, false, scope);
+      this.validateType(node.returnType, node, false, false, scope);
+      this.validateConstraints(node.typeParameters, node);
+      this.validateParameterDefaults(node.params, node);
+    });
+    if (node.async && !isPromiseType(node.returnType)) this.report(node, `Una función async debe retornar Promise<T>, no '${node.returnType}'`);
+    if (node.async && node.params.some(parameter => parameter.out)) this.report(node, "Las funciones async no admiten parámetros out sin análisis de duración");
+    if (node.async && node.params.some(parameter => parameter.passing === "mut")) this.report(node, "Las funciones async no admiten parámetros mut sin análisis de duración");
+    const restIndex = node.params.findIndex(parameter => parameter.variadic);
+    if (restIndex >= 0 && restIndex !== node.params.length - 1) this.report(node.params[restIndex], "El parámetro variádico debe ser el último");
+    if (node.params.filter(parameter => parameter.variadic).length > 1) this.report(node, "Solo se permite un parámetro variádico");
+    if (restIndex >= 0 && !node.variadicTypeParameters.includes(node.params[restIndex].type)) this.report(node.params[restIndex], "El parámetro rest debe usar un pack genérico variádico");
+    for (const pack of node.variadicTypeParameters) {
+      if (!node.params.some(parameter => parameter.variadic && parameter.type === pack)) this.report(node, `El pack genérico '${pack}' necesita un parámetro rest correspondiente`);
+    }
+    const signature: FunctionSignature = {
+      typeParameters: TypeChecker.namesOf(node.typeParameters),
+      variadicTypeParameters: node.variadicTypeParameters,
+      typeConstraints: TypeChecker.constraintsOf(node.typeParameters),
+      defaults: TypeChecker.defaultsOf(node.typeParameters),
+      params: node.params.map(p => ({ name: p.name, type: p.type, out: p.out, mutableReference: p.passing === "mut", variadic: p.variadic, defaultValue: p.defaultValue, optional: p.optional })),
+      returnType: node.returnType
+    };
+    this.functionDeclarations.set(signature, node);
+    // V0.3: huella estructural resuelta sobre el nodo. Permite al codegen
+    // comparar firmas sin parsear strings y generar SFINAE constraints.
+    node.resolvedSignature = {
+      parameters: node.params.map(p => ({
+        name: p.name,
+        type: toResolvedType(p.type) ?? { kind: "any" },
+        optional: p.optional ?? false,
+        variadic: p.variadic ?? false,
+        hasDefault: p.defaultValue !== undefined,
+      })),
+      returnType: toResolvedType(node.returnType) ?? { kind: "any" },
+      typeParameters: TypeChecker.namesOf(node.typeParameters),
+      async: node.async,
+    };
+    const existing = scope.resolveLocal(node.name);
+    if (!existing) scope.define(node.name, { kind: "function", overloads: [signature] });
+    else if (existing.kind !== "function") this.report(node, `Símbolo duplicado '${node.name}'`);
+    else if (existing.overloads.some(candidate => this.sameSignature(candidate, signature))) this.report(node, `Sobrecarga duplicada '${node.name}'`);
+    else existing.overloads.push(signature);
+  }
+
+  private declareInterface(node: InterfaceDeclaration, scope: Scope): void {
+    if (this.interfaces.has(node.name) || !scope.define(node.name, { kind: "type", type: node.name })) {
+      this.report(node, `Símbolo duplicado '${node.name}'`); return;
+    }
+    this.interfaces.set(node.name, node);
+    // V0.4: interfaces se emiten como `struct` C++ con métodos virtuales puros.
+    node.resolvedRuntimeType = { kind: "passthrough", cppName: node.name };
+    const methods = new Set<string>();
+    // V30.11: track conjunto de nombres declarados (metodos + campos) para
+    // detectar colisiones entre miembros de la interface. Las interfaces son
+    // contratos estructurales: el mismo nombre no puede ser ambos metodo y
+    // campo (eso seria ambiguo en C++ y absurdo en TS).
+    const memberNames = new Set<string>();
+    // V30.11: validar los campos de la shape. Mismas reglas que un campo de
+    // clase: tipo concreto (no void ni otra interface), no ref/constRef (un
+    // campo no puede almacenar prestamos), y nombres unicos.
+    for (const field of node.fields) {
+      if (memberNames.has(field.name)) this.report(field, `Miembro duplicado '${field.name}'`);
+      memberNames.add(field.name);
+      this.validateType(field.type, field, false, false, scope);
+      if (field.type === "void" || this.interfaces.has(field.type)) this.report(field, `El campo '${field.name}' necesita un tipo concreto`);
+      // V22 (Memory Model v2): ref<T> y constRef<T> son préstamos que no
+      // pueden almacenarse en un campo. Misma regla que en ClassField.
+      if (isGenericType(field.type) && (genericBase(field.type) === "ref" || genericBase(field.type) === "constRef")) {
+        this.report(field, `E4203: borrowed references cannot be stored in interface fields. Use T (value), ptr<T> (exclusive owner), or constPtr<T> (readonly owner) for the field '${field.name}'.`);
+      }
+    }
+    for (const method of node.methods) {
+      if (memberNames.has(method.name)) this.report(method, `El método '${method.name}' entra en conflicto con un campo`);
+      memberNames.add(method.name);
+      const signature = `${method.name}(${method.params.map(parameter => parameter.type).join(",")})`;
+      if (methods.has(signature)) this.report(method, `Sobrecarga de método duplicada '${method.name}'`);
+      methods.add(signature);
+      this.validateType(method.returnType, method, false, true, scope);
+      for (const parameter of method.params) this.validateType(parameter.type, parameter, false, true, scope);
+      this.validateParameterDefaults(method.params, method);
+      // V22: ref<T>/constRef<T> no se permiten como return type en métodos
+      // de interface (misma regla que en FunctionDeclaration/ClassMethod).
+      if (isGenericType(method.returnType) && (genericBase(method.returnType) === "ref" || genericBase(method.returnType) === "constRef")) {
+        this.report(method, `E42xx: borrowed references cannot be returned yet. Returning ref<T> or constRef<T> requires lifetime analysis that is not supported by the current ownership model.`);
+      }
+      // V0.3: huella estructural resuelta del método de interfaz.
+      method.resolvedSignature = {
+        parameters: method.params.map(p => ({
+          name: p.name,
+          type: toResolvedType(p.type) ?? { kind: "any" },
+          optional: p.optional ?? false,
+          variadic: p.variadic ?? false,
+          hasDefault: p.defaultValue !== undefined,
+        })),
+        returnType: toResolvedType(method.returnType) ?? { kind: "any" },
+        typeParameters: TypeChecker.namesOf(method.typeParameters ?? []),
+        async: false,
+      };
+    }
+  }
+
+  // V28: helpers para registrar tipos built-in (interfaces y clases) que
+  // viven en runtime/*.hpp pero que el dialecto conoce (porque aparecen
+  // en el d.ts template). El type-checker NO parsea el d.ts — necesita
+  // poder validar referencias a HttpRequest, HttpResponse, Server, etc.
+  // Las firmas se pasan en forma simplificada y se traducen a los tipos
+  // AST equivalentes antes de inyectarse en `this.interfaces`/`this.classes`.
+  private fakeSpan() { return { start: { line: 0, column: 0, offset: 0 }, end: { line: 0, column: 0, offset: 0 } }; }
+  private registerBuiltinInterface(name: string, methods: { name: string; returnType: string; params: { name: string; type: string }[] }[]): void {
+    const decl: InterfaceDeclaration = {
+      kind: "InterfaceDeclaration",
+      name,
+      exported: true,
+      methods: methods.map(m => ({
+        kind: "InterfaceMethod" as const,
+        name: m.name,
+        params: m.params.map(p => ({
+          kind: "Parameter" as const,
+          name: p.name,
+          type: p.type,
+          out: false,
+          passing: "value" as const,
+          optional: false,
+          span: this.fakeSpan(),
+        })),
+        returnType: m.returnType,
+        decorators: [],
+        span: this.fakeSpan(),
+      })),
+      // V30.11: las interfaces built-in no declaran campos (son contratos
+      // puros de metodos, igual que antes). Solo las interfaces declaradas
+      // en .ets pueden tener `fields`.
+      fields: [],
+      decorators: [],
+      span: this.fakeSpan(),
+    };
+    this.interfaces.set(name, decl);
+  }
+  private registerBuiltinClass(name: string, methods: { name: string; returnType: string; params: { name: string; type: string }[] }[]): void {
+    const decl: ClassDeclaration = {
+      kind: "ClassDeclaration",
+      name,
+      exported: true,
+      typeParameters: [],
+      variadicTypeParameters: [],
+      fields: [],
+      methods: methods.map(m => ({
+        kind: "ClassMethod" as const,
+        name: m.name,
+        params: m.params.map(p => ({
+          kind: "Parameter" as const,
+          name: p.name,
+          type: p.type,
+          out: false,
+          passing: "value" as const,
+          optional: false,
+          span: this.fakeSpan(),
+        })),
+        returnType: m.returnType,
+        body: null as unknown as BlockStatement,
+        decorators: [],
+        access: "public" as const,
+        span: this.fakeSpan(),
+      })),
+      decorators: [],
+      span: this.fakeSpan(),
+    };
+    this.classes.set(name, decl);
+  }
+
+  // Declara un alias de tipo y valida su RHS (con detección de ciclos). Los
+  // parámetros de tipo se añaden al ámbito activo mientras se valida el RHS,
+  // para que `type Box<T> = T[]` acepte `T` como tipo dentro del cuerpo.
+  private declareTypeAlias(node: TypeAliasDeclaration, scope: Scope): void {
+    if (this.aliases.has(node.name) || !scope.define(node.name, { kind: "type", type: node.name })) {
+      this.report(node, `Símbolo duplicado '${node.name}'`); return;
+    }
+    this.aliases.set(node.name, node);
+    // V30.14.1: guardar en el mapa para que el codegen pueda expandir
+    // el alias en generic types.
+    this.typeAliasMap.set(node.name, node.type);
+    // V30.14.2: guardar la expansion y el mapa inverso (de union
+    // expandida -> nombre de type alias) para que el codegen pueda
+    // resolver `A | B` (expandido) a `X` (alias original) y emitir
+    // `X_Union` en vez de `std::variant<A, B>`.
+    this.aliasExpansions.set(node.name, node.type);
+    if (isUnionType(node.type)) this.unionAliasReverseMap.set(node.type, node.name);
+    // V0.4: pre-computa el ResolvedRuntimeType del RHS del alias. Esto
+    // permite que el codegen consuma directamente la forma resuelta sin
+    // tener que parsear `node.type` cada vez.
+    node.resolvedRuntimeType = { kind: "alias", target: toResolvedRuntimeType(node.type) };
+    this.withTypeParameters(node.typeParameters, () => {
+      const visited = new Set<string>([node.name]);
+      this.validateType(node.type, node, false, false, scope, visited);
+    });
+  }
+
+  // Recorre el programa y reemplaza en el AST cualquier referencia a un alias
+  // (simple o genérico) por su forma expandida. Sin esta mutación, codegen
+  // emitiría literalmente `NumberArray ns = ...;` y el binario no compilaría.
+  private expandAliasesInProgram(program: Program): void {
+    const rewriteConstraints = (parameters: TypeParameter[]): void => {
+      for (const parameter of parameters) {
+        if (parameter.constraint) parameter.constraint = this.expandType(parameter.constraint);
+        if (parameter.default) parameter.default = this.expandType(parameter.default);
+      }
+    };
+    const rewriteParameter = (parameter: Parameter): void => { parameter.type = this.expandType(parameter.type); };
+    const rewriteArrow = (params: Parameter[], returnType: TypeName | undefined): void => {
+      params.forEach(rewriteParameter);
+      if (returnType) returnType = this.expandType(returnType);
+    };
+    const walk = (statement: Statement | undefined): void => {
+      if (!statement) return;
+      switch (statement.kind) {
+        case "VariableDeclaration":
+          if (statement.declaredType) statement.declaredType = this.expandType(statement.declaredType);
+          break;
+        case "FunctionDeclaration":
+          statement.params.forEach(rewriteParameter);
+          statement.returnType = this.expandType(statement.returnType);
+          rewriteConstraints(statement.typeParameters);
+          break;
+        case "InterfaceDeclaration":
+          statement.methods.forEach(method => {
+            method.params.forEach(rewriteParameter);
+            method.returnType = this.expandType(method.returnType);
+            rewriteConstraints(method.typeParameters ?? []);
+          });
+          break;
+        case "ClassDeclaration":
+          statement.fields.forEach(field => { field.type = this.expandType(field.type); });
+          statement.methods.forEach(method => {
+            method.params.forEach(rewriteParameter);
+            method.returnType = this.expandType(method.returnType);
+            rewriteConstraints(method.typeParameters ?? []);
+          });
+          rewriteConstraints(statement.typeParameters);
+          break;
+        case "TypeAliasDeclaration":
+          statement.type = this.expandType(statement.type);
+          statement.typeParameters.forEach(parameter => {
+            if (parameter.constraint) parameter.constraint = this.expandType(parameter.constraint);
+            if (parameter.default) parameter.default = this.expandType(parameter.default);
+          });
+          break;
+        case "BlockStatement": statement.statements.forEach(walk); break;
+        case "IfStatement":
+          walk(statement.thenBranch); if (statement.elseBranch) walk(statement.elseBranch); break;
+        case "WhileStatement": walk(statement.body); break;
+        case "ForStatement": walk(statement.body); if (statement.initializer && statement.initializer.kind === "BlockStatement") walk(statement.initializer); break;
+        case "ForOfStatement": walk(statement.body); break;
+        case "ForInStatement": walk(statement.body); break;
+        case "ReturnStatement": break;
+        case "BreakStatement": case "ContinueStatement": case "DeleteStatement": case "SwitchStatement": case "ExpressionStatement": break;
+        case "EnumDeclaration": break;
+      }
+    };
+    program.statements.forEach(walk);
+  }
+
+  private declareClassName(node: ClassDeclaration, scope: Scope): void {
+    if (node.name === "Promise" || this.classes.has(node.name) || !scope.define(node.name, { kind: "type", type: node.name })) {
+      this.report(node, `Símbolo duplicado '${node.name}'`); return;
+    }
+    this.classes.set(node.name, node);
+    // V0.4: tipo concreto en runtime C++.
+    if (node.typeParameters.length) node.resolvedRuntimeType = { kind: "polymorphic", typeParameters: TypeChecker.namesOf(node.typeParameters) };
+    else node.resolvedRuntimeType = { kind: "passthrough", cppName: node.name };
+  }
+
+  private declareEnum(node: EnumDeclaration, scope: Scope): void {
+    if (this.enums.has(node.name) || !scope.define(node.name, { kind: "type", type: node.name })) {
+      this.report(node, `Símbolo duplicado '${node.name}'`); return;
+    }
+    this.enums.set(node.name, node);
+    // V0.4: enums se emiten como un struct C++.
+    node.resolvedRuntimeType = { kind: "passthrough", cppName: node.name };
+    const seen = new Set<string>();
+    for (const member of node.members) {
+      if (seen.has(member.name)) this.report(member, `Miembro de enum duplicado '${member.name}'`);
+      seen.add(member.name);
+      this.defineVariable(scope, member.name, node.name, false);
+    }
+  }
+
+  // V1.4: registra `Result<T, E = string>` como unión sintética del
+  // runtime. Dos variantes con discriminador booleano en el campo `ok`:
+  //   { ok: true,  value: T }
+  //   { ok: false, error: E }
+  // Tras este registro, todo el flujo (validateType, match, narrowing)
+  // trata `Result<T>` y `Result<T, E>` como tagged union nativa.
+  private declareResultSyntheticUnion(scope: Scope): void {
+    // Span sintético para nodos sin posición real (no aparecen en código).
+    const synthSpan = { start: { offset: 0, line: 0, column: 0 }, end: { offset: 0, line: 0, column: 0 } };
+    const resultNode: UnionDeclaration = {
+      kind: "UnionDeclaration",
+      exported: true,
+      name: "Result",
+      typeParameters: [
+        { name: "T", span: synthSpan },
+        { name: "E", span: synthSpan, default: "string" },
+      ],
+      variants: [
+        { name: "Ok",  payload: "T", discriminator: { field: "ok", value: true  }, span: synthSpan },
+        { name: "Err", payload: "E", discriminator: { field: "ok", value: false }, span: synthSpan },
+      ],
+      resolvedRuntimeType: { kind: "passthrough", cppName: "Result" },
+      span: synthSpan,
+    };
+    // Marcamos para que NO entre en `expandAliasesInProgram` ni en la fase de
+    // validación de payloads (los nombres T/E son type parameters, no tipos
+    // reales). `declareUnion` los maneja correctamente vía `withTypeParameters`.
+    this.unions.set(resultNode.name, resultNode);
+    scope.define(resultNode.name, { kind: "type", type: resultNode.name });
+  }
+
+  // V1: tagged unions nativas del dialecto. Se emiten como `std::variant<...>`
+  // con discriminador. Cada variante es accesible vía `match` (V1.2 introducirá
+  // exhaustividad).
+  private declareUnion(node: UnionDeclaration, scope: Scope): void {
+    if (this.classes.has(node.name) || this.enums.has(node.name) || this.unions.has(node.name) || !scope.define(node.name, { kind: "type", type: node.name })) {
+      this.report(node, `Símbolo duplicado '${node.name}'`); return;
+    }
+    this.unions.set(node.name, node);
+    // V0.4: pre-computamos el ResolvedRuntimeType para que el codegen lo
+    // consuma directamente. Una unión sin parámetros genéricos se emite
+    // como passthrough (std::variant) en C++.
+    node.resolvedRuntimeType = { kind: "passthrough", cppName: node.name };
+    this.withTypeParameters(node.typeParameters, () => {
+      const seen = new Set<string>();
+      for (const variant of node.variants) {
+        if (seen.has(variant.name)) this.report(variant, `Variante de unión duplicada '${variant.name}'`);
+        seen.add(variant.name);
+        if (variant.payload) this.validateType(variant.payload, variant, false, false, scope);
+      }
+    });
+  }
+
+  private validateClass(node: ClassDeclaration, scope: Scope): void {
+    if (node.variadicTypeParameters.length) this.report(node, "Los packs genéricos en clases todavía no están soportados");
+    this.withTypeParameters(node.typeParameters, () => { this.validateConstraints(node.typeParameters, node); this.validateClassMembers(node, scope); });
+  }
+
+  private validateClassMembers(node: ClassDeclaration, scope: Scope): void {
+    const members = new Set<string>();
+    const methodSignatures = new Set<string>();
+    for (const field of node.fields) {
+      if (members.has(field.name)) this.report(field, `Miembro duplicado '${field.name}'`);
+      members.add(field.name);
+      this.validateType(field.type, field, false, false, scope);
+      if (field.type === "void" || this.interfaces.has(field.type)) this.report(field, `El campo '${field.name}' necesita un tipo concreto`);
+      // V22 (Memory Model v2): ref<T> y constRef<T> son préstamos que no
+      // pueden almacenarse en un campo. E4203.
+      if (isGenericType(field.type) && (genericBase(field.type) === "ref" || genericBase(field.type) === "constRef")) {
+        this.report(field, `E4203: borrowed references cannot be stored in class fields. Use T (value), ptr<T> (exclusive owner), or constPtr<T> (readonly owner) for the field '${field.name}'.`);
+      }
+    }
+    for (const method of node.methods) {
+      if (members.has(method.name)) this.report(method, `El método '${method.name}' entra en conflicto con un campo`);
+      const signature = `${method.name}(${method.params.map(parameter => parameter.type).join(",")})`;
+      if (methodSignatures.has(signature)) this.report(method, `Sobrecarga de método duplicada '${method.name}'`);
+      methodSignatures.add(signature);
+      this.withTypeParameters(method.typeParameters ?? [], () => {
+        this.validateConstraints(method.typeParameters ?? [], method);
+        for (const parameter of method.params) this.validateType(parameter.type, parameter, true, false, scope);
+        this.validateType(method.returnType, method, false, false, scope);
+        this.validateParameterDefaults(method.params, method);
+      });
+    }
+  }
+
+  private validateConstraints(parameters: TypeParameter[], node: { span: import("../core/span.ts").Span }): void {
+    for (const parameter of parameters) {
+      if (!parameter.constraint) continue;
+      // El constraint puede ser una intersección `A & B & ...`: cada miembro debe ser una interfaz.
+      const members = isIntersectionType(parameter.constraint) ? intersectionMembers(parameter.constraint) : [parameter.constraint];
+      for (const member of members) if (!this.interfaces.has(member)) this.report(node, `El constraint '${member}' debe ser una interfaz`);
+    }
+    // TS-style: los defaults deben venir después de los parámetros sin default.
+    let seenDefault = false;
+    for (const parameter of parameters) {
+      if (parameter.default) {
+        seenDefault = true;
+      } else if (seenDefault) {
+        this.report(node, `El parámetro '${parameter.name}' necesita un valor por defecto porque los siguientes lo tienen`);
+      }
+    }
+    // Si un parámetro tiene default y constraint, el default debe satisfacer el constraint.
+    for (const parameter of parameters) {
+      if (!parameter.default || !parameter.constraint) continue;
+      if (!this.satisfiesInterface(parameter.default, parameter.constraint)) this.report(node, `El valor por defecto '${parameter.default}' no satisface el constraint '${parameter.constraint}'`);
+    }
+  }
+
+  // Valida los valores por defecto de los parámetros: cada uno se evalúa en un
+  // scope temporal que contiene los parámetros anteriores (los defaults pueden
+  // referenciar parámetros previos como `function f(x: number, y: number = x * 2)`).
+  private validateParameterDefaults(params: Parameter[], node: { span: import("../core/span.ts").Span }): void {
+    const local = new Scope();
+    for (const parameter of params) {
+      if (parameter.defaultValue) {
+        const actual = this.expression(parameter.defaultValue, local, parameter.type);
+        this.require(actual, parameter.type, parameter.defaultValue);
+        // V3: idem VariableDeclaration, validamos rango de literales numéricos
+        // concretos en defaults de parámetros (acepta `-N` / `+N` unarios).
+        this.validateNumericExpression(parameter.defaultValue, parameter.type);
+      }
+      // V22: los parámetros de función son siempre mutables localmente (el
+      // callee puede asignar a `b` o a `b.x` libremente). La inmutabilidad
+      // se enforce en runtime cuando el tipo es `readonly<T>` o `constRef<T>`.
+      // Las arrow functions (1685) sí restringen a false para evitar mutar
+      // capturas.
+      // V22: los parámetros de función son siempre mutables localmente (el
+      // callee puede asignar a `b` o a `b.x` libremente). La inmutabilidad
+      // se enforce en runtime cuando el tipo es `readonly<T>` o `constRef<T>`.
+      this.defineVariable(local, parameter.name, parameter.type, true, { variadic: parameter.variadic, mutableReference: this.parameterIsMutableReference(parameter.type) }, parameter);
+    }
+  }
+
+  // V30: la forma V2 de match (`case { kind: ... }:`) se elimino.
+  // La exhaustividad la enforce el dialecto a traves de `otherwise(...)`
+  // en la forma V23 (`match(value, [when(...), otherwise(...)])`).
+  // Esta funcion queda como dead code por seguridad.
+  private validateExhaustiveMatch(node: MatchExpression, subjectUnion: UnionDeclaration, scope: Scope): void {
+    void node; void subjectUnion; void scope;
+  }
+  // V3: rango de un literal numérico contra un tipo numérico concreto (i8..u64, f32, f64).
+  // Se invoca cuando una declaración anota explícitamente el tipo numérico y el
+  // initializer es un literal numérico (con posible prefijo `-` o `+`). Reporta
+  // diagnóstico si el valor no cabe en el rango del tipo destino. Las reglas:
+  //   - i*/u* (enteros): Number.isSafeInteger(value) + rango [-2^(n-1), 2^(n-1)-1] para signed,
+  //     [0, 2^n-1] para unsigned. Para unsigned, valor negativo => error.
+  //   - f32/f64 (flotantes): sólo se rechaza que no sea finito (no validamos precisión).
+  private validateNumericLiteral(node: LiteralExpression, expectedType: TypeName): void {
+    if (!isNumericType(expectedType)) return;
+    if (node.literalType !== "number") return; // sólo literales numéricos
+    if (expectedType === "i64" || expectedType === "u64") {
+      const exact = exactIntegerLiteral(node);
+      const min = expectedType === "i64" ? I64_MIN : 0n;
+      const max = expectedType === "i64" ? I64_MAX : U64_MAX;
+      if (exact === undefined || exact < min || exact > max) {
+        this.report(node, `El literal ${node.exactInteger ?? node.raw ?? node.value} no cabe en ${expectedType}`);
+      } else {
+        node.exactInteger = exact.toString(); node.integerType = expectedType;
+      }
+      return;
+    }
+    const raw = node.value;
+    const kind = numericKind(expectedType);
+    const bits = numericBitWidth(expectedType);
+    const sign = numericSign(expectedType);
+    if (kind === "integer" && bits !== null) {
+      // Para u* (unsigned), el valor negativo es siempre un error.
+      if (sign === "unsigned" && typeof raw === "number" && raw < 0) {
+        this.report(node, `El literal ${raw} no cabe en ${expectedType} (rango 0..${(2 ** bits) - 1})`);
+        return;
+      }
+      if (typeof raw !== "number" || !Number.isFinite(raw) || !Number.isInteger(raw)) {
+        this.report(node, `El literal ${raw} no cabe en ${expectedType} (se esperaba un entero)`);
+        return;
+      }
+      if (!Number.isSafeInteger(raw)) {
+        this.report(node, `El literal ${raw} no cabe en ${expectedType} (no es un entero seguro de JavaScript)`);
+        return;
+      }
+      const max = sign === "unsigned" ? (2 ** bits) - 1 : (2 ** (bits - 1)) - 1;
+      const min = sign === "unsigned" ? 0 : -(2 ** (bits - 1));
+      if (raw < min || raw > max) {
+        this.report(node, `El literal ${raw} no cabe en ${expectedType} (rango ${min}..${max})`);
+      }
+    } else if (kind === "float" && bits !== null) {
+      // Para f32/f64: cualquier número finito cabe (rango muy laxo; no
+      // validamos precisión). NaN/Infinity no caben — un literal parseado
+      // rara vez es NaN/Inf, pero defenderse si el lexer lo produce.
+      if (typeof raw !== "number" || !Number.isFinite(raw)) {
+        this.report(node, `El literal ${raw} no es un número finito válido para ${expectedType}`);
+      }
+    }
+  }
+
+  // V4: helper para extraer un valor entero literal de una expresión (o
+  // `undefined` si no es un literal entero). Soporta tanto LiteralExpression
+  // como UnaryExpression con `-`/`+` sobre LiteralExpression.
+  private integer64Literal(node: Expression): boolean {
+    if (node.kind === "LiteralExpression") return node.literalType === "number" && exactIntegerLiteral(node) !== undefined;
+    return node.kind === "UnaryExpression" && (node.operator === "-" || node.operator === "+")
+      && node.operand.kind === "LiteralExpression" && exactIntegerLiteral(node.operand) !== undefined;
+  }
+
+  private literalIntValue(node: Expression): number | undefined {
+    if (node.kind === "LiteralExpression" && node.literalType === "number" && Number.isInteger(Number(node.value))) return Number(node.value);
+    if (node.kind === "UnaryExpression" && (node.operator === "-" || node.operator === "+") && node.operand.kind === "LiteralExpression" && node.operand.literalType === "number" && Number.isInteger(Number(node.operand.value))) return node.operator === "-" ? -Number(node.operand.value) : Number(node.operand.value);
+    return undefined;
+  }
+
+  // V3: helper público-equivalente para casos donde el initializer es un
+  // UnaryExpression con un literal numérico (p.ej. `-129`). Lo desempaqueta y
+  // delega en `validateNumericLiteral` con el signo aplicado.
+  private validateNumericExpression(node: Expression, expectedType: TypeName): void {
+    if (!isNumericType(expectedType)) return;
+    // Acepta LiteralExpression directo.
+    if (node.kind === "LiteralExpression") { this.validateNumericLiteral(node, expectedType); return; }
+    // O UnaryExpression con operador `-`/`+` y operando literal numérico.
+    if (node.kind === "UnaryExpression" && (node.operator === "-" || node.operator === "+") && node.operand.kind === "LiteralExpression") {
+      const operand = node.operand;
+      if (operand.literalType !== "number") return;
+      if (expectedType === "i64" || expectedType === "u64") {
+        const magnitude = exactIntegerLiteral(operand);
+        if (magnitude !== undefined) {
+          const exact = node.operator === "-" ? -magnitude : magnitude;
+          const synthetic: LiteralExpression = { ...operand, exactInteger: exact.toString() };
+          this.validateNumericLiteral(synthetic, expectedType);
+          if (synthetic.integerType === expectedType) {
+            node.exactInteger = exact.toString(); node.integerType = expectedType;
+          }
+          return;
+        }
+      }
+      const signed = node.operator === "-" ? -Number(operand.value) : Number(operand.value);
+      const synthetic: LiteralExpression = { ...operand, value: signed };
+      this.validateNumericLiteral(synthetic, expectedType);
+    }
+  }
+
+  private validateType(type: TypeName, node: { span: import("../core/span.ts").Span }, interfaceAllowed: boolean, primitiveOnly = false, scope?: Scope, visited?: Set<string>): TypeName {
+    // Resolver cualquier `typeof X` en posición de tipo antes de validar.
+    // Devolvemos el tipo ya resuelto para que el llamador pueda reescribirlo
+    // en su AST (e.g. `node.declaredType = resolved`) y no quede la marca
+    // `$typeof$x` colgando para comparaciones y generación de código.
+    if (isTypeofType(type)) {
+      if (!scope) { this.report(node, `typeof tipo requiere un ámbito activo para resolver '${typeofTarget(type)}'`); return type; }
+      const name = typeofTarget(type);
+      const sym = scope.resolve(name);
+      if (!sym) { this.report(node, `typeof tipo: '${name}' no está definido en este ámbito`); return type; }
+      if (sym.kind === "variable" || sym.kind === "type") {
+        const resolvedType = sym.type;
+        // Si el tipo resuelto es a su vez un `typeof`, seguimos resolviendo.
+        return this.validateType(resolvedType, node, interfaceAllowed, primitiveOnly, scope, visited);
+      }
+      this.report(node, `typeof tipo: '${name}' no tiene un tipo resoluble`);
+      return type;
+    }
+    // Alias de tipo: `type X = ...`. El alias es transparente: expandimos el
+    // RHS y validamos contra ese. `visited` evita ciclos como
+    // `type A = B; type B = A;`.
+    if (this.aliases.has(type)) {
+      const next = new Set(visited);
+      if (next.has(type)) { this.report(node, `Ciclo en alias de tipo '${type}'`); return type; }
+      next.add(type);
+      return this.validateType(this.aliases.get(type)!.type, node, interfaceAllowed, primitiveOnly, scope, next);
+    }
+    if (this.activeTypeParameters.has(type)) return type;
+    // V1.2: las uniones no-genéricas (e.g. `Direction`) son tipos concretos válidos.
+    if (this.unions.has(type)) {
+      const unionNode = this.unions.get(type)!;
+      if (unionNode.typeParameters.length) this.report(node, `'${type}' espera ${unionNode.typeParameters.length} argumento(s) de tipo, no lleva ninguno`);
+      return type;
+    }
+    if (isUnionType(type)) { for (const member of unionMembers(type)) this.validateType(member, node, interfaceAllowed, primitiveOnly, scope); return type; }
+    if (isIntersectionType(type)) { for (const member of intersectionMembers(type)) this.validateType(member, node, true, true, scope); return type; }
+    // V5: readonly<T> es un decorador. Validamos recursivamente el tipo interno.
+    if (isReadonlyType(type)) {
+      const inner = readonlyInner(type);
+      if (inner) this.validateType(inner, node, interfaceAllowed, primitiveOnly, scope);
+      return type;
+    }
+    if (isArrayType(type)) {
+      const element = arrayElement(type);
+      // V30.12.2: Array<Interface> se acepta a nivel de type-checker.
+      // El codegen genera un union automatico con las clases concretas
+      // que tengan campo `kind: string` y emiten `std::vector<I_AutoUnion>`.
+      // Si no hay clases concretas, el codegen emite un error claro.
+      // Permitimos `interfaceAllowed=true` para que el elemento (que puede
+      // ser una interface) no se rechace en la recursion.
+      if (element === "void") this.report(node, `El array necesita un tipo de elemento concreto, no 'void'`);
+      this.validateType(element, node, true, primitiveOnly, scope, visited);
+      return type;
+    }
+    // V4: arrays de tamaño fijo `T[N]`. Validamos que T es concreto y N
+    // es positivo. Registramos en el cache indexado por el nombre canónico
+    // para que codegen y bounds-check puedan consultar element/size sin
+    // re-parsear el string (regla del dialecto: nada de regex sobre tipos).
+    const fixedMatch = type.match(/^([^\s\[\]]+)\[(\d+)\]$/);
+    if (fixedMatch) {
+      const element = fixedMatch[1];
+      const size = Number(fixedMatch[2]);
+      if (element === "void" || this.interfaces.has(element)) this.report(node, `El array fijo necesita un tipo de elemento concreto, no '${element}'`);
+      if (!Number.isInteger(size) || size <= 0) this.report(node, `El tamaño del array fijo debe ser un literal entero positivo, no '${size}'`);
+      this.validateType(element, node, false, primitiveOnly, scope);
+      return registerFixedArray(element, size);
+    }
+    if (isTupleType(type)) {
+      const elements = tupleElements(type);
+      if (!elements.length) this.report(node, "Una tupla debe tener al menos un elemento");
+      for (const element of elements) {
+        if (element === "void" || this.interfaces.has(element)) this.report(node, `La tupla necesita tipos concretos, no '${element}'`);
+        this.validateType(element, node, false, primitiveOnly, scope);
+      }
+      return type;
+    }
+    if (isFunctionType(type)) {
+      for (const parameter of functionParameters(type)) {
+        if (parameter === "void" || this.interfaces.has(parameter)) this.report(node, `Una closure necesita parámetros concretos, no '${parameter}'`);
+        this.validateType(parameter, node, false, primitiveOnly, scope);
+      }
+      const result = functionResult(type);
+      if (this.interfaces.has(result)) this.report(node, `Una closure necesita un retorno concreto, no '${result}'`);
+      this.validateType(result, node, false, primitiveOnly, scope);
+      return type;
+    }
+    if (isGenericType(type)) {
+      const base = genericBase(type); const owner = this.classes.get(base);
+      // V1.2: las uniones son tipos válidos aunque no estén en classes.
+      if (!owner && this.unions.has(base)) {
+        const unionNode = this.unions.get(base)!;
+        // V1.4: defaults en typeParameters (e.g. `Result<T>` → E="string").
+        if (genericArguments(type).length > unionNode.typeParameters.length) this.report(node, `'${base}' espera ${unionNode.typeParameters.length} argumento(s) de tipo como máximo, recibió ${genericArguments(type).length}`);
+        else if (genericArguments(type).length < unionNode.typeParameters.length) {
+          const missing = unionNode.typeParameters.slice(genericArguments(type).length);
+          if (missing.some(p => p.default === undefined)) {
+            const required = unionNode.typeParameters.length - missing.filter(p => p.default !== undefined).length;
+            this.report(node, `'${base}' espera al menos ${required} argumento(s) de tipo, recibió ${genericArguments(type).length}`);
+          }
+        }
+        genericArguments(type).forEach(argument => this.validateType(argument, node, false, primitiveOnly, scope));
+        return type;
+      } const arguments_ = genericArguments(type);
+      // V22 (Memory Model v2): ref<T> y constRef<T> no se permiten como
+      // argumentos de tipo en genéricos (e.g. `Array<ref<Counter>>` no
+      // tiene sentido porque las referencias no son valores). E4205.
+      for (const arg of arguments_) {
+        if (isGenericType(arg) && (genericBase(arg) === "ref" || genericBase(arg) === "constRef")) {
+          this.report(node, `E4205: borrowed references (ref<T>/constRef<T>) cannot be used as type arguments in generic instantiations.`);
+        }
+      }
+      // Instanciación de alias genérico: `type Box<T> = T[]` + `Box<number>`.
+      if (!owner && this.aliases.has(base)) {
+        const alias = this.aliases.get(base)!;
+        const next = visited ?? new Set<string>();
+        if (next.has(base)) { this.report(node, `Ciclo en alias de tipo '${base}'`); return; }
+        if (arguments_.length !== alias.typeParameters.length) { this.report(node, `'${base}' espera ${alias.typeParameters.length} argumentos de tipo, recibió ${arguments_.length}`); return; }
+        arguments_.forEach(argument => this.validateType(argument, node, false, primitiveOnly, scope));
+        const aliasConstraints = TypeChecker.constraintsOf(alias.typeParameters);
+        for (const [parameter, constraint] of Object.entries(aliasConstraints)) {
+          const index = alias.typeParameters.findIndex(parameter_ => parameter_.name === parameter);
+          const actual = arguments_[index];
+          if (actual && constraint && !this.satisfiesInterface(actual, constraint)) this.report(node, `El tipo '${actual}' no satisface el constraint '${constraint}' de '${parameter}'`);
+        }
+        const next2 = new Set(next); next2.add(base);
+        const subs = new Map<string, TypeName>();
+        alias.typeParameters.forEach((parameter, index) => { if (arguments_[index]) subs.set(parameter.name, arguments_[index]); });
+        const expanded = this.substituteType(alias.type, subs);
+        this.withTypeParameters(alias.typeParameters, () => {
+          this.validateType(expanded, node, interfaceAllowed, primitiveOnly, scope, next2);
+        });
+        return type;
+      }
+      if (base === "Promise") {
+        if (arguments_.length !== 1) this.report(node, `'Promise' espera 1 argumento de tipo, recibió ${arguments_.length}`);
+        arguments_.forEach(argument => this.validateType(argument, node, false, primitiveOnly, scope));
+        return type;
+      }
+      if (base === "Result") {
+        // V1.4: `Result<T>` (1 arg, E por defecto = string) o `Result<T, E>`.
+        // Se delega en la rama de uniones (sintética, registrada por
+        // declareResultSyntheticUnion) que ya valida nº de typeArgs y
+        // procesa defaults. Solo añadimos aquí la restricción legacy
+        // de que T ≠ void (que el flujo de unions no conoce).
+        if (arguments_.length < 1 || arguments_.length > 2) this.report(node, `'Result' espera 1 o 2 argumentos de tipo, recibió ${arguments_.length}`);
+        if (arguments_[0] === "void") this.report(node, "Result<void> no está soportado; usa Result<boolean> o Promise<void>");
+        // Si no es la unión sintética (p.ej. alguien redeclaró `Result`),
+        // caemos al path genérico inferior para no romper su semántica.
+        if (this.unions.has(base) && this.unions.get(base)!.typeParameters.length) {
+          const unionNode = this.unions.get(base)!;
+          // V1.4: la unión sintética declara 2 typeParameters (T, E) pero
+          // E tiene default. Permitir 1 o 2 argumentos; los defaults se
+          // resuelven en la rama genérica inferior.
+          if (arguments_.length > unionNode.typeParameters.length) this.report(node, `'${base}' espera ${unionNode.typeParameters.length} argumento(s) de tipo como máximo, recibió ${arguments_.length}`);
+          else if (arguments_.length < unionNode.typeParameters.length) {
+            const missing = unionNode.typeParameters.slice(arguments_.length);
+            if (missing.some(p => p.default === undefined)) {
+              const required = unionNode.typeParameters.length - missing.filter(p => p.default !== undefined).length;
+              this.report(node, `'${base}' espera al menos ${required} argumento(s) de tipo, recibió ${arguments_.length}`);
+            }
+          }
+          arguments_.forEach(argument => this.validateType(argument, node, false, primitiveOnly, scope));
+          return type;
+        }
+        // Si no hay unión sintética (caso patológico), validamos igual.
+        arguments_.forEach(argument => this.validateType(argument, node, false, primitiveOnly, scope));
+        return type;
+      }
+      if (base === "Map") {
+        if (arguments_.length !== 2) this.report(node, `'Map' espera 2 argumentos de tipo (K, V), recibió ${arguments_.length}`);
+        arguments_.forEach(argument => this.validateType(argument, node, false, primitiveOnly, scope));
+        return type;
+      }
+      if (base === "Optional") {
+        if (arguments_.length !== 1) this.report(node, `'Optional' espera 1 argumento de tipo, recibió ${arguments_.length}`);
+        this.validateType(arguments_[0], node, false, primitiveOnly, scope);
+        return type;
+      }
+      // Issue #3: smart pointers. Aceptan exactamente 1 argumento de tipo,
+      // que NO puede ser primitivo (los primitivos van siempre por valor).
+      if (base === "Unq" || base === "Rc" || base === "MutRef" || base === "Mut") {
+        if (arguments_.length !== 1) this.report(node, `'${base}' espera 1 argumento de tipo, recibió ${arguments_.length}`);
+        const inner = arguments_[0];
+        if (inner && isPrimitive(inner)) this.report(node, `'${base}<${inner}>' no soporta primitivos (los primitivos van por valor)`);
+        this.validateType(inner, node, false, primitiveOnly, scope);
+        // V22 PR#9a: E4404 - deprecation warning para Rc<T>. Se debe migrar
+        // a ptr<T> (unique ownership) o weak<T> (shared ownership circular,
+        // PR#9b). Reportamos como warning (no error) para no romper código
+        // existente durante la migracion.
+        if (base === "Rc") {
+          this.report(node, `E4404: 'Rc<T>' is deprecated. Use 'ptr<T>' for unique ownership or 'weak<T>' for shared ownership that breaks cycles (V22 PR#9b).`);
+        }
+        return type;
+      }
+      if (base === "Set") {
+        if (arguments_.length !== 1) this.report(node, `'Set' espera 1 argumento de tipo, recibió ${arguments_.length}`);
+        arguments_.forEach(argument => this.validateType(argument, node, false, primitiveOnly, scope));
+        return type;
+      }
+      // V1.2: las uniones también son tipos genéricos. Aceptan el número
+      // declarado de typeParameters. V1.4: si los parámetros que faltan
+      // tienen `default`, se omiten sin error (e.g. `Result<T>` → E="string").
+      if (this.unions.has(base)) {
+        const unionNode = this.unions.get(base)!;
+        if (arguments_.length > unionNode.typeParameters.length) this.report(node, `'${base}' espera ${unionNode.typeParameters.length} argumento(s) de tipo como máximo, recibió ${arguments_.length}`);
+        else if (arguments_.length < unionNode.typeParameters.length) {
+          // ¿Todos los parámetros que faltan tienen default?
+          const missing = unionNode.typeParameters.slice(arguments_.length);
+          if (missing.some(p => p.default === undefined)) {
+            const required = unionNode.typeParameters.length - missing.filter(p => p.default !== undefined).length;
+            this.report(node, `'${base}' espera al menos ${required} argumento(s) de tipo, recibió ${arguments_.length}`);
+          }
+        }
+        arguments_.forEach(argument => this.validateType(argument, node, false, primitiveOnly, scope));
+        return type;
+      }
+      // V22 (Memory Model v2): ptr<T>, constPtr<T>, ref<T>, constRef<T> son
+      // modificadores intrínsecos de paso, no tipos genéricos definidos por
+      // el usuario. Aceptamos exactamente 1 argumento (T) y seguimos.
+      if (base === "ptr" || base === "constPtr" || base === "ref" || base === "constRef") {
+        if (arguments_.length !== 1) this.report(node, `'${base}<T>' espera 1 argumento de tipo, recibió ${arguments_.length}`);
+        else arguments_.forEach(argument => this.validateType(argument, node, false, primitiveOnly, scope));
+        return type;
+      }
+      if (!owner) { this.report(node, `Tipo genérico no definido '${base}'`); return type; }
+      if (arguments_.length !== owner.typeParameters.length) this.report(node, `'${base}' espera ${owner.typeParameters.length} argumentos de tipo, recibió ${arguments_.length}`);
+      arguments_.forEach(argument => this.validateType(argument, node, false, primitiveOnly, scope));
+      owner.typeParameters.forEach((parameter, index) => {
+        const constraint = parameter.constraint; const actual = arguments_[index];
+        if (constraint && actual && !this.satisfiesInterface(actual, constraint)) this.report(node, `El tipo '${actual}' no satisface el constraint '${constraint}' de '${parameter.name}'`);
+      });
+      return type;
+    }
+    const primitive = isPrimitive(type);
+    const concrete = this.classes.has(type) || this.aliases.has(type) || this.enums.has(type) || ["TcpListener", "TcpConnection", "TlsContext", "TlsConnection", "CancellationSource", "CancellationToken", "JsonValue", "FileReader", "Request", "Response", "Server", "HttpClientResponse", "Timer", "FsWatcher", "FsEvent", "Regex", "Console"].includes(type);
+    const contract = interfaceAllowed && this.interfaces.has(type);
+    // Los tipos genéricos `Promise<T>`, `Result<T, E>`, `Map<K, V>`, `Set<T>`,
+    // `Optional<T>` se aceptan siempre (son tipos del runtime).
+    const genericBaseName = type.includes("<") ? type.slice(0, type.indexOf("<")) : "";
+    const genericConcrete = ["Promise", "Result", "Map", "Set", "Optional"].includes(genericBaseName);
+    if (!primitive && (primitiveOnly || (!concrete && !contract && !genericConcrete))) {
+      // V30.12.0: forward declaration. Si el tipo no esta declarado
+      // todavia (uso antes de declaracion), encolamos en forwardRefs
+      // y validamos al final de check(). Si seguimos en la segunda
+      // pasada (resolvingForwardRefs=true) y el tipo sigue sin estar,
+      // entonces SI reportamos el error. primitiveOnly=true fuerza
+      // error inmediato (no se encola).
+      if (!primitiveOnly && !this.resolvingForwardRefs) {
+        this.forwardRefs.push({ type, node, interfaceAllowed, primitiveOnly, scope });
+        return;
+      }
+      this.report(node, `Tipo no definido o no permitido '${type}'`);
+    }
+  }
+
+  private statement(node: Statement, scope: Scope): void {
+    if("decorators" in node && node.decorators?.some(d=>d.name === "etsPublish")) this.report(node,"@etsPublish solo es válido dentro del Estatic producido por @etsgen");
+    switch (node.kind) {
+      case "VariableDeclaration": {
+        // V6: si el tipo es `T[N]` con `N` siendo un IdentifierExpression
+        // que referencia un `const` con valor literal conocido, propagamos el
+        // valor antes de validateType (que registra el cache). Sin esto, el
+        // bounds-check y el codegen ven `u8[N]` con `N` simbólico y no
+        // pueden emitir `std::array<T, 4>` constexpr.
+        if (node.declaredType) {
+          node.declaredType = this.propagateConstantArraySize(node.declaredType, scope);
+        }
+        const expandedDeclared = node.declaredType ? this.expandType(node.declaredType, scope) : undefined;
+        // V4: validateType() registra el array fijo en los caches de
+        // type-system.ts ANTES de evaluar el initializer. Sin esto, el
+        // initializer no recibe `expected = T[N]` correctamente.
+        if (node.declaredType) this.validateType(node.declaredType, node, true, false, scope);
+        const actual = this.expression(node.initializer, scope, expandedDeclared);
+        const expected = expandedDeclared ?? actual;
+        if (node.declaredType) {
+          // Reescribimos el AST con el tipo ya expandido (`typeof` resuelto
+          // incluido) para que codegen vea directamente `number` y no la
+          // marca `$typeof$x`. validateType ya se llamó antes para registrar
+          // arrays fijos en los caches; no lo repetimos aquí.
+          node.declaredType = expandedDeclared;
+          // V3: si el tipo es un numérico concreto (i8..u64, f32, f64) y el
+          // initializer es un literal numérico (con posible signo unario),
+          // verificamos que el valor quepa en el rango del tipo destino.
+          this.validateNumericExpression(node.initializer, node.declaredType);
+        }
+        if (expected === "void") this.report(node, "Una variable no puede ser de tipo void");
+        // V22: si el expected es `ptr<T>`/`constPtr<T>` y el actual es `T`,
+        // aceptamos (inferencia de ownership). El codegen usará
+        // make_unique<T>(...) si el initializer es un NewExpression.
+        const isPtrImplicit = expected && isGenericType(expected)
+          && (genericBase(expected) === "ptr" || genericBase(expected) === "constPtr")
+          && genericArguments(expected)[0] === actual
+          && this.classes.has(actual)
+          && actual !== "void";
+        if (!typeMatches(actual, expected) && !isPtrImplicit) this.report(node, `Se esperaba ${expected}, pero se obtuvo ${actual}`);
+        // V22 PR#134: detectar borrow conflicts. Si el tipo declarado es
+        // `ref<T>`/`constRef<T>` y el initializer es `ref(x)`/`constRef(x)`,
+        // registramos el borrow sobre la fuente `x` y comprobamos aliasing
+        // con borrows activos en el scope actual.
+        if (expected && isGenericType(expected)
+            && (genericBase(expected) === "ref" || genericBase(expected) === "constRef")
+            && node.initializer.kind === "CallExpression"
+            && (node.initializer.callee === "ref" || node.initializer.callee === "constRef")
+            && node.initializer.args.length === 1
+            && node.initializer.args[0].kind === "IdentifierExpression") {
+          const sourceName = node.initializer.args[0].name;
+          const borrowName = node.name;  // e.g. "a" en `const a: ref<User> = ref(u)`
+          const newMode: "mut" | "shared" = node.initializer.callee === "ref" ? "mut" : "shared";
+          const declaredLine = node.span.start.line;
+          // V30.7 NLL: la clave del borrowStack es el NOMBRE DEL BORROW
+          // (e.g. "a"), no la fuente. Asi, cuando se lee "a" despues,
+          // sabemos a que fuente ("u") actualizar su lastUseLine.
+          //
+          // Para detectar conflictos con OTROS borrows sobre la MISMA
+          // fuente, tenemos que escanear todos los borrows del scope y
+          // ver si alguno tiene `sourceName === sourceName` y sigue vivo
+          // (lastUseLine >= declaredLine).
+          const currentScope = this.borrowStack[this.borrowStack.length - 1];
+          let conflictingSource: { mode: "mut" | "shared"; lastUseLine: number } | undefined;
+          for (const [, entry] of currentScope) {
+            if (entry.sourceName === sourceName && entry.lastUseLine >= declaredLine) {
+              conflictingSource = entry;
+              break;
+            }
+          }
+          if (conflictingSource) {
+            const existingIsMut = conflictingSource.mode === "mut";
+            const newIsMut = newMode === "mut";
+            const isConflict = existingIsMut || newIsMut;
+            if (isConflict) {
+              const code = existingIsMut && newIsMut ? "E4206" : "E4207";
+              const msg = existingIsMut && newIsMut
+                ? `E4206: mutable borrow conflict. '${sourceName}' is already borrowed as 'ref<T>' in this scope; cannot borrow again as 'ref<T>' (would create two mutable references). Use 'constRef(${sourceName})' if shared access is enough.`
+                : `E4207: mutable/shared borrow conflict. '${sourceName}' is already borrowed ${existingIsMut ? "as 'ref<T>' (mutable)" : "as 'constRef<T>' (shared)"} in this scope; cannot borrow ${newIsMut ? "as 'ref<T>' (mutable)" : "as 'constRef<T>' (shared)"} because it would violate Rust-like aliasing rules.`;
+              this.report(node.initializer, msg);
+            }
+          }
+          // Registrar este borrow. Clave = nombre del borrow (no la fuente).
+          // lastUseLine = declared (ultimo uso conocido; se actualizara al
+          // leerse el borrow).
+          const entry = { mode: newMode, lastUseLine: declaredLine, declared: declaredLine, sourceName };
+          currentScope.set(borrowName, entry);
+          // V30.7 NLL: tambien en borrowLog para resolver conflictos al final.
+          this.borrowLog.push({ ...entry, borrowName });
+        }
+        // V6: si es `const` y el initializer es un literal puro, anotamos el
+        // valor para que el codegen pueda emitir `constexpr` y propagar el
+        // valor a usos posteriores (tamaños de arrays fijos, branches con
+        // condición constante). Limitación: solo literales simples; no
+        // evaluamos expresiones (eso sería constant folding completo).
+        if (!node.mutable && node.initializer.kind === "LiteralExpression") {
+          const lit = node.initializer;
+          node.constValue = lit.exactInteger !== undefined && !Number.isSafeInteger(Number(lit.exactInteger))
+            ? null : lit.value as number | string | boolean | null;
+        }
+        if (node.arrayBindings && node.arrayBindings.length > 0) {
+          // Destructuring de arrays: cada binding hereda el tipo del elemento
+          // del initializer (no del array completo). Si el initializer es
+          // `string[]`, los bindings son `string`. Si el binding declara su
+          // propio tipo, lo respetamos.
+          const elementType = (actual && actual.endsWith("[]")) ? actual.slice(0, -2) : actual;
+          for (const binding of node.arrayBindings) {
+            const bindingType = binding.declaredType ? this.expandType(binding.declaredType, scope) : elementType;
+            // Default value: si lo hay, su tipo debe ser compatible con el binding.
+            // Si el initializer tiene menos elementos que bindings, los que tengan
+            // default obtienen ese default; el resto produce error en runtime.
+            if (binding.defaultValue) {
+              const defaultType = this.expression(binding.defaultValue, scope, bindingType);
+              if (!typeMatches(defaultType, bindingType)) this.report(binding.defaultValue, `Default value de '${binding.name}': se esperaba ${bindingType}, se obtuvo ${defaultType}`);
+            }
+            if (!this.defineVariable(scope, binding.name, bindingType, node.mutable)) this.report(node, `Símbolo duplicado '${binding.name}'`);
+          }
+        } else if (node.objectBindings && node.objectBindings.length > 0) {
+          // V30.20: object destructuring. Cada binding es `name: property`
+          // (shorthand si name == property). El tipo del binding es el
+          // tipo del field en el initializer. Si el binding declara tipo
+          // propio, se respeta.
+          for (const binding of node.objectBindings) {
+            let bindingType: string;
+            if (binding.declaredType) {
+              bindingType = this.expandType(binding.declaredType, scope);
+            } else {
+              // Look up the field type on the object/interface/class.
+              // Resolvemos el tipo real del initializer y buscamos su field.
+              // Simplificacion: usamos `any` si no se puede resolver, y el
+              // codegen emite el acceso directo (`p.x`) que C++ valida.
+              bindingType = "any";
+            }
+            if (binding.defaultValue) {
+              const defaultType = this.expression(binding.defaultValue, scope, bindingType);
+              if (!typeMatches(defaultType, bindingType)) this.report(binding.defaultValue, `Default value de '${binding.name}': se esperaba ${bindingType}, se obtuvo ${defaultType}`);
+            }
+            if (!this.defineVariable(scope, binding.name, bindingType, node.mutable)) this.report(node, `Símbolo duplicado '${binding.name}'`);
+          }
+        } else if (!this.defineVariable(scope, node.name, expected, node.mutable, { constValue: node.constValue }, node)) this.report(node, `Símbolo duplicado '${node.name}'`);
+        if (!node.arrayBindings?.length && !node.objectBindings?.length) {
+          this.closureReturns.flow(scope.resolveLocal(node.name), node.initializer);
+        }
+        for (const binding of node.arrayBindings ?? []) this.closureReturns.flow(scope.resolveLocal(binding.name), node.initializer);
+        break;
+      }
+      case "UsingDeclaration": {
+        // `using name = expr;` se type-checkea igual que `let name = expr`,
+        // con el matiz de que el binding es siempre inmutable (los recursos
+        // RAII no se reasignan) y se permite cualquier tipo Disposable o con
+        // destructor C++. Por ahora aceptamos cualquier tipo.
+        const expandedDeclared = node.declaredType ? this.expandType(node.declaredType, scope) : undefined;
+        const actual = this.expression(node.initializer, scope, expandedDeclared);
+        const expected = expandedDeclared ?? actual;
+        if (expandedDeclared) this.validateType(expandedDeclared, node, true, false, scope);
+        // V3: rango literal para tipos numéricos concretos (idem VariableDeclaration).
+        if (expandedDeclared) this.validateNumericExpression(node.initializer, expandedDeclared);
+        if (expected === "void") this.report(node, "Un recurso 'using' no puede ser de tipo void");
+        if (!typeMatches(actual, expected)) this.report(node, `Se esperaba ${expected}, pero se obtuvo ${actual}`);
+        if (!this.defineVariable(scope, node.name, expected, false)) this.report(node, `Símbolo duplicado '${node.name}'`);
+        break;
+      }
+      case "ExportDefaultDeclaration": {
+        // `export default <decl-or-expr>` parsea una declaración completa
+        // (class/function/let/const) o una expresión. Se type-checkea
+        // normalmente; el codegen emite un marcador pero compila igual.
+        this.statement(node.declaration as Statement, scope);
+        break;
+      }
+      case "ExportNamedDeclaration": {
+        // `export { name1, name2 as alias2 }` re-exporta bindings ya
+        // declarados arriba. Verificamos que existan; el alias es opcional
+        // y se registra en el scope para que pueda usarse como nombre local.
+        for (const spec of node.specifiers) {
+          const original = scope.resolve(spec.name);
+          if (!original) { this.report(spec, `Símbolo no definido '${spec.name}'`); continue; }
+          if (spec.alias) scope.define(spec.alias, { ...original, name: spec.alias } as unknown as SymbolInfo);
+        }
+        break;
+      }
+      case "FunctionDeclaration": {
+        // V22 (Memory Model v2): ref<T>/constRef<T> no se permiten como
+        // return type en V1 (no hay análisis de lifetimes). E42xx.
+        if (isGenericType(node.returnType) && (genericBase(node.returnType) === "ref" || genericBase(node.returnType) === "constRef")) {
+          this.report(node, `E42xx: borrowed references cannot be returned yet. Returning ref<T> or constRef<T> requires lifetime analysis that is not supported by the current ownership model.`);
+        }
+        // V22: ref<T>/constRef<T> no se permiten en funciones `async`
+        // (podrían quedar colgando durante una suspensión). E4204.
+        if (node.async) {
+          for (const p of node.params) {
+            if (isGenericType(p.type) && (genericBase(p.type) === "ref" || genericBase(p.type) === "constRef")) {
+              this.report(p, `E4204: borrowed parameters (ref<T>/constRef<T>) are not allowed in async functions. Receive the value by copy (T) or by ownership (ptr<T>).`);
+            }
+          }
+        }
+        this.withTypeParameters(node.typeParameters, () => {
+          const local = new Scope(scope);
+          for (const p of node.params) {
+            // `p?: T` se modela como `Optional<T>` en el scope. Si el user
+            // ya escribió `Optional<T>` no duplicamos el envoltorio.
+            const effectiveType = p.optional
+              ? (isGenericType(p.type) && genericBase(p.type) === "Optional" ? p.type : genericType("Optional", [p.type]))
+              : p.type;
+            if (!this.defineVariable(local, p.name, effectiveType, true, { variadic: p.variadic, mutableReference: this.parameterIsMutableReference(p.type) }, p)) this.report(node, `Parámetro duplicado '${p.name}'`);
+          }
+          const previousReturn = this.currentReturn; const previousAsync = this.currentAsync;
+          this.currentReturn = node.async && isPromiseType(node.returnType) ? promiseResult(node.returnType) : node.returnType;
+          this.currentAsync = node.async;
+          this.statement(node.body, local);
+          this.currentReturn = previousReturn; this.currentAsync = previousAsync;
+        });
+        break;
+      }
+      case "InterfaceDeclaration": break;
+      case "TypeAliasDeclaration": break;
+      case "ClassDeclaration": {
+        // V19: registramos la clase actual. Cuando visitamos los métodos,
+        // `currentClass` les permite enforzar `private`/`protected` sobre
+        // accesos a campos/métodos de la misma clase.
+        const previousClass = this.currentClass;
+        this.currentClass = node.name;
+        this.withTypeParameters(node.typeParameters, () => { for (const method of node.methods) this.classMethod(method, node, scope); });
+        this.currentClass = previousClass;
+        break;
+      }
+      case "EnumDeclaration": break;
+      case "BlockStatement": {
+        const child = new Scope(scope);
+        // V22 PR#134: push borrow scope. Las declaraciones ref()/constRef()
+        // dentro de este bloque se registran en el nuevo nivel y se limpian
+        // al hacer pop (lexical end-of-block).
+        this.borrowStack.push(new Map());
+        for (const s of node.statements) this.statement(s, child);
+        this.borrowStack.pop();
+        break;
+      }
+      case "ExpressionStatement": this.expression(node.expression, scope); break;
+      case "IfStatement": {
+        const condType = this.expression(node.condition, scope);
+        this.require(condType, "boolean", node.condition);
+        // V1.4: detectar narrowing de tagged unions. Patrones reconocidos:
+        //   if (expr.tag == lit) / === lit
+        //   if (expr.tag != lit) / !== lit
+        // `expr` debe ser `IdentifierExpression` con tipo union con
+        // variantes que tengan discriminador declarado.
+        const narrowInfo = this.parseNarrowingCondition(node.condition, scope);
+        // V22: snapshot del estado `moved` antes de cada rama. Si ambas
+        // ramas mueven la misma variable, queda `moved`. Si solo una, queda
+        // `maybe-moved`. La implementación V1 conservadora hace un join
+        // por intersección: si una rama no toca una variable, conserva el
+        // estado previo (que podría ser `Available` o `moved`).
+        const previousMoved = new Map(this.moved);
+        if (narrowInfo) {
+          const thenVariants = narrowInfo.discriminator
+            ? this.variantsMatchingDiscriminator(narrowInfo.unionType, narrowInfo.discriminator)
+            : undefined;
+          const elseVariants = narrowInfo.discriminator && thenVariants
+            ? this.variantsExcludingDiscriminator(narrowInfo.unionType, narrowInfo.discriminator)
+            : undefined;
+          const previousNarrowed = new Map(this.narrowed);
+          if (thenVariants) this.narrowed.set(narrowInfo.name, { unionType: narrowInfo.unionType, discriminator: narrowInfo.discriminator, variants: thenVariants });
+          const thenMoved = new Map(this.moved);
+          this.statement(node.thenBranch, scope);
+          const afterThen = new Map(this.moved);
+          // Restauramos para que el `else` empiece desde el mismo snapshot.
+          this.moved = thenMoved;
+          this.narrowed = previousNarrowed;
+          if (node.elseBranch) {
+            const previousNarrowed2 = new Map(this.narrowed);
+            if (elseVariants) this.narrowed.set(narrowInfo.name, { unionType: narrowInfo.unionType, discriminator: narrowInfo.discriminator, variants: elseVariants });
+            this.statement(node.elseBranch, scope);
+            // V22 join: una variable queda `moved` si está `moved` en
+            // AMBAS ramas. Si está `moved` solo en una, queda `maybe-moved`.
+            // Si está `maybe-moved` en una y `moved` en la otra, queda
+            // `maybe-moved` (puede que no se haya movido).
+            for (const [name, state] of this.moved) {
+              const other = afterThen.get(name) ?? previousMoved.get(name);
+              if (other === "moved" && state === "moved") this.moved.set(name, "moved");
+              else if (other === "moved" || state === "moved") this.moved.set(name, "maybe-moved");
+              else this.moved.set(name, state);
+            }
+            this.narrowed = previousNarrowed2;
+          } else {
+            // Sin else: si la rama `then` movió la variable, ahora es
+            // `maybe-moved` (puede que no se haya ejecutado el then).
+            for (const [name, state] of afterThen) {
+              if (state === "moved" && !this.moved.has(name)) this.moved.set(name, "maybe-moved");
+            }
+          }
+        } else {
+          const thenMoved = new Map(this.moved);
+          this.statement(node.thenBranch, scope);
+          const afterThen = new Map(this.moved);
+          this.moved = thenMoved;
+          if (node.elseBranch) {
+            this.statement(node.elseBranch, scope);
+            for (const [name, state] of this.moved) {
+              const other = afterThen.get(name) ?? previousMoved.get(name);
+              if (other === "moved" && state === "moved") this.moved.set(name, "moved");
+              else if (other === "moved" || state === "moved") this.moved.set(name, "maybe-moved");
+              else this.moved.set(name, state);
+            }
+          } else {
+            for (const [name, state] of afterThen) {
+              if (state === "moved" && !this.moved.has(name)) this.moved.set(name, "maybe-moved");
+            }
+          }
+        }
+        break;
+      }
+      case "WhileStatement":
+        this.require(this.expression(node.condition, scope), "boolean", node.condition);
+        this.loopDepth++; this.statement(node.body, scope); this.loopDepth--; break;
+      case "ForStatement": {
+        const local = new Scope(scope);
+        if (node.initializer) this.statement(node.initializer, local);
+        if (node.condition) this.require(this.expression(node.condition, local), "boolean", node.condition);
+        if (node.increment) this.expression(node.increment, local);
+        this.loopDepth++; this.statement(node.body, local); this.loopDepth--; break;
+      }
+      case "BreakStatement": if (this.loopDepth === 0) this.report(node, "break solo es válido dentro de un bucle"); break;
+      case "ContinueStatement": if (this.loopDepth === 0) this.report(node, "continue solo es válido dentro de un bucle"); break;
+      case "ForOfStatement": {
+        const iterableType = this.expression(node.iterable, scope);
+        // Determina el tipo del elemento en función del iterable.
+        let elementType: TypeName;
+        if (isArrayType(iterableType)) elementType = arrayElement(iterableType);
+        else if (isTupleType(iterableType)) elementType = iterableType;
+        else if (iterableType === "string") elementType = "string";
+        else if (isMapType(iterableType)) elementType = tupleType(genericArguments(iterableType));
+        else if (isSetType(iterableType)) elementType = genericArguments(iterableType)[0] ?? "void";
+        else { this.report(node.iterable, `El tipo '${iterableType}' no es iterable en for..of`); elementType = "void"; }
+        // `for await (const x of arr)`: el elemento debe ser Promise<T> y el
+        // binding tiene tipo T. Es la inversa de `Promise.all`-like pero
+        // secuencial: `await` cada elemento.
+        if (node.await) {
+          if (!isPromiseType(elementType)) { this.report(node.iterable, `'for await' requiere un iterable de Promise<T>, no '${elementType}'`); }
+          else elementType = promiseResult(elementType);
+        }
+        const local = new Scope(scope);
+        if (!this.defineVariable(local, node.binding.name, elementType, node.binding.mutable)) this.report(node.binding, `Símbolo duplicado '${node.binding.name}'`);
+        if (isArrayType(iterableType)) this.closureReturns.flow(local.resolveLocal(node.binding.name), node.iterable);
+        this.loopDepth++; this.statement(node.body, local); this.loopDepth--; break;
+      }
+      case "ForInStatement": {
+        const targetType = this.expression(node.target, scope);
+        // Determina el tipo de la clave/índice a partir del objetivo.
+        let keyType: TypeName;
+        if (isArrayType(targetType)) keyType = "number";
+        else if (isMapType(targetType)) keyType = genericArguments(targetType)[0] ?? "void";
+        else { this.report(node.target, `El tipo '${targetType}' no es iterable en for..in`); keyType = "void"; }
+        const local = new Scope(scope);
+        if (!this.defineVariable(local, node.binding.name, keyType, node.binding.mutable)) this.report(node.binding, `Símbolo duplicado '${node.binding.name}'`);
+        this.loopDepth++; this.statement(node.body, local); this.loopDepth--; break;
+      }
+      case "DeleteStatement": {
+        const objectType = this.expression(node.target.object, scope);
+        if (!this.mutableTarget(node.target, scope)) this.report(node, "delete requiere un receptor mutable (no se puede borrar de una constante)");
+        else this.markCapturedMutation(node.target, scope);
+        if (isMapType(objectType)) {
+          const keyType = genericArguments(objectType)[0] ?? "void";
+          const actual = this.expression(node.target.index, scope, keyType);
+          this.require(actual, keyType, node.target.index);
+        } else if (isSetType(objectType)) {
+          const valueType = genericArguments(objectType)[0] ?? "void";
+          const actual = this.expression(node.target.index, scope, valueType);
+          this.require(actual, valueType, node.target.index);
+        } else if (isArrayType(objectType)) {
+          this.require(this.expression(node.target.index, scope, "number"), "number", node.target.index);
+        } else {
+          this.expression(node.target.index, scope);
+          this.report(node.target.object, `delete solo es válido sobre Map<K,V>, Set<T> o T[] (se obtuvo '${objectType}')`);
+        }
+        break;
+      }
+      case "ReturnStatement": {
+        if (!this.currentReturn) this.report(node, "return solo es válido dentro de una función");
+        const actual = node.value ? this.expression(node.value, scope, this.currentReturn) : "void";
+        if (node.value && isClosureReturnCarrier(actual)) this.closureReturns.returned(node.value, node);
+        const flattenedAsyncReturn = this.currentAsync === true && isPromiseType(actual) && promiseResult(actual) === this.currentReturn;
+        // V8.0: si el retorno es `Unq<T>` / `Rc<T>` y el valor es de tipo
+        // `T` (la clase), допускаем como válido — el codegen envolverá con
+        // `unSome<T>` / `rcShare<T>`. La inferencia es intraprocedural.
+        const v8ImplicitWrap = node.value && this.currentReturn && isGenericType(this.currentReturn)
+          && (genericBase(this.currentReturn) === "Unq" || genericBase(this.currentReturn) === "Rc")
+          && this.classes.has(actual)
+          && actual !== "void";
+        // V22: si el retorno es `ptr<T>` o `constPtr<T>` y el valor es `T`
+        // (por ejemplo `new T(...)` o un identificador de tipo T), aceptamos
+        // — el codegen emite `std::make_unique<T>(...)` o convierte al
+        // `std::unique_ptr<T>` correcto. La inferencia es intraprocedural
+        // y solo aplica cuando el actual es exactamente T (la clase del
+        // modifier, sin genéricos).
+        const v22PtrImplicitWrap = node.value && this.currentReturn && isGenericType(this.currentReturn)
+          && (genericBase(this.currentReturn) === "ptr" || genericBase(this.currentReturn) === "constPtr")
+          && genericArguments(this.currentReturn)[0] === actual
+          && this.classes.has(actual)
+          && actual !== "void";
+        if (this.currentReturn && !typeMatches(actual, this.currentReturn) && !flattenedAsyncReturn && !v8ImplicitWrap && !v22PtrImplicitWrap) this.report(node, `La función retorna ${this.currentReturn}, no ${actual}`);
+        break;
+      }
+    }
+  }
+
+  private classMethod(method: ClassMethod, owner: ClassDeclaration, scope: Scope): void {
+    this.withTypeParameters(method.typeParameters ?? [], () => {
+      const local = new Scope(scope);
+      const ownerType = owner.typeParameters.length ? genericType(owner.name, TypeChecker.namesOf(owner.typeParameters)) : owner.name;
+      // V30.22.1: los static methods NO tienen `this` (C++ tampoco lo
+      // permite). Definir `this` solo en metodos de instancia.
+      if (!method.isStatic) this.defineVariable(local, "this", ownerType, true);
+      for (const parameter of method.params) if (!this.defineVariable(local, parameter.name, parameter.type, true, { mutableReference: this.parameterIsMutableReference(parameter.type) }, parameter)) this.report(parameter, `Parámetro duplicado '${parameter.name}'`);
+      // V20: parameter properties. Si el parámetro del constructor tiene
+      // modificador (acceso o readonly), también lo añadimos como campo
+      // accesible en `this.x`. Lo hacemos después de los params para no
+      // colisionar.
+      if (method.name === "constructor") {
+        for (const p of method.params) {
+          if (p.access !== undefined || p.readonly === true) {
+            // `this.x` debe estar disponible; no necesitamos definirlo en el
+            // scope (accesos son `this.x` no `x`). Pero el campo debe ser
+            // reconocido por el acceso a miembros.
+          }
+        }
+      }
+      // V22 (Memory Model v2): mismas reglas que para FunctionDeclaration
+      // aplicadas a los métodos de clase.
+      if (isGenericType(method.returnType) && (genericBase(method.returnType) === "ref" || genericBase(method.returnType) === "constRef")) {
+        this.report(method, `E42xx: borrowed references cannot be returned yet. Returning ref<T> or constRef<T> requires lifetime analysis that is not supported by the current ownership model.`);
+      }
+      // V0.3: huella estructural resuelta del método.
+      method.resolvedSignature = {
+        parameters: method.params.map(p => ({
+          name: p.name,
+          type: toResolvedType(p.type) ?? { kind: "any" },
+          optional: p.optional ?? false,
+          variadic: p.variadic ?? false,
+          hasDefault: p.defaultValue !== undefined,
+        })),
+        returnType: toResolvedType(method.returnType) ?? { kind: "any" },
+        typeParameters: TypeChecker.namesOf(method.typeParameters ?? []),
+        async: false,
+      };
+      const previous = this.currentReturn; const previousAsync = this.currentAsync; const previousCtor = this.inConstructor;
+      // V19: registramos la clase/método actual para enforzar encapsulación.
+      // Usamos el nombre del field `this.currentClass` de la closure padre
+      // (este método está dentro de un classStatement).
+      this.currentReturn = method.returnType; this.currentAsync = false; this.inConstructor = method.name === "constructor";
+      this.currentMethod = method.name;
+      this.statement(method.body, local);
+      this.currentReturn = previous; this.currentAsync = previousAsync; this.inConstructor = previousCtor;
+    });
+  }
+
+  private expression(node: Expression, scope: Scope, expected?: TypeName): TypeName {
+    if (node.kind === "IdentifierExpression") {
+      this.recordClosureReference(node.name, node.span.etsgenDefinition ? scope.root() : scope);
+      this.closureReturns.flow(node, (node.span.etsgenDefinition ? scope.root() : scope).resolve(node.name));
+    } else if (node.kind === "CallExpression") this.recordClosureReference(node.callee, node.span.etsgenDefinition ? scope.root() : scope);
+    let result: TypeName = "void";
+    switch (node.kind) {
+      case "LiteralExpression":
+        if (expected === "i64" || expected === "u64") this.validateNumericLiteral(node, expected);
+        result = node.integerType ?? node.literalType; break;
+      case "TemplateLiteralExpression": {
+        // Las expresiones interpoladas se evalúan y se confía en `ets::concat`
+        // (en C++) para convertirlas a texto. Cualquier tipo con `operator<<`
+        // funciona; aquí solo necesitamos propagar los tipos para el análisis.
+        for (const expr of node.expressions) this.expression(expr, scope);
+        result = "string";
+        break;
+      }
+      case "MatchExpression": {
+        // V30: la forma V2 de match (`match (r) { case ... }`) se elimino.
+        // El match V30 es siempre una `CallExpression` con
+        // `callee === "match"`, parseada por `assignment()`. Si llegamos
+        // aqui con un `MatchExpression`, es un caso degenerado del parser
+        // (despues de un error E4410). Reportamos un error claro y
+        // devolvemos void para no romper el resto del type-check.
+        this.report(node, "E4410: la forma V2 de match fue eliminada en V30; usa `match(value, [when(pat, () => result), otherwise(() => default)])`");
+        for (const arm of node.arms) this.expression(arm.result, scope, expected);
+        result = "void";
+        break;
+      }
+      case "SatisfiesExpression": {
+        // `expr satisfies T`: type-check que expr sea asignable a T. Pasamos
+        // el tipo declarado como `expected` para que `optionalSome(value)` y
+        // helpers similares puedan propagar T desde el contexto.
+        const operandType = this.expression(node.operand, scope, node.declaredType);
+        if (!typeMatches(operandType, node.declaredType)) this.report(node, `Tipo '${operandType}' no satisface '${node.declaredType}'`);
+        result = node.declaredType;
+        break;
+      }
+      case "AsExpression": {
+        // V30.55: `expr as T` (type assertion TS-style). A diferencia de
+        // `satisfies`, `as` NO verifica compatibilidad — el programador
+        // afirma el tipo. Asignamos directamente el tipo objetivo como
+        // resultado, lo que permite narrowing ergonomico sin necesidad
+        // de pattern matching (e.g. `parsed as Array<Task>`).
+        this.expression(node.expression, scope);
+        result = node.targetType;
+        break;
+      }
+      case "ArrayLiteralExpression": {
+        if (expected && isArrayType(expected)) {
+          const element = arrayElement(expected);
+          for (const item of node.elements) {
+            if (item.kind === "SpreadElement") {
+              // Para un spread, el tipo del operando debe ser compatible con el
+              // `element` (otro vector del mismo tipo, una tupla del mismo tipo, o el propio `element`).
+              const actual = this.expression(item.expression, scope);
+              if (actual === element || actual === `${element}[]` || isTupleType(actual)) {
+                // ok
+              } else this.report(item, `Spread: se esperaba vector de ${element}, se obtuvo ${actual}`);
+            } else this.require(this.expression(item, scope, element), element, item);
+          }
+          result = expected;
+        } else if (expected && isFixedArrayType(expected)) {
+          // V4: arrays de tamaño fijo. Validamos el número de elementos y el
+          // tipo de cada uno. El `expected` se pasa a cada item para que el
+          // type-checker propague conversiones (p.ej. `let buf: u8[3] = [1,2,3];`
+          // donde los literales son `number` y se castean a `u8`).
+          const fixedElement = fixedArrayElement(expected)!;
+          const fixedSize = fixedArraySize(expected)!;
+          if (node.elements.length !== fixedSize) {
+            this.report(node, `El array fijo espera ${fixedSize} elementos, recibió ${node.elements.length}`);
+            result = expected;
+            break;
+          }
+          for (const item of node.elements) {
+            if (item.kind === "SpreadElement") this.report(item, "Spread no se admite en arrays fijos (tamaño estático)");
+            else this.require(this.expression(item, scope, fixedElement), fixedElement, item);
+          }
+          result = expected;
+        } else if (expected && isTupleType(expected)) {
+          const items = tupleElements(expected);
+          if (items.length !== node.elements.length) this.report(node, `La tupla espera ${items.length} elementos, recibió ${node.elements.length}`);
+          node.elements.forEach((item, index) => {
+            if (item.kind === "SpreadElement") this.report(item, "Spread no se admite en tuplas (tamaño fijo)");
+            else { const itemType = items[index]; const actual = this.expression(item, scope, itemType); if (itemType) this.require(actual, itemType, item); }
+          });
+          result = expected;
+        } else {
+          const items = node.elements.map(item => {
+            if (item.kind === "SpreadElement") return this.expression(item.expression, scope);
+            return this.expression(item, scope);
+          });
+          if (!items.length) { this.report(node, "Un array vacío necesita una anotación de tipo"); result = "void[]"; }
+          else result = items.every(item => item === items[0]) ? arrayType(items[0]) : tupleType(items);
+        }
+        break;
+      }
+      case "ObjectLiteralExpression": {
+        // V30.11: object literal como satisfaccion de una shape (interface).
+        // Si `expected` apunta a una interface, cada propiedad del literal
+        // debe coincidir con un campo declarado (nombre + tipo). Los campos
+        // opcionales (`nombre?`) se admiten omitidos. Si falta un campo
+        // obligatorio, o sobra una propiedad no declarada, error.
+        //
+        // Antes de V30.11, el object literal solo era valido como
+        // constructor inline de una object-variant de union. Ahora se
+        // admiten ambos contextos; la rama de union se mantiene intacta
+        // mas abajo (es la original).
+        if (expected && !isGenericType(expected) && this.interfaces.has(expected)) {
+          const iface = this.interfaces.get(expected)!;
+          const ifaceFieldNames = new Set(iface.fields.map(f => f.name));
+          const providedNames = new Set<string>();
+          for (const prop of node.properties) {
+            providedNames.add(prop.key);
+            const fieldDecl = iface.fields.find(f => f.name === prop.key);
+            if (!fieldDecl) {
+              this.report(prop.value, `La interfaz '${expected}' no declara el campo '${prop.key}'`);
+              continue;
+            }
+            const fieldType = this.expandType(fieldDecl.type, scope);
+            prop.destinationType = toResolvedType(fieldType);
+            this.require(this.expression(prop.value, scope, fieldType), fieldType, prop.value);
+          }
+          for (const fieldDecl of iface.fields) {
+            if (!fieldDecl.optional && !providedNames.has(fieldDecl.name)) {
+              this.report(node, `Falta el campo obligatorio '${fieldDecl.name}' de la interfaz '${expected}'`);
+            }
+          }
+          result = expected;
+          break;
+        }
+        // V1.4: object literal como constructor inline de object-variant.
+        // El primer property debe ser el discriminador (literal primitivo);
+        // los demás son bindings del payload. Necesitamos `expected` apuntando
+        // a la unión declarada para resolver la variante.
+        if (!expected || !this.unions.has(genericBase(expected))) {
+          this.report(node, "El object literal solo se admite como constructor de una object-variant; el contexto no provee una unión esperada");
+          result = "void";
+          break;
+        }
+        const unionType = genericBase(expected);
+        const unionNode = this.unions.get(unionType)!;
+        if (node.properties.length === 0) {
+          this.report(node, "El object literal debe tener al menos el discriminador");
+          result = expected;
+          break;
+        }
+        const discProp = node.properties[0];
+        if (discProp.value.kind !== "LiteralExpression") {
+          this.report(discProp.value, "El primer campo de un object literal debe ser el discriminador (literal primitivo)");
+          result = expected;
+          break;
+        }
+        const discValue = discProp.value.value;
+        // Buscar la variante cuyo discriminador coincide con `discProp.key = discValue`.
+        const variant = unionNode.variants.find(v => v.discriminator && v.discriminator.field === discProp.key && v.discriminator.value === discValue);
+        if (!variant) {
+          this.report(discProp.value, `'${unionType}' no tiene variante con discriminador ${discProp.key} = ${JSON.stringify(discValue)}`);
+          result = expected;
+          break;
+        }
+        // Validar el resto de propiedades como bindings del payload.
+        // El payload de la variante es `T` (si un solo binding) o `tupleType([...])` (varios).
+        // Para object-variants, el payload es `T` (un solo binding) o `void` (sin bindings).
+        const bindings = node.properties.slice(1);
+        if (variant.payload === "void" || !variant.payload) {
+          if (bindings.length > 0) this.report(node, `La variante '${variant.name}' no espera bindings`);
+        } else if (bindings.length === 1 && !isTupleType(variant.payload)) {
+          const bindingValue = bindings[0].value;
+          this.require(this.expression(bindingValue, scope, variant.payload), variant.payload, bindingValue);
+        } else {
+          // Tupla de tipos — debe coincidir con bindings.length.
+          const tupleItems = tupleElements(variant.payload);
+          if (tupleItems.length !== bindings.length) this.report(node, `La variante '${variant.name}' espera ${tupleItems.length} bindings, recibió ${bindings.length}`);
+          else bindings.forEach((b, i) => this.require(this.expression(b.value, scope, tupleItems[i]), tupleItems[i], b.value));
+        }
+        result = expected;
+        break;
+      }
+      case "ArrowFunctionExpression": {
+        if (node.params.some(parameter => parameter.passing === "mut")) this.report(node, "Los parámetros mut en closures necesitan un tipo de función con efectos; use una función declarada");
+        const expectedParameters = expected && isFunctionType(expected) ? functionParameters(expected) : undefined;
+        const expectedResult = expected && isFunctionType(expected) ? functionResult(expected) : undefined;
+        if (expectedParameters && expectedParameters.length !== node.params.length) this.report(node, `La closure espera ${expectedParameters.length} parámetros, recibió ${node.params.length}`);
+        const local = new Scope(scope);
+        node.params.forEach((parameter, index) => {
+          // V30.23: expandir aliases en el tipo del param para que
+          // `child: SvgChildren` (donde `SvgChildren = Line | MultiLine`)
+          // se compare correctamente contra el `expected` que ya esta
+          // expandido.
+          parameter.type = this.expandType(parameter.type);
+          this.validateType(parameter.type, parameter, false, false, local);
+          if (expectedParameters?.[index]) this.require(parameter.type, expectedParameters[index], parameter);
+          if (!this.defineVariable(local, parameter.name, parameter.type, false, {}, parameter)) this.report(parameter, `Parámetro duplicado '${parameter.name}'`);
+        });
+        if (node.returnType) node.returnType = this.expandType(node.returnType, local);
+        const declaredResult = node.returnType ?? expectedResult;
+        let resultType: TypeName;
+        // V30.10: si la arrow function es `async`, el body es un contexto
+        // async valido (await permitido). Si no, forzamos currentAsync=false
+        // (como antes) para mantener la semantica sincrona.
+        const previousAsync = this.currentAsync; this.currentAsync = node.isAsync === true;
+        const previousClosure = this.currentClosure;
+        const closure: ClosureContext = { node, parentScope: scope, parent: previousClosure, captures: new Map() };
+        this.currentClosure = closure;
+        node.mutatesCapturedState = false;
+        node.capturedSymbols = [];
+        if (node.body.kind === "BlockStatement") {
+          if (!declaredResult) this.report(node, "Una función flecha con bloque necesita tipo de retorno");
+          // V30.10: si la arrow es `async` y el returnType es `Promise<T>`,
+          // el currentReturn del body es T (no Promise<T>), igual que en
+          // FunctionDeclaration async. Asi, `return 21` en `(n): Promise<number> => ...`
+          // acepta un `number` sin necesidad de envolver.
+          const effectiveReturn = (node.isAsync === true && declaredResult && isPromiseType(declaredResult))
+            ? promiseResult(declaredResult)
+            : declaredResult;
+          const previous = this.currentReturn; this.currentReturn = effectiveReturn ?? "void";
+          this.statement(node.body, local); this.currentReturn = previous;
+          resultType = declaredResult ?? "void";
+        } else {
+          const actual = this.expression(node.body, local, declaredResult);
+          if (declaredResult) this.require(actual, declaredResult, node.body);
+          resultType = declaredResult ?? actual;
+        }
+        // Los usos se registran durante la resolución semántica, no recorriendo
+        // nombres sin ámbitos. Así los bindings interiores no ocultan capturas
+        // reales ni se convierten en capturas inexistentes de la lambda padre.
+        node.capturedSymbols = Array.from(closure.captures.keys());
+        for (const symbol of closure.captures.values()) this.closureReturns.flow(node, symbol);
+        if (node.mutatesCapturedState && node.capturedSymbols.length) this.closureReturns.referenceClosure(node);
+        if (node.body.kind !== "BlockStatement" && isClosureReturnCarrier(resultType)) this.closureReturns.returned(node.body, node);
+        for (const [capturedName, symbol] of closure.captures) {
+          if (symbol.kind === "variable" && isGenericType(symbol.type)
+              && (genericBase(symbol.type) === "ref" || genericBase(symbol.type) === "constRef")) {
+            this.report(node, `E4209: closure captures borrowed reference '${capturedName}' (${symbol.type}). Borrowed references cannot escape their scope via closures. Pass the value explicitly as a closure parameter.`);
+          }
+        }
+        this.currentClosure = previousClosure; this.currentAsync = previousAsync;
+        if (node.returnType) this.validateType(node.returnType, node, false, false, local);
+        result = functionType(node.params.map(parameter => parameter.type), resultType);
+        break;
+      }
+      case "IdentifierExpression": {
+        // V30.22.6: marker interno para argumentos posicionales que
+        // NO fueron provistos (named args sin todos los params). El
+        // overload matching los acepta como `any` (lo que permite
+        // que el parametro tenga default value o sea opcional) y el
+        // codegen no los emite (los cubre el default value o
+        // `optionalNone<T>()`).
+        if (node.name === "_ets_omitted") { result = "any"; break; }
+        // V30.7 NLL: si este identifier es el NOMBRE DE UN BORROW
+        // (e.g. `a` en `const a: ref<User> = ref(u)`), actualizamos su
+        // `lastUseLine` en todos los scopes del borrowStack donde
+        // aparezca. Esto permite que un nuevo borrow declarado en una
+        // linea posterior sepa que `a` ya termino (y por tanto la fuente
+        // `u` ya no esta borrowed).
+        for (const scope of this.borrowStack) {
+          const entry = scope.get(node.name);
+          if (entry) entry.lastUseLine = node.span.start.line;
+        }
+        // Tambien actualizar en borrowLog (para resolveBorrowConflicts).
+        for (const entry of this.borrowLog) {
+          if (entry.borrowName === node.name && entry.lastUseLine < node.span.start.line) {
+            entry.lastUseLine = node.span.start.line;
+          }
+        }
+        // Los enums se referencian por nombre (`Color.Green`); permitimos el identificador
+        // desnudo como valor y devolvemos el nombre del enum como tipo de la expresión.
+        // Comprobamos esto ANTES del scope porque `Color` está registrado como
+        // TypeSymbol (no como variable), y sin este atajo el type-checker diría
+        // que `Color` no es un valor.
+        if (this.enums.has(node.name)) { result = node.name; break; }
+        // V1.2: las uniones también son espacios de nombres para sus variantes.
+        // `Outcome.Ok(...)` se trata como llamada válida aunque `Outcome` esté
+        // registrado como TypeSymbol. El tipo de la expresión es la unión misma.
+        if (this.unions.has(node.name)) { result = node.name; break; }
+        // V30.22.1: las clases también son espacios de nombres para sus
+        // static fields/methods. `Counter.count` o `Counter.inc()` se
+        // aceptan aunque `Counter` esté registrado como TypeSymbol.
+        // V30.50: este atajo se movió a MemberExpression/MemberCallExpression
+        // (más abajo) para evitar que `User` solo (sin `.algo`) se acepte
+        // como valor. Ahora el handler de IdentifierExpression rechaza
+        // los nombres de clase como valores, restaurando el test V30.10.
+        // Luego buscamos en el scope: una declaración local (variable,
+        // parámetro) debe ganar sobre el tipo builtin del mismo nombre. Esto
+        // permite `const path: string = argument(1); path + ".ext"` sin que
+        // el type-checker reclame "Path" donde se espera "string".
+        const symbol = (node.span.etsgenDefinition ? scope.root() : scope).resolve(node.name);
+        if (symbol) {
+          // V30.10: aceptar tambien `function` como valor. Las funciones
+          // nombradas decaen a puntero-a-funcion en C++ y se pueden pasar
+          // como argumento a un template <typename F0>. Antes se rechazaban
+          // con "es un símbolo de tipo o función, no un valor", lo que
+          // rompía el patrón `app.get("/ruta", handler)` estilo express.
+          if (symbol.kind === "function") {
+            // Construir el function type a partir del (unico) overload.
+            // Solo soportamos el caso simple: 1 overload, sin type params
+            // sin resolver. Funciones genericas o con overloads daran
+            // el mensaje de "no se puede usar" para no perder precision.
+            if (symbol.overloads.length === 1
+                && symbol.overloads[0].typeParameters.length === 0
+                && symbol.overloads[0].variadicTypeParameters.length === 0) {
+              const ov = symbol.overloads[0];
+              const paramTypes = ov.params.map(p => p.type);
+              result = functionType(paramTypes, ov.returnType);
+            } else {
+              this.report(node, `'${node.name}' es una función con genéricos o overloads; pásala como arrow (x: T) => ... para evitar la resolución de tipos`);
+            }
+            break;
+          }
+          if (symbol.kind !== "variable") this.report(node, `'${node.name}' es un símbolo de tipo o función, no un valor`);
+          else {
+            // V22 (Memory Model v2): si la variable fue movida con move(x),
+            // cualquier lectura posterior es diagnóstico E4102 o E4103.
+            if (this.moved.has(node.name)) {
+              const state = this.moved.get(node.name);
+              this.report(node, `E410${state === "moved" ? "2" : "3"}: use of ${state} value '${node.name}'`);
+            }
+            result = this.expandType(symbol.type); if (symbol.variadic) this.variadicExpressions.add(node);
+          }
+          break;
+        }
+        if (node.name === "console") { result = "Console"; break; }
+        if (node.name === "fs") { result = "Filesystem"; break; }
+        if (node.name === "path") { result = "Path"; break; }
+        if (node.name === "process") { result = "Process"; break; }
+        if (node.name === "JSON") { result = "Json"; break; }
+        if (node.name === "Math") { result = "Math"; break; }
+        if (node.name === "Date") { result = "Date"; break; }
+        if (node.name === "http") { result = "http"; break; }
+        // V30.25: `regex` es un builtin global que crea un Regex (envuelve
+        // std::regex). Lo declaramos aca para que el type-checker no se
+        // queje de "simbolo no definido". El CallExpression posterior
+        // valida los args y emite el codigo.
+        if (node.name === "regex") { result = "Regex"; break; }
+        this.report(node, `Símbolo no definido '${node.name}'`, this.suggestSimilar(node.name, scope.names()));
+        break;
+      }
+      case "GenericIdentifierExpression": {
+        // V1.2: `Name<T1, T2>` antes de un member access. Devolvemos el
+        // tipo genérico instanciado para que `typeMatches` lo compare
+        // correctamente con el esperado.
+        result = genericType(node.name, node.typeArguments);
+        break;
+      }
+      case "UnaryExpression": {
+        if (expected === "i64" || expected === "u64") this.validateNumericExpression(node, expected);
+        if (node.operator === "typeof") {
+          // `typeof` acepta cualquier operando (incluido `void`) y siempre
+          // produce un literal `string` en C++. Se type-checkea el operando
+          // para validar referencias, pero el resultado se descarta.
+          this.expression(node.operand, scope);
+          result = "string";
+          break;
+        }
+        const operand = this.expression(node.operand, scope);
+        const required = node.operator === "!" ? "boolean" : "number";
+        this.require(operand, required, node.operand);
+        result = node.integerType ?? (node.operator !== "!" && isNumericName(operand) ? promoteUnary(operand) : required);
+        break;
+      }
+      case "AwaitExpression": {
+        if (this.currentAsync === false) this.report(node, "await solo es válido dentro de una función async o en el nivel superior");
+        const operand = this.expression(node.operand, scope);
+        if (!isPromiseType(operand)) this.report(node.operand, `await requiere Promise<T>, no '${operand}'`);
+        // V22 PR#8: E4210 - cualquier borrow activo (ref<T>/constRef<T>)
+        // que sobreviva a un await es potencialmente dangling. Reportamos
+        // el error en el momento del await (no en la declaracion) para no
+        // quejarnos de borrows que solo viven despues del await.
+        for (const frame of this.borrowStack) {
+          for (const [sourceName, mode] of frame.entries()) {
+            this.report(node, `E4210: borrowed reference '${sourceName}' (${mode}) cannot cross an await point in an async function. Move ownership into the function (ptr<T>) or refactor to avoid the await.`);
+          }
+        }
+        result = promiseResult(operand);
+        break;
+      }
+      case "BinaryExpression": {
+        let left = this.expression(node.left, scope, expected === "i64" || expected === "u64" ? expected : undefined);
+        if (node.operator === "instanceof") {
+          // El parser mete el tipo del lado derecho en un `IdentifierExpression`
+          // sintético (porque `string`/`number`/`boolean` no son identificadores
+          // para el lexer). Extraemos el nombre directamente y lo usamos como
+          // tipo. Validamos sin invocar `expression()` para no fallar al
+          // resolver el identificador contra el scope.
+          const right = node.right.kind === "IdentifierExpression" ? node.right.name : "void";
+          if (isUnionType(left)) {
+            const members = unionMembers(left);
+            if (!members.includes(right)) this.report(node.right, `instanceof: '${right}' no es miembro de la unión '${left}'`);
+          } else if (!this.classes.has(right) && right !== "string" && right !== "number" && right !== "boolean") {
+            this.report(node.right, `instanceof: '${right}' no es una clase ni un tipo primitivo`);
+          }
+          result = "boolean";
+          break;
+        }
+        const right = this.expression(node.right, scope,
+          (left === "i64" || left === "u64") && this.integer64Literal(node.right) ? left : undefined);
+        if ((right === "i64" || right === "u64") && this.integer64Literal(node.left)) left = this.expression(node.left, scope, right);
+        const promoted = promoteBinary(left, right, node.operator);
+        // V30.36: `+` con al menos un operando string hace string
+        // concat (estilo JS: `"x" + 5` -> `"x5"`, `5 + true` -> `"5true"`).
+        // El operando no-string se acepta si es string | number |
+        // boolean | any | numericType. El codegen emite `ets::concat(...)`
+        // y envuelve los operandos no-string con `ets::stringify(...)`
+        // para que C++ reciba un std::string.
+        if (node.operator === "+" && (left === "string" || right === "string")) {
+          // V30.36: aceptar el operando no-string si es `string`,
+          // `number` (que se mapea a `double` en C++), `boolean`,
+          // `any` o cualquier tipo numerico concreto (i8..u64, f32, f64).
+          const isStringifiable = (t: TypeName) => t === "string" || t === "number" || t === "any" || t === "boolean" || isNumericType(t);
+          if (!isStringifiable(left)) this.report(node.left, `No se puede concatenar '${left}' con string. Usa numberToString() o template literals.`);
+          if (!isStringifiable(right)) this.report(node.right, `No se puede concatenar '${right}' con string. Usa numberToString() o template literals.`);
+          result = "string";
+          break;
+        }
+        if (node.operator === "??") {
+          // `??` (nullish coalescing) sobre `Optional<T>`. El operando izquierdo
+          // debe ser `Optional<T>` y el derecho debe ser de tipo `T` (el
+          // default). Resultado: `T`.
+          if (!isGenericType(left) || genericBase(left) !== "Optional") {
+            this.report(node.left, `El operador '??' requiere un Optional<T> a la izquierda, se obtuvo '${left}'`);
+          } else {
+            const element = genericArguments(left)[0] ?? "void";
+            this.require(right, element, node.right);
+            result = element;
+          }
+        }
+        else if (["+", "-", "*", "/", "%"].includes(node.operator)) { this.requireNumericOperand(left, node.left); this.requireNumericOperand(right, node.right); result = promoted ?? "number"; }
+        else if (["|", "&", "^", "<<", ">>"].includes(node.operator)) {
+          this.requireNumericOperand(left, node.left); this.requireNumericOperand(right, node.right);
+          if (["f32", "f64"].includes(left) || ["f32", "f64"].includes(right)) this.report(node, "Los operadores bitwise requieren operandos enteros; convierte el flotante explícitamente");
+          result = promoted ?? "number";
+        }
+        else if (["<", "<=", ">", ">="].includes(node.operator)) { this.requireNumericOperand(left, node.left); this.requireNumericOperand(right, node.right); result = "boolean"; }
+        else if (["==", "!="].includes(node.operator)) { if (!this.sameNumericFamily(left, right)) this.report(node, "Los operandos comparados deben tener el mismo tipo"); result = "boolean"; }
+        else { this.require(left, "boolean", node.left); this.require(right, "boolean", node.right); result = "boolean"; }
+        break;
+      }
+      case "CallExpression": {
+        // comptime() conserva el tipo de retorno de su arrow durante la
+        // validacion previa. El evaluator sustituira la llamada despues, pero
+        // el checker debe recorrer ahora el body para no ocultar errores.
+        if (node.callee === "comptime") {
+          if (node.args.length !== 1) {
+            this.report(node, `comptime() espera exactamente 1 argumento, recibió ${node.args.length}`);
+          }
+          const argument = node.args[0];
+          if (!argument) {
+            result = "any";
+            break;
+          }
+          const argumentType = this.expression(argument, scope);
+          if (argument.kind !== "ArrowFunctionExpression") {
+            this.report(argument, "comptime() espera una función flecha");
+            result = "any";
+            break;
+          }
+          result = isFunctionType(argumentType)
+            ? this.expandType(functionResult(argumentType), scope)
+            : "any";
+          break;
+        }
+
+        // V30.22.6: named args. El codegen reordena los args segun la
+        // firma. Aqui solo tenemos que evitar que el overload matching
+        // falle por el orden incorrecto. Como el codegen hace la
+        // reordenacion, dejamos que el type-checker trabaje en el
+        // orden literal de los args.
+        // V3: `i32(x)`, `u64(y)`, `f32(z)`, etc. son casts a tipos numéricos
+        // concretos (10 primitivos). El parser los desazucara como
+        // CallExpression con callee=identifier; aquí reconocemos ese patrón y
+        // emitimos el tipo destino. La validación de rango del argumento
+        // ocurre si el argumento es un literal (idem VariableDeclaration).
+        if (isNumericType(node.callee) && node.typeArguments.length === 0) {
+          if (node.args.length !== 1) this.report(node, `'${node.callee}' espera 1 argumento, recibió ${node.args.length}`);
+          const arg = node.args[0];
+          if (arg) {
+            const expected = node.callee;
+            const actual = this.expression(arg, scope, expected);
+            this.require(actual, expected, arg);
+            // Validación de rango si el argumento es un literal numérico
+            // (con o sin signo unario). Mismas reglas que en VariableDeclaration.
+            this.validateNumericExpression(arg, expected);
+          }
+          result = node.callee;
+          break;
+        }
+        if (ASYNC_PRIMITIVE_HELPERS[node.callee]) {
+          const signature = ASYNC_PRIMITIVE_HELPERS[node.callee];
+          if (node.args.length !== signature.params.length) this.report(node, `'${node.callee}' espera ${signature.params.length} argumentos, recibió ${node.args.length}`);
+          node.args.forEach((arg, index) => { const expectedType = signature.params[index]; const actual = this.expression(arg, scope, expectedType); if (expectedType) this.require(actual, expectedType, arg); });
+          result = signature.returnType; break;
+        }
+        // V30.25: `regex(pattern)` y `regex(pattern, flags)` crean un
+        // Regex (envuelve std::regex). El primer arg es el pattern, el
+        // segundo opcional son flags (string con chars 'i', 'm').
+        if (node.callee === "regex") {
+          if (node.args.length < 1 || node.args.length > 2) this.report(node, `regex espera 1 o 2 argumentos, recibió ${node.args.length}`);
+          if (node.args[0]) this.require(this.expression(node.args[0], scope, "string"), "string", node.args[0]);
+          if (node.args[1]) this.require(this.expression(node.args[1], scope, "string"), "string", node.args[1]);
+          result = "Regex";
+          break;
+        }
+        if (FILE_HELPERS[node.callee]) {
+          const helper = FILE_HELPERS[node.callee];
+          if (node.args.length < helper.minParams) this.report(node, `'${node.callee}' espera al menos ${helper.minParams} argumentos, recibió ${node.args.length}`);
+          if (helper.paramTypes) node.args.forEach((arg, index) => { if (helper.paramTypes![index]) this.require(this.expression(arg, scope, helper.paramTypes![index]), helper.paramTypes![index], arg); });
+          else node.args.forEach(arg => this.expression(arg, scope));
+          result = helper.returnType; break;
+        }
+        if (NET_HELPERS[node.callee]) {
+          const helper = NET_HELPERS[node.callee];
+          if (node.args.length < helper.minParams) this.report(node, `'${node.callee}' espera al menos ${helper.minParams} argumentos, recibió ${node.args.length}`);
+          if (helper.paramTypes) node.args.forEach((arg, index) => { if (helper.paramTypes![index]) this.require(this.expression(arg, scope, helper.paramTypes![index]), helper.paramTypes![index], arg); });
+          else node.args.forEach(arg => this.expression(arg, scope));
+          result = helper.returnType; break;
+        }
+        if (ASYNC_HELPERS[node.callee]) {
+          const helper = ASYNC_HELPERS[node.callee];
+          if (node.args.length !== 1) this.report(node, `'${node.callee}' espera 1 argumento, recibió ${node.args.length}`);
+          const argType = node.args[0] ? this.expression(node.args[0], scope) : "void";
+          if (!isArrayType(argType) || !isGenericType(arrayElement(argType)) || genericBase(arrayElement(argType)) !== "Promise") {
+            this.report(node.args[0] ?? node, `'${node.callee}' requiere un array de Promise<T> (Task<T>[])`);
+            result = "void"; break;
+          }
+          const elementType = genericArguments(arrayElement(argType))[0] ?? "unknown";
+          if (helper.returnsArray) result = arrayType(elementType);
+          else result = elementType;
+          break;
+        }
+        // V22 (Memory Model v2): `ref(x)` transfiere ownership de un ptr<T>.
+                // El argumento debe ser un identificador declarado como `ptr<T>` o
+                // `constPtr<T>`. Marcamos la variable como `moved` para que cualquier
+                // uso posterior sea diagnóstico E4102/E4103.
+                if (node.callee === "move" && node.args.length === 1) {
+                  const innerExpr = node.args[0];
+                  if (innerExpr.kind === "IdentifierExpression") {
+                    const symbol = scope.resolve(innerExpr.name);
+                    if (!symbol || symbol.kind !== "variable") this.report(innerExpr, `move: símbolo no definido '${innerExpr.name}'`);
+                    else if (!isGenericType(symbol.type) || (genericBase(symbol.type) !== "ptr" && genericBase(symbol.type) !== "constPtr")) {
+                      this.report(innerExpr, `E4100: copy of non-move-only value '${innerExpr.name}'. move(x) is only valid on ptr<T> or constPtr<T>.`);
+                    } else {
+                      this.expression(innerExpr, scope, symbol.type);
+                      this.moved.set(innerExpr.name, "moved");
+                      result = symbol.type;
+                    }
+                  } else {
+                    this.report(innerExpr, `E4101: ownership transfer requires move(identifier). Direct move of a temporary is not supported.`);
+                    result = this.expression(innerExpr, scope);
+                  }
+                  break;
+                }
+                // V22 (Memory Model v2): `ref(x)` y `constRef(x)` crean un borrow de
+                // un lvalue. El argumento debe ser un lvalue (IdentifierExpression,
+                // MemberExpression, IndexExpression). El tipo retornado es `ref<T>`
+                // o `constRef<T>` donde T es el tipo del lvalue. Si el expected
+                // contextual es `ref<T>`/`constRef<T>`, lo usamos para inferir T.
+                if ((node.callee === "ref" || node.callee === "constRef") && node.args.length === 1) {
+                  const innerExpr = node.args[0];
+                  // Validar que es un lvalue.
+                  if (innerExpr.kind !== "IdentifierExpression"
+                      && innerExpr.kind !== "MemberExpression"
+                      && innerExpr.kind !== "IndexExpression") {
+                    this.report(innerExpr, `E4208: ${node.callee}(x) requires an lvalue (variable, member access, or index). Got ${innerExpr.kind}.`);
+                    result = "void";
+                    break;
+                  }
+                  // Inferir T del expected contextual o del tipo del lvalue.
+                  let innerType: TypeName;
+                  if (expected && isGenericType(expected)
+                      && (genericBase(expected) === "ref" || genericBase(expected) === "constRef")) {
+                    innerType = genericArguments(expected)[0] ?? this.expression(innerExpr, scope);
+                  } else {
+                    innerType = this.expression(innerExpr, scope);
+                  }
+                  // Validar que el tipo del lvalue coincide con T (si lo tenemos).
+                  if (expected && isGenericType(expected)
+                      && (genericBase(expected) === "ref" || genericBase(expected) === "constRef")) {
+                    const expectedInner = genericArguments(expected)[0];
+                    if (expectedInner && innerType !== expectedInner) {
+                      // OK en algunos casos (subtipado), no error por ahora.
+                    }
+                  }
+                  result = node.callee === "ref" ? genericType("ref", [innerType]) : genericType("constRef", [innerType]);
+                  break;
+                }
+        // V23: `match(value, [...])` o `match(value, "discriminator", [...])`.
+        // El primer argumento es el subject. El segundo (sin discriminator) es
+        // el array de cases. Con discriminator, args[1] es la clave string y
+        // args[2] es el array de cases.
+        if (node.callee === "match" && (node.args.length === 2 || node.args.length === 3)) {
+          const subject = node.args[0];
+          const subjectType = this.expression(subject, scope);
+          // Determinar dónde está el array de cases.
+          let caseList: Expression;
+          if (node.args.length === 3) {
+            const discArg = node.args[1];
+            const casesArg = node.args[2];
+            if (discArg.kind !== "LiteralExpression" || discArg.literalType !== "string") {
+              this.report(discArg, `E4403: 'match' with 3 arguments expects a string discriminator as the second argument, got ${discArg.kind}`);
+              result = "void";
+              break;
+            }
+            node.matchedDiscriminator = discArg.value as string;
+            this.expression(discArg, scope, "string");
+            // V30.5.2: si el subject es una union (declarada con `union X = ...`)
+            // y el discriminator coincide con el campo del union que el codegen
+            // emite como `_Kind` (e.g. `R_Kind::Success`), anotamos el tipo C++
+            // del discriminador para que el codegen emita el pattern como
+            // miembro del enum en vez de string literal. Sin esto, la
+            // comparacion `r.kind == std::string("Success")` no compila.
+            const subjectBase = genericBase(subjectType);
+            if (this.unions.has(subjectBase)) {
+              const unionNode = this.unions.get(subjectBase)!;
+              // El campo discriminador del union en C++ es el nombre de la
+              // union seguido de `_Kind` (e.g. `R` -> `R_Kind`).
+              // El campo del struct que el codegen emite es `kind` (el
+              // literal del discriminator). Verificamos que coincida.
+              const expectedDiscField = "kind";
+              if (discArg.value === expectedDiscField) {
+                node.matchedDiscriminatorType = `${unionNode.name}_Kind`;
+              }
+            }
+            caseList = casesArg;
+          } else {
+            caseList = node.args[1];
+          }
+          if (caseList.kind !== "ArrayLiteralExpression") {
+            this.report(caseList, `E4402: 'match' expects an array of cases as ${node.args.length === 3 ? "third" : "second"} argument, got ${caseList.kind}`);
+            result = "void";
+            break;
+          }
+          // Validamos cada elemento del array.
+          const returnTypes: TypeName[] = [];
+          let hasOtherwise = false;
+          for (const element of caseList.elements) {
+            if (element.kind !== "SpreadElement" && (element as any).kind === "CallExpression" && (element as any).callee === "when") {
+              const caseCall = element as any;
+              if (caseCall.args.length !== 2) {
+                this.report(caseCall, `E4404: 'when' expects 2 arguments (pattern, callback), got ${caseCall.args.length}`);
+                continue;
+              }
+              const [pattern, callback] = caseCall.args;
+              // Pattern se valida contra el subject type.
+              this.expression(pattern, scope, subjectType);
+              // Callback puede tener 0 o 1 params (0 si no usa el subject, 1 si sí).
+              if (callback.params.length > 1) {
+                this.report(callback, `E4406: 'when' callback must have at most 1 parameter, got ${callback.params.length}`);
+                continue;
+              }
+              const _unused = this.expression(callback, scope);
+              // V23: el checker sobre una ArrowFunctionExpression devuelve el tipo
+              // function (`(T) => R`), no el `R` del body. Para el resultado del
+              // match queremos el `R` real. Si el lambda tiene returnType declarado
+              // lo usamos; si no, inferimos del body.
+              let callbackReturnType: TypeName;
+              if (callback.returnType) {
+                callbackReturnType = callback.returnType;
+              } else if (callback.body.kind !== "BlockStatement") {
+                callbackReturnType = this.expression(callback.body, scope);
+              } else {
+                callbackReturnType = "void";
+              }
+              returnTypes.push(callbackReturnType);
+            } else if (element.kind !== "SpreadElement" && (element as any).kind === "CallExpression" && (element as any).callee === "whenType") {
+              const caseCall = element as any;
+              if (caseCall.args.length !== 1) {
+                this.report(caseCall, `E4404: 'whenType' expects 1 argument (callback), got ${caseCall.args.length}`);
+                continue;
+              }
+              const callback = caseCall.args[0];
+              if (callback.kind !== "ArrowFunctionExpression") {
+                this.report(callback, `E4405: 'whenType' callback must be an arrow function`);
+                continue;
+              }
+              if (callback.params.length > 1) {
+                this.report(callback, `E4406: 'whenType' callback must have exactly 1 parameter`);
+                continue;
+              }
+              // El tipo T viene de los typeArguments del whenType<T>.
+              if (caseCall.typeArguments.length !== 1) {
+                this.report(caseCall, `E4407: 'whenType<T>' requires exactly 1 type argument, got ${caseCall.typeArguments.length}`);
+                continue;
+              }
+              this.expression(callback, scope);
+              let callbackReturnType: TypeName;
+              if (callback.returnType) callbackReturnType = callback.returnType;
+              else if (callback.body.kind !== "BlockStatement") callbackReturnType = this.expression(callback.body, scope);
+              else callbackReturnType = "void";
+              returnTypes.push(callbackReturnType);
+            } else if (element.kind !== "SpreadElement" && (element as any).kind === "CallExpression" && (element as any).callee === "otherwise") {
+              const caseCall = element as any;
+              if (caseCall.args.length !== 1) {
+                this.report(caseCall, `E4404: 'otherwise' expects 1 argument (callback), got ${caseCall.args.length}`);
+                continue;
+              }
+              hasOtherwise = true;
+              const callback = caseCall.args[0];
+              if (callback.kind !== "ArrowFunctionExpression") {
+                this.report(callback, `E4405: 'otherwise' callback must be an arrow function`);
+                continue;
+              }
+              // `otherwise` callback may have 0 or 1 params.
+              if (callback.params.length > 1) {
+                this.report(callback, `E4406: 'otherwise' callback must have at most 1 parameter, got ${callback.params.length}`);
+                continue;
+              }
+              const _unused = this.expression(callback, scope);
+              // V23: el checker sobre una ArrowFunctionExpression devuelve el tipo
+              // function (`(T) => R`), no el `R` del body. Para el resultado del
+              // match queremos el `R` real. Si el lambda tiene returnType declarado
+              // lo usamos; si no, inferimos del body.
+              let callbackReturnType: TypeName;
+              if (callback.returnType) {
+                callbackReturnType = callback.returnType;
+              } else if (callback.body.kind !== "BlockStatement") {
+                callbackReturnType = this.expression(callback.body, scope);
+              } else {
+                callbackReturnType = "void";
+              }
+              returnTypes.push(callbackReturnType);
+            } else if (element.kind === "SpreadElement") {
+              this.report(element, `E4408: 'match' cases cannot use spread elements`);
+            } else {
+              this.report(element, `E4409: 'match' cases must be calls to 'when', 'whenType' or 'otherwise', got ${(element as any).kind}`);
+            }
+          }
+          // Calculamos el tipo del resultado: unión de los retornos.
+          node.matchedKind = "match";
+          if (returnTypes.length > 0) {
+            // Simplificación: si todos los retornos son el mismo tipo, usar ese.
+            // Si hay variación, usamos union. Para V1, usamos el primer tipo si todos
+            // son iguales; si no, usamos un unionType genérico.
+            const first = returnTypes[0];
+            const allSame = returnTypes.every(t => t === first);
+            if (allSame) result = first;
+            else {
+              // Para V1: union pipe-delimited ("A|B|C"). Deduplicamos.
+              const unique = Array.from(new Set(returnTypes));
+              result = unique.join("|") as TypeName;
+            }
+            node.matchedResultType = result;
+          } else {
+            result = "void";
+            node.matchedResultType = "void";
+          }
+          // Si no hay otherwise y el subject es union, advertencia: puede no matchear.
+          if (!hasOtherwise) {
+            // V1: no enforce exhaustividad para la nueva forma. Solo informativo.
+            // (La forma V2 keyword se elimino en V30; la exhaustividad se enforce
+            // con `otherwise(...)` en la forma V23.)
+          }
+          break;
+        }
+        // V23: `when(...)` / `whenType(...)` / `otherwise(...)` SUELTOS (fuera de un `match`).
+        // El checker deja pasar la validación normal (los trata como CallExpression)
+        // pero reporta un warning si aparecen sin estar dentro de un match.
+        // Para V1, lo dejamos pasar sin warning — el codegen emitirá la llamada
+        // normal y el linker fallará. Si quieres warning estricto, podemos añadirlo.
+        // Por ahora solo validamos que coincidan con el metadata:
+        if (node.callee === "when" || node.callee === "whenType" || node.callee === "otherwise") {
+          const meta = HELPER_METADATA[node.callee];
+          if (meta && node.args.length < meta.minParams) {
+            this.report(node, `'${node.callee}' expects at least ${meta.minParams} argument(s), got ${node.args.length}`);
+          }
+          // No marcamos matchedKind: serán tratados como CallExpression normal.
+          // El codegen + linker fallarán en runtime si están fuera de match().
+        }
+        if (OPTIONAL_HELPERS[node.callee]) {
+          const helper = OPTIONAL_HELPERS[node.callee];
+          if (node.args.length < helper.minParams) this.report(node, `'${node.callee}' espera al menos ${helper.minParams} argumentos`);
+          // Inferimos T a partir del `expected` contextual. Por ejemplo,
+          // `const x: Optional<number> = optionalSome(5)` propaga `number` como
+          // tipo esperado del argumento, lo que hace que `5` se type-checkee
+          // contra `number`.
+          const expectedElement = expected && isGenericType(expected) && genericBase(expected) === "Optional" ? genericArguments(expected)[0] : undefined;
+          if (helper.returnsGeneric && expectedElement) {
+            // Helper que devuelve Optional<T>: tipamos cada argumento con T.
+            if (node.callee === "optionalNone") result = genericType("Optional", [expectedElement]);
+            else if (node.callee === "optionalSome" && node.args[0]) { this.require(this.expression(node.args[0], scope, expectedElement), expectedElement, node.args[0]); result = genericType("Optional", [expectedElement]); }
+            else if (node.callee === "optionalOrElse") {
+              node.args.forEach(arg => this.expression(arg, scope));
+              result = genericType("Optional", [expectedElement]);
+            }
+          } else if (!helper.returnsGeneric) {
+            // Helpers que devuelven primitivos. Para los que tienen firma
+            // (Optional<T>, T) -> T (caso de optionalValueOr) inferimos T
+            // del primer argumento cuando es un Optional<X>. Si no, caemos
+            // al expected contextual.
+            if (node.callee === "optionalValueOr" && node.args[0]) {
+              const arg0Type = this.expression(node.args[0], scope);
+              if (isGenericType(arg0Type) && genericBase(arg0Type) === "Optional") {
+                const T = genericArguments(arg0Type)[0];
+                if (node.args[1]) this.expression(node.args[1], scope, T);
+                result = T;
+                break;
+              }
+            }
+            // Fallback: usar el expected contextual como antes.
+            node.args.forEach((arg, index) => {
+              if (index === 0 && expectedElement) this.require(this.expression(arg, scope, genericType("Optional", [expectedElement])), genericType("Optional", [expectedElement]), arg);
+              else this.expression(arg, scope);
+            });
+            if (node.callee === "optionalIsPresent") result = "boolean";
+            else if (node.callee === "optionalValueOr") result = expectedElement ?? "void";
+          }
+          // `optionalMap` y `optionalAndThen` se manejan SIEMPRE (con o sin
+          // expected contextual) porque pueden inferir el tipo por sí solos.
+          if (node.callee === "optionalMap") {
+            const arg0Type = node.args[0] ? this.expression(node.args[0], scope) : "void";
+            const arg1Type = node.args[1] ? this.expression(node.args[1], scope) : "void";
+            if (!isGenericType(arg0Type) || genericBase(arg0Type) !== "Optional") {
+              this.report(node.args[0], `optionalMap: primer argumento debe ser Optional<T>, se obtuvo '${arg0Type}'`);
+              result = "void";
+            } else if (!isFunctionType(arg1Type)) {
+              this.report(node.args[1], `optionalMap: segundo argumento debe ser una función T → U`);
+              result = "void";
+            } else {
+              result = genericType("Optional", [functionResult(arg1Type)]);
+            }
+            break;
+          }
+          if (node.callee === "optionalAndThen") {
+            const arg1Type = node.args[1] ? this.expression(node.args[1], scope) : "void";
+            if (isFunctionType(arg1Type)) {
+              const lambdaReturn = functionResult(arg1Type);
+              if (node.args[0]) this.expression(node.args[0], scope, lambdaReturn);
+              result = lambdaReturn;
+            } else {
+              if (node.args[0]) this.expression(node.args[0], scope);
+              this.report(node.args[1], `optionalAndThen: segundo argumento debe ser una función T → Optional<U>`);
+              result = "void";
+            }
+            break;
+          }
+          if (result === undefined) { result = "void"; node.args.forEach(arg => this.expression(arg, scope)); }
+          break;
+        }
+        // Helpers de smart pointers (Issue #3): Un<T>, Rc<T>, MutRef<T>, Mut<T>.
+        // Patrón idéntico a OPTIONAL_HELPERS pero con detección del base genérico
+        // correspondiente. Los 4 helpers `unSome`, `unNone`, `rcShare` esperan un
+        // `expected` contextual (e.g. `const x: Un<Counter> = unSome(...)`) para
+        // inferir T.
+        if (UN_HELPERS[node.callee] || RC_HELPERS[node.callee] || REF_HELPERS[node.callee]) {
+          const isMutRef = node.callee === "mutRefOf" || node.callee === "mutRefFrom" || node.callee === "mutRefValue";
+          const smartBase = UN_HELPERS[node.callee] ? "Unq" : RC_HELPERS[node.callee] ? "Rc" : isMutRef ? "MutRef" : "Mut";
+          // Para constructores (unSome, unNone, rcShare, mutRefOf, etc.) usamos
+          // el `expected` contextual. Para inspectors (unIsSome, unValue,
+          // rcStrongCount, rcValue) inferimos desde el tipo del primer argumento.
+          const isInspector = node.callee === "unIsSome" || node.callee === "unValue" || node.callee === "rcStrongCount" || node.callee === "rcValue" || node.callee === "mutRefValue" || node.callee === "mutValue" || node.callee === "mutIsSome";
+          let expectedElement: TypeName | undefined;
+          if (isInspector && node.args[0]) {
+            const arg0Type = this.expression(node.args[0], scope);
+            expectedElement = isGenericType(arg0Type) && genericBase(arg0Type) === smartBase ? genericArguments(arg0Type)[0] : undefined;
+            if (!expectedElement) this.report(node, `'${node.callee}' espera ${smartBase}<T>, se obtuvo '${arg0Type}'`);
+          } else {
+            expectedElement = expected && isGenericType(expected) && genericBase(expected) === smartBase ? genericArguments(expected)[0] : undefined;
+          }
+          if (expectedElement) {
+            if (node.callee === "unSome" && node.args[0]) { this.require(this.expression(node.args[0], scope, expectedElement), expectedElement, node.args[0]); result = genericType("Unq", [expectedElement]); }
+            else if (node.callee === "unNone") result = genericType("Unq", [expectedElement]);
+            else if (node.callee === "unIsSome") { result = "boolean"; }
+            else if (node.callee === "unValue") { result = expectedElement; }
+            else if (node.callee === "rcShare" && node.args[0]) { this.require(this.expression(node.args[0], scope, expectedElement), expectedElement, node.args[0]); result = genericType("Rc", [expectedElement]); }
+            else if (node.callee === "rcStrongCount") { result = "number"; }
+            else if (node.callee === "rcValue") { result = expectedElement; }
+            else if ((node.callee === "mutRefOf" || node.callee === "mutRefFrom") && node.args[0]) { this.require(this.expression(node.args[0], scope, expectedElement), expectedElement, node.args[0]); result = genericType("MutRef", [expectedElement]); }
+            else if (node.callee === "mutRefValue") { result = expectedElement; }
+            else if ((node.callee === "mutOf" || node.callee === "mutFrom") && node.args[0]) { this.require(this.expression(node.args[0], scope, expectedElement), expectedElement, node.args[0]); result = genericType("Mut", [expectedElement]); }
+            else if (node.callee === "mutValue") { result = expectedElement; }
+            else if (node.callee === "mutIsSome") { result = "boolean"; }
+            else { result = "void"; node.args.forEach(arg => this.expression(arg, scope)); }
+          } else {
+            // Sin expected ni tipo inferible: reportamos.
+            this.report(node, `'${node.callee}' requiere contexto de tipo ${smartBase}<T>`);
+            node.args.forEach(arg => this.expression(arg, scope));
+            result = "void";
+          }
+          break;
+        }
+        if (JSON_HELPERS[node.callee]) {
+          const signature = JSON_HELPERS[node.callee];
+          if (!signature || !signature.params) { result = "void"; node.args.forEach(a => this.expression(a, scope)); break; }
+          if (node.args.length !== signature.params.length) this.report(node, `'${node.callee}' espera ${signature.params.length} argumentos, recibió ${node.args.length}`);
+          node.args.forEach((arg, index) => { const expectedType = signature.params[index]; const actual = this.expression(arg, scope, expectedType); if (expectedType) this.require(actual, expectedType, arg); });
+          result = signature.returnType; break;
+        }
+        const symbol = (node.span.etsgenDefinition ? scope.root() : scope).resolve(node.callee);
+        if (!symbol) { this.report(node, `Función no definida '${node.callee}'`, this.suggestSimilar(node.callee, scope.names())); node.args.forEach(a => this.expression(a, scope)); break; }
+        if (symbol.kind === "variable" && isFunctionType(symbol.type)) {
+          const parameters = functionParameters(symbol.type);
+          if (node.args.length !== parameters.length) this.report(node, `'${node.callee}' espera ${parameters.length} argumentos, recibió ${node.args.length}`);
+          node.args.forEach((arg, index) => { const expectedType = parameters[index]; const actual = this.expression(arg, scope, expectedType); if (expectedType) this.require(actual, expectedType, arg); });
+          result = functionResult(symbol.type); break;
+        }
+        if (symbol.kind !== "function") { this.report(node, `'${node.callee}' no es invocable`); node.args.forEach(a => this.expression(a, scope)); break; }
+        if (node.callee === "length") {
+          if (node.args.length !== 1) this.report(node, "'length' espera un argumento");
+          const argument = node.args[0]; const actual = argument ? this.expression(argument, scope) : "void";
+          if (argument && actual !== "string" && !isArrayType(actual) && !isTupleType(actual)) this.report(argument, "length requiere string, array o tupla");
+          result = "number"; break;
+        }
+        if (["print", "write", "printError", "writeError"].includes(node.callee)) { node.args.forEach(arg => this.expression(arg, scope)); result = "void"; break; }
+        // Propagamos el `expected` contextual a cada argumento cuando TODAS las sobrecargas
+        // coinciden en el tipo del parámetro en esa posición. Esto permite, por ejemplo,
+        // que una closure interna reciba como `expected` el tipo función declarado en la
+        // firma y así inferir su tipo de retorno.
+        const contextualArgTypes = node.args.map((_, index) => {
+          const candidates = symbol.overloads
+            .map(signature => signature.params[Math.min(index, signature.params.length - (signature.params.at(-1)?.variadic ? 1 : 0))]?.type)
+            .filter((type): type is TypeName => !!type);
+          if (!candidates.length) return undefined;
+          if (candidates.every(type => type === candidates[0])) return candidates[0];
+          return undefined;
+        });
+        // V10: marcar lambdas pasadas directamente como argumento. Esto
+        // habilita la emisión inline en C++ sin envolver en `std::function`
+        // cuando el codegen decide hacerlo. La marca se setea antes de
+        // procesar el argumento para que `expression()` la vea al final.
+        node.args.forEach((arg, index) => { if (arg.kind === "ArrowFunctionExpression" && !arg.singleUseSite) arg.singleUseSite = { kind: "CallExpression", argumentIndex: index }; });
+        // V30.22.6: si hay named args, los reordenamos al orden
+        // posicional segun la firma. Los `FunctionParameterSymbol`
+        // ahora guardan `name` (V30.22.6) asi que podemos buscar el
+        // indice del parametro por nombre.
+        //
+        // Estrategia: para cada param de la firma, si fue provisto
+        // por nombre, se usa su `value`. Si no, se deja un marker
+        // `_ets_omitted` que el type-checker trata como `any` (asi el
+        // overload matching acepta el parametro cuando tiene default
+        // value o es opcional). El codegen tambien lo trata como
+        // `any` y no emite el arg, dejando que el default value o
+        // `optionalNone<T>()` cubra el slot.
+        const hasNamed = node.args.some(arg => arg.kind === "NamedArgumentExpression");
+        if (hasNamed && symbol.overloads.length > 0) {
+          const params = symbol.overloads[0].params;
+          const provided = new Map<string, Expression>();
+          let invalidLabel=false;
+          for (const arg of node.args) {
+            if (arg.kind === "NamedArgumentExpression") {
+              const idx = params.findIndex(p => p.name === arg.name);
+              if (idx >= 0) provided.set(arg.name, arg.value);
+              else { invalidLabel=true; this.report(arg, `La función '${node.callee}' no tiene un parámetro llamado '${arg.name}'`); }
+            }
+          }
+          // node.args mantiene el orden de la firma. Slots no
+          // provistos usan `_ets_omitted` (tipo `any`).
+          if(!invalidLabel) node.args = params.map(p => {
+            if (provided.has(p.name)) return provided.get(p.name)!;
+            return { kind: "IdentifierExpression", name: "_ets_omitted", span: node.span } as unknown as Expression;
+          });
+        }
+        // V30.22.7: spread element en la llamada. En V30.22.7 el
+        // spread solo funciona si la firma destino acepta un unico
+        // param de tipo array. El type-check valida eso y el codegen
+        // emite el array como arg unico. Para firmas multi-param, el
+        // overload matching fallara (limitación documentada: el
+        // dialecto no tiene variadics de runtime).
+        const argumentTypes = node.args.map((arg, index) => this.expression(arg, scope, contextualArgTypes[index]));
+        const matches = symbol.overloads.map(signature => this.matchOverload(signature, argumentTypes, node.typeArguments, expected)).filter(match => !!match).sort((a, b) => b.score - a.score);
+        if (!matches.length) { this.report(node, `Ninguna sobrecarga de '${node.callee}' acepta (${argumentTypes.join(", ")})`); break; }
+        if (matches.length > 1 && matches[0].score === matches[1].score) this.report(node, `Llamada ambigua a '${node.callee}'`);
+        const selected = matches[0]; const signature = selected.signature;
+        const declaration = this.functionDeclarations.get(signature);
+        if (declaration) this.selectedFunctions.set(node, declaration);
+        if (!node.typeArguments.length) {
+          const inferred = signature.typeParameters.filter(parameter => !signature.variadicTypeParameters.includes(parameter)).map(parameter => selected.substitutions.get(parameter));
+          if (inferred.length && inferred.every((type): type is TypeName => !!type)) this.inferredCallTypeArguments.set(node, inferred);
+        }
+        node.typeArguments.forEach(argument => this.validateType(argument, node, false, false, scope));
+        node.args.forEach((arg, index) => {
+          const parameter = signature.params[Math.min(index, signature.params.length - 1)];
+          if (parameter?.out || parameter?.mutableReference) {
+            const mode = parameter.out ? "out" : "mut";
+            if (arg.kind !== "IdentifierExpression") this.report(arg, `Un argumento ${mode} debe ser una variable mutable`);
+            else { const target = scope.resolve(arg.name); if (!target || target.kind !== "variable" || !target.mutable) this.report(arg, `Un argumento ${mode} debe ser una variable mutable`); else this.markCapturedMutation(arg, scope); }
+          }
+        });
+        result = this.substituteType(signature.returnType, selected.substitutions); break;
+      }
+      case "MemberCallExpression": {
+        // V30.17: `Promise.all([...])` y `Promise.race([...])`. Static builtin.
+        if (node.object.kind === "IdentifierExpression" && node.object.name === "Promise") {
+          if (node.method === "all" || node.method === "race") {
+            if (node.args.length !== 1) this.report(node, `Promise.${node.method} espera 1 argumento (array de tasks)`);
+            // Aceptamos cualquier tipo de array (Promise<X>[] o cualquier otro).
+            // El codegen lo procesa especialmente via el side-channel.
+            this.expression(node.args[0]!, scope);
+            // Side-channel para el codegen: marca el node con el nombre
+            // del metodo para que emita `::ets::when_all(...)` etc.
+            (node as unknown as { _etsPromiseStatic: string })._etsPromiseStatic = node.method;
+            // V30.17: Promise.all<T> requiere type argument explicito.
+            // `Promise.all<number>([slow1(), slow2()])` devuelve
+            // `Promise<number[]>`. Sin type argument, el dialecto usa
+            // `any` como placeholder. En codegen, si el side-channel
+            // dice "all" y el result type es Promise<any[]>, emitimos
+            // el tipo concreto via `ets::all<vector<Task<number>>>(...)`.
+            const tArg = node.typeArguments[0];
+            if (node.method === "all") {
+              return genericType("Promise", [tArg ? `${tArg}[]` : "any[]"]);
+            }
+            return genericType("Promise", [tArg ?? "any"]);
+          }
+          this.report(node, `Promise.${node.method} no es una API valida (usa all o race)`);
+          return genericType("Promise", ["any"]);
+        }
+        // V30.22.1: `ClassName.staticMethod(args)` permite llamar a un
+        // metodo estatico sin necesidad de instanciar la clase. Esto es
+        // el patron estandar de TS/Java para metodos de clase (factory,
+        // utilities, etc.). El codegen emite `ClassName::staticMethod(args)`.
+        if (node.object.kind === "IdentifierExpression" && this.classes.has(node.object.name)) {
+          const cls = this.classes.get(node.object.name)!;
+          const method = cls.methods.find(m => m.name === node.method && m.isStatic);
+          if (method) {
+            // Validamos args contra los params del metodo estatico.
+            const requiredParams = method.params.filter(p => p.defaultValue === undefined).length;
+            if (node.args.length < requiredParams) this.report(node, `'${cls.name}.${method.name}' espera al menos ${requiredParams} argumento(s), recibió ${node.args.length}`);
+            for (let i = 0; i < node.args.length; ++i) this.expression(node.args[i]!, scope);
+            // Anotamos el nodo como "static call" para que el codegen
+            // emita `ClassName::method(...)` en lugar de `method(...)`.
+            (node as unknown as { _etsStaticCall: string })._etsStaticCall = cls.name;
+            result = method.returnType === "void" ? "void" : (method.returnType ?? "void");
+            break;
+          }
+        }
+        const objectType = this.expression(node.object, scope);
+        // V1.2: `Union<T1, T2>.Variant(args)` o `Union.Variant(args)`. Si la
+        // unión existe y la variante está declarada, el resultado es el tipo
+        // de la unión instanciado (o simple si no hay genéricos).
+        if (node.object.kind === "IdentifierExpression" || node.object.kind === "GenericIdentifierExpression") {
+          const unionName = node.object.name;
+          if (this.unions.has(unionName)) {
+            const unionNode = this.unions.get(unionName)!;
+            const variant = unionNode.variants.find(v => v.name === node.method);
+            if (!variant) {
+              this.report(node, `La unión '${unionName}' no tiene variante '${node.method}' (variantes: ${unionNode.variants.map(v => v.name).join(", ")})`);
+              result = unionNode.typeParameters.length ? genericType(unionName, node.object.kind === "GenericIdentifierExpression" ? node.object.typeArguments : TypeChecker.namesOf(unionNode.typeParameters)) : unionName;
+              break;
+            }
+            if ((variant.payload ? 1 : 0) !== node.args.length) {
+              this.report(node, `La variante '${unionName}' espera ${variant.payload ? 1 : 0} argumento(s), recibió ${node.args.length}`);
+              result = unionNode.typeParameters.length ? genericType(unionName, node.object.kind === "GenericIdentifierExpression" ? node.object.typeArguments : TypeChecker.namesOf(unionNode.typeParameters)) : unionName;
+              break;
+            }
+            const args_ = node.object.kind === "GenericIdentifierExpression" ? node.object.typeArguments : TypeChecker.namesOf(unionNode.typeParameters);
+            if (variant.payload) this.expression(node.args[0]!, scope, variant.payload);
+            result = unionNode.typeParameters.length ? genericType(unionName, args_) : unionName;
+            break;
+          }
+        }
+        if (objectType === "Filesystem") {
+          result = this.dispatchBuiltin("fs", FILESYSTEM_METHODS, node, scope);
+          break;
+        }
+        if (objectType === "Path") {
+          result = this.dispatchBuiltin("path", PATH_METHODS, node, scope);
+          break;
+        }
+        if (objectType === "Process") {
+          result = this.dispatchBuiltin("process", PROCESS_METHODS, node, scope);
+          break;
+        }
+        if (objectType === "Math") {
+          result = this.dispatchBuiltin("Math", MATH_METHODS, node, scope);
+          break;
+        }
+        if (objectType === "Date") {
+          result = this.dispatchBuiltin("Date", DATE_METHODS, node, scope);
+          break;
+        }
+        if (objectType === "Json") {
+          result = this.dispatchBuiltin("JSON", JSON_METHODS, node, scope);
+          break;
+        }
+        // V30.25: Regex.test/match/replace. El tipo Regex es opaco (envuelve
+        // std::regex en runtime/ets_regex.hpp). Los métodos se modelan
+        // inline porque la API es pequeña y queremos tipos especificos.
+        if (objectType === "Regex") {
+          if (node.method === "test") {
+            if (node.args.length !== 1) this.report(node, `Regex.test espera 1 argumento, recibió ${node.args.length}`);
+            if (node.args[0]) this.require(this.expression(node.args[0], scope, "string"), "string", node.args[0]);
+            result = "boolean";
+            break;
+          }
+          if (node.method === "match") {
+            if (node.args.length !== 1) this.report(node, `Regex.match espera 1 argumento, recibió ${node.args.length}`);
+            if (node.args[0]) this.require(this.expression(node.args[0], scope, "string"), "string", node.args[0]);
+            result = "string[]";
+            break;
+          }
+          if (node.method === "replace") {
+            if (node.args.length !== 2) this.report(node, `Regex.replace espera 2 argumentos, recibió ${node.args.length}`);
+            if (node.args[0]) this.require(this.expression(node.args[0], scope, "string"), "string", node.args[0]);
+            if (node.args[1]) this.require(this.expression(node.args[1], scope, "string"), "string", node.args[1]);
+            result = "string";
+            break;
+          }
+          this.report(node, `Regex.${node.method} no es un metodo valido (usa test/match/replace)`);
+          result = "void";
+          break;
+        }
+        // FileReader: lector streaming por descriptor. Los metodos se
+        // dispatchan con un set hardcoded igual que Console porque el
+        // checker no usa las declaraciones de editor de `types/estatic.d.ts`.
+        if (objectType === "FileReader") {
+          const validMethods = new Set(["readChar", "read", "readLine", "peekChar", "peek", "eof", "close"]);
+          if (!validMethods.has(node.method)) this.report(node, `FileReader.${node.method} no es un metodo valido (usa readChar/peekChar/peek/read/readLine/eof/close)`);
+          node.args.forEach(arg => this.expression(arg, scope));
+          if (node.method === "readChar") result = "number";
+          else if (node.method === "peekChar") result = "number";
+          else if (node.method === "eof") result = "boolean";
+          else if (node.method === "readLine") result = "string";
+          else if (node.method === "read" || node.method === "peek") result = "string";
+          else if (node.method === "close") result = "void";
+          else result = "void";
+          break;
+        }
+        if (objectType === "Console") {
+          if(Object.hasOwn(TERMINAL_METHODS,node.method)) {
+            if(node.typeArguments.length) this.report(node,"console no acepta argumentos de tipo en controles de terminal");
+            if(node.optional) this.report(node,"console no requiere acceso opcional");
+            if(node.args.some(arg=>arg.kind === "NamedArgumentExpression")) this.report(node,"console usa argumentos posicionales");
+            result=this.dispatchBuiltin("console",TERMINAL_METHODS,node,scope);break;
+          }
+          const validMethods = new Set(["log", "info", "debug", "trace", "warn", "error"]);
+          if (!validMethods.has(node.method)) this.report(node, `console.${node.method} no es una API válida (usa log/info/debug/trace/warn/error)`);
+          node.args.forEach(arg => this.expression(arg, scope));
+          result = "void";
+          break;
+        }
+        if (objectType === "http") {
+          // http.createServer() -> Server. http.param/query/header(req, name) -> string.
+          // http.get(url) -> Result<HttpClientResponse, string>.
+          // http.post(url, body, contentType?) -> Result<HttpClientResponse, string>.
+          if (node.method === "createServer") {
+            // http.createServer() -> Server
+            if (node.args.length !== 0) this.report(node, "http.createServer() no acepta argumentos");
+            result = "Server";
+            break;
+          }
+          // http.param(req, name) / http.query(req, name) / http.header(req, name) -> string
+          if (node.method === "param" || node.method === "query" || node.method === "header") {
+            if (node.args.length !== 2) this.report(node, `http.${node.method}(req, name) espera 2 argumentos`);
+            this.expression(node.args[0]!, scope);
+            this.expression(node.args[1]!, scope);
+            result = "string";
+            break;
+          }
+          // V30.3: http.get(url) -> Promise<Result<HttpClientResponse, string>>.
+          // Antes retornaba Result<...> sincrono. Ahora retorna Promise<Result<...>>
+          // y se traduce a `co_await ::ets::httpClientGetAsync(url)`. El cliente
+          // async (runtime/ets_http_curl_async.hpp) usa BlockingAwaiter + worker
+          // thread para no bloquear el event loop.
+          if (node.method === "get") {
+            if (node.args.length !== 1) this.report(node, "http.get(url) espera 1 argumento (url)");
+            this.require(this.expression(node.args[0]!, scope, "string"), "string", node.args[0]!);
+            result = "Promise<Result<HttpClientResponse,string>>";
+            break;
+          }
+          // V30.3: http.post(url, body, contentType?) -> Promise<Result<HttpClientResponse, string>>.
+          if (node.method === "post") {
+            if (node.args.length < 2 || node.args.length > 3) {
+              this.report(node, "http.post(url, body, contentType?) espera 2 o 3 argumentos");
+            }
+            this.require(this.expression(node.args[0]!, scope, "string"), "string", node.args[0]!);
+            this.require(this.expression(node.args[1]!, scope, "string"), "string", node.args[1]!);
+            if (node.args[2]) this.require(this.expression(node.args[2], scope, "string"), "string", node.args[2]!);
+            result = "Promise<Result<HttpClientResponse,string>>";
+            break;
+          }
+          this.report(node, `http.${node.method} no es una API valida (usa createServer/param/query/header/get/post)`);
+          result = "Server";
+          break;
+        }
+        if (objectType === "Server") {
+          // server.get/post/put/patch/delete(path, handler) -> void.
+          // server.listen(port) -> void (bloquea hasta SIGINT).
+          const validRoutedMethods = new Set(["get", "post", "put", "patch", "delete"]);
+          if (validRoutedMethods.has(node.method)) {
+            if (node.args.length !== 2) this.report(node, `server.${node.method}(path, handler) espera 2 argumentos`);
+            this.expression(node.args[0]!, scope);
+            this.expression(node.args[1]!, scope);
+            result = "void";
+            break;
+          }
+          if (node.method === "listen") {
+            if (node.args.length !== 1) this.report(node, "server.listen(port) espera 1 argumento");
+            this.expression(node.args[0]!, scope);
+            result = "void";
+            break;
+          }
+          this.report(node, `server.${node.method} no es un metodo (usa get/post/put/patch/delete/listen)`);
+          result = "void";
+          break;
+        }
+        if (objectType === "Request") {
+          // req.method/path/rawQuery/body son campos (no metodos). El
+          // dialecto trata todo como call/member, asi que aceptamos
+          // `req.method` (sin args) como acceso a campo.
+          if (node.args.length !== 0) this.report(node, `req.${node.method} es un campo, no un metodo`);
+          result = "string";
+          break;
+        }
+        if (objectType === "Response") {
+          // res.status(n), res.header(k,v), res.send(s), res.json(s) -> Response.
+          // Todos encadenables. El codegen los traduce a res.status(...) etc.
+          const chainable = new Set(["status", "header", "send", "json"]);
+          if (chainable.has(node.method)) {
+            node.args.forEach(arg => this.expression(arg, scope));
+            result = "Response";
+            break;
+          }
+          this.report(node, `response.${node.method} no es un metodo (usa status/header/send/json)`);
+          result = "Response";
+          break;
+        }
+        // V28: HttpClientResponse. Resultado de http.get/post. Accesores:
+        // status() -> number, body() -> string, header(name) -> string.
+        if (objectType === "HttpClientResponse") {
+          const methods = new Set(["status", "body", "header"]);
+          if (methods.has(node.method)) {
+            node.args.forEach(arg => this.expression(arg, scope));
+            if (node.method === "status") result = "number";
+            else result = "string";
+            break;
+          }
+          this.report(node, `HttpClientResponse.${node.method} no es un metodo (usa status/body/header)`);
+          result = "HttpClientResponse";
+          break;
+        }
+        // Para un parámetro genérico `T` con constraint `A & B`, reunimos los métodos
+        // de todas las interfaces miembro para resolver la llamada.
+        const constraint = this.activeTypeConstraints.get(objectType);
+        if (constraint && isIntersectionType(constraint) && this.activeTypeParameters.has(objectType)) {
+          const memberMethods = intersectionMembers(constraint).flatMap(member => this.interfaces.get(member)?.methods ?? []);
+          const methods = memberMethods.filter(candidate => candidate.name === node.method);
+          if (!methods.length) this.report(node, `El constraint '${constraint}' no declara '${node.method}'`);
+          result = this.resolveInterfaceMethodCall(methods, node, scope, expected) ?? "void";
+          break;
+        }
+        if (isGenericType(objectType) && genericBase(objectType) === "Result") {
+          const valueType = genericArguments(objectType)[0] ?? "void";
+          if (node.args.length) this.report(node, `'${node.method}' no acepta argumentos`);
+          node.args.forEach(arg => this.expression(arg, scope));
+          if (node.method === "isOk") result = "boolean";
+          else if (node.method === "value") result = valueType;
+          else if (node.method === "error") result = "string";
+          else this.report(node, `Result no declara '${node.method}'`);
+          break;
+        }
+        if (isGenericType(objectType) && genericBase(objectType) === "Map") {
+          const typeArgs = genericArguments(objectType);
+          if (typeArgs.length !== 2) { this.report(node, `Map espera 2 argumentos de tipo, recibió ${typeArgs.length}`); break; }
+          result = this.dispatchGenericBuiltin("Map", MAP_METHODS, node, scope, typeArgs);
+          break;
+        }
+        if (isGenericType(objectType) && genericBase(objectType) === "Set") {
+          const typeArgs = genericArguments(objectType);
+          if (typeArgs.length !== 1) { this.report(node, `Set espera 1 argumento de tipo, recibió ${typeArgs.length}`); break; }
+          result = this.dispatchGenericBuiltin("Set", SET_METHODS, node, scope, typeArgs);
+          break;
+        }
+        // V28: metodos de string estilo TypeScript. El dialecto expone
+        // la API de string como llamadas tipo metodo (`s.charAt(i)`) y
+        // el codegen las traduce 1:1 a `ets::string_*` (byte-level, ver
+        // runtime/ets_string.hpp). Validamos aridad y tipos de los args
+        // contra `STRING_METHODS`.
+        if (objectType === "string") {
+          const method = STRING_METHODS[node.method];
+          if (!method) {
+            this.report(node, `El tipo 'string' no declara '${node.method}' (usa ${Object.keys(STRING_METHODS).join(", ")})`);
+            node.args.forEach(arg => this.expression(arg, scope));
+            result = "string";
+            break;
+          }
+          if (node.args.length !== method.arity) this.report(node, `string.${node.method} espera ${method.arity} argumento(s), recibió ${node.args.length}`);
+          method.paramTypes.forEach((expected, i) => {
+            if (node.args[i]) this.require(this.expression(node.args[i], scope, expected), expected, node.args[i]!);
+          });
+          result = method.returnType;
+          break;
+        }
+        // V7: métodos sobre arrays `T[]`. Las firmas se materializan con
+        // `typeArgs = [T]` (elemento del array). Para `map<U>(f)` y
+        // `reduce<U>(init, op)`, el parámetro `U` puede declararse
+        // explícitamente o inferirse del tipo de retorno de la lambda o del
+        // valor `init`; el resultado se guarda en `inferredCallTypeArguments`
+        // para que el codegen emita la llamada C++ con los tipos correctos.
+        if (isArrayType(objectType)) {
+          const method = ARRAY_METHODS[node.method];
+          if (!method) {
+            this.report(node, `El tipo '${objectType}' no declara '${node.method}' (usa ${Object.keys(ARRAY_METHODS).join(", ")})`);
+            node.args.forEach(arg => this.expression(arg, scope));
+            result = "void[]";
+            break;
+          }
+          if (!method.variadic && node.args.length !== method.arity) this.report(node, `Array.${node.method} espera ${method.arity} argumento(s), recibió ${node.args.length}`);
+          const T = arrayElement(objectType);
+          if (node.method === "push") {
+            if (node.args[0]) this.require(this.expression(node.args[0], scope, T), T, node.args[0]);
+            this.markCapturedMutation(node.object, scope);
+            result = "void";
+            break;
+          }
+          if (node.method === "filter") {
+            const expected = functionType([T], "boolean");
+            if (node.args[0]) this.require(this.expression(node.args[0], scope, expected), expected, node.args[0]);
+            result = objectType;
+            break;
+          }
+          if (node.method === "map") {
+            // `arr.map<U>(f)`: `f` debe ser `(T) => U`. `U` se obtiene en
+            // este orden de prioridad: typeArgument explícito, expected
+            // (p.ej. `let r: string[] = arr.map(...)`), tipo de retorno del
+            // lambda. Si nada de eso aplica, dejamos `U = undefined` y el
+            // codegen usará `auto` para el vector de salida (caso raro; lo
+            // común es que el dialecto siempre reciba `expected` por la
+            // anotación del LHS o por el contexto de llamada).
+            const userU = node.typeArguments[0];
+            let U: TypeName | undefined = userU;
+            if (!U && expected && isArrayType(expected)) {
+              const innerExpected = arrayElement(expected);
+              if (innerExpected !== "void") U = innerExpected;
+            }
+            if (!U && node.args[0] && node.args[0].kind === "ArrowFunctionExpression") {
+              // Inferencia desde el retorno del lambda (modo conservativo:
+              // no pasamos `expected` para no contaminar la inferencia del
+              // cuerpo; el usuario debe anotar `U` si la lambda no tiene
+              // un tipo de retorno concreto).
+              const fnType = this.expression(node.args[0], scope);
+              if (fnType && isFunctionType(fnType)) {
+                const r = functionResult(fnType);
+                if (r && r !== "void") U = r;
+              }
+            }
+            const fnExpected = functionType([T], U ?? "void");
+            // V10: la lambda es argumento directo de `.filter` o `.map`,
+            // марка `singleUseSite` para que el codegen la inline.
+            if (node.args[0] && node.args[0].kind === "ArrowFunctionExpression") node.args[0].singleUseSite = { kind: "MemberCallExpression", argumentIndex: 0 };
+            if (node.args[0]) this.require(this.expression(node.args[0], scope, fnExpected), fnExpected, node.args[0]);
+            if (U) this.inferredCallTypeArguments.set(node, [U]);
+            result = U ? `${U}[]` : "void[]";
+            break;
+          }
+          if (node.method === "reduce") {
+            // `arr.reduce<U>(init, op)`: `init: U`, `op: (U, T) => U`.
+            // `U` se deduce del typeArgument explícito o del tipo de `init`
+            // (primer argumento). Sin uno de los dos no podemos validar la
+            // firma del operador.
+            const userU = node.typeArguments[0];
+            let U: TypeName | undefined = userU;
+            if (!U && node.args[0]) {
+              const initType = this.expression(node.args[0], scope);
+              if (initType) U = initType;
+            }
+            if (!U) this.report(node.args[0] ?? node, `Array.reduce requiere tipo del acumulador U (anota arr.reduce<U>(init, op) o da un tipo a init)`);
+            const fnExpected = functionType([U ?? "void", T], U ?? "void");
+            // V10: el operador de reduce es argumento directo, марка `singleUseSite`.
+            if (node.args[1] && node.args[1].kind === "ArrowFunctionExpression") node.args[1].singleUseSite = { kind: "MemberCallExpression", argumentIndex: 1 };
+            if (node.args[1]) this.require(this.expression(node.args[1], scope, fnExpected), fnExpected, node.args[1]);
+            if (U) this.inferredCallTypeArguments.set(node, [U]);
+            result = U ?? "void";
+            break;
+          }
+          // V11: métodos adicionales sobre arrays. La firma del lambda se
+          // valida según `paramKinds` y el returnType se computa con la
+          // tabla ARRAY_METHODS.
+          if (node.method === "forEach") {
+            const fnExpected = functionType([T], "void");
+            // V10: lambda directa es singleUseSite.
+            if (node.args[0] && node.args[0].kind === "ArrowFunctionExpression") node.args[0].singleUseSite = { kind: "MemberCallExpression", argumentIndex: 0 };
+            if (node.args[0]) this.require(this.expression(node.args[0], scope, fnExpected), fnExpected, node.args[0]);
+            result = "void";
+            break;
+          }
+          if (node.method === "find") {
+            const fnExpected = functionType([T], "boolean");
+            if (node.args[0] && node.args[0].kind === "ArrowFunctionExpression") node.args[0].singleUseSite = { kind: "MemberCallExpression", argumentIndex: 0 };
+            if (node.args[0]) this.require(this.expression(node.args[0], scope, fnExpected), fnExpected, node.args[0]);
+            result = `Optional<${T}>`;
+            break;
+          }
+          if (node.method === "some" || node.method === "every") {
+            const fnExpected = functionType([T], "boolean");
+            if (node.args[0] && node.args[0].kind === "ArrowFunctionExpression") node.args[0].singleUseSite = { kind: "MemberCallExpression", argumentIndex: 0 };
+            if (node.args[0]) this.require(this.expression(node.args[0], scope, fnExpected), fnExpected, node.args[0]);
+            result = "boolean";
+            break;
+          }
+          if (node.method === "slice") {
+            if (node.args[0]) this.require(this.expression(node.args[0], scope), "number", node.args[0]);
+            if (node.args[1]) this.require(this.expression(node.args[1], scope), "number", node.args[1]);
+            result = objectType;
+            break;
+          }
+          // V30.8: `concat(b, c, d, ...)` — variadico. Cada argumento debe
+          // ser del mismo tipo array `T[]` que el receptor. Devuelve `T[]`.
+          if (node.method === "concat") {
+            const arrExpected = objectType;
+            for (const arg of node.args) {
+              if (arg.kind === "ArrowFunctionExpression") arg.singleUseSite = { kind: "MemberCallExpression", argumentIndex: node.args.indexOf(arg) };
+              this.require(this.expression(arg, scope), arrExpected, arg);
+            }
+            result = objectType;
+            break;
+          }
+          // V14: `sort(cmp)` — `cmp: (T, T) => number` (negativo si a<b).
+          if (node.method === "sort") {
+            const fnExpected = functionType([T, T], "number");
+            if (node.args[0] && node.args[0].kind === "ArrowFunctionExpression") node.args[0].singleUseSite = { kind: "MemberCallExpression", argumentIndex: 0 };
+            if (node.args[0]) this.require(this.expression(node.args[0], scope, fnExpected), fnExpected, node.args[0]);
+            result = objectType;
+            break;
+          }
+          // V14: `flatMap<U>(f)` — `f: (T) => U[]`, devuelve `U[]`.
+          if (node.method === "flatMap") {
+            const userU = node.typeArguments[0];
+            let U: TypeName | undefined = userU;
+            if (!U && expected && isGenericType(expected) && genericBase(expected).startsWith("U")) U = genericArguments(expected)[0];
+            if (!U) this.report(node, `Array.flatMap requiere tipo U (anota arr.flatMap<U>(f))`);
+            const fnExpected = functionType([T], U ? `${U}[]` : "void[]");
+            if (node.args[0] && node.args[0].kind === "ArrowFunctionExpression") node.args[0].singleUseSite = { kind: "MemberCallExpression", argumentIndex: 0 };
+            if (node.args[0]) this.require(this.expression(node.args[0], scope, fnExpected), fnExpected, node.args[0]);
+            if (U) this.inferredCallTypeArguments.set(node, [U]);
+            result = U ? `${U}[]` : "void[]";
+            break;
+          }
+          // V14: `includes(value)` — compara por `operator==`.
+          if (node.method === "includes") {
+            if (node.args[0]) this.require(this.expression(node.args[0], scope, T), T, node.args[0]);
+            result = "boolean";
+            break;
+          }
+          // V30.24: `join(separator)` une los elementos del array en un
+          // string. Solo valido para arrays de strings (T = string). Si
+          // T no es string, reporta error claro.
+          if (node.method === "join") {
+            if (T !== "string") this.report(node, `Array.join solo se permite sobre string[] (se obtuvo ${T}[])`);
+            if (node.args[0]) this.require(this.expression(node.args[0], scope, "string"), "string", node.args[0]);
+            result = "string";
+            break;
+          }
+          break;
+        }
+        // V14: Optional<T> tiene métodos intrínsecos conocidos por el dialecto
+        // (estilo Rust Option::is_some, Option::unwrap). NO son magia del
+        // compilador: el programador los ve y decide cuándo usarlos. Si
+        // llama `o.value()` sin verificar, aborta — el programador DEBE
+        // gestionar el caso vacío explícitamente.
+        if (objectType && isGenericType(objectType) && genericBase(objectType) === "Optional") {
+          const T = genericArguments(objectType)[0] ?? "void";
+          const method = node.method;
+          if (method === "isPresent" || method === "isEmpty") {
+            if (node.args.length !== 0) this.report(node, `Optional.${method} espera 0 argumentos`);
+            result = "boolean";
+            break;
+          }
+          if (method === "value") {
+            if (node.args.length !== 0) this.report(node, `Optional.value espera 0 argumentos`);
+            result = T;
+            break;
+          }
+          if (method === "valueOr") {
+            if (node.args.length !== 1) this.report(node, `Optional.valueOr espera 1 argumento`);
+            else this.require(this.expression(node.args[0], scope, T), T, node.args[0]);
+            result = T;
+            break;
+          }
+          if (method === "map") {
+            if (node.args.length !== 1) this.report(node, `Optional.map espera 1 argumento`);
+            else {
+              const innerExpected = expected && isGenericType(expected) && genericBase(expected) === "Optional" ? genericArguments(expected)[0] ?? "void" : "void";
+              const fnExpected = functionType([T], innerExpected);
+              this.require(this.expression(node.args[0], scope, fnExpected), fnExpected, node.args[0]);
+            }
+            result = expected ?? `Optional<${T}>`;
+            break;
+          }
+          if (method === "andThen") {
+            if (node.args.length !== 1) this.report(node, `Optional.andThen espera 1 argumento`);
+            else this.require(this.expression(node.args[0], scope), functionType([T], `Optional<void>`), node.args[0]);
+            result = expected ?? `Optional<${T}>`;
+            break;
+          }
+          if (method === "orElse") {
+            if (node.args.length !== 1) this.report(node, `Optional.orElse espera 1 argumento`);
+            else this.require(this.expression(node.args[0], scope, objectType), objectType, node.args[0]);
+            result = objectType;
+            break;
+          }
+          this.report(node, `Optional no tiene el método '${method}'`);
+          result = objectType;
+          break;
+        }
+        const resolvedClass = this.resolveClass(objectType);
+        const constrainedInterface = this.activeTypeConstraints.get(objectType);
+        // V30.14.2: si el tipo del object es un union expandido de un
+        // type alias (registrado en `unionAliasReverseMap`), resolvemos
+        // el metodo consultando cada variante. Si TODAS las clases lo
+        // tienen, devolvemos un sentinel `union_alias::X::method` que
+        // el codegen traduce a la llamada despachada.
+        if (isUnionType(objectType) && this.unionAliasReverseMap.has(objectType)) {
+          const aliasName = this.unionAliasReverseMap.get(objectType)!;
+          const expansion = this.aliasExpansions.get(aliasName);
+          if (expansion && isUnionType(expansion)) {
+            const allClasses = expansion.split("|").map(s => s.trim());
+            const firstCls = this.classes.get(allClasses[0]!);
+            const method = firstCls?.methods.find(candidate => candidate.name === node.method);
+            if (method) {
+              const allHave = allClasses.every(cls => {
+                const c = this.classes.get(cls);
+                return c?.methods.some(m => m.name === node.method);
+              });
+              if (allHave) {
+                const retType = this.substituteType(method.returnType ?? "void", resolvedClass?.substitutions ?? new Map());
+                result = `union_alias::${aliasName}::${node.method}::${retType}` as TypeName;
+                break;
+              }
+            }
+          }
+        }
+        const owner = this.interfaces.get(constrainedInterface ?? objectType) ?? resolvedClass?.owner;
+        const methods = owner?.methods.filter(candidate => candidate.name === node.method) ?? [];
+        if (!owner) this.report(node.object, `El tipo '${objectType}' no tiene métodos`);
+        else if (!methods.length) this.report(node, `El tipo '${objectType}' no declara '${node.method}'`);
+        // V19: encapsulación de métodos. Si el método es `private` y el
+        // acceso viene desde fuera de la clase, error. Solo se chequea
+        // si el owner es un ClassDeclaration (las interfaces son públicas
+        // por contrato).
+        const methodOwnerName = owner && "name" in owner ? owner.name : undefined;
+        const offendingMethod = methods.find(m => "access" in m) as ClassMethod | undefined;
+        if (offendingMethod?.access === "private" && methodOwnerName !== this.currentClass) {
+          this.report(node, `El método '${node.method}' es privado en '${methodOwnerName}' y no se puede llamar desde fuera`);
+          result = "void";
+          break;
+        }
+        if (offendingMethod?.access === "protected" && methodOwnerName !== this.currentClass) {
+          this.report(node, `El método '${node.method}' es protegido en '${methodOwnerName}' y no se puede llamar desde fuera`);
+          result = "void";
+          break;
+        }
+        // V30.13: misma propagación contextual que CallExpression — si TODAS
+        // las sobrecargas coinciden en el tipo del parámetro en una posición,
+        // lo pasamos como `expected` al argumento. Esto permite que un literal
+        // `[new Line(), new MultiLine(10, 20)]` se infiera como
+        // `Array<SvgChild>` cuando el método espera `Array<SvgChild>` (antes
+        // el literal se evaluaba como tupla `(Line, MultiLine)` y el
+        // matchOverload no encontraba la firma porque `satisfiesInterface`
+        // no acepta tuplas como el lado "actual").
+        const classSubstitutions = resolvedClass?.substitutions ?? new Map<string, TypeName>();
+        const contextualArgTypes = node.args.map((_, index) => {
+          const candidates = methods
+            .map(method => {
+              const parameter = method.params[Math.min(index, method.params.length - (method.params.at(-1)?.variadic ? 1 : 0))];
+              return parameter ? this.substituteType(parameter.type, classSubstitutions) : undefined;
+            })
+            .filter((type): type is TypeName => !!type);
+          if (!candidates.length) return undefined;
+          if (candidates.every(type => type === candidates[0])) return candidates[0];
+          return undefined;
+        });
+        const argumentTypes = node.args.map((arg, index) => this.expression(arg, scope, contextualArgTypes[index]));
+        const matches = methods.map(method => {
+          const signature: FunctionSignature = {
+            typeParameters: TypeChecker.namesOf(method.typeParameters ?? []), variadicTypeParameters: [], typeConstraints: TypeChecker.constraintsOf(method.typeParameters ?? []), defaults: TypeChecker.defaultsOf(method.typeParameters ?? []),
+            params: method.params.map(parameter => ({ type: this.substituteType(parameter.type, classSubstitutions), out: parameter.out, mutableReference: parameter.passing === "mut", defaultValue: parameter.defaultValue, optional: parameter.optional })),
+            returnType: this.substituteType(method.returnType, classSubstitutions)
+          };
+          const match = this.matchOverload(signature, argumentTypes, node.typeArguments, expected);
+          return match ? { match, method } : undefined;
+        }).filter((candidate): candidate is { match: NonNullable<ReturnType<TypeChecker["matchOverload"]>>; method: ClassMethod } => !!candidate)
+          .sort((left, right) => right.match.score - left.match.score);
+        if (methods.length && !matches.length) this.report(node, `Ninguna sobrecarga de método '${node.method}' acepta (${argumentTypes.join(", ")})`);
+        if (matches.length > 1 && matches[0].match.score === matches[1].match.score) this.report(node, `Llamada ambigua al método '${node.method}'`);
+        if (matches.length) {
+          const selected = matches[0].match;
+          if (resolvedClass && this.methodMutates(matches[0].method)) {
+            // V30.29: si el metodo devuelve el tipo de la clase
+            // (fluent setter / constructor-like), el receptor puede ser
+            // un rvalue (e.g. `new MultiLine().newLine(30, 0)`). El
+            // metodo muta `this` y devuelve un nuevo estado del
+            // mismo tipo, que es exactamente el patron "fluent
+            // interface" usado para encadenar llamadas. El codegen
+            // traduce el receptor rvalue a un temporal mutable
+            // (V30.29) y el lvalue resultante tiene el metodo
+            // aplicado.
+            const className = resolvedClass.owner.name;
+            const methodReturnType = selected.signature.returnType;
+            const returnsOwnType = methodReturnType === className;
+            if (!this.mutableTarget(node.object, scope) && !returnsOwnType) this.report(node.object, `El método '${node.method}' modifica el objeto y necesita un receptor mutable`);
+            else if (returnsOwnType && !this.mutableTarget(node.object, scope)) {
+              // V30.29: el receptor rvalue + metodo que muta + devuelve
+              // `T` se permite. Marcamos la expresion como
+              // "fluent" para que el codegen la trate especialmente
+              // (crea un temporal mutable en lugar de emitir el rvalue
+              // directamente).
+              (node as unknown as { _etsFluentChain?: boolean })._etsFluentChain = true;
+            } else this.markCapturedMutation(node.object, scope);
+          }
+          node.typeArguments.forEach(argument => this.validateType(argument, node, false, false, scope));
+          node.args.forEach((argument, index) => {
+            const selectedParameter = selected.signature.params[index];
+            if (!selectedParameter?.out && !selectedParameter?.mutableReference) return;
+            const mode = selectedParameter.out ? "out" : "mut";
+            if (argument.kind !== "IdentifierExpression") this.report(argument, `Un argumento ${mode} debe ser una variable mutable`);
+            else { const target = scope.resolve(argument.name); if (!target || target.kind !== "variable" || !target.mutable) this.report(argument, `Un argumento ${mode} debe ser una variable mutable`); else this.markCapturedMutation(argument, scope); }
+          });
+          const inferred = selected.signature.typeParameters.map(parameter => selected.substitutions.get(parameter));
+          if (!node.typeArguments.length && inferred.length && inferred.every((type): type is TypeName => !!type)) this.inferredCallTypeArguments.set(node, inferred);
+          result = this.substituteType(selected.signature.returnType, selected.substitutions);
+        }
+        break;
+      }
+      case "MemberExpression": {
+        // V30.17: `Promise.X` como acceso (no call) es invalido. Las
+        // unicas APIs validas de Promise son `.all([...])` y `.race([...])`
+        // que se procesan en `MemberCallExpression`. Si el usuario escribe
+        // `const p = Promise.all` sin parens, es un error.
+        if (node.object.kind === "IdentifierExpression" && node.object.name === "Promise") {
+          this.report(node, `Promise.${node.member} debe invocarse como Promise.${node.member}([...])`);
+          return "Promise";
+        }
+        let objectType: string;
+        if (node.object.kind === "IdentifierExpression" && this.classes.has(node.object.name)) {
+          objectType = node.object.name;
+        } else {
+          objectType = this.expression(node.object, scope);
+        }
+        if(objectType === "Console" && Object.hasOwn(TERMINAL_METHODS,node.member)) {this.report(node,"Los métodos de console deben invocarse; no se admiten propiedades ni extracción de métodos");result="void";break;}
+        // V1.4: si el object es una expresión narrowada por un if anterior,
+        // devolvemos el payload de la variante narrowada. Si solo hay una
+        // variante activa y tiene payload, ese es el tipo. Si no,
+        // разреша el acceso devolviendo la unión misma (el codegen emitirá
+        // std::get_if o similar).
+        if (node.object.kind === "IdentifierExpression" && this.narrowed.has(node.object.name)) {
+          const narrow = this.narrowed.get(node.object.name)!;
+          const unionNode = this.unions.get(narrow.unionType);
+          if (unionNode) {
+            const activeVariants = unionNode.variants.filter(v => narrow.variants.includes(v.name));
+            if (activeVariants.length === 1 && activeVariants[0].payload) {
+              // Si la unión es genérica (e.g. `Result<T,E>`), sustituimos
+              // los type parameters con los argumentos reales del tipo del
+              // identificador narrowado. Si faltan argumentos, usamos el
+              // default declarado en el type parameter (e.g. `E` tiene
+              // default `string` en `Result<T, E>`).
+              const exprSymbol = scope.resolve(node.object.name);
+              if (exprSymbol && exprSymbol.kind === "variable") {
+                const exprType = exprSymbol.type;
+                if (isGenericType(exprType)) {
+                  const args = genericArguments(exprType);
+                  const params = unionNode.typeParameters;
+                  const subs = new Map<string, TypeName>();
+                  params.forEach((p, i) => {
+                    if (args[i]) subs.set(p.name, args[i]);
+                    else if (p.default) subs.set(p.name, p.default);
+                  });
+                  result = this.substituteType(activeVariants[0].payload, subs);
+                  break;
+                }
+              }
+              result = activeVariants[0].payload;
+              break;
+            }
+            if (activeVariants.length > 0) { result = narrow.unionType; break; }
+          }
+        }
+        // V1.4: acceso al campo discriminador de una unión siempre разрешен
+        // aunque la unión no tenga clase. El tipo del campo es el del
+        // literal declarado en la primera variante con discriminador.
+        if (!isGenericType(objectType) && this.unions.has(objectType)) {
+          const unionNode = this.unions.get(objectType)!;
+          const disc = unionNode.variants.find(v => v.discriminator)?.discriminator;
+          if (disc && disc.field === node.member) {
+            result = typeof disc.value === "boolean" ? "boolean" : typeof disc.value === "number" ? "number" : "string";
+            break;
+          }
+        }
+        if (isGenericType(objectType) && this.unions.has(genericBase(objectType))) {
+          const unionNode = this.unions.get(genericBase(objectType))!;
+          const disc = unionNode.variants.find(v => v.discriminator)?.discriminator;
+          if (disc && disc.field === node.member) {
+            result = typeof disc.value === "boolean" ? "boolean" : typeof disc.value === "number" ? "number" : "string";
+            break;
+          }
+        }
+        // V28: `s.length` es el unico field-style de la API de string.
+        // El resto son metodos (se validan en MemberCallExpression).
+        if (objectType === "string" && node.member === "length") {
+          result = "number";
+          break;
+        }
+        // Acceso a miembro de enum: `Color.Green` se evalúa al tipo del enum, no al subyacente.
+        // La conversión al subyacente ocurre en el codegen cuando se necesita (p.ej. `print(c)`).
+        if (node.object.kind === "IdentifierExpression" && this.enums.has(node.object.name)) {
+          const enumNode = this.enums.get(node.object.name)!;
+          const member = enumNode.members.find(candidate => candidate.name === node.member);
+          if (!member) this.report(node, `El enum '${node.object.name}' no declara el miembro '${node.member}'`);
+          result = node.object.name;
+          break;
+        }
+        // V30.22.2: `Math.PI`, `Math.E` acceden a constantes del namespace
+        // Math. Marcamos el nodo con `_etsBuiltinProperty` para que el
+        // codegen emita `ets::math_pi()` o `ets::math_e()`.
+        if (objectType === "Math" && node.member in MATH_PROPERTIES) {
+          (node as unknown as { _etsBuiltinProperty: { builtin: string; property: string } })._etsBuiltinProperty = { builtin: "Math", property: node.member };
+          result = MATH_PROPERTIES[node.member]!;
+          break;
+        }
+        if (node.optional) {
+          // `?.`: el operando debe ser `Optional<T>`; el resultado es
+          // `Optional<field_type>`. Se valida contra el nombre del campo en
+          // la clase T.
+          if (!isGenericType(objectType) || genericBase(objectType) !== "Optional") {
+            this.report(node.object, `Optional chaining '?.': el operando debe ser Optional<T>, se obtuvo '${objectType}'`);
+            result = "void";
+            break;
+          }
+          const element = genericArguments(objectType)[0] ?? "void";
+          const resolvedInner = this.resolveClass(element); const ownerInner = resolvedInner?.owner;
+          if (!ownerInner) {
+            this.report(node.object, `Optional chaining '?.': '${element}' no es una clase concreta`);
+            result = "void";
+            break;
+          }
+          const fieldInner = ownerInner.fields.find(candidate => candidate.name === node.member);
+          if (!fieldInner) {
+            this.report(node, `La clase '${element}' no declara el campo '${node.member}'`);
+            result = "void";
+            break;
+          }
+          const fieldInnerType = this.substituteType(fieldInner.type, resolvedInner?.substitutions ?? new Map());
+          result = genericType("Optional", [fieldInnerType]);
+          break;
+        }
+        // V22 (Memory Model v2): ptr<T>, constPtr<T>, ref<T>, constRef<T>
+        // son modificadores de paso. El member access desempaca al tipo
+        // interno T antes de buscar la clase.
+        let classLookupType = objectType;
+        if (isGenericType(classLookupType)) {
+          const memBase = genericBase(classLookupType);
+          if (memBase === "ptr" || memBase === "constPtr" || memBase === "ref" || memBase === "constRef") {
+            const innerArg = genericArguments(classLookupType)[0];
+            if (innerArg) classLookupType = innerArg;
+          }
+        }
+        // V30.16: si `classLookupType` es un type parameter con un
+        // constraint (e.g. `T extends HasLength`), usamos el constraint
+        // como tipo concreto para buscar fields/methods. Esto permite
+        // que `function longest<T extends HasLength>(a: T, b: T) { return
+        // a.length > b.length ? a : b }` acceda a `length` del constraint.
+        if (this.activeTypeConstraints && this.activeTypeConstraints.has(classLookupType)) {
+          classLookupType = this.activeTypeConstraints.get(classLookupType)!;
+        }
+        // Request: campos pre-parseados del request HTTP.
+        if (objectType === "Request") {
+          const reqFields: Record<string, string> = {
+            method: "string", path: "string", rawQuery: "string", body: "string",
+          };
+          if (reqFields[node.member]) { result = reqFields[node.member]!; break; }
+          this.report(node, `Request.${node.member} no existe (usa method/path/rawQuery/body)`);
+          result = "string";
+          break;
+        }
+        // Response: campos computados (post-send). Solo lectura.
+        if (objectType === "Response") {
+          const respFields: Record<string, string> = {
+            getStatus: "number",  // alias method-style del status code
+            getBody: "string",    // alias method-style del body
+          };
+          if (respFields[node.member]) { result = respFields[node.member]!; break; }
+          this.report(node, `Response.${node.member} no existe (usa status/header/send/json/getStatus/getBody)`);
+          result = "Response";
+          break;
+        }
+        // V30.22.1: `ClassName.staticField` permite acceder a un campo
+        // estatico sin instanciar la clase. Devolvemos el tipo del field
+        // y marcamos el nodo con `_etsStaticField` para que el codegen
+        // emita `ClassName::field` en lugar de `field`.
+        if (node.object.kind === "IdentifierExpression" && this.classes.has(node.object.name)) {
+          const cls = this.classes.get(node.object.name)!;
+          const staticField = cls.fields.find(f => f.name === node.member && f.isStatic);
+          if (staticField) {
+            (node as unknown as { _etsStaticField: string })._etsStaticField = cls.name;
+            result = staticField.type;
+            break;
+          }
+        }
+        const resolved = this.resolveClass(classLookupType); const owner = resolved?.owner;
+        const field = owner?.fields.find(candidate => candidate.name === node.member);
+        // V30.14.2: `c.kind` / `c.method()` donde `c: X` (X es un type
+        // alias para union de clases). El type-checker ya expandio el
+        // alias a `Line | Circle`; lo reescribimos a un sentinel
+        // `union_alias::X::*` que el codegen traduce.
+        if (!owner && isUnionType(objectType) && this.unionAliasReverseMap?.has(objectType)) {
+          const aliasName = this.unionAliasReverseMap.get(objectType)!;
+          if (aliasName) {
+            const expansion = this.aliasExpansions.get(aliasName);
+            if (expansion && isUnionType(expansion)) {
+              // Verifica que TODAS las clases del union tienen el member.
+              const allMembers = expansion.split("|").map(s => s.trim());
+              const ok = allMembers.every(cls => {
+                const c = this.classes.get(cls);
+                if (!c) return false;
+                return c.fields.some(f => f.name === node.member) || c.methods.some(m => m.name === node.member);
+              });
+              if (ok) {
+                // Si es un field de la primera variante, devolvemos su tipo
+                // (o string para `kind`, que es el caso comun).
+                const firstCls = this.classes.get(allMembers[0]!);
+                if (firstCls) {
+                  const f = firstCls.fields.find(candidate => candidate.name === node.member);
+                  if (f) { result = f.type; break; }
+                  // Es un metodo: devolvemos un sentinel.
+                  const m = firstCls.methods.find(candidate => candidate.name === node.member);
+                  if (m) {
+                    result = `union_alias::${aliasName}::${node.member}::${m.returnType ?? "void"}` as TypeName;
+                    break;
+                  }
+                }
+                // El member es `kind` (string, comun a todos los payload).
+                if (node.member === "kind") { result = "string"; break; }
+              }
+            }
+          }
+        }
+        // V30.11: resolución de campos/métodos de interface. Si el tipo del
+        // objeto es una interface (nombrada o genérica como `Foo<T>`),
+        // buscamos el miembro como campo o metodo de la shape. Esto cubre
+        // tanto `const m: Mod = ...; m.kind` (cliente) como llamadas del
+        // estilo `const r: I = ...; r.metodo()` (futuro).
+        // V30.16: usamos `classLookupType` (que ya resuelve type-param
+        // constraints) en lugar de `objectType` para que `T extends I`
+        // acceda a los miembros de `I`.
+        const interfaceBase = isGenericType(classLookupType) ? genericBase(classLookupType) : classLookupType;
+        if (!owner && this.interfaces.has(interfaceBase)) {
+          const iface = this.interfaces.get(interfaceBase)!;
+          const fieldMember = iface.fields.find(f => f.name === node.member);
+          if (fieldMember) {
+            // Las interfaces declaradas en .ets no admiten todavia
+            // typeParameters al nivel de la interface (solo los metodos
+            // pueden ser genericos via InterfaceMethod.typeParameters).
+            // Por tanto `field.type` se devuelve tal cual; si en algun
+            // momento se anade genericidad a la interface, aqui habra que
+            // propagar las sustituciones como hace `resolveClass`.
+            result = fieldMember.type;
+            break;
+          }
+          // El miembro tambien puede ser un metodo (MemberCallExpression
+          // lo consumira despues). Devolvemos un nombre sentinela que el
+          // codegen reconoce como dispatch a la firma de la interface.
+          if (iface.methods.some(m => m.name === node.member)) {
+            result = `interface::${interfaceBase}::${node.member}`;
+            break;
+          }
+          this.report(node, `La interfaz '${interfaceBase}' no declara el miembro '${node.member}'`);
+          result = "void";
+          break;
+        }
+        // V1.2: los miembros de una unión (variantes) se acceden como `Direction.North`.
+        // Si el objeto es un nombre de unión, el miembro es una variante.
+        if (!owner && this.unions.has(objectType)) {
+          const unionNode = this.unions.get(objectType)!;
+          const variant = unionNode.variants.find(v => v.name === node.member);
+          if (variant) { result = objectType; break; }
+          this.report(node, `La unión '${objectType}' no tiene variante '${node.member}'`);
+          break;
+        }
+        // V22-gap-#2: `length` es propiedad virtual sobre `Array<T>` / `T[]`.
+        // Devuelve `number` y se compila a `obj.size()` en C++.
+        if (node.member === "length" && (objectType.endsWith("[]") || (isGenericType(objectType) && genericBase(objectType) === "Array"))) {
+          result = "number";
+          break;
+        }
+        if (!owner) this.report(node.object, `El tipo '${classLookupType}' no es una clase concreta`);
+        // V19: chequeo de encapsulación. Si el campo es `private` y el
+        // acceso viene desde fuera de la clase, error.
+        const ownerName = owner?.name;
+        if (field && field.access === "private" && ownerName !== this.currentClass) {
+          this.report(node, `El campo '${node.member}' es privado en '${ownerName}' y no se puede acceder desde fuera`);
+          result = "void";
+          break;
+        }
+        if (field && field.access === "protected" && ownerName !== this.currentClass) {
+          // V19: protected sin herencia todavía = equivalente a private.
+          // Cuando llegue herencia (#29), se aflojará la restricción.
+          this.report(node, `El campo '${node.member}' es protegido en '${ownerName}' y no se puede acceder desde fuera`);
+          result = "void";
+          break;
+        }
+        // V20: parameter properties — si el campo no está declarado pero hay
+        // un parámetro del constructor con ese nombre + modificador, también
+        // se considera un campo válido (implícito).
+        if (!field && owner) {
+          const ctor = owner.methods.find(m => m.name === "constructor");
+          if (ctor) {
+            const paramProp = ctor.params.find(p => p.name === node.member && (p.access !== undefined || p.readonly === true));
+            if (paramProp) {
+              result = this.substituteType(paramProp.type, resolved?.substitutions ?? new Map());
+              break;
+            }
+          }
+          this.report(node, `La clase '${objectType}' no declara el campo '${node.member}'`);
+        }
+        if (field) result = this.substituteType(field.type, resolved?.substitutions ?? new Map());
+        break;
+      }
+      case "IndexExpression": {
+        const objectType = this.expression(node.object, scope);
+        this.require(this.expression(node.index, scope, "number"), "number", node.index);
+        // V5: readonly<T[]> y readonly<T[N]> permiten indexación de solo lectura.
+        // El resultado es readonly del element (no se puede reasignar a través del index).
+        if (isReadonlyType(objectType)) {
+          const inner = readonlyInner(objectType);
+          if (inner && isArrayType(inner)) result = readonlyType(arrayElement(inner));
+          else if (inner && isFixedArrayType(inner)) result = readonlyType(fixedArrayElement(inner)!);
+          else this.report(node.object, `El tipo '${objectType}' no se puede indexar`);
+        }
+        else if (isArrayType(objectType)) result = arrayElement(objectType);
+        else if (isFixedArrayType(objectType)) {
+          // V4: bounds check en compilación cuando el índice es literal entero.
+          // Soportamos tanto `LiteralExpression` (p.ej. `buf[3]`) como
+          // `UnaryExpression` con `-` sobre LiteralExpression (p.ej. `buf[-1]`).
+          const size = fixedArraySize(objectType)!;
+          const elementType = fixedArrayElement(objectType)!;
+          const literalValue = this.literalIntValue(node.index);
+          if (literalValue !== undefined && (literalValue < 0 || literalValue >= size)) this.report(node.index, `Índice de array fijo fuera de rango: ${literalValue} (tamaño ${size})`);
+          result = elementType;
+        }
+        else if (isTupleType(objectType)) {
+          const items = tupleElements(objectType);
+          if (node.index.kind !== "LiteralExpression" || node.index.literalType !== "number" || !Number.isInteger(node.index.value)) {
+            this.report(node.index, "El índice de una tupla debe ser un literal entero");
+          } else {
+            const index = Number(node.index.value);
+            if (index < 0 || index >= items.length) this.report(node.index, `Índice de tupla fuera de rango: ${index}`);
+            else result = items[index];
+          }
+        } else this.report(node.object, `El tipo '${objectType}' no se puede indexar`);
+        break;
+      }
+      case "NamedArgumentExpression": {
+        // V30.22.6: un named argument `name: value` se procesa como una
+        // expression normal desde el punto de vista del tipo. El CallExpression
+        // padre resuelve el `name` a la posicion del parametro en la firma
+        // (en `prepareNamedArgs`).
+        result = this.expression(node.value, scope);
+        break;
+      }
+      case "SpreadElement": {
+        // V30.22.7: spread operator en un CallExpression. El tipo del
+        // spread es el tipo del array que se expande.
+        result = this.expression(node.expression, scope);
+        break;
+      }
+      case "NewExpression": {
+        // `Map<K,V>` y `Set<T>` no son clases declaradas por el usuario pero sí
+        // constructibles: se permite `new Map<K,V>()` / `new Set<T>()` sin args.
+        const baseName = isGenericType(node.className) ? genericBase(node.className) : node.className;
+        if (baseName === "Map" || baseName === "Set") {
+          if (node.args.length) this.report(node, `${baseName} no toma argumentos de construcción, recibió ${node.args.length}`);
+          this.validateType(node.className, node, false, false, scope);
+          result = node.className; break;
+        }
+        const resolved = this.resolveClass(node.className); const owner = resolved?.owner;
+        if (!owner) { this.report(node, `Clase no definida '${node.className}'`); node.args.forEach(arg => this.expression(arg, scope)); break; }
+        if (owner.typeParameters.length && !isGenericType(node.className)) this.report(node, `La clase genérica '${owner.name}' necesita ${owner.typeParameters.length} argumentos de tipo`);
+        // V19: si la clase tiene constructor explícito, el `new T(...)` llama
+        // al constructor (no aggregate-init). El número de args debe
+        // coincidir con los params del constructor.
+        const hasConstructor = owner.methods.some(m => m.name === "constructor");
+        if (hasConstructor) {
+          const ctor = owner.methods.find(m => m.name === "constructor")!;
+          // Validamos args contra los params del constructor (sin defaults).
+          const requiredParams = ctor.params.filter(p => p.defaultValue === undefined).length;
+          const totalParams = ctor.params.length;
+          // V30.35: validar minimo Y maximo. Antes, `new K(1, 2, 3, 4)` con
+          // ctor de 3 params pasaba la validacion (4 >= 3) pero el codegen
+          // emitia `K{}.constructor(1, 2, 3, 4)` que g++ rechazaba con un
+          // error criptico. Ahora reportamos un error claro en type-check.
+          if (node.args.length < requiredParams) this.report(node, `'${node.className}' espera al menos ${requiredParams} argumento(s) en el constructor, recibió ${node.args.length}`);
+          if (node.args.length > totalParams) this.report(node, `'${node.className}' espera como mucho ${totalParams} argumento(s) en el constructor, recibió ${node.args.length}`);
+          // Validamos tipos de cada argumento contra el param.
+          const classSubstitutions = resolved?.substitutions ?? new Map();
+          node.args.forEach((arg, i) => {
+            const param = ctor.params[i];
+            if (!param) return;
+            const expected = this.substituteType(param.type, classSubstitutions);
+            const actual = this.expression(arg, scope, expected);
+            this.require(actual, expected, arg);
+          });
+          result = node.className;
+          break;
+        }
+        // V30.34: si NO hay constructor explicito pero hay al
+        // menos un field con `defaultValue`, el codegen del struct
+        // genera un ctor sintetico que aplica los defaults
+        // (`class K { n: i32 = 42 }` -> `constructor() { this.n = 42; }`).
+        // El NewExpression del codegen lo invoca como
+        // `K{}.constructor()` (mismo patron que ctor explicito).
+        // Aceptamos `new K()` con 0 args en este caso para que el
+        // usuario no tenga que escribir un ctor explicito solo
+        // para inicializar fields con defaults.
+        //
+        // Si el usuario pasa args (`new K(7)`) sin ctor explicito,
+        // rechazamos: el ctor sintetico no acepta params, y el
+        // aggregate init que se emita ignoraria los defaults (que
+        // es justo el bug que estamos arreglando).
+        const hasFieldsWithDefaults = owner.fields.some(f => f.defaultValue !== undefined && !f.isStatic);
+        if (!hasConstructor && hasFieldsWithDefaults) {
+          if (node.args.length === 0) {
+            // Caso normal: el codegen sintetiza un ctor que
+            // aplica los defaults, y el NewExpression lo invoca.
+            result = node.className;
+            break;
+          }
+          this.report(node, `'${node.className}' no tiene constructor explícito que acepte ${node.args.length} argumento(s); declara un constructor o usa 'new ${node.className}()'`);
+          result = node.className;
+          break;
+        }
+        if (node.args.length !== owner.fields.length) this.report(node, `'${node.className}' espera ${owner.fields.length} valores de composición, recibió ${node.args.length}`);
+        node.args.forEach((arg, i) => { const field = owner.fields[i]; const expectedType = field ? this.substituteType(field.type, resolved?.substitutions ?? new Map()) : undefined; const actual = this.expression(arg, scope, expectedType); if (expectedType) this.require(actual, expectedType, arg); });
+        result = node.className; break;
+      }
+      case "AssignmentExpression": {
+        const targetType = this.expression(node.target, scope); const value = this.expression(node.value, scope, targetType);
+        if (node.target.kind === "IdentifierExpression") this.closureReturns.flow(scope.resolve(node.target.name), node.value);
+        else if (node.target.kind === "IndexExpression" && isArrayType(this.types.get(node.target.object) ?? "")) {
+          this.recordClosureArrayWrite(node.target.object, node.value, scope);
+        }
+        if (!this.mutableTarget(node.target, scope)) this.report(node, "No se puede modificar una constante ni uno de sus campos");
+        else {
+          // Rechaza asignaciones a campos `readonly` fuera del constructor:
+          // el dialecto exige que se inicialicen una sola vez en el cuerpo
+          // del constructor. Esto se modela como "mutable solo dentro del
+          // método `constructor` de la misma clase".
+          if (!this.inConstructor) {
+            const readonlyField = this.findReadonlyFieldAccess(node.target);
+            if (readonlyField) this.report(node, `El campo readonly '${readonlyField}' solo puede asignarse dentro del constructor`);
+          }
+          this.markCapturedMutation(node.target, scope);
+        }
+        this.require(value, targetType, node.value); result = targetType;
+        break;
+      }
+      case "CompoundAssignmentExpression": {
+        // V30.19: `x += y`, `x -= y`, etc. Misma semantica que AssignmentExpression
+        // (target debe ser mutable, no readonly, value debe ser asignable al target).
+        // V30.22.1: el target puede ser un static field (`Counter.count += 1`), por
+        // lo que NO se aplica el chequeo de readonly (los static fields no son
+        // readonly por defecto).
+        const targetType = this.expression(node.target, scope); const value = this.expression(node.value, scope, targetType);
+        if (!this.mutableTarget(node.target, scope)) this.report(node, "No se puede modificar una constante ni uno de sus campos");
+        else this.markCapturedMutation(node.target, scope);
+        this.require(value, targetType, node.value); result = targetType;
+        break;
+      }
+      case "TernaryExpression": {
+        // `cond ? then : else`. La condición debe ser booleana; las dos
+        // ramas deben producir tipos compatibles (uno asignable al otro).
+        this.require(this.expression(node.condition, scope, "boolean"), "boolean", node.condition);
+        const thenType = this.expression(node.thenBranch, scope);
+        const elseType = this.expression(node.elseBranch, scope, thenType);
+        if (!typeMatches(elseType, thenType) && !typeMatches(thenType, elseType)) this.report(node, "Las ramas del ternario deben tener tipos compatibles");
+        result = thenType;
+        break;
+      }
+    }
+    // V0.1: anotar `resolvedType` directamente sobre el nodo además de
+    // (durante la transición) mantener el mapa paralelo. Las llamadas a
+    // `typeOf` consultan primero `resolvedType` para que la transición sea
+    // transparente.
+    if (node.kind === "MemberCallExpression" && node.method === "push" && isArrayType(this.types.get(node.object) ?? "")) {
+      for (const arg of node.args) this.recordClosureArrayWrite(node.object, arg, scope);
+    }
+    if (isClosureReturnCarrier(result)) {
+      if (node.kind === "TernaryExpression") {
+        this.closureReturns.flow(node, node.thenBranch);
+        this.closureReturns.flow(node, node.elseBranch);
+      } else if (node.kind === "AssignmentExpression") this.closureReturns.flow(node, node.value);
+      else if (node.kind === "CallExpression") {
+        this.closureReturns.flow(node, scope.resolve(node.callee));
+        for (const arg of node.args) this.closureReturns.flow(node, arg);
+      } else if (node.kind === "ArrayLiteralExpression") {
+        for (const item of node.elements) this.closureReturns.flow(node, item.kind === "SpreadElement" ? item.expression : item);
+      } else if (node.kind === "IndexExpression") this.closureReturns.flow(node, node.object);
+      else if (node.kind === "MemberCallExpression" && isArrayType(this.types.get(node.object) ?? "")) {
+        this.closureReturns.flow(node, node.object);
+        for (const arg of node.args) this.closureReturns.flow(node, arg);
+      }
+    }
+    node.resolvedType = toResolvedType(result);
+    this.types.set(node, result); return result;
+  }
+
+  private findReadonlyFieldAccess(node: Expression): string | undefined {
+    // Devuelve el nombre del campo si `node` es un acceso a un campo
+    // `readonly` de la clase actualmente en checkeo (`this.field = ...`).
+    // Devuelve `undefined` si no aplica.
+    if (node.kind !== "MemberExpression") return undefined;
+    const object = node.object;
+    if (object.kind !== "IdentifierExpression" || object.name !== "this") return undefined;
+    const ownerType = this.currentReturn; // pista: el currentReturn de un método no es el de this; usamos una búsqueda explícita
+    // Buscamos en todas las clases registradas si alguna tiene un campo con
+    // ese nombre y es readonly. Es una simplificación: no comprobamos que la
+    // clase del `this` actual sea la misma, pero como el dialecto no tiene
+    // herencia, cada `this.field` solo puede referirse a la clase del método
+    // envolvente. El constructor del flujo correcto garantiza que el campo
+    // existe; si la asignación es a un campo que no es readonly, devuelve
+    // undefined y se permite.
+    for (const cls of this.classes.values()) {
+      const field = cls.fields.find(f => f.name === node.member && f.readonly);
+      if (field) return field.name;
+    }
+    return undefined;
+  }
+
+  private mutableTarget(node: Expression, scope: Scope): boolean {
+    if (node.kind === "MemberExpression") {
+      // V22: si el objeto es `constRef<T>` o `constPtr<T>`, no se puede mutar.
+      // E4300/E4301.
+      // V30.50: si el object es un IdentifierExpression que es el
+      // nombre de una clase (e.g. `Counter.count += 1`), evitamos pasar
+      // por el IdentifierExpression handler (que ahora rechaza los
+      // nombres de clase como valores).
+      let objectType: string;
+      if (node.object.kind === "IdentifierExpression" && this.classes.has(node.object.name)) {
+        objectType = node.object.name;
+      } else {
+        objectType = this.expression(node.object, scope);
+      }
+      if (isGenericType(objectType) && (genericBase(objectType) === "constRef" || genericBase(objectType) === "constPtr")) return false;
+      return this.mutableTarget(node.object, scope);
+    }
+    if (node.kind === "IndexExpression") {
+      // V5: si el objeto indexado es `readonly<T[]>`, no se puede mutar
+      // a través de un index assignment (`xs[0] = 99`).
+      const objectType = this.expression(node.object, scope);
+      if (isReadonlyType(objectType)) return false;
+      // V22: constRef<T[]> o constPtr<T[]> también bloquean index assignment.
+      if (isGenericType(objectType) && (genericBase(objectType) === "constRef" || genericBase(objectType) === "constPtr")) return false;
+      return this.mutableTarget(node.object, scope);
+    }
+    if (node.kind !== "IdentifierExpression") return false;
+    const symbol = (node.span.etsgenDefinition ? scope.root() : scope).resolve(node.name);
+    if (!symbol) return false;
+    // V30.22.1: los accessos a static fields via `ClassName.field` (donde
+    // `ClassName` es un type symbol) son mutables. Esto permite
+    // `Counter.count += 1` o `Counter.count = 5` en static fields.
+    if (symbol.kind === "type" && this.classes.has(node.name)) {
+      // El chequeo de readonly ya se hizo en el MemberExpression lookup
+      // (los static fields no son readonly por defecto).
+      return true;
+    }
+    if (symbol.kind !== "variable") return false;
+    // V22 (Memory Model v2): los parámetros `out T` o con modifier `ref<T>`
+    // son mutables (T&). Esto se marca con `mutableReference: true` en el
+    // FunctionParameterSymbol. Variables `let` ya tienen `mutable: true`.
+    if (symbol.mutableReference) return true;
+    // V5: si el tipo del símbolo es `readonly<T>`, el target es inmutable.
+    if (isReadonlyType(symbol.type)) return false;
+    return symbol.mutable;
+  }
+
+  private recordClosureArrayWrite(target: Expression, value: Expression, scope: Scope): void {
+    this.closureReturns.flow(target, value);
+    while (target.kind === "IndexExpression") target = target.object;
+    if (target.kind === "IdentifierExpression") this.closureReturns.flow(scope.resolve(target.name), value);
+  }
+
+  private recordClosureReference(name: string, scope: Scope, mutated = false): void {
+    if (!this.currentClosure) return;
+    const symbol = scope.resolve(name);
+    // Los globales no necesitan captura, pero un local homónimo sí: comparar
+    // identidad, no solo el nombre. Funciones/tipos no son objetos capturables.
+    if (!symbol || symbol.kind !== "variable" || scope.root().resolveLocal(name) === symbol) return;
+    for (let closure = this.currentClosure; closure; closure = closure.parent) {
+      if (closure.parentScope.resolve(name) !== symbol) continue;
+      closure.captures.set(name, symbol);
+      if (mutated) closure.node.mutatesCapturedState = true;
+    }
+  }
+
+  private markCapturedMutation(node: Expression, scope: Scope): void {
+    if (!this.currentClosure) return;
+    let target = node;
+    while (target.kind === "MemberExpression" || target.kind === "IndexExpression") target = target.object;
+    if (target.kind !== "IdentifierExpression" || target.name === "this") return;
+    this.recordClosureReference(target.name, scope, true);
+  }
+
+  private methodMutates(method: ClassMethod): boolean {
+    const expressionMutates = (expression: Expression): boolean => {
+      if (expression.kind === "AssignmentExpression") {
+        let target: Expression = expression.target;
+        while (target.kind === "MemberExpression" || target.kind === "IndexExpression") target = target.object;
+        return target.kind === "IdentifierExpression" && target.name === "this";
+      }
+      if (expression.kind === "BinaryExpression") return expressionMutates(expression.left) || expressionMutates(expression.right);
+      if (expression.kind === "UnaryExpression" || expression.kind === "AwaitExpression") return expressionMutates(expression.operand);
+      if (expression.kind === "CallExpression" || expression.kind === "NewExpression") return expression.args.some(expressionMutates);
+      if (expression.kind === "MemberCallExpression") return expressionMutates(expression.object) || expression.args.some(expressionMutates);
+      if (expression.kind === "MemberExpression") return expressionMutates(expression.object);
+      if (expression.kind === "IndexExpression") return expressionMutates(expression.object) || expressionMutates(expression.index);
+      if (expression.kind === "ArrayLiteralExpression") return expression.elements.some(item => item.kind === "SpreadElement" ? expressionMutates(item.expression) : expressionMutates(item));
+      return false;
+    };
+    const statementMutates = (statement: Statement): boolean => {
+      if (statement.kind === "VariableDeclaration") return expressionMutates(statement.initializer);
+      if (statement.kind === "ExpressionStatement") return expressionMutates(statement.expression);
+      if (statement.kind === "ReturnStatement") return !!statement.value && expressionMutates(statement.value);
+      if (statement.kind === "BlockStatement") return statement.statements.some(statementMutates);
+      if (statement.kind === "IfStatement") return expressionMutates(statement.condition) || statementMutates(statement.thenBranch) || (!!statement.elseBranch && statementMutates(statement.elseBranch));
+      if (statement.kind === "WhileStatement") return expressionMutates(statement.condition) || statementMutates(statement.body);
+      if (statement.kind === "ForStatement") return (!!statement.initializer && statementMutates(statement.initializer)) || (!!statement.condition && expressionMutates(statement.condition)) || (!!statement.increment && expressionMutates(statement.increment)) || statementMutates(statement.body);
+      return false;
+    };
+    return statementMutates(method.body);
+  }
+
+  private require(actual: TypeName, expected: TypeName, node: { span: import("../core/span.ts").Span }): void {
+    if (this.enumCompatible(actual, expected)) return;
+    if (!typeMatches(actual, expected) && !this.satisfiesInterface(actual, expected)) this.report(node, `Se esperaba ${expected}, pero se obtuvo ${actual}`);
+  }
+
+  // V3: variante de `require` que acepta tipos numéricos concretos (i8..u64,
+  // f32, f64) además de `number`. Usada por los operadores binarios
+  // aritméticos y de comparación: cualquier tipo numérico es admisible y se
+  // promueve a `number` para la operación.
+  private requireNumericOperand(actual: TypeName, node: { span: import("../core/span.ts").Span }): void {
+    if (actual === "number" || isNumericType(actual)) return;
+    this.report(node, `Se esperaba un operando numérico, se obtuvo '${actual}'`);
+  }
+
+  // V3: dos operandos pertenecen a la "misma familia numérica" si ambos son
+  // numéricos (incluyendo `number`) o si son iguales. Usada por `==`/`!=`.
+  private sameNumericFamily(left: TypeName, right: TypeName): boolean {
+    if (left === right) return true;
+    const leftIsNumeric = left === "number" || isNumericType(left);
+    const rightIsNumeric = right === "number" || isNumericType(right);
+    return leftIsNumeric && rightIsNumeric;
+  }
+  // Un enum numérico es intercambiable con `number` (y un enum de cadena con `string`)
+  // en cualquier posición: asignación, paso de argumento, etc. El codegen hace el cast
+  // explícito a `double` para los enums numéricos porque `enum class` no convierte
+  // implícitamente en C++.
+  private enumCompatible(actual: TypeName, expected: TypeName): boolean {
+    if (actual === expected) return false;
+    const actualEnum = this.enums.get(actual);
+    if (!actualEnum) return false;
+    if (actualEnum.underlying === "number" && expected === "number") return true;
+    if (actualEnum.underlying === "string" && expected === "string") return true;
+    return false;
+  }
+  private satisfiesInterface(actual: TypeName, expected: TypeName): boolean {
+    if (this.activeTypeConstraints.get(actual) === expected) return true;
+    // Intersección `A & B & ...`: el tipo debe satisfacer TODAS las interfaces.
+    if (isIntersectionType(expected)) return intersectionMembers(expected).every(member => this.satisfiesInterface(actual, member));
+    const resolved = this.resolveClass(actual); const concrete = resolved?.owner; const contract = this.interfaces.get(expected);
+    if (!concrete || !contract) return false;
+    return contract.methods.every(required => {
+      return concrete.methods.some(method => method.name === required.name && this.substituteType(method.returnType, resolved?.substitutions ?? new Map()) === required.returnType && method.params.length === required.params.length &&
+        method.params.every((parameter, index) => this.substituteType(parameter.type, resolved?.substitutions ?? new Map()) === required.params[index].type && parameter.out === required.params[index].out && parameter.passing === required.params[index].passing));
+    });
+  }
+  private sameSignature(left: FunctionSignature, right: FunctionSignature): boolean {
+    const normalize = (signature: FunctionSignature): string[] => {
+      const substitutions = new Map<string, TypeName>();
+      signature.typeParameters.forEach((parameter, index) => substitutions.set(parameter, `$${index}`));
+      return signature.params.map(parameter => `${parameter.variadic ? "..." : ""}${this.substituteType(parameter.type, substitutions)}`);
+    };
+    const leftTypes = normalize(left); const rightTypes = normalize(right);
+    return leftTypes.length === rightTypes.length && leftTypes.every((type, index) => type === rightTypes[index]);
+  }
+  private matchOverload(signature: FunctionSignature, actuals: TypeName[], explicit: TypeName[], contextualReturn?: TypeName): { signature: FunctionSignature; substitutions: Map<string, TypeName>; score: number } | undefined {
+    const rest = signature.params.at(-1)?.variadic ? signature.params.at(-1) : undefined;
+    const fixedCount = signature.params.length - (rest ? 1 : 0);
+    // Cuenta de parámetros obligatorios (sin `defaultValue`); los parámetros con
+    // valor por defecto pueden omitirse en la llamada.
+    const requiredCount = signature.params.filter(parameter => !parameter.defaultValue && !parameter.variadic && !parameter.optional).length;
+    if ((!rest && (actuals.length < requiredCount || actuals.length > signature.params.length)) || (rest && actuals.length < fixedCount)) return undefined;
+    const normalTypeParameters = signature.typeParameters.filter(parameter => !signature.variadicTypeParameters.includes(parameter));
+    if (explicit.length) {
+      if ((!signature.variadicTypeParameters.length && explicit.length !== normalTypeParameters.length) || (signature.variadicTypeParameters.length && explicit.length < normalTypeParameters.length)) return undefined;
+    }
+    const substitutions = new Map<string, TypeName>();
+    const defaults = signature.defaults ?? {};
+    // Los argumentos explícitos tienen prioridad absoluta. Sin ellos, los
+    // defaults NO se aplican todavía — primero dejamos que la inferencia
+    // (actuales, returnType contextual) intente llenar los huecos; los
+    // defaults solo cubren los parámetros que queden sin inferir al final
+    // (estilo TS).
+    // V30.18: `substitutions` ya estaba bien, pero el codepath de
+    // `tryInferType` setea keys string ("T"), y esta linea debe
+    // tambien usar string keys. La firma `typeParameters: string[]`
+    // (en `FunctionSignature`) hace `parameter` un string directamente.
+    normalTypeParameters.forEach((parameter, index) => { if (explicit[index]) substitutions.set(parameter, explicit[index]); });
+    const parameters = new Set(signature.typeParameters); let score = rest ? -1 : 0;
+    for (let index = 0; index < actuals.length; index++) {
+      const parameter = index < fixedCount ? signature.params[index] : rest;
+      if (!parameter) return undefined;
+      if (rest && signature.variadicTypeParameters.includes(parameter.type)) { score += 1; continue; }
+      // V30.22.6: un arg con tipo `any` (proveniente de `_ets_omitted`,
+      // un named arg no provisto) se acepta como match cuando el
+      // param tiene default value o es opcional. Si el param es
+      // requerido, el error semantico ya se reportara via el flujo
+      // normal.
+      if (actuals[index] === "any" && (parameter.defaultValue || parameter.optional || parameter.variadic)) { score += 4; continue; }
+      if (!this.tryInferType(parameter.type, actuals[index], parameters, substitutions)) return undefined;
+      const expected = this.substituteType(parameter.type, substitutions);
+      // V30.18: `any` acepta cualquier actual (incluyendo Promise<number>).
+      if (expected === "any") { score += parameters.has(parameter.type) ? 2 : 4; continue; }
+      if (this.enumCompatible(actuals[index], expected) || typeMatches(actuals[index], expected) || this.satisfiesInterface(actuals[index], expected)) score += parameters.has(parameter.type) ? 2 : 4;
+      else return undefined;
+    }
+    if (contextualReturn && normalTypeParameters.some(parameter => !substitutions.has(parameter))) {
+      if (!this.tryInferType(signature.returnType, contextualReturn, parameters, substitutions)) return undefined;
+    }
+    // Tras la inferencia, cualquier parámetro aún sin ligar cae a su `default`
+    // declarado (si lo tiene). Si sigue sin ligar, el overload no aplica.
+    if (normalTypeParameters.some(parameter => !substitutions.has(parameter))) {
+      for (const parameter of normalTypeParameters) {
+        if (substitutions.has(parameter)) continue;
+        const fallback = defaults[parameter];
+        if (fallback) substitutions.set(parameter, fallback);
+      }
+      if (normalTypeParameters.some(parameter => !substitutions.has(parameter))) return undefined;
+    }
+    for (const [parameter, constraint] of Object.entries(signature.typeConstraints ?? {})) {
+      const actual = substitutions.get(parameter);
+      if (!actual || !this.satisfiesInterface(actual, constraint)) return undefined;
+    }
+    return { signature, substitutions, score };
+  }
+  private tryInferType(pattern: TypeName, actual: TypeName, parameters: Set<string>, substitutions: Map<string, TypeName>): boolean {
+    if (parameters.has(pattern)) {
+      const previous = substitutions.get(pattern);
+      if (previous && previous !== actual) return false;
+      substitutions.set(pattern, actual); return true;
+    }
+    // V30.18: `any` acepta cualquier tipo (incluyendo generics como
+    // Promise<T>). Util para combinators como `timeout`/`retry` que
+    // toman cualquier task.
+    if (pattern === "any") return true;
+    // Union types: `actual` cubre `pattern` si cada miembro del union es uno de los tipos
+    // esperados (covarianza). Permite pasar un `string` a un parámetro `string | number`.
+    if (typeMatches(actual, pattern)) return true;
+    if (pattern === actual) return true;
+    // Enums numéricos/de cadena son intercambiables con su subyacente (`number`/`string`)
+    // para argumentos. El codegen emite el cast explícito a `double` para los numéricos.
+    if (this.enumCompatible(actual, pattern)) return true;
+    if (isArrayType(pattern) && isArrayType(actual)) return this.tryInferType(arrayElement(pattern), arrayElement(actual), parameters, substitutions);
+    if (isTupleType(pattern) && isTupleType(actual)) {
+      const expected = tupleElements(pattern); const received = tupleElements(actual);
+      return expected.length === received.length && expected.every((item, index) => this.tryInferType(item, received[index], parameters, substitutions));
+    }
+    if (isFunctionType(pattern) && isFunctionType(actual)) {
+      const expected = functionParameters(pattern); const received = functionParameters(actual);
+      return expected.length === received.length && expected.every((item, index) => this.tryInferType(item, received[index], parameters, substitutions)) && this.tryInferType(functionResult(pattern), functionResult(actual), parameters, substitutions);
+    }
+    if (isGenericType(pattern) && isGenericType(actual) && genericBase(pattern) === genericBase(actual)) {
+      const expected = genericArguments(pattern); const received = genericArguments(actual);
+      return expected.length === received.length && expected.every((item, index) => this.tryInferType(item, received[index], parameters, substitutions));
+    }
+    return this.satisfiesInterface(actual, pattern);
+  }
+  private resolveClass(type: TypeName): { owner: ClassDeclaration; substitutions: Map<string, TypeName> } | undefined {
+    // `Mut<T>` y `MutRef<T>` son modificadores: se resuelven al tipo base T.
+    if (isGenericType(type)) {
+      const base = genericBase(type);
+      if (base === "Mut" || base === "MutRef") {
+        const inner = genericArguments(type)[0];
+        if (inner) return this.resolveClass(inner);
+      }
+    }
+    const base = isGenericType(type) ? genericBase(type) : type; const owner = this.classes.get(base);
+    if (!owner) return undefined;
+    const substitutions = new Map<string, TypeName>(); const arguments_ = isGenericType(type) ? genericArguments(type) : [];
+    owner.typeParameters.forEach((parameter, index) => { if (arguments_[index]) substitutions.set(parameter.name, arguments_[index]); });
+    return { owner, substitutions };
+  }
+
+  /**
+   * Devuelve true si el tipo del parámetro es `Mut<T>` o `MutRef<T>`.
+   * En ese caso el parámetro es una referencia mutable (T* o T& en C++)
+   * y debe permitirse la asignación a sus campos.
+   */
+  private parameterIsMutableReference(type: TypeName): boolean {
+    // V22 (Memory Model v2): solo `ref<T>` (T&) es mutable por referencia.
+    // `ptr<T>` y `constPtr<T>` no se modifican directamente (se usa `move()`
+    // para transferir ownership). `constRef<T>` y `readonly<T>` son inmutables.
+    if (isReadonlyType(type)) return false;
+    if (!isGenericType(type)) return false;
+    return genericBase(type) === "ref";
+  }
+  private substituteType(type: TypeName, substitutions: Map<string, TypeName>): TypeName {
+    return this.substituteTypeInternal(type, substitutions, new Set());
+  }
+
+  // Variante interna de `substituteType` que también expande alias. Mantiene
+  // `visited` para detectar ciclos a través de cadenas de alias (p. ej.
+  // `type A = B; type B = A`) y para evitar bucle en expansiones recursivas.
+  private substituteTypeInternal(type: TypeName, substitutions: Map<string, TypeName>, visited: Set<string>): TypeName {
+    // Alias simple: `type X = ...`. Reemplaza por el RHS y recurre.
+    const alias = this.aliases.get(type);
+    if (alias) {
+      if (visited.has(type)) return type;
+      visited.add(type);
+      return this.substituteTypeInternal(alias.type, substitutions, visited);
+    }
+    // Instanciación de alias genérico: `type Box<T> = T[]` usado como `Box<U>`.
+    if (isGenericType(type)) {
+      const base = genericBase(type);
+      const aliasInstance = this.aliases.get(base);
+      if (aliasInstance) {
+        if (visited.has(base)) return type;
+        visited.add(base);
+        const args = genericArguments(type);
+        const subs = new Map<string, TypeName>();
+        aliasInstance.typeParameters.forEach((parameter, index) => { if (args[index]) subs.set(parameter.name, args[index]); });
+        return this.substituteTypeInternal(aliasInstance.type, subs, visited);
+      }
+    }
+    if (substitutions.has(type)) return substitutions.get(type)!;
+    if (isUnionType(type)) return unionMembers(type).map(member => this.substituteTypeInternal(member, substitutions, visited)).join(" | ");
+    if (isIntersectionType(type)) return intersectionMembers(type).map(member => this.substituteTypeInternal(member, substitutions, visited)).join(" & ");
+    if (isArrayType(type)) return arrayType(this.substituteTypeInternal(arrayElement(type), substitutions, visited));
+    if (isTupleType(type)) return tupleType(tupleElements(type).map(item => this.substituteTypeInternal(item, substitutions, visited)));
+    if (isFunctionType(type)) return functionType(functionParameters(type).map(item => this.substituteTypeInternal(item, substitutions, visited)), this.substituteTypeInternal(functionResult(type), substitutions, visited));
+    if (isGenericType(type)) return genericType(genericBase(type), genericArguments(type).map(item => this.substituteTypeInternal(item, substitutions, visited)));
+    return type;
+  }
+
+  // Expande un tipo hasta su forma canónica (sin alias ni `typeof`). Usado por
+  // los sitios que almacenan el tipo en el símbolo (`VariableDeclaration`) o lo
+  // devuelven al usuario (`IdentifierExpression`), donde tanto el alias como
+  // la marca `typeof X` deben desaparecer para que el resto del análisis
+  // trabaje contra tipos reales. `scope` es opcional: sin él, las marcas
+  // `typeof X` se devuelven tal cual (p.ej. durante `expandAliasesInProgram`,
+  // antes de entrar a un ámbito).
+  // V30.14.1: lookup de type alias post-check. Usado por el codegen
+  // para expandir type arguments en generic types (e.g. `Array<SvgChild>`
+  // donde `SvgChild` es un alias de `Line | MultiLine`).
+  public resolveTypeAliasFromAst(name: string): string | undefined {
+    return this.typeAliasMap.get(name);
+  }
+  // V30.14.2: devuelve el nombre del type alias si la expansion es un union
+  // registrado en `unionAliasReverseMap`. Usado por el codegen.
+  public resolveUnionAliasNameFromAst(union: TypeName): string | undefined {
+    return this.unionAliasReverseMap.get(union);
+  }
+
+  private expandType(type: TypeName, scope?: Scope, activeAliases: ReadonlySet<string> = new Set()): TypeName {
+    const visited = new Set<string>(activeAliases);
+    let current = type;
+    while (true) {
+      // V4: los arrays fijos tienen caches indexados por nombre canónico en
+      // type-system.ts. expandType() puebla el cache aquí para que el
+      // type-checker pueda detectar `T[N]` antes de pasar por validateType.
+      const fixedMatch = current.match(/^([^\s\[\]]+)\[(\d+)\]$/);
+      if (fixedMatch) {
+        registerFixedArray(fixedMatch[1], Number(fixedMatch[2]));
+      }
+      const alias = this.aliases.get(current);
+      if (alias) {
+        if (visited.has(current)) break;
+        visited.add(current);
+        current = alias.type;
+        continue;
+      }
+      // Normalizar el elemento bajo todas las dimensiones, no solo un alias
+      // inmediatamente anterior a []. Compartir la ruta de aliases evita
+      // recursión infinita al encontrar A = A[] o ciclos indirectos.
+      if (isArrayType(current)) {
+        let element = current;
+        let dimensions = 0;
+        while (isArrayType(element)) { element = arrayElement(element); dimensions++; }
+        return this.expandType(element, scope, visited) + "[]".repeat(dimensions);
+      }
+      if (isGenericType(current)) {
+        const base = genericBase(current);
+        const aliasInstance = this.aliases.get(base);
+        if (aliasInstance) {
+          if (visited.has(base)) break;
+          visited.add(base);
+          const args = genericArguments(current);
+          const subs = new Map<string, TypeName>();
+          aliasInstance.typeParameters.forEach((parameter, index) => { if (args[index]) subs.set(parameter.name, args[index]); });
+          current = this.substituteType(aliasInstance.type, subs);
+          continue;
+        }
+        // V30.14.1: descender en generic types (`Array<T>`, `Optional<T>`)
+        // y expandir los type arguments que sean alias. Asi,
+        // `Array<SvgChild>` se convierte en `Array<Line | MultiLine>`,
+        // que el codegen de arrays (arrayCppType) traduce a
+        // `std::vector<std::variant<Line, MultiLine>>`.
+        // NOTA: el type-checker no modifica el AST en este punto para
+        // evitar problemas de re-validacion; la expansion de aliases
+        // en generic types se hace en el codegen (cpp-generator)
+        // mediante `expandTypeInCodegen`.
+        // if (isGenericType(current)) { ... } -> no hacer nada aquí
+      }
+      if (isTypeofType(current) && scope) {
+        const name = typeofTarget(current);
+        const sym = scope.resolve(name);
+        if (!sym) break;
+        if (sym.kind === "variable" || sym.kind === "type") { current = sym.type; continue; }
+        break;
+      }
+      break;
+    }
+    return current;
+  }
+  private withTypeParameters(parameters: TypeParameter[], action: () => void): void {
+    const previous = this.activeTypeParameters; const previousConstraints = this.activeTypeConstraints; const previousDefaults = this.activeTypeDefaults;
+    const names = parameters.map(parameter => parameter.name);
+    const entries = parameters.filter(parameter => parameter.constraint).map(parameter => [parameter.name, parameter.constraint] as const);
+    const defaults = parameters.filter(parameter => parameter.default).map(parameter => [parameter.name, parameter.default] as const);
+    this.activeTypeParameters = new Set([...previous, ...names]);
+    this.activeTypeConstraints = new Map([...previousConstraints, ...entries]);
+    this.activeTypeDefaults = new Map([...previousDefaults, ...defaults]);
+    action();
+    this.activeTypeParameters = previous; this.activeTypeConstraints = previousConstraints; this.activeTypeDefaults = previousDefaults;
+  }
+  private report(node: { span: import("../core/span.ts").Span }, message: string): void;
+  private report(node: { span: import("../core/span.ts").Span }, message: string, hint?: string, notes?: string[]): void;
+  private report(node: { span: import("../core/span.ts").Span }, message: string, hint?: string, notes?: string[]): void {
+    const diagnostic: import("../core/diagnostic.ts").Diagnostic = { phase: "semantic", message, span: node.span };
+    if (hint) diagnostic.hint = hint;
+    if (notes) diagnostic.notes = notes;
+    this.diagnostics.push(diagnostic);
+  }
+  /** Sugiere un nombre cercano (distancia Levenshtein ≤ 2) para errores tipo
+   *  "Símbolo no definido 'X'". Devuelve el mensaje de hint o undefined si
+   *  no encuentra candidato razonable. */
+  private suggestSimilar(name: string, candidates: Iterable<string>): string | undefined {
+    let best: { candidate: string; distance: number } | undefined;
+    for (const candidate of candidates) {
+      const distance = levenshtein(name, candidate);
+      if (distance <= 2 && (!best || distance < best.distance)) best = { candidate, distance };
+    }
+    return best ? `¿Quisiste decir '${best.candidate}'?` : undefined;
+  }
+
+  // V1.4: analiza una condición de IfStatement buscando un patrón de
+  // narrowing de tagged union: `expr.tag op literal`. Devuelve el nombre
+  // de la expresión, su tipo union, el operador y el discriminador.
+  // Si no encaja, devuelve undefined.
+  private parseNarrowingCondition(
+    condition: Expression,
+    scope: Scope,
+  ): { name: string; unionType: TypeName; discriminator: { field: string; value: string | number | boolean } } | undefined {
+    if (condition.kind !== "BinaryExpression") return undefined;
+    if (!["==", "===", "!=", "!=="].includes(condition.operator)) return undefined;
+    // Forma esperada: `expr.tag op literal`. El lado izquierdo debe ser
+    // `MemberExpression` con object = IdentifierExpression.
+    const memberAccess = condition.left.kind === "MemberExpression" ? condition.left : condition.right.kind === "MemberExpression" ? condition.right : undefined;
+    const literalSide = condition.left.kind === "MemberExpression" ? condition.right : condition.left;
+    if (!memberAccess || memberAccess.kind !== "MemberExpression") return undefined;
+    if (memberAccess.object.kind !== "IdentifierExpression") return undefined;
+    const exprName = memberAccess.object.name;
+    const exprType = scope.resolve(exprName);
+    if (!exprType || exprType.kind !== "variable") return undefined;
+    // El tipo puede ser el union directamente (e.g. `Result<number>`) o
+    // un wrapper genérico del union sintético (e.g. `Result<T,E>`).
+    // En ambos casos, el union base es lo que buscamos.
+    const unionType = isGenericType(exprType.type) ? genericBase(exprType.type) : exprType.type;
+    if (!this.unions.has(unionType)) return undefined;
+    // Extraer literal del lado derecho.
+    if (literalSide.kind !== "LiteralExpression") return undefined;
+    let literalValue: string | number | boolean;
+    if (literalSide.literalType === "string") literalValue = String(literalSide.value);
+    else if (literalSide.literalType === "number") literalValue = Number(literalSide.value);
+    else if (literalSide.literalType === "boolean") literalValue = Boolean(literalSide.value);
+    else return undefined;
+    return { name: exprName, unionType, discriminator: { field: memberAccess.member, value: literalValue } };
+  }
+
+  // V1.4: variantes de un union cuyo discriminador coincide con el literal.
+  // Si la unión no tiene discriminador declarado, devuelve undefined
+  // (no se puede narrowar de forma segura).
+  private variantsMatchingDiscriminator(
+    unionType: TypeName,
+    discriminator: { field: string; value: string | number | boolean },
+  ): string[] | undefined {
+    const union = this.unions.get(unionType);
+    if (!union) return undefined;
+    const matching = union.variants.filter(v => v.discriminator && v.discriminator.field === discriminator.field && v.discriminator.value === discriminator.value);
+    if (matching.length === 0) return undefined;
+    return matching.map(v => v.name);
+  }
+
+  // V1.4: variantes que NO cumplen el discriminador (para el else).
+  private variantsExcludingDiscriminator(
+    unionType: TypeName,
+    discriminator: { field: string; value: string | number | boolean },
+  ): string[] | undefined {
+    const union = this.unions.get(unionType);
+    if (!union) return undefined;
+    const matching = union.variants.filter(v => v.discriminator && v.discriminator.field === discriminator.field && v.discriminator.value === discriminator.value);
+    return union.variants.filter(v => !matching.includes(v)).map(v => v.name);
+  }
+}

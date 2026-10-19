@@ -1,0 +1,102 @@
+import {test} from "node:test";
+import assert from "node:assert/strict";
+import {mkdtempSync,writeFileSync,readFileSync,rmSync,mkdirSync,existsSync,unlinkSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {resolve,join,dirname} from "node:path";
+import {fileURLToPath} from "node:url";
+import {spawnSync,execFileSync} from "node:child_process";
+import {compile} from "../../src/compiler.ts";
+import {compileFile} from "../../src/modules/module-loader.ts";
+import {mapCppSources,markCppOrigin} from "../../src/codegen/cpp-source-map.ts";
+import {writeGeneratedSources,writeMappedCpp} from "../../src/codegen/etsgen-sources.ts";
+import {buildIncremental} from "../../src/build/incremental-builder.ts";
+import {loadConfig} from "../../src/config/project-config.ts";
+import type {GeneratedSource,Span} from "../../src/core/span.ts";
+
+const root=resolve(dirname(fileURLToPath(import.meta.url)),"../..");
+const span:Span={start:{offset:0,line:1,column:1},end:{offset:1,line:1,column:2}};
+const sources:GeneratedSource[]=[{id:"etsgen:0",kind:"etsgen",generator:"emit",source:"print(7);",callSpan:span}];
+const generated=(line=1,id="etsgen:0"):Span=>({...span,generated:{id,span:{start:{...span.start,line},end:{...span.end,line}}}});
+const generator=(text:string,name="emit")=>`@etsgen function ${name}():string{return ${JSON.stringify(text)};}`;
+async function temporary(run:(dir:string)=>void|Promise<void>){const dir=mkdtempSync(join(tmpdir(),"ets-cpp-maps-"));try{await run(dir);}finally{rmSync(dir,{recursive:true,force:true});}}
+const native=(file:string,extra:string[]=[])=>spawnSync("g++",["-std=c++20","-O0","-pthread","-fno-exceptions",`-I${root}`,file,...extra],{encoding:"utf8"});
+const cli=(entry:string,args:string[])=>spawnSync(process.execPath,["--experimental-strip-types",join(root,"src/cli.ts"),entry,...args],{encoding:"utf8"});
+
+test("cpp maps: código sin expansiones permanece idéntico",()=>{
+ const cpp="int main() {return 0;}\n";assert.deepEqual(mapCppSources(cpp,"main.cpp",[],[]),{cpp,mappings:[]});assert.equal(markCppOrigin(span,cpp),cpp);
+});
+test("cpp maps: marcador conserva span y rango físico",()=>{
+ const raw=markCppOrigin(generated(3),"int x=1;\nint y=2;");const result=mapCppSources(raw,"main.cpp",sources,["generated.ets"]);
+ assert.match(result.cpp,/#line 3 "generated.ets"/);assert.equal(result.mappings.length,2);
+ const mapping=result.mappings[0];assert.equal(result.cpp.split("\n")[mapping.cppStartLine-1],"int x=1;");assert.equal(mapping.cppEndLine,mapping.cppStartLine);assert.equal(mapping.origin.span.start.line,3);
+});
+test("cpp maps: restaura archivo C++ y línea física tras el fragmento",()=>{
+ const result=mapCppSources(markCppOrigin(generated(),"int x;")+"int broken;","/tmp/main.cpp",sources,["generated.ets"]);
+ const lines=result.cpp.split("\n");const reset=lines.findIndex(line=>/^#line .*main.cpp"$/.test(line));assert.ok(reset>=0);assert.equal(lines[reset],`#line ${reset+2} "/tmp/main.cpp"`);assert.ok(lines.slice(reset+1).includes("int broken;"));
+});
+test("cpp maps: scopes anidados restauran la procedencia del padre",()=>{
+ const child={...sources[0],id:"etsgen:1",parentId:"etsgen:0"};
+ const raw=markCppOrigin(generated(2),"before;"+markCppOrigin(generated(4,"etsgen:1"),"child;")+"after;");
+ const result=mapCppSources(raw,"main.cpp",[...sources,child],["parent.ets","child.ets"]);
+ assert.deepEqual(result.mappings.map(m=>m.origin.id),["etsgen:0","etsgen:1","etsgen:0"]);assert.match(result.cpp,/#line 4 "child.ets"/);assert.equal(result.cpp.match(/#line 2 "parent.ets"/g)?.length,2);
+});
+for(const [label,cpp] of [["sin apertura","// @ets-cpp-origin-end"],["sin cierre",markCppOrigin(generated(),"x;").replace("// @ets-cpp-origin-end","")],["id desconocido",markCppOrigin(generated(1,"unknown"),"x;")],["línea inválida",markCppOrigin(generated(0),"x;")]] as const){
+ test(`cpp maps: rechaza mapa ${label}`,()=>{assert.throws(()=>mapCppSources(cpp,"main.cpp",sources,["generated.ets"]));});
+}
+test("cpp maps: escapa rutas con comillas y barras sin inyectar directivas",()=>{
+ const result=mapCppSources(markCppOrigin(generated(),"int x;"),'a"b.cpp',sources,['x"y\\z.ets']);assert.ok(result.cpp.includes(JSON.stringify('x"y\\z.ets')));assert.ok(result.cpp.includes(JSON.stringify('a"b.cpp')));
+});
+test("cpp maps: string ETS con aspecto de marcador permanece texto",()=>{
+ const {cpp}=compile(generator('print("// @ets-cpp-origin-end");')+"emit();");assert.doesNotThrow(()=>mapCppSources(cpp,"main.cpp",sources,["generated.ets"]));
+});
+test("cpp maps native: error deliberado apunta al ETS; error posterior vuelve al C++",async()=>temporary(async dir=>{
+ const file=join(dir,"main.cpp"),ets=join(dir,"fragment.ets");writeFileSync(ets,"// source\n// source\nprint(7);\n");
+ const raw=markCppOrigin(generated(3),'static_assert(false,"fragment_failure");')+'\nstatic_assert(false,"cpp_failure");';
+ const result=mapCppSources(raw,file,sources,[ets]);writeFileSync(file,result.cpp);
+ const nativeResult=native(file,["-fsyntax-only"]);assert.notEqual(nativeResult.status,0);assert.ok(nativeResult.stderr.includes(ets+":3:"),nativeResult.stderr);
+ const physical=result.cpp.split("\n").findIndex(line=>line.includes('"cpp_failure"'))+1;assert.ok(nativeResult.stderr.includes(file+":"+physical+":"),nativeResult.stderr);
+}));
+test("cpp maps CLI native: unity compila y ejecuta conservando ETS original",async()=>temporary(async dir=>{
+ const entry=join(dir,"main.ets"),out=join(dir,"app.cpp"),text='@etsPublish function answer(value:number):number {\n return value+1;\n}';writeFileSync(entry,generator(text)+"emit();print(answer(7));");
+ const result=cli(entry,["-o",out]);assert.equal(result.status,0,result.stderr);
+ const manifest=JSON.parse(readFileSync(join(out+".etsgen","manifest.json"),"utf8"));assert.equal(readFileSync(join(out+".etsgen",manifest.fragments[0].file),"utf8"),text);
+ const map=JSON.parse(readFileSync(out+".map.json","utf8"));assert.ok(map.mappings.some((m:any)=>m.origin.span.start.line===2));
+ const compiled=native(out,["-o",join(dir,"app")]);assert.equal(compiled.status,0,compiled.stderr);assert.equal(execFileSync(join(dir,"app"),{encoding:"utf8"}),"8\n");
+}));
+test("cpp maps CLI native: fallo en firma de plantilla de cabecera señala ETS",async()=>temporary(async dir=>{
+ const entry=join(dir,"main.ets"),out=join(dir,"app.cpp"),text='\n@etsPublish function answer<T>(value:Native):number { return 7; }';
+ writeFileSync(entry,'@cpp_type("MissingNativeType") class Native {}'+generator(text)+"emit();");
+ const result=cli(entry,["-o",out]);assert.equal(result.status,0,result.stderr);
+ // Introduce a native-only error after transpilation to exercise the emitted map.
+ writeFileSync(out,readFileSync(out,"utf8").replaceAll("Native value","MissingNativeType value"));
+ const compiled=native(out,["-fsyntax-only"]);assert.notEqual(compiled.status,0);assert.ok(compiled.stderr.includes(join(out+".etsgen","etsgen-0.ets")+":2:"),compiled.stderr);
+ const map=JSON.parse(readFileSync(out+".map.json","utf8"));assert.ok(map.mappings.some((m:any)=>m.origin.span.start.line===2));
+}));
+test("cpp maps CLI: multi escribe mapas del header y las unidades",async()=>temporary(async dir=>{
+ const entry=join(dir,"main.ets"),out=join(dir,"out"),dump=join(dir,"custom-fragments");writeFileSync(entry,generator('@etsPublish class Box {value:number;}')+"emit();print(new Box(7).value);");
+ const result=cli(entry,["--multi","-o",out,"--emit-etsgen",dump]);assert.equal(result.status,0,result.stderr);assert.ok(existsSync(join(out,"main.cpp.map.json")));const header=readFileSync(join(out,"estatic_common.hpp"),"utf8");assert.ok(header.includes(join(dump,"etsgen-0.ets")));
+ const compiled=native(join(out,"main.cpp"),["-o",join(dir,"app")]);assert.equal(compiled.status,0,compiled.stderr);assert.equal(execFileSync(join(dir,"app"),{encoding:"utf8"}),"7\n");
+}));
+test("cpp maps: manifest conserva llamada local al módulo y parentesco",async()=>temporary(async dir=>{
+ writeFileSync(join(dir,"gen.ets"),generator('etsDefinition("child");',"parent")+'\n'+generator('print(7);',"child")+'\nexport {parent};');
+ writeFileSync(join(dir,"main.ets"),'import {parent as produce} from "./gen";\nproduce();');
+ const result=await compileFile(join(dir,"main.ets"));await writeGeneratedSources(result.ast.generatedSources!,join(dir,"sources"));const manifest=JSON.parse(readFileSync(join(dir,"sources/manifest.json"),"utf8"));
+ assert.equal(manifest.fragments[0].displayGenerator,"produce");assert.equal(manifest.fragments[0].callLocation.file,join(dir,"main.ets"));assert.equal(manifest.fragments[0].callLocation.span.start.line,2);assert.equal(manifest.fragments[1].parentId,manifest.fragments[0].id);assert.equal(manifest.fragments[1].callLocation.file,join(dir,"sources/etsgen-0.ets"));assert.equal(manifest.fragments[1].callLocation.span.start.line,1);
+}));
+test("cpp maps: API escribe sidecar con ruta del manifiesto",async()=>temporary(async dir=>{
+ await writeGeneratedSources(sources,dir);const out=join(dir,"main.cpp");const cpp=await writeMappedCpp(markCppOrigin(generated(),"int value;"),out,sources,dir);assert.equal(readFileSync(out,"utf8"),cpp);const map=JSON.parse(readFileSync(out+".map.json","utf8"));assert.equal(map.manifest,join(dir,"manifest.json"));
+}));
+test("cpp maps native: incremental conserva y reconstruye artefactos de depuración",async()=>temporary(async dir=>{
+ const compiler=join(dir,"compiler");mkdirSync(join(compiler,"build"),{recursive:true});mkdirSync(join(compiler,"runtime"));
+ // Unused prerequisite sentinel: this program does not use or link libuv.
+ writeFileSync(join(compiler,"build/runtime_ets_libuv.o"),"");
+ writeFileSync(join(compiler,"runtime/ets_runtime.hpp"),`#include ${JSON.stringify(join(root,"runtime/ets_runtime.hpp"))}\n`);
+ writeFileSync(join(dir,"main.ets"),generator('print(7);')+"emit();");
+ const configPath=join(dir,"config.ts");writeFileSync(configPath,`export default {entry:"main.ets",compiler:{enabled:true,flags:["-std=c++20","-O0","-pthread","-fno-exceptions",${JSON.stringify('-I'+root)}]}};`);const config=(await loadConfig(configPath))!;
+ const first=await buildIncremental(config,compiler);assert.equal(first.compiled.length,1);assert.equal(execFileSync(first.binary,{encoding:"utf8"}),"7\n");assert.equal((await buildIncremental(config,compiler)).cacheResult,"hit");
+ const ets=join(config.incremental.generatedDirectory,"etsgen/etsgen-0.ets");unlinkSync(ets);await buildIncremental(config,compiler);assert.ok(existsSync(ets));
+}));
+
+test("cpp maps: recompilar sin expansiones elimina el sidecar anterior",async()=>temporary(async dir=>{
+ const file=join(dir,"app.cpp");await writeGeneratedSources(sources,dir);await writeMappedCpp(markCppOrigin(generated(),"int x;"),file,sources,dir);assert.ok(existsSync(file+".map.json"));await writeMappedCpp("int main(){}",file,[],dir);assert.equal(existsSync(file+".map.json"),false);assert.equal(readFileSync(file,"utf8"),"int main(){}");
+}));

@@ -1,0 +1,20 @@
+import type {TypeName} from "../ast/nodes.ts";
+export const TERMINAL_METHODS:Record<string,{params:TypeName[];returnType:TypeName}>=Object.assign(Object.create(null),{
+ write:{params:["string"],returnType:"boolean"},
+ writeLine:{params:["string"],returnType:"boolean"},
+ flush:{params:[],returnType:"boolean"},
+ isTTY:{params:[],returnType:"boolean"},
+ supportsAnsi:{params:[],returnType:"boolean"},
+ columns:{params:[],returnType:"number"},
+ rows:{params:[],returnType:"number"},
+ color:{params:["string"],returnType:"boolean"},
+ background:{params:["string"],returnType:"boolean"},
+ style:{params:["string"],returnType:"boolean"},
+ reset:{params:[],returnType:"boolean"},
+ clear:{params:[],returnType:"boolean"},
+ clearLine:{params:[],returnType:"boolean"},
+ moveTo:{params:["number","number"],returnType:"boolean"},
+ moveBy:{params:["number","number"],returnType:"boolean"},
+ hideCursor:{params:[],returnType:"boolean"},
+ showCursor:{params:[],returnType:"boolean"},
+});
