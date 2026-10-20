@@ -63,7 +63,7 @@ Para consultar la versión instalada:
 ```bash
 etsc --version
 etsc -v
-# Ts2cpp 1.7.0 (v45)
+# estatic 1.8.0 (v46)
 ```
 
 El `estatic.config.ts` generado NO requiere que listes `-luv`, `-lssl`,
@@ -127,7 +127,9 @@ npm start -- --config otra.config.ts --build
 npm start -- --config otra.config.ts --build --unity
 ```
 
-Con la compilación incremental activa, cada módulo `.ts` o `.ets` produce su propia unidad C++ y su propio objeto `.o`. Los objetos se identifican por el contenido del módulo, las declaraciones compartidas, el runtime, el compilador y sus flags. Una segunda compilación reutiliza los objetos válidos y también evita el enlace cuando nada ha cambiado. `--unity` fuerza la salida histórica de un único `.cpp`, útil para inspección y depuración. Un archivo de entrada y `-o` continúan disponibles para compilaciones puntuales y usan ese modo unitario.
+Con la compilación incremental activa hay tres capas independientes de caché: sintaxis/AST por contenido de módulo, snapshot completa de transpilación y objetos C++ por unidad. Si cambia un solo archivo se vuelven a escanear y parsear únicamente sus bytes; los AST de los demás módulos se restauran. El análisis semántico combinado y el codegen se ejecutan para el programa nuevo por seguridad entre módulos, pero el `.o` sólo se recompila si cambió su C++ o la cabecera común. Si no cambió el programa, o sólo cambian flags/runtime nativos, se restaura la snapshot y se omiten parse, type-check, `comptime`, `@etsgen` y codegen. Los objetos incorporan a su clave el C++ materializado, la cabecera compartida, el runtime, el compilador y sus flags. Véase [`docs/transpilation-cache.md`](./docs/transpilation-cache.md).
+
+`--unity` fuerza la salida histórica de un único `.cpp`, útil para inspección y depuración. Un archivo de entrada y `-o` continúan disponibles para compilaciones puntuales y usan ese modo unitario.
 
 En perfiles de release se separan funciones y datos por sección, el enlazador elimina secciones y bibliotecas no utilizadas y el binario se entrega sin símbolos internos. Tree-sitter y la gramática TypeScript solo se enlazan cuando el ejecutable utiliza las APIs de sintaxis o AST; una aplicación normal no incorpora el parser del compilador. Para conservar símbolos durante la depuración, utilice el perfil `debug` y retire `-s` de `linkFlags`.
 
@@ -858,10 +860,11 @@ Salida en color cuando stdout es un TTY. Se desactiva con `NO_COLOR=1` y se fuer
 ```bash
 $ etsc build --verbose
 Cargando grafo de módulos...
-       1 módulo(s) cargado(s)
+       1 módulo(s) cargado(s); sintaxis: 0 hit(s), 1 miss(es)
        Calculando digests (runtime + flags)... 0.01s
        Cache miss: no existe el objeto cacheado
-       Regenerando .cpp (parse + type-check + codegen)... 0.04s
+       Regenerando .cpp (frontend incremental + type-check + codegen)... 0.04s
+       AST cache: 0 reutilizado(s), 1 parseado(s)
        Compilando a objeto (g++)... 0.38s
        Enlazando binario (g++)... 5.62s
        Binario: /tmp/inc-build/build/app (28,000 bytes)
@@ -989,7 +992,7 @@ npm run test:http-routing
 npm run test:e2e
 ```
 
-La última ejecución completa registrada en `status.md` pasó 1125 pruebas
+La última ejecución completa registrada en `status.md` pasó 1127 pruebas
 unitarias. El número puede cambiar al añadir casos; no se mantiene como una
 constante manual en este README.
 

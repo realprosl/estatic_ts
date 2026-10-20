@@ -1,4 +1,4 @@
-import { readFile, realpath } from "node:fs/promises";
+import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { dirname, extname, resolve } from "node:path";
 import { parse, analyze } from "../compiler.ts";
@@ -12,6 +12,7 @@ import { bindModuleNames, referencedGlobals, type NamespaceBindings } from "./mo
 import { scanModuleSyntax, type LocalExport } from "./module-syntax.ts";
 import { resolveModuleExports, namespaceExports, type ExportTarget } from "./module-exports.ts";
 import type { Program, Statement } from "../ast/nodes.ts";
+import { getTs2cppRevision, getTs2cppVersion } from "../core/ts2cpp-version.ts";
 
 // Module declarations are discovered from lexer tokens, including multiline lists.
 
@@ -37,12 +38,59 @@ export interface ModuleCompilationResult {
   /** V30.6.0: backends runtime que el programa necesita (libuv, curl, tls, io_uring).
    * Detectado mirando el AST, no escaneando includes del cpp (mas fiable). */
   runtimeBackends: RuntimeBackends;
+  /** Estadísticas de la caché persistente del frontend. */
+  transpilationCache?: { parsedHits: number; parsedMisses: number };
 }
-export interface ModuleLoaderOptions { moduleRoots?: string[]; aliases?: Record<string, string>; minimal?: boolean; /** V30.6.1: raíz para derivar la identidad estable de módulo (H-01/H-02). */ baseDirectory?: string }
+export interface ModuleLoaderOptions {
+  moduleRoots?: string[];
+  aliases?: Record<string, string>;
+  minimal?: boolean;
+  /** V30.6.1: raíz para derivar la identidad estable de módulo (H-01/H-02). */
+  baseDirectory?: string;
+  /** Directorio opcional para ASTs parseados, indexados por contenido. */
+  transpilationCacheDirectory?: string;
+}
 
 export interface ModuleImport { names: string[]; bindings?: {imported:string;local:string}[]; namespace?:string; reexport?:boolean; star?:boolean; resolved?:boolean; dependency: string; line: number }
 export interface LoadedModule { file: string; source: string; dependencies: string[]; imports: ModuleImport[]; exports?: LocalExport[]; hash: string }
-export interface ModuleGraph { entry: string; modules: LoadedModule[]; baseDirectory: string }
+export interface ModuleGraph {
+  entry: string;
+  modules: LoadedModule[];
+  baseDirectory: string;
+  frontendCache?: { syntaxHits: number; syntaxMisses: number };
+}
+
+const MODULE_SYNTAX_CACHE_VERSION = 1;
+const compilerCacheIdentity = () => `${getTs2cppVersion()}:${getTs2cppRevision() ?? "dev"}`;
+async function scanCachedModule(source: string, directory: string | undefined, stats: { syntaxHits: number; syntaxMisses: number }): Promise<ReturnType<typeof scanModuleSyntax>> {
+  if (!directory) {
+    stats.syntaxMisses++;
+    return scanModuleSyntax(source);
+  }
+  const key = createHash("sha256").update(`module-syntax:${MODULE_SYNTAX_CACHE_VERSION}:${compilerCacheIdentity()}\0`).update(source).digest("hex");
+  const syntaxDirectory = resolve(directory, "syntax");
+  const cacheFile = resolve(syntaxDirectory, `${key}.json`);
+  try {
+    const cached = JSON.parse(await readFile(cacheFile, "utf8")) as { version?: number; syntax?: ReturnType<typeof scanModuleSyntax> };
+    if (cached.version === MODULE_SYNTAX_CACHE_VERSION && typeof cached.syntax?.source === "string" && Array.isArray(cached.syntax.requests) && Array.isArray(cached.syntax.exports)) {
+      stats.syntaxHits++;
+      return cached.syntax;
+    }
+  } catch {
+    // Miss normal o entrada incompleta.
+  }
+  const syntax = scanModuleSyntax(source);
+  stats.syntaxMisses++;
+  try {
+    await mkdir(syntaxDirectory, { recursive: true });
+    const temporary = `${cacheFile}.${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`;
+    await writeFile(temporary, JSON.stringify({ version: MODULE_SYNTAX_CACHE_VERSION, syntax }), "utf8");
+    await rename(temporary, cacheFile);
+  } catch {
+    // La caché no forma parte de la semántica del programa.
+  }
+  return syntax;
+}
 
 async function resolveSourceFile(requested: string): Promise<string | undefined> {
   const candidates = extname(requested) ? [requested] : [`${requested}.ts`, `${requested}.ets`];
@@ -57,6 +105,7 @@ export async function loadModuleGraph(entry: string, options: ModuleLoaderOption
   const ordered: LoadedModule[] = [];
   const visited = new Set<string>();
   const visiting: string[] = [];
+  const frontendCache = { syntaxHits: 0, syntaxMisses: 0 };
   // V30.6.1: baseDirectory se usa para derivar la identidad estable de
   // modulo (computeModuleId). Si no se pasa, usamos dirname(entry).
   const baseDirectory = options.baseDirectory ?? dirname(entry);
@@ -70,7 +119,7 @@ export async function loadModuleGraph(entry: string, options: ModuleLoaderOption
     visiting.push(file);
     const source = await readFile(file, "utf8");
     let syntax:ReturnType<typeof scanModuleSyntax>;
-    try {syntax=scanModuleSyntax(source);}
+    try {syntax=await scanCachedModule(source, options.transpilationCacheDirectory, frontendCache);}
     catch(error) {if(!(error instanceof DiagnosticError)) throw error;throw new DiagnosticError(error.diagnostics.map(d=>({...d,file,source})));}
     const dependencies:string[]=[], imports:ModuleImport[]=[];
     for(const request of syntax.requests) {
@@ -106,20 +155,56 @@ export async function loadModuleGraph(entry: string, options: ModuleLoaderOption
   };
 
   const resolvedEntry = await visit(resolve(entry));
-  return { entry: resolvedEntry, modules: ordered, baseDirectory };
+  return { entry: resolvedEntry, modules: ordered, baseDirectory, frontendCache };
 }
 
-export async function compileFile(entry: string, options: ModuleLoaderOptions = {}): Promise<ModuleCompilationResult> {
-  const graph = await loadModuleGraph(entry, options);
+const PARSED_AST_CACHE_VERSION = 1;
+
+async function parseCachedModule(module: LoadedModule, directory: string | undefined, stats: { parsedHits: number; parsedMisses: number }): Promise<Program> {
+  if (!directory) {
+    stats.parsedMisses++;
+    return parse(module.source);
+  }
+  const key = createHash("sha256")
+    .update(`parsed-ast:${PARSED_AST_CACHE_VERSION}:${compilerCacheIdentity()}\0`)
+    .update(module.source)
+    .digest("hex");
+  const parsedDirectory = resolve(directory, "ast");
+  const cacheFile = resolve(parsedDirectory, `${key}.json`);
+  try {
+    const cached = JSON.parse(await readFile(cacheFile, "utf8")) as { version?: number; ast?: Program };
+    if (cached.version === PARSED_AST_CACHE_VERSION && cached.ast?.kind === "Program" && Array.isArray(cached.ast.statements)) {
+      stats.parsedHits++;
+      return cached.ast;
+    }
+  } catch {
+    // Un miss o una entrada corrupta nunca debe impedir compilar.
+  }
+  const ast = parse(module.source);
+  stats.parsedMisses++;
+  try {
+    await mkdir(parsedDirectory, { recursive: true });
+    const temporary = `${cacheFile}.${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`;
+    await writeFile(temporary, JSON.stringify({ version: PARSED_AST_CACHE_VERSION, ast }), "utf8");
+    await rename(temporary, cacheFile);
+  } catch {
+    // La caché es una optimización: un filesystem de solo lectura no cambia el resultado.
+  }
+  return ast;
+}
+
+/** Compila un grafo ya cargado. El incremental evita así resolver y escanear imports dos veces. */
+export async function compileModuleGraph(graph: ModuleGraph, options: ModuleLoaderOptions = {}): Promise<ModuleCompilationResult> {
   const ordered = graph.modules;
   const baseDirectory = graph.baseDirectory;
-  const visibilityPrograms = ordered.map(module => {
-    try { return { module, ast: parse(module.source) }; }
+  const cacheStats = { parsedHits: 0, parsedMisses: 0 };
+  const visibilityPrograms = await Promise.all(ordered.map(async module => {
+    try { return { module, ast: await parseCachedModule(module, options.transpilationCacheDirectory, cacheStats) }; }
     catch (error) {
       if (!(error instanceof DiagnosticError)) throw error;
       throw new DiagnosticError(error.diagnostics.map(diagnostic => ({ ...diagnostic, file: module.file, source: module.source })));
     }
-  });
+  }));
   const surfaces=resolveModuleExports(visibilityPrograms);
   validateModuleVisibility(visibilityPrograms,surfaces);
   const canonical=new Map<string,string>();
@@ -296,7 +381,7 @@ export async function compileFile(entry: string, options: ModuleLoaderOptions = 
       cpp: generator.generateModule(moduleAst, ast, headerName, stableInitName(module.file, baseDirectory), index === ordered.length - 1 ? moduleInitializers : undefined),
     };
   });
-    return { ast, header, modules, moduleNames: ordered.map(m => m.file), linkFlags: generator.linkFlags, externalHeaders: generator.externalHeaders, runtimeBackends: detectRuntimeBackends(ast) };
+    return { ast, header, modules, moduleNames: ordered.map(m => m.file), linkFlags: generator.linkFlags, externalHeaders: generator.externalHeaders, runtimeBackends: detectRuntimeBackends(ast), transpilationCache: cacheStats };
   } catch (error) {
     if (!(error instanceof DiagnosticError)) throw error;
     const diagnostics: Diagnostic[] = error.diagnostics.map(diagnostic => {
@@ -318,4 +403,8 @@ export async function compileFile(entry: string, options: ModuleLoaderOptions = 
     });
     throw new DiagnosticError(diagnostics);
   }
+}
+
+export async function compileFile(entry: string, options: ModuleLoaderOptions = {}): Promise<ModuleCompilationResult> {
+  return compileModuleGraph(await loadModuleGraph(entry, options), options);
 }

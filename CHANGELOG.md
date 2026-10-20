@@ -2,7 +2,22 @@
 
 Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
-## Sin publicar (2026-10-19)
+## Sin publicar (2026-10-20)
+
+### Added
+
+- Caché persistente anterior al `.o`: escaneo de imports/exports y AST por
+  contenido de módulo, más snapshots completas de transpilación. El incremental
+  carga el grafo una sola vez; cambiar un archivo sólo vuelve a escanear y
+  parsear ese módulo, y cambiar únicamente flags/runtime reutiliza parse,
+  type-check, `comptime`, `@etsgen` y codegen. La API informa `hit`, `partial` o
+  `miss` y el número de AST restaurados/parseados.
+- Los manifests de objeto incluyen ahora el hash de la cabecera común además
+  del C++ de la unidad y el entorno nativo, evitando reutilizar un `.o`
+  incompatible cuando cambia una declaración compartida. Dos regresiones
+  cubren invalidación por módulo, restauración de snapshot y recompilación de
+  un único objeto. Suite estable acumulada: 1127/1127. Versión
+  `estatic 1.8.0 (v46)`. Ver `docs/transpilation-cache.md`.
 
 ### Removed
 

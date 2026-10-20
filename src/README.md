@@ -31,7 +31,7 @@ src/
 │   ├── cpp-types.ts      tabla TypeName → C++ (Promise→Task, Result, Map/Set…)
 │   └── cpp-parameters.ts reglas out/mut/move/automatic
 ├── build/                compilador incremental
-│   └── incremental-builder.ts  cabecera común + .cpp por módulo + cache SHA-256
+│   └── incremental-builder.ts  snapshots de transpilación + .cpp/.o por módulo
 ├── config/               carga de estatic.config.ts
 │   └── project-config.ts EstaticConfig + ResolvedConfig + defaults
 ├── project/              scaffolding
@@ -58,7 +58,7 @@ src/
    ▼  lexer/
 tokens
    │
-   ▼  parser/
+   ▼  parser/ (AST cacheado por contenido)
 AST (Program)
    │
    ▼  semantic/
@@ -67,7 +67,7 @@ AST + tipos por expresión + diagnósticos
    ▼  codegen/
 .cpp + cabecera común (incremental) o un solo .cpp (unitario)
    │
-   ▼  g++ por módulo (cache por SHA-256)
+   ▼  g++ por módulo (cache por C++ + header + entorno nativo)
 binario
 ```
 
