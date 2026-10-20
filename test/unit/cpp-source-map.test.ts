@@ -1,6 +1,6 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {mkdtempSync,writeFileSync,readFileSync,rmSync,mkdirSync,existsSync,unlinkSync} from "node:fs";
+import {mkdtempSync,writeFileSync,readFileSync,rmSync,mkdirSync,existsSync,unlinkSync,statSync,utimesSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {resolve,join,dirname} from "node:path";
 import {fileURLToPath} from "node:url";
@@ -12,6 +12,8 @@ import {writeGeneratedSources,writeMappedCpp} from "../../src/codegen/etsgen-sou
 import {buildIncremental} from "../../src/build/incremental-builder.ts";
 import {loadConfig} from "../../src/config/project-config.ts";
 import type {GeneratedSource,Span} from "../../src/core/span.ts";
+import {compareModuleFingerprints} from "../../src/modules/module-fingerprints.ts";
+import {BuildProfile} from "../../src/build/build-profile.ts";
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),"../..");
 const span:Span={start:{offset:0,line:1,column:1},end:{offset:1,line:1,column:2}};
@@ -93,8 +95,11 @@ test("cpp maps native: incremental conserva y reconstruye artefactos de depuraci
  writeFileSync(join(compiler,"runtime/ets_runtime.hpp"),`#include ${JSON.stringify(join(root,"runtime/ets_runtime.hpp"))}\n`);
  writeFileSync(join(dir,"main.ets"),generator('print(7);')+"emit();");
  const configPath=join(dir,"config.ts");writeFileSync(configPath,`export default {entry:"main.ets",compiler:{enabled:true,flags:["-std=c++20","-O0","-pthread","-fno-exceptions",${JSON.stringify('-I'+root)}]}};`);const config=(await loadConfig(configPath))!;
- const first=await buildIncremental(config,compiler);assert.equal(first.compiled.length,1);assert.equal(first.transpilationCache,"miss");assert.equal(execFileSync(first.binary,{encoding:"utf8"}),"7\n");assert.equal((await buildIncremental(config,compiler)).cacheResult,"hit");
- const ets=join(config.incremental.generatedDirectory,"etsgen/etsgen-0.ets");unlinkSync(ets);const restored=await buildIncremental(config,compiler);assert.ok(existsSync(ets));assert.equal(restored.transpilationCache,"hit");assert.deepEqual(restored.parsedModules,{reused:1,parsed:0});
+ const first=await buildIncremental(config,compiler);assert.equal(first.compiled.length,1);assert.equal(first.transpilationCache,"miss");assert.equal(execFileSync(first.binary,{encoding:"utf8"}),"7\n");
+ assert.ok(first.profile.totalsMs["check-source"]>=0);assert.ok(first.profile.totalsMs["native-compile"]>0);assert.ok(existsSync(first.profile.report));assert.ok(!existsSync(join(config.incremental.cacheDirectory,"../pch")));
+ const originalHeader=readFileSync(first.header,"utf8");const old=new Date("2000-01-01T00:00:00Z");utimesSync(first.header,old,old);
+ const hit=await buildIncremental(config,compiler);assert.equal(hit.cacheResult,"hit");assert.equal(readFileSync(first.header,"utf8"),originalHeader);assert.equal(statSync(first.header).mtimeMs,old.getTime());assert.ok(!("check-source" in hit.profile.totalsMs));
+ const ets=join(config.incremental.generatedDirectory,"etsgen/etsgen-0.ets");unlinkSync(ets);const restored=await buildIncremental(config,compiler);assert.ok(existsSync(ets));assert.equal(restored.transpilationCache,"hit");assert.deepEqual(restored.parsedModules,{reused:1,parsed:0});assert.ok(!("check-source" in restored.profile.totalsMs));assert.equal(statSync(first.header).mtimeMs,old.getTime());
 }));
 
 test("cpp maps: recompilar sin expansiones elimina el sidecar anterior",async()=>temporary(async dir=>{
@@ -123,4 +128,47 @@ test("incremental: editar una implementación reutiliza frontend y objeto del m�
  const cold=await buildIncremental(config,compiler);assert.equal(cold.compiled.length,2);assert.equal(execFileSync(cold.binary,{encoding:"utf8"}),"7\n");
  writeFileSync(library,"export function answer():number{return 9;}");
  const changed=await buildIncremental(config,compiler);assert.equal(changed.transpilationCache,"partial");assert.deepEqual(changed.parsedModules,{reused:1,parsed:1});assert.equal(changed.compiled.length,1);assert.equal(changed.reused.length,1);assert.equal(execFileSync(changed.binary,{encoding:"utf8"}),"9\n");
+ assert.equal(changed.moduleChanges.find(item=>item.file===library)?.reason,"implementation");
+ const persisted=JSON.parse(readFileSync(changed.profile.report,"utf8"));assert.equal(persisted.moduleChanges.length,1);assert.ok(persisted.profile.totalsMs["codegen-module"]>=0);
+ unlinkSync(changed.header);const restored=await buildIncremental(config,compiler);assert.ok(existsSync(restored.header));assert.equal(restored.transpilationCache,"hit");assert.ok(!("check-source" in restored.profile.totalsMs));assert.equal(execFileSync(restored.binary,{encoding:"utf8"}),"9\n");
+}));
+
+test("build profile: errores se propagan y medidas async conservan el resultado",async()=>{
+ const profile=new BuildProfile();assert.throws(()=>profile.measure("broken",()=>{throw new Error("expected");}),/expected/);
+ assert.equal(await profile.measureAsync("async",async()=>7),7);assert.ok(profile.totals().broken>=0);assert.ok(profile.totals().async>=0);
+});
+
+for(const [label,before,after,reason] of [
+ ["cuerpo runtime","export function value():number{return 1;}","export function value():number{return 2;}","implementation"],
+ ["firma","export function value():number{return 1;}","export function value(x:number=1):number{return x;}","interface"],
+ ["helper privado comptime","function helper():number{return 1;}@comptime export function value():number{return helper();}","function helper():number{return 2;}@comptime export function value():number{return helper();}","compile-time"],
+ ["cuerpo genérico","export function value<T>(x:T):T{return x;}","export function value<T>(x:T):T{print(1);return x;}","compile-time"],
+ ["constante exportada","export const value:number=1;","export const value:number=2;","interface"],
+] as const) {
+ test(`module fingerprints: ${label}`,async()=>temporary(async dir=>{
+  const lib=join(dir,"lib.ets"),entry=join(dir,"main.ets");writeFileSync(lib,before);writeFileSync(entry,'import "./lib";');
+  const first=(await compileFile(entry)).semanticFingerprints!;writeFileSync(lib,after);const second=(await compileFile(entry)).semanticFingerprints!;
+  const changes=compareModuleFingerprints(first,second);assert.equal(changes.find(item=>item.file===lib)?.reason,reason);
+  assert.equal(changes.some(item=>item.file===entry),reason!=="implementation");
+ }));
+}
+
+test("module fingerprints: propagación transitiva por reexports y eliminación",async()=>temporary(async dir=>{
+ const lib=join(dir,"lib.ets"),entry=join(dir,"main.ets");writeFileSync(lib,'export function value():number{return 1;}');writeFileSync(join(dir,"barrel.ets"),'export * from "./lib";');writeFileSync(entry,'import {value} from "./barrel";print(value());');
+ const first=(await compileFile(entry)).semanticFingerprints!;writeFileSync(lib,'export function value(x:number=1):number{return x;}');const second=(await compileFile(entry)).semanticFingerprints!;
+ const changes=compareModuleFingerprints(first,second);assert.equal(changes.length,3);assert.equal(changes.find(item=>item.file===entry)?.reason,"dependency");
+ writeFileSync(entry,"print(1);");const removed=compareModuleFingerprints(second,(await compileFile(entry)).semanticFingerprints!);assert.equal(removed.filter(item=>item.reason==="removed").length,2);
+}));
+
+test("module fingerprints: posiciones y comentarios no cambian interfaces",async()=>temporary(async dir=>{
+ const entry=join(dir,"main.ets");writeFileSync(entry,'export function value():number{return 1;}');const before=(await compileFile(entry)).semanticFingerprints!;
+ writeFileSync(entry,'// comment\n\nexport function value():number{return 1;}');const after=(await compileFile(entry)).semanticFingerprints!;
+ assert.equal(before[0].interfaceHash,after[0].interfaceHash);assert.equal(before[0].implementationHash,after[0].implementationHash);
+}));
+
+test("module fingerprints: implementación importada por un generador invalida consumidores transitivos",async()=>temporary(async dir=>{
+ const lib=join(dir,"lib.ets"),gen=join(dir,"gen.ets"),entry=join(dir,"main.ets");
+ writeFileSync(lib,'export function helper():number{return 1;}');writeFileSync(gen,'import {helper} from "./lib";@comptime export function value():number{return helper();}');writeFileSync(entry,'import {value} from "./gen";');
+ const before=(await compileFile(entry)).semanticFingerprints!;writeFileSync(lib,'export function helper():number{return 2;}');const after=(await compileFile(entry)).semanticFingerprints!;
+ const changes=compareModuleFingerprints(before,after);assert.equal(changes.find(item=>item.file===lib)?.reason,"implementation");assert.equal(changes.find(item=>item.file===gen)?.reason,"dependency");assert.equal(changes.find(item=>item.file===entry)?.reason,"dependency");
 }));

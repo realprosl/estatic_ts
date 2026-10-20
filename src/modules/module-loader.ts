@@ -13,6 +13,9 @@ import { scanModuleSyntax, type LocalExport } from "./module-syntax.ts";
 import { resolveModuleExports, namespaceExports, type ExportTarget } from "./module-exports.ts";
 import type { Program, Statement } from "../ast/nodes.ts";
 import { getTs2cppRevision, getTs2cppVersion } from "../core/ts2cpp-version.ts";
+import { performance } from "node:perf_hooks";
+import { BuildProfile } from "../build/build-profile.ts";
+import { fingerprintModules, type ModuleFingerprint } from "./module-fingerprints.ts";
 
 // Module declarations are discovered from lexer tokens, including multiline lists.
 
@@ -40,6 +43,7 @@ export interface ModuleCompilationResult {
   runtimeBackends: RuntimeBackends;
   /** Estadísticas de la caché persistente del frontend. */
   transpilationCache?: { parsedHits: number; parsedMisses: number };
+  semanticFingerprints?: ModuleFingerprint[];
 }
 export interface ModuleLoaderOptions {
   moduleRoots?: string[];
@@ -49,6 +53,7 @@ export interface ModuleLoaderOptions {
   baseDirectory?: string;
   /** Directorio opcional para ASTs parseados, indexados por contenido. */
   transpilationCacheDirectory?: string;
+  profile?: BuildProfile;
 }
 
 export interface ModuleImport { names: string[]; bindings?: {imported:string;local:string}[]; namespace?:string; reexport?:boolean; star?:boolean; resolved?:boolean; dependency: string; line: number }
@@ -195,6 +200,8 @@ async function parseCachedModule(module: LoadedModule, directory: string | undef
 
 /** Compila un grafo ya cargado. El incremental evita así resolver y escanear imports dos veces. */
 export async function compileModuleGraph(graph: ModuleGraph, options: ModuleLoaderOptions = {}): Promise<ModuleCompilationResult> {
+  const profile = options.profile ?? new BuildProfile();
+  let phaseStart = performance.now();
   const ordered = graph.modules;
   const baseDirectory = graph.baseDirectory;
   const cacheStats = { parsedHits: 0, parsedMisses: 0 };
@@ -205,8 +212,13 @@ export async function compileModuleGraph(graph: ModuleGraph, options: ModuleLoad
       throw new DiagnosticError(error.diagnostics.map(diagnostic => ({ ...diagnostic, file: module.file, source: module.source })));
     }
   }));
+  profile.record("restore-or-parse", phaseStart);
+  phaseStart = performance.now();
   const surfaces=resolveModuleExports(visibilityPrograms);
   validateModuleVisibility(visibilityPrograms,surfaces);
+  profile.record("resolve-exports", phaseStart);
+  const semanticFingerprints = profile.measure("fingerprints", () => fingerprintModules(graph, visibilityPrograms, surfaces));
+  phaseStart = performance.now();
   const canonical=new Map<string,string>();
   const occupied=new Set(ordered.flatMap(module=>module.source.match(/[A-Za-z_$][\w$]*/g) ?? []));
   let nextBinding=0;
@@ -315,7 +327,9 @@ export async function compileModuleGraph(graph: ModuleGraph, options: ModuleLoad
         throw new DiagnosticError([{phase:"semantic",code:"MODULE_GENERATED_EXPORT_MISSING",message:`La expansión no publicó '${name}' en el nivel superior del módulo`,span:{start:{...entry.span.start,line:entry.span.start.line+range.start-1,offset:entry.span.start.offset+range.startOffset},end:{...entry.span.end,line:entry.span.end.line+range.start-1,offset:entry.span.end.offset+range.startOffset}},hint:"Genera una declaración @etsPublish desde una llamada de nivel superior y conserva export { nombre }."}]);
       }
     };
-    const { program: ast, checker } = analyze([astOriginal],{validateExpanded:validateGeneratedExports});
+    profile.record("module-binding", phaseStart);
+    const { program: ast, checker } = analyze([astOriginal],{validateExpanded:validateGeneratedExports,profile});
+    phaseStart = performance.now();
     // Expanded calls disappear from the AST. Check their retained provenance
     // too, so expansion cannot erase an otherwise invisible generator access.
     for(const source of ast.generatedSources ?? []) {
@@ -349,6 +363,8 @@ export async function compileModuleGraph(graph: ModuleGraph, options: ModuleLoad
       const range=ranges.find(range=>range.file === source.callSpan.module);
       if(range) source.originalCallSpan={start:{...source.callSpan.start,line:source.callSpan.start.line-range.start+1,offset:source.callSpan.start.offset-range.startOffset},end:{...source.callSpan.end,line:source.callSpan.end.line-range.start+1,offset:source.callSpan.end.offset-range.startOffset}};
     }
+    profile.record("validate-expanded-modules", phaseStart);
+    phaseStart = performance.now();
     const generator = new CppGenerator(
       expression => checker.typeOf(expression),
       expression => checker.isVariadic(expression),
@@ -361,9 +377,10 @@ export async function compileModuleGraph(graph: ModuleGraph, options: ModuleLoad
     // directamente o añadir su propio include.
     generator.minimal = options.minimal ?? false;
     generator.prepareModules(ast);
+    profile.record("codegen-prepare", phaseStart);
     const headerName = "estatic_common.hpp";
     const moduleInitializers = ordered.map(module => stableInitName(module.file, baseDirectory));
-    const header = generator.generateHeader(ast, moduleInitializers);
+    const header = profile.measure("codegen-header", () => generator.generateHeader(ast, moduleInitializers));
     // V15: en vez de parsear cada módulo por separado (lo que produce ASTs
   // distintos que el type-checker no reconoce), filtramos el AST combinado
   // por rango de líneas del módulo. Así los nodos que `generateModule`
@@ -378,10 +395,10 @@ export async function compileModuleGraph(graph: ModuleGraph, options: ModuleLoad
     const moduleAst: Program = { kind: "Program", statements: moduleStatementsFromCombined, span: { start: ast.span.start, end: ast.span.end } };
     return {
       name: module.file,
-      cpp: generator.generateModule(moduleAst, ast, headerName, stableInitName(module.file, baseDirectory), index === ordered.length - 1 ? moduleInitializers : undefined),
+      cpp: profile.measure("codegen-module", () => generator.generateModule(moduleAst, ast, headerName, stableInitName(module.file, baseDirectory), index === ordered.length - 1 ? moduleInitializers : undefined), module.file),
     };
   });
-    return { ast, header, modules, moduleNames: ordered.map(m => m.file), linkFlags: generator.linkFlags, externalHeaders: generator.externalHeaders, runtimeBackends: detectRuntimeBackends(ast), transpilationCache: cacheStats };
+    return { ast, header, modules, moduleNames: ordered.map(m => m.file), linkFlags: generator.linkFlags, externalHeaders: generator.externalHeaders, runtimeBackends: detectRuntimeBackends(ast), transpilationCache: cacheStats, semanticFingerprints };
   } catch (error) {
     if (!(error instanceof DiagnosticError)) throw error;
     const diagnostics: Diagnostic[] = error.diagnostics.map(diagnostic => {

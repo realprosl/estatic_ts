@@ -63,7 +63,7 @@ Para consultar la versión instalada:
 ```bash
 etsc --version
 etsc -v
-# estatic 1.8.0 (v46)
+# estatic 1.9.0 (v47)
 ```
 
 El `estatic.config.ts` generado NO requiere que listes `-luv`, `-lssl`,
@@ -871,7 +871,9 @@ Cargando grafo de módulos...
 Build incremental (miss): 1 módulo(s) compilado(s), 0 reutilizado(s), re-enlazado, 6305ms
 ```
 
-Cache hit ~40ms vs build cold ~6s (150x speedup). El flag `--verbose` imprime tiempos por fase y diagnóstico claro del motivo del cache miss. `-v` queda reservado para mostrar la versión.
+`--verbose` imprime las duraciones medidas de lectura del grafo, restauración/parseo, resolución, checker fuente/final, `comptime`, expansión `@etsgen`, generación de cabecera/unidades, escritura, compilación y enlace. Cada build exitoso guarda `build/.estatic/cache/build-profile.json`, con los tiempos de esta ejecución, contadores de caché y motivos de cambio por módulo. `-v` queda reservado para mostrar la versión.
+
+Desde v47 no se genera el PCH que el incremental no utilizaba, se conservan los archivos generados idénticos y los hits no sobrescriben la cabecera común. El manifiesto `module-interfaces.json` registra huellas de interfaces, implementaciones y dependencias como base del futuro checker incremental; todavía no omite validaciones semánticas. Para medir un proyecto reproducible: `node --experimental-strip-types scripts/benchmark-incremental.ts` (acepta la ruta de otro checkout para comparar).
 
 ### Página web de demos auto-generada
 
@@ -992,7 +994,7 @@ npm run test:http-routing
 npm run test:e2e
 ```
 
-La última ejecución completa registrada en `status.md` pasó 1127 pruebas
+La última ejecución completa registrada en `status.md` pasó 1136 pruebas
 unitarias. El número puede cambiar al añadir casos; no se mantiene como una
 constante manual en este README.
 

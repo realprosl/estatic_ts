@@ -9,6 +9,7 @@ import { selectComptimeFunction, hasComptimeDecorator, type ComptimeFunctions, t
 import { EtsgenBudget, type EtsgenLimits } from "./codegen/etsgen-budget.ts";
 import { validateAndExpandEtsgen, etsgenGeneratedError, type EtsgenFragment, generatedEtsSpan } from "./codegen/etsgen-fragments.ts";
 import type { Program, Statement, CallExpression, Expression } from "./ast/nodes.ts";
+import { BuildProfile } from "./build/build-profile.ts";
 
 export interface CompilationResult { ast: Program; cpp: string }
 /** V15: resultado del pipeline por módulos. El header contiene todas las
@@ -308,7 +309,8 @@ function evalEtsgenPass(program:Program, resolveFunction:ComptimeFunctionResolve
   return validateAndExpandEtsgen(visit(program) as Program, fragments, true);
 }
 
-export function analyze(programs: Program[], options:{validateExpanded?:(program:Program)=>void}={}): { program: Program; checker: TypeChecker } {
+export function analyze(programs: Program[], options:{validateExpanded?:(program:Program)=>void; profile?: BuildProfile}={}): { program: Program; checker: TypeChecker } {
+  const profile = options.profile ?? new BuildProfile();
   if (!programs.length) throw new Error("No hay módulos para analizar");
   const combined: Program = { kind: "Program", statements: programs.flatMap(module => module.statements), span: { start: programs[0].span.start, end: programs.at(-1)!.span.end } };
   // Validamos primero el AST original. Sin esta pasada, el evaluator podia
@@ -317,13 +319,13 @@ export function analyze(programs: Program[], options:{validateExpanded?:(program
   // tipo de retorno del arrow; el literal concreto se valida despues.
   let sourceChecker = new TypeChecker();
   let prepared=combined;
-  try { sourceChecker.check(combined); }
+  try { profile.measure("check-source", () => sourceChecker.check(combined)); }
   catch(error) {
     if(!(error instanceof DiagnosticError)) throw error;
     if(!combined.statements.some(s=>s.kind === "FunctionDeclaration" && s.decorators?.some(d=>d.name === "etsgen"))) throw error;
-    sourceChecker=checkForExpansion(combined);
-    prepared=evalEtsgenCalls(combined,call=>sourceChecker.functionOf(call),{},options.validateExpanded);
-    sourceChecker=new TypeChecker(); sourceChecker.check(prepared);
+    sourceChecker=profile.measure("check-expansion-context", () => checkForExpansion(combined));
+    prepared=profile.measure("etsgen", () => evalEtsgenCalls(combined,call=>sourceChecker.functionOf(call),{},options.validateExpanded));
+    sourceChecker=new TypeChecker(); profile.measure("check-expanded-source", () => sourceChecker.check(prepared));
   }
 
   // V30.41: despues de validar el AST fuente, evaluamos comptime(). Una segunda
@@ -336,10 +338,11 @@ export function analyze(programs: Program[], options:{validateExpanded?:(program
   // ordinarias, así que markComptimeOnlyFunctions puede filtrar
   // las funciones @etsgen que solo se usaban estaticamente.
   const resolveFunction: ComptimeFunctionResolver = call => sourceChecker.functionOf(call);
-  const afterEtsgen = evalEtsgenCalls(evaluateComptime(prepared, undefined, resolveFunction), resolveFunction,{},options.validateExpanded);
+  const evaluated = profile.measure("comptime", () => evaluateComptime(prepared, undefined, resolveFunction));
+  const afterEtsgen = profile.measure("etsgen", () => evalEtsgenCalls(evaluated, resolveFunction,{},options.validateExpanded));
   const program: Program = { ...afterEtsgen, statements: markComptimeOnlyFunctions(afterEtsgen.statements) };
   const checker = new TypeChecker();
-  checker.check(program);
+  profile.measure("check-final", () => checker.check(program));
   return { program, checker };
 }
 
