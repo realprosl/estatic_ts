@@ -8,6 +8,7 @@ import { HELPER_METADATA } from "./helpers.ts";
 import { registerBuiltins } from "./builtin-registry.ts";
 import { exactIntegerLiteral, I64_MIN, I64_MAX, U64_MAX } from "../types/integer64.ts";
 import { ClosureReturnSafety, isClosureReturnCarrier } from "./closure-return-safety.ts";
+import { semanticNodes, type BodyAnnotations, type CheckStage, type SemanticCheckCache } from "./semantic-cache.ts";
 
 interface ClosureContext {
   node: ArrowFunctionExpression;
@@ -345,6 +346,7 @@ function levenshtein(a: string, b: string): number {
 }
 
 export class TypeChecker {
+  private semanticBodyCache?: { cache: SemanticCheckCache; stage: CheckStage };
   // V30.14.1: programa actual + mapa de type aliases post-check.
   // El codegen usa esto para expandir type arguments en generic types
   // (e.g. `Array<SvgChild>` -> `Array<Line | MultiLine>`).
@@ -482,7 +484,8 @@ export class TypeChecker {
     return parameters.map(parameter => parameter.name);
   }
 
-  check(program: Program): void {
+  check(program: Program, bodyCache?: { cache: SemanticCheckCache; stage: CheckStage }): void {
+    this.semanticBodyCache = bodyCache;
     this.closureReturns = new ClosureReturnSafety();
     this.currentProgram = program;
     const global = new Scope();
@@ -608,6 +611,45 @@ export class TypeChecker {
 
   /** Selected source declaration for static evaluation, without AST back-links. */
   functionOf(expression: Expression): FunctionDeclaration | undefined { return this.selectedFunctions.get(expression); }
+
+  /** Internal persistent-cache adapter. Locations stay on the current AST. */
+  captureBodyAnnotations(node: FunctionDeclaration): BodyAnnotations {
+    const result: BodyAnnotations = { types: [], runtime: [], constants: [], selected: [] };
+    const names = ["number", "string", "boolean", "void"];
+    semanticNodes(node.body).forEach((value, index) => {
+      const expression = value as Expression;
+      const selected = this.selectedFunctions.get(expression);
+      const selectedIndex = selected ? this.currentProgram!.statements.indexOf(selected) : -1;
+      const type = names.indexOf(this.types.get(expression) ?? "");
+      result.types.push(value.kind.endsWith("Expression") && type < 0 ? -2 : type);
+      if (value.fromRuntime !== undefined) result.runtime.push([index, value.fromRuntime]);
+      if (value.constValue !== undefined) result.constants.push([index, value.constValue]);
+      if (selectedIndex >= 0) result.selected.push([index, selectedIndex]);
+    });
+    return result;
+  }
+
+  restoreBodyAnnotations(node: FunctionDeclaration, data: BodyAnnotations): boolean {
+    const nodes = semanticNodes(node.body);
+    if (!data || !Array.isArray(data.types) || nodes.length !== data.types.length || !Array.isArray(data.runtime) || !Array.isArray(data.constants) || !Array.isArray(data.selected)) return false;
+    if (data.types.some(type => !Number.isInteger(type) || type < -1 || type > 3)) return false;
+    const validIndex = (index: number): boolean => Number.isInteger(index) && index >= 0 && index < nodes.length;
+    if (data.runtime.some(([index, value]) => !validIndex(index) || typeof value !== "boolean") || data.constants.some(([index]) => !validIndex(index))) return false;
+    for (const [index, declaration] of data.selected) {
+      const selected = this.currentProgram?.statements[declaration];
+      if (!validIndex(index) || nodes[index].kind !== "CallExpression" || selected?.kind !== "FunctionDeclaration" || selected.name !== nodes[index].callee) return false;
+    }
+    const names = ["number", "string", "boolean", "void"];
+    const resolved = names.map(type => toResolvedType(type));
+    for (let index = 0; index < nodes.length; index++) {
+      const type = data.types[index];
+      if (type >= 0) { this.types.set(nodes[index], names[type]); nodes[index].resolvedType = resolved[type]; }
+    }
+    for (const [index, value] of data.runtime) nodes[index].fromRuntime = value;
+    for (const [index, value] of data.constants) nodes[index].constValue = value;
+    for (const [index, selected] of data.selected) this.selectedFunctions.set(nodes[index], this.currentProgram!.statements[selected] as FunctionDeclaration);
+    return true;
+  }
 
   private dispatchBuiltin(global: string, methods: Record<string, { params: TypeName[]; returnType: TypeName }>, node: { method: string; args: Expression[]; span: import("../core/span.ts").Span }, scope: Scope): TypeName {
     const signature = methods[node.method];
@@ -1673,7 +1715,11 @@ export class TypeChecker {
           const previousReturn = this.currentReturn; const previousAsync = this.currentAsync;
           this.currentReturn = node.async && isPromiseType(node.returnType) ? promiseResult(node.returnType) : node.returnType;
           this.currentAsync = node.async;
-          this.statement(node.body, local);
+          const cached = this.semanticBodyCache;
+          if (!cached || !cached.cache.restore(node, this, cached.stage)) {
+            this.statement(node.body, local);
+            cached?.cache.remember(node, this, cached.stage);
+          }
           this.currentReturn = previousReturn; this.currentAsync = previousAsync;
         });
         break;

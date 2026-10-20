@@ -10,6 +10,7 @@ import { EtsgenBudget, type EtsgenLimits } from "./codegen/etsgen-budget.ts";
 import { validateAndExpandEtsgen, etsgenGeneratedError, type EtsgenFragment, generatedEtsSpan } from "./codegen/etsgen-fragments.ts";
 import type { Program, Statement, CallExpression, Expression } from "./ast/nodes.ts";
 import { BuildProfile } from "./build/build-profile.ts";
+import type { SemanticCheckCache } from "./semantic/semantic-cache.ts";
 
 export interface CompilationResult { ast: Program; cpp: string }
 /** V15: resultado del pipeline por módulos. El header contiene todas las
@@ -309,7 +310,7 @@ function evalEtsgenPass(program:Program, resolveFunction:ComptimeFunctionResolve
   return validateAndExpandEtsgen(visit(program) as Program, fragments, true);
 }
 
-export function analyze(programs: Program[], options:{validateExpanded?:(program:Program)=>void; profile?: BuildProfile}={}): { program: Program; checker: TypeChecker } {
+export function analyze(programs: Program[], options:{validateExpanded?:(program:Program)=>void; profile?: BuildProfile; semanticCache?: SemanticCheckCache}={}): { program: Program; checker: TypeChecker } {
   const profile = options.profile ?? new BuildProfile();
   if (!programs.length) throw new Error("No hay módulos para analizar");
   const combined: Program = { kind: "Program", statements: programs.flatMap(module => module.statements), span: { start: programs[0].span.start, end: programs.at(-1)!.span.end } };
@@ -319,7 +320,7 @@ export function analyze(programs: Program[], options:{validateExpanded?:(program
   // tipo de retorno del arrow; el literal concreto se valida despues.
   let sourceChecker = new TypeChecker();
   let prepared=combined;
-  try { profile.measure("check-source", () => sourceChecker.check(combined)); }
+  try { profile.measure("check-source", () => sourceChecker.check(combined, options.semanticCache ? { cache: options.semanticCache, stage: "source" } : undefined)); }
   catch(error) {
     if(!(error instanceof DiagnosticError)) throw error;
     if(!combined.statements.some(s=>s.kind === "FunctionDeclaration" && s.decorators?.some(d=>d.name === "etsgen"))) throw error;
@@ -342,7 +343,7 @@ export function analyze(programs: Program[], options:{validateExpanded?:(program
   const afterEtsgen = profile.measure("etsgen", () => evalEtsgenCalls(evaluated, resolveFunction,{},options.validateExpanded));
   const program: Program = { ...afterEtsgen, statements: markComptimeOnlyFunctions(afterEtsgen.statements) };
   const checker = new TypeChecker();
-  profile.measure("check-final", () => checker.check(program));
+  profile.measure("check-final", () => checker.check(program, options.semanticCache ? { cache: options.semanticCache, stage: "final" } : undefined));
   return { program, checker };
 }
 

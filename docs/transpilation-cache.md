@@ -24,6 +24,11 @@ nuevo programa siguen siendo globales. Aun así, la comparación de C++ y header
 recompila únicamente los `.o` realmente afectados. Convertir el checker a
 interfaces semánticas por módulo sería el siguiente nivel de granularidad.
 
+v48 añade una primera restauración de cuerpos semánticos para programas dentro
+de una cobertura escalar cerrada. Las demás construcciones conservan el análisis
+global descrito arriba. Véase [`semantic-cache.md`](./semantic-cache.md) para
+las claves, contadores, fallbacks y mediciones reales.
+
 ## Diagnóstico
 
 `etsc build --verbose` muestra hits/misses del escaneo, ASTs reutilizados y si
