@@ -6,6 +6,19 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v47 (`estatic 1.9.0`): perfil por fase en `build-profile.json` y `--verbose`,
+  separando checker fuente/final, comptime, expansión ETS, codegen y compilación
+  nativa. Los hits informan sólo trabajo de la ejecución actual. Manifiesto de
+  interfaces, cuerpos, dependencias y motivos de cambio, con propagación por
+  reexports y tratamiento conservador de genéricos/generadores; es metadato de
+  planificación y no permite omitir el checker todavía.
+- Retirada la generación de PCH sin consumidores. Preservados archivos C++,
+  fragmentos ETS y mapas idénticos; un hit conserva la cabecera común original
+  y restaura el header si falta. Las comprobaciones de existencia usan `stat`
+  en vez de leer binarios y objetos enteros. Benchmark reproducible para builds
+  en frío, hits, edición de cuerpo y cambios de flags. Nueve regresiones nuevas;
+  suite estable acumulada: 1136/1136. Ver `docs/transpilation-cache.md`.
+
 - Caché persistente anterior al `.o`: escaneo de imports/exports y AST por
   contenido de módulo, más snapshots completas de transpilación. El incremental
   carga el grafo una sola vez; cambiar un archivo sólo vuelve a escanear y

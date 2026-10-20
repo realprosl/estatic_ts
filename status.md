@@ -28,12 +28,17 @@ Las declaraciones del editor tienen una única fuente canónica en
 `types/estatic.d.ts`. `etsc init` la copia y `etsc update-types` actualiza
 proyectos existentes con respaldo `.bak`. El registro semántico y el archivo
 se comprueban mediante una regresión automática. La versión visible por CLI es
-`estatic 1.8.0 (v46)` mediante `--version` o `-v`; verbose usa `--verbose`.
+`estatic 1.9.0 (v47)` mediante `--version` o `-v`; verbose usa `--verbose`.
+
+El incremental informa tiempos reales por fase y registra interfaces/dependencias
+por módulo para planificar invalidaciones. El checker sigue siendo global.
+Retirado el PCH no utilizado y preservados los artefactos idénticos, incluida
+la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
 ## Verificación conocida
 
 - La última ejecución completa del conjunto unitario estable realizada durante
-  esta revisión pasó **1127/1127 pruebas**.
+  esta revisión pasó **1136/1136 pruebas**.
 - El proyecto modular de ejemplo `examples/todo-project/` pasó **8/8**
   comprobaciones de integración.
 - Las correcciones de `Timer` y `FsWatcher` tienen regresiones específicas.
