@@ -50,5 +50,5 @@ export function getTs2cppRevision(): number | undefined {
 export function getTs2cppVersionLabel(): string {
   const version = getTs2cppVersion();
   const revision = getTs2cppRevision();
-  return revision === undefined ? `Ts2cpp ${version}` : `Ts2cpp ${version} (v${revision})`;
+  return revision === undefined ? `estatic ${version}` : `estatic ${version} (v${revision})`;
 }

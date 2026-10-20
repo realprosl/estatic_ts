@@ -3,10 +3,12 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rename, writeFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { dirname, join, basename } from "node:path";
+import { dirname, join } from "node:path";
 import type { ResolvedConfig } from "../config/project-config.ts";
-import { compileFile, loadModuleGraph } from "../modules/module-loader.ts";
+import { compileModuleGraph, loadModuleGraph, type ModuleCompilationResult, type ModuleGraph } from "../modules/module-loader.ts";
 import { computeModuleId, assertUniqueIdentities } from "../modules/module-identity.ts";
+import { getTs2cppRevision, getTs2cppVersion } from "../core/ts2cpp-version.ts";
+import type { GeneratedSource } from "../core/span.ts";
 
 declare const process: { stderr: { write: (data: string) => void }; env: Record<string, string | undefined>; stdout: { write: (data: string) => void } };
 declare const Buffer: { byteLength: (data: string) => number };
@@ -34,6 +36,9 @@ export interface IncrementalBuildResult {
   durationMs: number;
   /** Resultado de la caché: 'hit' (todo reutilizado), 'miss' (regenerado), 'partial' (algunos módulos). */
   cacheResult: "hit" | "miss" | "partial";
+  /** Reutilización previa a C++: snapshot completa o ASTs de módulos sin cambios. */
+  transpilationCache: "hit" | "partial" | "miss";
+  parsedModules: { reused: number; parsed: number };
 }
 
 /** Opciones del build incremental. */
@@ -87,6 +92,7 @@ class BuildProgress {
  */
 function globalDigest(config: ResolvedConfig, runtimeDigest: string): string {
   const hash = createHash("sha256");
+  hash.update(`ts2cpp:${getTs2cppVersion()}:${getTs2cppRevision() ?? "dev"}\x00`);
   for (const flag of [...config.compiler.flags].sort()) hash.update("C:" + flag + "\x00");
   for (const flag of [...config.compiler.linkFlags].sort()) hash.update("L:" + flag + "\x00");
   for (const lib of [...config.linkLibraries].sort()) hash.update("lib:" + lib + "\x00");
@@ -216,6 +222,53 @@ async function fileExists(path: string): Promise<boolean> {
   catch { return false; }
 }
 
+const TRANSPILATION_CACHE_VERSION = 1;
+interface CachedTranspilation {
+  version: number;
+  header: string;
+  modules: { name: string; cpp: string }[];
+  moduleNames: string[];
+  linkFlags: string[];
+  externalHeaders: string[];
+  runtimeBackends: ModuleCompilationResult["runtimeBackends"];
+  generatedSources: GeneratedSource[];
+}
+
+function transpilationFingerprint(graph: ModuleGraph): string {
+  const hash = createHash("sha256");
+  hash.update(`transpilation-cache:${TRANSPILATION_CACHE_VERSION}\0`);
+  hash.update(`compiler:${getTs2cppVersion()}:${getTs2cppRevision() ?? "dev"}\0`);
+  hash.update(`base:${graph.baseDirectory}\0entry:${graph.entry}\0`);
+  for (const module of graph.modules) {
+    hash.update(`module:${module.file}\0${module.hash}\0${module.source}\0`);
+    hash.update(JSON.stringify(module.imports) + "\0");
+  }
+  return hash.digest("hex");
+}
+
+function validCachedTranspilation(value: unknown, graph: ModuleGraph): value is CachedTranspilation {
+  if (!value || typeof value !== "object") return false;
+  const cached = value as Partial<CachedTranspilation>;
+  return cached.version === TRANSPILATION_CACHE_VERSION
+    && typeof cached.header === "string"
+    && Array.isArray(cached.modules)
+    && Array.isArray(cached.moduleNames)
+    && cached.moduleNames.length === graph.modules.length
+    && cached.moduleNames.every((name, index) => name === graph.modules[index]?.file)
+    && cached.modules.every(module => typeof module?.name === "string" && typeof module?.cpp === "string")
+    && Array.isArray(cached.linkFlags)
+    && Array.isArray(cached.externalHeaders)
+    && Array.isArray(cached.generatedSources)
+    && !!cached.runtimeBackends
+    && ["libuv", "curl", "tls", "ioUring"].every(name => typeof (cached.runtimeBackends as unknown as Record<string, unknown>)[name] === "boolean");
+}
+
+async function publishJsonAtomic(path: string, value: unknown): Promise<void> {
+  const temporary = `${path}.${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`;
+  await writeFile(temporary, JSON.stringify(value), "utf8");
+  await rename(temporary, path);
+}
+
 /**
  * Construye (o reutiliza) un proyecto Estatic de forma incremental.
  *
@@ -232,6 +285,11 @@ async function fileExists(path: string): Promise<boolean> {
 export async function buildIncremental(config: ResolvedConfig, compilerRoot: string, options: IncrementalBuildOptions = {}): Promise<IncrementalBuildResult> {
   const progress = new BuildProgress(options.verbose ?? false);
   if (options.verbose) process.stderr.write(`   Cargando grafo de módulos...\n`);
+  const generatedDir = config.incremental.generatedDirectory;
+  const cacheDir = config.incremental.cacheDirectory;
+  const transpilationDir = join(cacheDir, "transpilation");
+  await mkdir(generatedDir, { recursive: true });
+  await mkdir(transpilationDir, { recursive: true });
 
   // V30.6.0: el pre-compile de los .o del runtime ahora lo hace
   // `scripts/postinstall.sh` (llamado por `npm install` automaticamente).
@@ -255,13 +313,11 @@ export async function buildIncremental(config: ResolvedConfig, compilerRoot: str
     moduleRoots: config.moduleRoots,
     aliases: config.aliases,
     baseDirectory: config.baseDirectory,
+    transpilationCacheDirectory: transpilationDir,
   });
-  if (options.verbose) progress.log(`${graph.modules.length} módulo(s) cargado(s)`);
-
-  const generatedDir = config.incremental.generatedDirectory;
-  const cacheDir = config.incremental.cacheDirectory;
-  await mkdir(generatedDir, { recursive: true });
-  await mkdir(cacheDir, { recursive: true });
+  if (options.verbose) progress.log(`${graph.modules.length} módulo(s) cargado(s); sintaxis: ${graph.frontendCache?.syntaxHits ?? 0} hit(s), ${graph.frontendCache?.syntaxMisses ?? 0} miss(es)`);
+  const transpilationKey = transpilationFingerprint(graph);
+  const transpilationPath = join(transpilationDir, `${transpilationKey}.json`);
 
   // 2) Digests: el del runtime depende del árbol runtime/ del compilador,
   // y el global mezcla flags + runtime. Cambia ⇒ toda la caché se invalida.
@@ -331,8 +387,8 @@ export async function buildIncremental(config: ResolvedConfig, compilerRoot: str
     progress.warn(`Cache global invalidado (runtime/flags cambiaron: ${previousGlobalDigest.slice(0, 8)}... → ${digest.slice(0, 8)}...)`);
   }
 
-  // Cabecera común: estable mientras el digest global no cambie. La
-  // reescribimos siempre (es barata) para reflejar el digest actual.
+  // Placeholder temprano: el header canónico producido por el codegen se
+  // escribe después de restaurar/generar la snapshot de transpilación.
   await writeFile(headerPath, `// Cabecera común generada por estatic-ts-cpp
 // digest=${digest}
 #include "ets_runtime.hpp"
@@ -388,6 +444,8 @@ export async function buildIncremental(config: ResolvedConfig, compilerRoot: str
         header: headerPath,
         durationMs: progress.totalElapsed(),
         cacheResult: "hit",
+        transpilationCache: "hit",
+        parsedModules: { reused: graph.modules.length, parsed: 0 },
       };
     }
     if (options.verbose) progress.warn(`Cache hit pero artefactos ausentes (binary=${binaryStillExists}/${binarySize}B, objects=${allObjectsPresent}); regenerando`);
@@ -398,22 +456,63 @@ export async function buildIncremental(config: ResolvedConfig, compilerRoot: str
     progress.warn(`Cache miss: huella del programa cambió (anterior ${previousManifest.slice(0, 8)}..., nueva ${programFingerprint.slice(0, 8)}...)`);
   }
 
-  // 4) Regenerar el header + `.cpp` por módulo mediante el pipeline canónico.
-  //    Esto vuelve a parsear + chequear tipos + emitir código. Cualquier
-  //    diagnóstico se propaga como `DiagnosticError` antes de tocar la
-  //    caché, así un error de tipos no deja un `.o` a medias.
-  progress.beginPhase("Regenerando .cpp (parse + type-check + codegen)");
-  const result = await compileFile(config.entry, {
-    moduleRoots: config.moduleRoots,
-    aliases: config.aliases,
-    baseDirectory: config.baseDirectory,
-  });
+  // 4) Restaurar la instantánea de transpilación o ejecutar el frontend.
+  // La instantánea está separada de los `.o`: cambiar flags/runtime obliga a
+  // recompilar C++, pero no a repetir parse, type-check, comptime ni codegen.
+  // En un miss, compileModuleGraph reutiliza por contenido los AST de todos
+  // los módulos que no cambiaron y no vuelve a cargar/resolver el grafo.
+  let cachedTranspilation: CachedTranspilation | undefined;
+  try {
+    const candidate: unknown = JSON.parse(await readFile(transpilationPath, "utf8"));
+    if (validCachedTranspilation(candidate, graph)) cachedTranspilation = candidate;
+  } catch {
+    // Miss normal o entrada corrupta: se reconstruye y reemplaza.
+  }
+  let result: ModuleCompilationResult;
+  let transpilationCache: IncrementalBuildResult["transpilationCache"];
+  let parsedModules: IncrementalBuildResult["parsedModules"];
+  if (cachedTranspilation) {
+    progress.beginPhase("Restaurando snapshot de transpilación");
+    const origin = { offset: 0, line: 1, column: 1 };
+    result = {
+      ...cachedTranspilation,
+      ast: { kind: "Program", statements: [], span: { start: origin, end: origin }, generatedSources: cachedTranspilation.generatedSources },
+      transpilationCache: { parsedHits: graph.modules.length, parsedMisses: 0 },
+    };
+    transpilationCache = "hit";
+    parsedModules = { reused: graph.modules.length, parsed: 0 };
+    if (options.verbose) progress.log(`Snapshot hit: parse, type-check, comptime y codegen reutilizados`);
+  } else {
+    progress.beginPhase("Regenerando .cpp (frontend incremental + type-check + codegen)");
+    result = await compileModuleGraph(graph, {
+      moduleRoots: config.moduleRoots,
+      aliases: config.aliases,
+      baseDirectory: config.baseDirectory,
+      transpilationCacheDirectory: transpilationDir,
+    });
+    const stats = result.transpilationCache ?? { parsedHits: 0, parsedMisses: graph.modules.length };
+    parsedModules = { reused: stats.parsedHits, parsed: stats.parsedMisses };
+    transpilationCache = stats.parsedHits > 0 ? "partial" : "miss";
+    const artifact: CachedTranspilation = {
+      version: TRANSPILATION_CACHE_VERSION,
+      header: result.header,
+      modules: result.modules,
+      moduleNames: result.moduleNames,
+      linkFlags: result.linkFlags,
+      externalHeaders: result.externalHeaders,
+      runtimeBackends: result.runtimeBackends,
+      generatedSources: result.ast.generatedSources ?? [],
+    };
+    await publishJsonAtomic(transpilationPath, artifact);
+    if (options.verbose) progress.log(`AST cache: ${stats.parsedHits} reutilizado(s), ${stats.parsedMisses} parseado(s)`);
+  }
   await mkdir(dirname(cppPath), { recursive: true });
   // V15: escribimos el header común + un `.cpp` por módulo (modo multi).
   const generatedSources=result.ast.generatedSources ?? [];
   const sourceDirectory=join(generatedDir,"etsgen");
   if(generatedSources.length) await writeGeneratedSources(generatedSources,sourceDirectory);
-  await writeMappedCpp(result.header,headerPath,generatedSources,sourceDirectory);
+  const mappedHeader = await writeMappedCpp(result.header,headerPath,generatedSources,sourceDirectory);
+  const headerHash = createHash("sha256").update(mappedHeader).digest("hex").slice(0, 16);
   const mapArtifacts=generatedSources.length ? [headerPath,headerPath+".map.json",join(sourceDirectory,"manifest.json"),...generatedSources.map((_,index)=>join(sourceDirectory,`etsgen-${index}.ets`))] : [];
   const compiled: string[] = [];
   const reused: string[] = [];
@@ -441,7 +540,7 @@ export async function buildIncremental(config: ResolvedConfig, compilerRoot: str
     // digest global. Asi, si el manifest global se corrompe o se
     // escribe antes de tiempo, un objeto viejo no se reutiliza bajo
     // una nueva configuracion (el cpp hash y el digest van juntos).
-    const moduleManifestValue = `${moduleCppHash}|${digest}`;
+    const moduleManifestValue = `${moduleCppHash}|${headerHash}|${digest}`;
     const previousModuleManifest = await readFile(moduleManifestPath, "utf8").catch(() => "");
     const objectExists = await fileExists(moduleObjectPath);
     // Reutilizamos el .o SOLO si (a) el hash del .cpp no cambió Y (b) el
@@ -544,5 +643,7 @@ export async function buildIncremental(config: ResolvedConfig, compilerRoot: str
     header: headerPath,
     durationMs: progress.totalElapsed(),
     cacheResult: compiled.length === 0 && !linked ? "hit" : (reused.length > 0 ? "partial" : "miss"),
+    transpilationCache,
+    parsedModules,
   };
 }

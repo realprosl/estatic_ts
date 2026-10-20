@@ -1,6 +1,6 @@
 # Ts2cpp — Estado actual
 
-Última revisión documental: **2026-10-19**. Este archivo es una fotografía
+Última revisión documental: **2026-10-20**. Este archivo es una fotografía
 del repositorio, no un historial de sesiones. El historial vive en
 [`CHANGELOG.md`](./CHANGELOG.md) y en [`docs/historical/`](./docs/historical/).
 
@@ -22,18 +22,18 @@ producción concurrente.
 | Runtime async/libuv | Experimental | Lifetime de handles y frames de `race` corregido; falta sanitizers y cancelación cooperativa |
 | HTTP cpp-httplib | Funcional con límites básicos | Cola, workers, cuerpo y timeouts acotados; falta carga sostenida y API de configuración `.ets` |
 | HTTP Drogon | Integrado, validación parcial | Caché ilimitada eliminada; falta validar el servidor completo con Drogon |
-| Tooling y build incremental | Funcional | Falta CI reproducible en el repositorio |
+| Tooling y build incremental | Funcional | Caché persistente de sintaxis, AST, snapshot de transpilación y `.o`; falta type-check incremental por interfaz y CI reproducible |
 
 Las declaraciones del editor tienen una única fuente canónica en
 `types/estatic.d.ts`. `etsc init` la copia y `etsc update-types` actualiza
 proyectos existentes con respaldo `.bak`. El registro semántico y el archivo
 se comprueban mediante una regresión automática. La versión visible por CLI es
-`Ts2cpp 1.7.0 (v45)` mediante `--version` o `-v`; verbose usa `--verbose`.
+`estatic 1.8.0 (v46)` mediante `--version` o `-v`; verbose usa `--verbose`.
 
 ## Verificación conocida
 
 - La última ejecución completa del conjunto unitario estable realizada durante
-  esta revisión pasó **1125/1125 pruebas**.
+  esta revisión pasó **1127/1127 pruebas**.
 - El proyecto modular de ejemplo `examples/todo-project/` pasó **8/8**
   comprobaciones de integración.
 - Las correcciones de `Timer` y `FsWatcher` tienen regresiones específicas.

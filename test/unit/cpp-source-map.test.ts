@@ -6,7 +6,7 @@ import {resolve,join,dirname} from "node:path";
 import {fileURLToPath} from "node:url";
 import {spawnSync,execFileSync} from "node:child_process";
 import {compile} from "../../src/compiler.ts";
-import {compileFile} from "../../src/modules/module-loader.ts";
+import {compileFile,loadModuleGraph} from "../../src/modules/module-loader.ts";
 import {mapCppSources,markCppOrigin} from "../../src/codegen/cpp-source-map.ts";
 import {writeGeneratedSources,writeMappedCpp} from "../../src/codegen/etsgen-sources.ts";
 import {buildIncremental} from "../../src/build/incremental-builder.ts";
@@ -93,10 +93,34 @@ test("cpp maps native: incremental conserva y reconstruye artefactos de depuraci
  writeFileSync(join(compiler,"runtime/ets_runtime.hpp"),`#include ${JSON.stringify(join(root,"runtime/ets_runtime.hpp"))}\n`);
  writeFileSync(join(dir,"main.ets"),generator('print(7);')+"emit();");
  const configPath=join(dir,"config.ts");writeFileSync(configPath,`export default {entry:"main.ets",compiler:{enabled:true,flags:["-std=c++20","-O0","-pthread","-fno-exceptions",${JSON.stringify('-I'+root)}]}};`);const config=(await loadConfig(configPath))!;
- const first=await buildIncremental(config,compiler);assert.equal(first.compiled.length,1);assert.equal(execFileSync(first.binary,{encoding:"utf8"}),"7\n");assert.equal((await buildIncremental(config,compiler)).cacheResult,"hit");
- const ets=join(config.incremental.generatedDirectory,"etsgen/etsgen-0.ets");unlinkSync(ets);await buildIncremental(config,compiler);assert.ok(existsSync(ets));
+ const first=await buildIncremental(config,compiler);assert.equal(first.compiled.length,1);assert.equal(first.transpilationCache,"miss");assert.equal(execFileSync(first.binary,{encoding:"utf8"}),"7\n");assert.equal((await buildIncremental(config,compiler)).cacheResult,"hit");
+ const ets=join(config.incremental.generatedDirectory,"etsgen/etsgen-0.ets");unlinkSync(ets);const restored=await buildIncremental(config,compiler);assert.ok(existsSync(ets));assert.equal(restored.transpilationCache,"hit");assert.deepEqual(restored.parsedModules,{reused:1,parsed:0});
 }));
 
 test("cpp maps: recompilar sin expansiones elimina el sidecar anterior",async()=>temporary(async dir=>{
  const file=join(dir,"app.cpp");await writeGeneratedSources(sources,dir);await writeMappedCpp(markCppOrigin(generated(),"int x;"),file,sources,dir);assert.ok(existsSync(file+".map.json"));await writeMappedCpp("int main(){}",file,[],dir);assert.equal(existsSync(file+".map.json"),false);assert.equal(readFileSync(file,"utf8"),"int main(){}");
+}));
+
+test("transpilation cache: sólo vuelve a escanear y parsear el módulo modificado",async()=>temporary(async dir=>{
+ const cache=join(dir,"cache"),options={baseDirectory:dir,transpilationCacheDirectory:cache};
+ writeFileSync(join(dir,"left.ets"),"export function left():number{return 1;}");
+ writeFileSync(join(dir,"right.ets"),"export function right():number{return 2;}");
+ writeFileSync(join(dir,"main.ets"),'import {left} from "./left";import {right} from "./right";print(left()+right());');
+ const cold=await compileFile(join(dir,"main.ets"),options);assert.deepEqual(cold.transpilationCache,{parsedHits:0,parsedMisses:3});
+ const warmGraph=await loadModuleGraph(join(dir,"main.ets"),options);assert.deepEqual(warmGraph.frontendCache,{syntaxHits:3,syntaxMisses:0});
+ const warm=await compileFile(join(dir,"main.ets"),options);assert.deepEqual(warm.transpilationCache,{parsedHits:3,parsedMisses:0});
+ writeFileSync(join(dir,"right.ets"),"export function right():number{return 20;}");
+ const changedGraph=await loadModuleGraph(join(dir,"main.ets"),options);assert.deepEqual(changedGraph.frontendCache,{syntaxHits:2,syntaxMisses:1});
+ const changed=await compileFile(join(dir,"main.ets"),options);assert.deepEqual(changed.transpilationCache,{parsedHits:2,parsedMisses:1});
+ assert.match(changed.modules.find(module=>module.name.endsWith("right.ets"))!.cpp,/20/);
+}));
+
+test("incremental: editar una implementación reutiliza frontend y objeto del módulo intacto",async()=>temporary(async dir=>{
+ const compiler=join(dir,"compiler");mkdirSync(join(compiler,"build"),{recursive:true});mkdirSync(join(compiler,"runtime"));
+ writeFileSync(join(compiler,"build/runtime_ets_libuv.o"),"");writeFileSync(join(compiler,"runtime/ets_runtime.hpp"),`#include ${JSON.stringify(join(root,"runtime/ets_runtime.hpp"))}\n`);
+ const library=join(dir,"lib.ets");writeFileSync(library,"export function answer():number{return 7;}");writeFileSync(join(dir,"main.ets"),'import {answer} from "./lib";print(answer());');
+ const configPath=join(dir,"config.ts");writeFileSync(configPath,`export default {entry:"main.ets",compiler:{enabled:true,flags:["-std=c++20","-O0","-pthread","-fno-exceptions",${JSON.stringify('-I'+root)}]}};`);const config=(await loadConfig(configPath))!;
+ const cold=await buildIncremental(config,compiler);assert.equal(cold.compiled.length,2);assert.equal(execFileSync(cold.binary,{encoding:"utf8"}),"7\n");
+ writeFileSync(library,"export function answer():number{return 9;}");
+ const changed=await buildIncremental(config,compiler);assert.equal(changed.transpilationCache,"partial");assert.deepEqual(changed.parsedModules,{reused:1,parsed:1});assert.equal(changed.compiled.length,1);assert.equal(changed.reused.length,1);assert.equal(execFileSync(changed.binary,{encoding:"utf8"}),"9\n");
 }));
