@@ -6,6 +6,21 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v50 (`estatic 1.12.0`): primer bloque del parser de bootstrap escrito en
+  Estatic, con AST en arena, tokens locales y diagnósticos recuperables.
+  Expresiones, declaraciones simples, funciones, clases/interfaces, tipos y
+  control de flujo se validan por separado del lexer. No es todavía la gramática
+  completa: imports/exports especiales, enum/union/switch, templates y otras
+  construcciones quedan pendientes y documentadas, con diagnóstico.
+- `npm run bootstrap:parser` transpila, compila C++20 y ejecuta una demostración
+  con tokens preparados. 105 pruebas nativas comparan estructura con stage 0,
+  analizan los fuentes completos del lexer y del parser y verifican límites,
+  recuperación y aislamiento. No se integra todavía una cadena nativa de fases.
+  Suite estable: 1300/1300, incluida una regresión nueva de codegen.
+- Corregida la detección de mutación de `this` a través de índices en codegen:
+  asignaciones y operaciones de colección anidadas ya no generan métodos
+  incorrectamente `const`. La prueba nativa conserva los getters `const`.
+
 - v49 (`estatic 1.11.0`): reinicio de `bootstrap/` con un lexer autónomo en
   Estatic, tipos locales, tokens con posiciones y diagnósticos recuperables.
   `inspectTokens` devuelve JSON y el driver permite observar el resultado.

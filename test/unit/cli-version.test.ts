@@ -20,16 +20,16 @@ function cli(flag: "--version" | "-v") {
 }
 
 test("cli version: package y revisión exponen la versión actual", () => {
-  assert.equal(getTs2cppVersion(), "1.11.0");
-  assert.equal(getTs2cppRevision(), 49);
-  assert.equal(getTs2cppVersionLabel(), "estatic 1.11.0 (v49)");
+  assert.equal(getTs2cppVersion(), "1.12.0");
+  assert.equal(getTs2cppRevision(), 50);
+  assert.equal(getTs2cppVersionLabel(), "estatic 1.12.0 (v50)");
 });
 
 for (const flag of ["--version", "-v"] as const) {
   test(`cli version: ${flag}`, () => {
     const result = cli(flag);
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(result.stdout.trim(), "estatic 1.11.0 (v49)");
+    assert.equal(result.stdout.trim(), "estatic 1.12.0 (v50)");
     assert.equal(result.stderr, "");
   });
 }

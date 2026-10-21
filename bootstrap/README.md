@@ -61,7 +61,8 @@ CRLF, whitespace Unicode, recuperación tras errores y posiciones. Hay 40
 fuentes ASCII generadas de forma determinista dentro de una de las pruebas.
 Otra prueba tokeniza el propio `lexer.ets` y compara todos sus tokens con el
 lexer TypeScript de arranque. La prueba de aislamiento exige exactamente dos
-fuentes ETS: lexer y demo.
+fuentes ETS en su carpeta: lexer y demo. El grafo compilado sigue teniendo
+exactamente esos dos módulos aunque haya otros pasos en `bootstrap/`.
 
 El uso de TypeScript aquí se limita a arrancar la compilación y verificar el
 resultado. El algoritmo que reconoce los tokens se ejecuta como código nativo
@@ -85,5 +86,12 @@ generado desde Estatic, no como una copia JavaScript del lexer.
 - Este paso demuestra el lexer escrito y ejecutado mediante el dialecto.
   El compilador completo aún no se autoaloja.
 
-El siguiente módulo se acordará después de este lexer; aquí todavía no hay
-parser ni integración entre fases.
+## Paso 2: parser (en curso)
+
+El [parser](./parser/README.md) tiene su propio AST local, tokens de entrada,
+driver y pruebas nativas. No importa el lexer. `npm run bootstrap:parser`
+ejecuta el ejemplo con tokens preparados; `npm run test:bootstrap:parser`
+valida este módulo por separado. El primer bloque analiza expresiones,
+declaraciones, funciones, clases y control de flujo, incluidos los fuentes ETS
+del lexer y del propio parser. Quedan construcciones pendientes documentadas;
+todavía no se integra una cadena nativa entre fases ni se añade el checker.
