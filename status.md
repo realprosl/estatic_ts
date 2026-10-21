@@ -29,7 +29,7 @@ Las declaraciones del editor tienen una única fuente canónica en
 `types/estatic.d.ts`. `etsc init` la copia y `etsc update-types` actualiza
 proyectos existentes con respaldo `.bak`. El registro semántico y el archivo
 se comprueban mediante una regresión automática. La versión visible por CLI es
-`estatic 1.12.0 (v50)` mediante `--version` o `-v`; verbose usa `--verbose`.
+`estatic 1.13.0 (v51)` mediante `--version` o `-v`; verbose usa `--verbose`.
 
 El incremental informa tiempos reales por fase y registra interfaces/dependencias
 por módulo para planificar invalidaciones. v48 restaura cuerpos de funciones
@@ -41,14 +41,17 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
 ## Verificación conocida
 
-- La última ejecución completa del conjunto unitario estable realizada durante
-  esta revisión pasó **1300/1300 pruebas**.
+- La verificación del conjunto unitario estable realizada durante esta revisión
+  pasó **1369/1369 pruebas**, por bloques de tests unitarios y bootstrap.
 - El lexer de `bootstrap/lexer/` pasa **44/44** pruebas nativas, incluidas
   comparaciones con stage 0, su propio código ETS y aislamiento del módulo.
   Ver [`bootstrap/README.md`](./bootstrap/README.md) para ejecutarlo por separado.
-- El primer bloque del parser aislado pasa **105/105** pruebas nativas,
+- El parser aislado pasa **174/174** pruebas nativas,
   incluido el análisis de su propio fuente y del lexer, sin importar otros
   módulos ETS. La gramática pendiente está en `bootstrap/parser/README.md`.
+- Enum/union se comparan con stage 0 y preservan números exactos y campos.
+  Switch se comprueba contra ASTs esperados independientes: el parser TS no
+  lo reconoce y su codegen omite el nodo. Esto aún no añade switch al compilador.
 - La mutación de campos de `this` a través de índices y los `push` anidados
   dejan de generar métodos C++ incorrectamente `const`; regresión nativa.
 - El proyecto modular de ejemplo `examples/todo-project/` pasó **8/8**

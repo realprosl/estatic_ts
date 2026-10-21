@@ -14,8 +14,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const entry = join(root, "bootstrap/lexer/demo.ets");
 const directory = mkdtempSync(join(tmpdir(), "estatic-bootstrap-lexer-"));
 const binary = join(directory, "lexer-demo");
+let graph: Awaited<ReturnType<typeof loadModuleGraph>>;
 
 before(async () => {
+  graph = await loadModuleGraph(entry);
   // The only ETS modules are lexer + its tiny demo. Native compilation is
   // mandatory: evaluating the lexer as JavaScript would not test self-hosting.
   const result = await compileFile(entry, { baseDirectory: root });
@@ -24,7 +26,7 @@ before(async () => {
   const files = result.modules.map((module, index) => {
     const file = join(directory, `unit-${index}.cpp`); writeFileSync(file, module.cpp); return file;
   });
-  execFileSync(process.env.CXX ?? "g++", ["-std=c++20", "-O0", "-pthread", "-fno-exceptions", `-I${root}`, `-I${directory}`, ...files, "-o", binary], { encoding: "utf8", timeout: 120000 });
+  execFileSync(process.env.CXX ?? "g++", ["-std=c++20", "-O0", "-pthread", "-fno-exceptions", `-I${root}`, `-I${directory}`, ...files, "-o", binary], { encoding: "utf8", timeout: 120000, env: { ...process.env, TMPDIR: directory } });
 });
 after(() => rmSync(directory, { recursive: true, force: true }));
 
@@ -106,8 +108,8 @@ test("bootstrap lexer: implementation tokenizes its own ETS source", () => {
   const source = readFileSync(join(root, "bootstrap/lexer/lexer.ets"), "utf8");
   const result = native(source);assert.deepEqual(result.diagnostics, []);assert.deepEqual(result.tokens, new Lexer(source).tokenize());
 });
-test("bootstrap lexer: isolated graph has no other compiler modules", async () => {
-  const graph = await loadModuleGraph(entry);assert.equal(graph.modules.length, 2);assert.deepEqual(graph.modules[0].dependencies, []);
+test("bootstrap lexer: isolated graph has no other compiler modules", () => {
+  assert.equal(graph.modules.length, 2);assert.deepEqual(graph.modules[0].dependencies, []);
   const sources = readdirSync(join(root, "bootstrap/lexer")).filter(file => file.endsWith(".ets")).sort();
   assert.deepEqual(sources, ["demo.ets", "lexer.ets"]);
 });

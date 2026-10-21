@@ -73,7 +73,10 @@ export class Parser {
   }
   accept(kind: string): boolean { if (!this.check(kind)) return false; this.take(); return true; }
   report(message: string): void {
-    if (100 > this.diagnostics.length) this.diagnostics.push(new ParserDiagnostic(message, this.peek(0)));
+    this.reportAt(this.peek(0), message);
+  }
+  reportAt(token: ParserToken, message: string): void {
+    if (100 > this.diagnostics.length) this.diagnostics.push(new ParserDiagnostic(message, token));
   }
   expect(kind: string): ParserToken {
     if (this.check(kind)) return this.take();
@@ -144,6 +147,9 @@ export class Parser {
     else if (this.check("function") || this.check("async")) result = this.functionDeclaration();
     else if (this.accept("class")) result = this.classDeclaration(this.previous());
     else if (this.accept("interface")) result = this.interfaceDeclaration(this.previous());
+    else if (this.accept("enum")) result = this.enumDeclaration(this.previous());
+    else if (this.accept("union")) result = this.unionDeclaration(this.previous());
+    else if (this.accept("switch")) result = this.switchStatement(this.previous());
     else if (this.check("type") && this.peek(0).lexeme == "type") {
       const keyword: ParserToken = this.take();
       const name: ParserToken = this.expect("identifier");
@@ -177,9 +183,11 @@ export class Parser {
         this.edge(result, "value", this.expression());
       }
       this.setEnd(result, this.terminator());
-    } else if (this.check("import") || this.check("enum") || this.check("union") || this.check("switch") || this.check("default") || (exported && this.check("{"))) {
+    } else if (this.check("import") || (exported && (this.check("default") || this.check("{")))) {
       this.report("Construcción pendiente en bootstrap/parser: " + this.peek(0).lexeme);
       result = this.add("ErrorNode", start, this.take()); this.synchronize();
+    } else if (this.check("case") || this.check("default")) {
+      this.report("case/default requiere un switch"); result = this.add("ErrorNode", start, this.take());
     } else {
       const value: number = this.expression();
       result = this.add("ExpressionStatement", this.node(value).start, this.terminator()); this.edge(result, "expression", value);
@@ -189,6 +197,7 @@ export class Parser {
     if (exported) {
       if (declarationKind != "VariableDeclaration" && declarationKind != "UsingDeclaration" && declarationKind != "FunctionDeclaration"
           && declarationKind != "ClassDeclaration" && declarationKind != "InterfaceDeclaration" && declarationKind != "TypeAliasDeclaration"
+          && declarationKind != "EnumDeclaration" && declarationKind != "UnionDeclaration"
           && declarationKind != "ErrorNode") this.report("export necesita una declaración compatible");
       this.attr(result, "exported", "true");
     }
@@ -203,6 +212,179 @@ export class Parser {
       if (this.check("}")) { if (depth == 0) return; depth = depth - 1; }
       this.take();
     }
+  }
+  digitValue(c: string): number {
+    if (c == "") return -1;
+    const digit: number = "0123456789abcdefABCDEF".indexOf(c, 0);
+    return digit >= 16 ? digit - 6 : digit;
+  }
+  decimalMultiplyAdd(text: string, factor: number, extra: number): string {
+    let carry: number = extra; let result: string = "";
+    for (let i: number = text.length - 1; i >= 0; i = i - 1) {
+      const value: number = (text.charCodeAt(i) - 48) * factor + carry;
+      result = "0123456789".charAt(value % 10) + result; carry = Math.floor(value / 10);
+    }
+    while (carry > 0) { result = "0123456789".charAt(carry % 10) + result; carry = Math.floor(carry / 10); }
+    let first: number = 0;
+    while (first + 1 < result.length && result.charAt(first) == "0") first = first + 1;
+    return result.slice(first, result.length);
+  }
+  // Canonical decimal text, never a double: enum counters and discriminators
+  // preserve precision until a future checker chooses the numeric type.
+  numericText(token: ParserToken): string {
+    const text: string = token.lexeme; let radix: number = 10; let begin: number = 0;
+    if (text.charAt(0) == "0") {
+      const prefix: string = text.charAt(1);
+      if (prefix == "x" || prefix == "X") { radix = 16; begin = 2; }
+      else if (prefix == "o" || prefix == "O") { radix = 8; begin = 2; }
+      else if (prefix == "b" || prefix == "B") { radix = 2; begin = 2; }
+    }
+    let whole: string = ""; let fraction: string = ""; let point: boolean = false;
+    for (let i: number = begin; i < text.length; i = i + 1) {
+      const c: string = text.charAt(i);
+      if (c == "_") {
+        const before: number = this.digitValue(text.charAt(i - 1)); const after: number = this.digitValue(text.charAt(i + 1));
+        if (i == begin || before < 0 || before >= radix || after < 0 || after >= radix) { this.reportAt(token, "Separador numérico no válido"); return "0"; }
+      } else if (c == "." && radix == 10 && !point && whole != "" && i + 1 < text.length) point = true;
+      else {
+        const digit: number = this.digitValue(c);
+        if (digit < 0 || digit >= radix) { this.reportAt(token, "Literal numérico no válido"); return "0"; }
+        if (radix != 10) whole = this.decimalMultiplyAdd(whole == "" ? "0" : whole, radix, digit);
+        else if (point) fraction = fraction + c;
+        else whole = whole + c;
+      }
+    }
+    if (whole == "" || (point && fraction == "")) { this.reportAt(token, "Literal numérico no válido"); return "0"; }
+    let first: number = 0; while (first + 1 < whole.length && whole.charAt(first) == "0") first = first + 1;
+    whole = whole.slice(first, whole.length);
+    let last: number = fraction.length;
+    while (last > 0 && fraction.charAt(last - 1) == "0") last = last - 1;
+    return last == 0 ? whole : whole + "." + fraction.slice(0, last);
+  }
+  incrementDecimal(value: string): string {
+    const point: number = value.indexOf(".", 0); const cut: number = point < 0 ? value.length : point;
+    const suffix: string = point < 0 ? "" : value.slice(point, value.length);
+    return this.decimalMultiplyAdd(value.slice(0, cut), 1, 1) + suffix;
+  }
+  enumDeclaration(keyword: ParserToken): number {
+    const name: ParserToken = this.expect("identifier"); const result: number = this.add("EnumDeclaration", keyword, name);
+    this.attr(result, "name", name.lexeme); this.expect("{"); this.skipNewlines();
+    let nextValue: string = "0"; let mode: string = ""; let names: string[] = [];
+    while (!this.check("}") && !this.check("eof")) {
+      const before: number = this.current; const memberName: ParserToken = this.expect("identifier");
+      if (names.includes(memberName.lexeme)) this.reportAt(memberName, "Miembro de enum duplicado");
+      names.push(memberName.lexeme);
+      const member: number = this.add("EnumMember", memberName, memberName); this.attr(member, "name", memberName.lexeme);
+      let literal: number = -1;
+      if (this.accept("=")) {
+        const value: ParserToken = this.peek(0);
+        if (this.check("number") || this.check("string")) {
+          this.take(); literal = this.add("LiteralExpression", value, value);
+          this.attr(literal, "literalType", value.kind); const canonical: string = value.kind == "number" ? this.numericText(value) : value.lexeme;
+          this.attr(literal, "value", canonical);
+          if (mode != "" && mode != value.kind) this.reportAt(value, "Un enum no puede mezclar miembros numéricos y de cadena");
+          mode = value.kind;
+          if (value.kind == "number") nextValue = this.incrementDecimal(canonical);
+        } else {
+          this.report("El valor del miembro de enum debe ser un literal numérico no negativo o de cadena");
+          while (!this.check(",") && !this.check("}") && !this.check("newline") && !this.check("eof")) this.take();
+        }
+      } else {
+        if (mode == "string") this.reportAt(memberName, "Un enum de cadena requiere valores explícitos en todos los miembros");
+        literal = this.add("LiteralExpression", memberName, memberName); this.attr(literal, "literalType", "number");
+        this.attr(literal, "value", nextValue); nextValue = this.incrementDecimal(nextValue);
+        if (mode == "") mode = "number";
+      }
+      if (literal >= 0) { this.edge(member, "value", literal); this.setEnd(member, this.node(literal).end); }
+      this.edge(result, "members", member); this.skipNewlines();
+      if (!this.check("}") && !this.check("eof")) {
+        if (!this.accept(",")) this.report("Se esperaba ',' o '}' entre miembros del enum");
+        this.skipNewlines();
+      }
+      if (this.current == before && !this.check("eof")) this.take();
+    }
+    if (names.length == 0) this.report("El enum debe tener al menos un miembro");
+    this.attr(result, "underlying", mode == "string" ? "string" : "number"); this.setEnd(result, this.expect("}")); return result;
+  }
+  unionDeclaration(keyword: ParserToken): number {
+    const name: ParserToken = this.expect("identifier"); const result: number = this.add("UnionDeclaration", keyword, name);
+    this.attr(result, "name", name.lexeme); this.typeParameters(result); this.expect("="); this.skipNewlines();
+    let names: string[] = []; let reading: boolean = true;
+    while (reading && !this.check("eof")) {
+      let variant: number = -1;
+      if (this.check("{")) variant = this.objectVariant();
+      else if (this.check("identifier")) {
+        const token: ParserToken = this.take(); variant = this.add("UnionVariant", token, token); this.attr(variant, "name", token.lexeme);
+        if (this.accept("(")) { this.attr(variant, "payload", this.typeName()); this.setEnd(variant, this.expect(")")); }
+      } else { this.report("Se esperaba una variante de la unión"); reading = false; }
+      if (variant >= 0) {
+        const variantName: string = this.get(variant, "name");
+        if (names.includes(variantName)) this.reportAt(this.node(variant).start, "Variante de unión duplicada");
+        names.push(variantName); this.edge(result, "variants", variant);
+        if (this.accept("|")) this.skipNewlines(); else reading = false;
+      }
+    }
+    this.setEnd(result, this.terminator()); return result;
+  }
+  objectVariant(): number {
+    const open: ParserToken = this.expect("{"); this.skipNewlines();
+    const field: ParserToken = this.expect("identifier"); this.expect(":"); const token: ParserToken = this.peek(0);
+    const result: number = this.add("UnionVariant", open, token);
+    let value: string = token.lexeme; let literalType: string = token.kind;
+    if (this.check("number") || this.check("string") || this.check("true") || this.check("false")) {
+      this.take(); if (token.kind == "number") value = this.numericText(token);
+      else if (token.kind == "true" || token.kind == "false") literalType = "boolean";
+    } else {
+      this.report("El discriminador de una object-variant debe ser un literal");
+      while (!this.check(";") && !this.check(",") && !this.check("}") && !this.check("eof")) this.take();
+    }
+    let variantName: string = field.lexeme + "_" + value;
+    if (literalType == "string") variantName = value;
+    else if (literalType == "boolean" && field.lexeme == "ok") variantName = (value == "true" ? "Ok" : "Err");
+    this.attr(result, "name", variantName);
+    const discriminator: number = this.add("Discriminator", field, token);
+    this.attr(discriminator, "field", field.lexeme); this.attr(discriminator, "literalType", literalType); this.attr(discriminator, "value", value);
+    this.edge(result, "discriminator", discriminator);
+    let names: string[] = [field.lexeme]; let types: string[] = []; this.skipNewlines();
+    while (this.accept(";") || this.accept(",")) {
+      this.skipNewlines(); if (this.check("}") || this.check("eof")) break;
+      const before: number = this.current; const bindingName: ParserToken = this.expect("identifier");
+      if (names.includes(bindingName.lexeme)) this.reportAt(bindingName, "Binding de variante duplicado");
+      names.push(bindingName.lexeme); this.expect(":"); const annotation: string = this.typeName();
+      const binding: number = this.add("Binding", bindingName, this.previous());
+      this.attr(binding, "name", bindingName.lexeme); this.attr(binding, "type", annotation);
+      this.edge(result, "bindings", binding); types.push(annotation); this.skipNewlines();
+      if (this.current == before && !this.check("eof")) this.take();
+    }
+    if (types.length == 1) this.attr(result, "payload", types[0]);
+    else if (types.length > 1) this.attr(result, "payload", "[" + types.join(",") + "]");
+    this.setEnd(result, this.expect("}")); return result;
+  }
+  switchStatement(keyword: ParserToken): number {
+    const result: number = this.add("SwitchStatement", keyword, keyword);
+    this.expect("("); this.edge(result, "discriminant", this.expression()); this.expect(")"); this.expect("{");
+    let hasDefault: boolean = false;
+    while (!this.check("}") && !this.check("eof")) {
+      this.skipNewlines(); if (this.check("}") || this.check("eof")) break;
+      if (this.check("case") || this.check("default")) {
+        const token: ParserToken = this.take(); const clause: number = this.add(token.kind == "case" ? "CaseClause" : "DefaultClause", token, token);
+        if (token.kind == "case") {
+          if (this.check(":")) { this.report("case necesita una expresión"); this.edge(clause, "labels", this.add("ErrorNode", this.peek(0), this.peek(0))); }
+          else this.edge(clause, "labels", this.expression());
+        } else { if (hasDefault) this.reportAt(token, "Un switch solo puede tener un default"); hasDefault = true; }
+        this.setEnd(clause, this.expect(":")); this.skipNewlines();
+        while (!this.check("case") && !this.check("default") && !this.check("}") && !this.check("eof")) {
+          this.skipNewlines(); if (this.check("case") || this.check("default") || this.check("}") || this.check("eof")) break;
+          if (!this.accept(";")) {
+            const before: number = this.current; const child: number = this.statement(false); this.edge(clause, "body", child);
+            this.setEnd(clause, this.node(child).end);
+            if (this.current == before && !this.check("eof")) { this.report("Token inesperado en la cláusula de switch"); this.take(); }
+          }
+        }
+        this.edge(result, "clauses", clause);
+      } else { this.report("Se esperaba case o default en switch"); this.take(); }
+    }
+    this.setEnd(result, this.expect("}")); return result;
   }
   variable(terminated: boolean): number {
     const keyword: ParserToken = this.take(); const name: ParserToken = this.expect("identifier");

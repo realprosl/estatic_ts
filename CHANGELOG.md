@@ -6,6 +6,23 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v51 (`estatic 1.13.0`): el parser aislado de bootstrap reconoce enum,
+  union y switch. Los enums admiten numeración implícita/expresa y cadenas;
+  sus números se normalizan e incrementan como texto decimal exacto, sin
+  redondeo double. Las unions conservan variantes, payloads, discriminadores
+  y nombres/tipos de bindings. Switch conserva cláusulas en orden, cuerpos
+  vacíos para fallthrough, default en cualquier posición y anidamiento.
+- El parser pasa de 105 a 174 pruebas nativas: paridad con stage 0 para
+  enum/union, AST de switch fijado de forma independiente, precisión numérica,
+  posiciones Unicode, entradas inválidas, recuperación y corpus determinista.
+  Total estable verificado por bloques: 1369/1369.
+- Se documentan diferencias respecto a stage 0: mezclas numérico/cadena y
+  duplicados rechazados antes, multilinea/separadores finales, precisión y
+  preservación de bindings. Switch se valida sólo como AST del bootstrap:
+  no se implementa su checker/codegen ni se incorpora al frontend TypeScript.
+  Continúan pendientes imports/exports especiales, templates, destructuring
+  y otras partes documentadas del parser.
+
 - v50 (`estatic 1.12.0`): primer bloque del parser de bootstrap escrito en
   Estatic, con AST en arena, tokens locales y diagnósticos recuperables.
   Expresiones, declaraciones simples, funciones, clases/interfaces, tipos y
