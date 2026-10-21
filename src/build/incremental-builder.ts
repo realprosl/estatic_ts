@@ -12,6 +12,7 @@ import type { GeneratedSource } from "../core/span.ts";
 import { performance } from "node:perf_hooks";
 import { BuildProfile, type PhaseTiming } from "./build-profile.ts";
 import { compareModuleFingerprints, type ModuleFingerprint, type ModuleChange } from "../modules/module-fingerprints.ts";
+import type { SemanticCacheStats } from "../semantic/semantic-cache.ts";
 
 declare const process: { stderr: { write: (data: string) => void }; env: Record<string, string | undefined>; stdout: { write: (data: string) => void } };
 declare const Buffer: { byteLength: (data: string) => number };
@@ -44,6 +45,7 @@ export interface IncrementalBuildResult {
   parsedModules: { reused: number; parsed: number };
   profile: { phases: PhaseTiming[]; totalsMs: Record<string, number>; report: string };
   moduleChanges: ModuleChange[];
+  semanticCache?: SemanticCacheStats;
 }
 
 /** Opciones del build incremental. */
@@ -282,7 +284,8 @@ async function publishJsonAtomic(path: string, value: unknown): Promise<void> {
  * El grafo comparte análisis semántico, pero cada módulo emite su propia
  * unidad C++ y objeto. Las cachés de sintaxis/AST, snapshot de transpilación
  * y objetos son independientes. Las interfaces registradas planifican futuras
- * invalidaciones; todavía no se usan para omitir el checker global.
+ * invalidaciones. La caché semántica restaura cuerpos de un subconjunto escalar;
+ * las declaraciones se revalidan y el resto conserva el checker global.
  */
 export async function buildIncremental(config: ResolvedConfig, compilerRoot: string, options: IncrementalBuildOptions = {}): Promise<IncrementalBuildResult> {
   const progress = new BuildProgress(options.verbose ?? false);
@@ -462,6 +465,13 @@ export async function buildIncremental(config: ResolvedConfig, compilerRoot: str
       profile,
     });
     const stats = result.transpilationCache ?? { parsedHits: 0, parsedMisses: graph.modules.length };
+    if (options.verbose && result.semanticCache) {
+      if (!result.semanticCache.enabled) progress.log(`Semantic cache fallback: ${result.semanticCache.fallbackReason}`);
+      for (const stage of ["source", "final"] as const) {
+        const semantic = result.semanticCache.stages[stage];
+        progress.log(`Semantic ${stage}: ${semantic.reusedBodies} cuerpo(s) reutilizado(s), ${semantic.checkedBodies} comprobado(s)`);
+      }
+    }
     parsedModules = { reused: stats.parsedHits, parsed: stats.parsedMisses };
     transpilationCache = stats.parsedHits > 0 ? "partial" : "miss";
     const artifact: CachedTranspilation = {
@@ -627,5 +637,6 @@ export async function buildIncremental(config: ResolvedConfig, compilerRoot: str
     transpilationCache,
     parsedModules,
     moduleChanges,
+    semanticCache: result.semanticCache,
   });
 }

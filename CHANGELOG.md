@@ -6,6 +6,20 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v48 (`estatic 1.10.0`): caché persistente de comprobación de cuerpos por módulo
+  para un conjunto cerrado de funciones escalares, con restauración en checks
+  fuente/final, tipos/constantes y selección de sobrecargas. Cambiar un cuerpo
+  conserva consumidores cuando las declaraciones/globals siguen idénticos.
+  Firmas y sentencias top-level se revalidan; clases, arrays, genéricos, closures,
+  ownership y generación estática usan el checker completo. Entradas con checksum,
+  publicación sólo tras éxito y contadores por etapa/módulo en el informe.
+- Catorce regresiones nuevas: caché entre procesos, cambios de cuerpo/firma/global,
+  errores nuevos, corrupción, ubicaciones, constantes, sobrecargas y fallbacks.
+  Incluyen compilación/ejecución C++; integración incremental verifica reutilización
+  semántica y de objetos tras cambiar una librería. Suite: 1150/1150. Benchmark
+  reproducible separa checker y transpilación total; no se afirma aceleración
+  general. Ver `docs/semantic-cache.md`.
+
 - v47 (`estatic 1.9.0`): perfil por fase en `build-profile.json` y `--verbose`,
   separando checker fuente/final, comptime, expansión ETS, codegen y compilación
   nativa. Los hits informan sólo trabajo de la ejecución actual. Manifiesto de

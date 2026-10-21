@@ -16,6 +16,7 @@ import { getTs2cppRevision, getTs2cppVersion } from "../core/ts2cpp-version.ts";
 import { performance } from "node:perf_hooks";
 import { BuildProfile } from "../build/build-profile.ts";
 import { fingerprintModules, type ModuleFingerprint } from "./module-fingerprints.ts";
+import { SemanticCheckCache, type SemanticCacheStats } from "../semantic/semantic-cache.ts";
 
 // Module declarations are discovered from lexer tokens, including multiline lists.
 
@@ -44,6 +45,7 @@ export interface ModuleCompilationResult {
   /** Estadísticas de la caché persistente del frontend. */
   transpilationCache?: { parsedHits: number; parsedMisses: number };
   semanticFingerprints?: ModuleFingerprint[];
+  semanticCache?: SemanticCacheStats;
 }
 export interface ModuleLoaderOptions {
   moduleRoots?: string[];
@@ -53,6 +55,8 @@ export interface ModuleLoaderOptions {
   baseDirectory?: string;
   /** Directorio opcional para ASTs parseados, indexados por contenido. */
   transpilationCacheDirectory?: string;
+  /** Permite comparar con el checker completo conservando la caché de parser. */
+  semanticCache?: boolean;
   profile?: BuildProfile;
 }
 
@@ -328,7 +332,9 @@ export async function compileModuleGraph(graph: ModuleGraph, options: ModuleLoad
       }
     };
     profile.record("module-binding", phaseStart);
-    const { program: ast, checker } = analyze([astOriginal],{validateExpanded:validateGeneratedExports,profile});
+    const semanticCache = options.transpilationCacheDirectory && options.semanticCache !== false
+      ? await profile.measureAsync("restore-semantic", () => SemanticCheckCache.open(astOriginal, options.transpilationCacheDirectory!, new Map(ordered.map(module => [module.file, module.source + "\0" + module.hash])))) : undefined;
+    const { program: ast, checker } = analyze([astOriginal],{validateExpanded:validateGeneratedExports,profile,semanticCache});
     phaseStart = performance.now();
     // Expanded calls disappear from the AST. Check their retained provenance
     // too, so expansion cannot erase an otherwise invisible generator access.
@@ -398,7 +404,8 @@ export async function compileModuleGraph(graph: ModuleGraph, options: ModuleLoad
       cpp: profile.measure("codegen-module", () => generator.generateModule(moduleAst, ast, headerName, stableInitName(module.file, baseDirectory), index === ordered.length - 1 ? moduleInitializers : undefined), module.file),
     };
   });
-    return { ast, header, modules, moduleNames: ordered.map(m => m.file), linkFlags: generator.linkFlags, externalHeaders: generator.externalHeaders, runtimeBackends: detectRuntimeBackends(ast), transpilationCache: cacheStats, semanticFingerprints };
+    if (semanticCache) await profile.measureAsync("write-semantic", () => semanticCache.commit());
+    return { ast, header, modules, moduleNames: ordered.map(m => m.file), linkFlags: generator.linkFlags, externalHeaders: generator.externalHeaders, runtimeBackends: detectRuntimeBackends(ast), transpilationCache: cacheStats, semanticFingerprints, semanticCache: semanticCache?.stats };
   } catch (error) {
     if (!(error instanceof DiagnosticError)) throw error;
     const diagnostics: Diagnostic[] = error.diagnostics.map(diagnostic => {

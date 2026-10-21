@@ -123,13 +123,15 @@ test("transpilation cache: sólo vuelve a escanear y parsear el módulo modifica
 test("incremental: editar una implementación reutiliza frontend y objeto del módulo intacto",async()=>temporary(async dir=>{
  const compiler=join(dir,"compiler");mkdirSync(join(compiler,"build"),{recursive:true});mkdirSync(join(compiler,"runtime"));
  writeFileSync(join(compiler,"build/runtime_ets_libuv.o"),"");writeFileSync(join(compiler,"runtime/ets_runtime.hpp"),`#include ${JSON.stringify(join(root,"runtime/ets_runtime.hpp"))}\n`);
- const library=join(dir,"lib.ets");writeFileSync(library,"export function answer():number{return 7;}");writeFileSync(join(dir,"main.ets"),'import {answer} from "./lib";print(answer());');
+ const library=join(dir,"lib.ets");writeFileSync(library,"export function answer():number{return 7;}");writeFileSync(join(dir,"main.ets"),'import {answer} from "./lib";function run():number{return answer();}print(run());');
  const configPath=join(dir,"config.ts");writeFileSync(configPath,`export default {entry:"main.ets",compiler:{enabled:true,flags:["-std=c++20","-O0","-pthread","-fno-exceptions",${JSON.stringify('-I'+root)}]}};`);const config=(await loadConfig(configPath))!;
  const cold=await buildIncremental(config,compiler);assert.equal(cold.compiled.length,2);assert.equal(execFileSync(cold.binary,{encoding:"utf8"}),"7\n");
  writeFileSync(library,"export function answer():number{return 9;}");
  const changed=await buildIncremental(config,compiler);assert.equal(changed.transpilationCache,"partial");assert.deepEqual(changed.parsedModules,{reused:1,parsed:1});assert.equal(changed.compiled.length,1);assert.equal(changed.reused.length,1);assert.equal(execFileSync(changed.binary,{encoding:"utf8"}),"9\n");
+ assert.equal(changed.semanticCache!.stages.source.reusedBodies,1);assert.equal(changed.semanticCache!.stages.final.reusedBodies,1);
  assert.equal(changed.moduleChanges.find(item=>item.file===library)?.reason,"implementation");
  const persisted=JSON.parse(readFileSync(changed.profile.report,"utf8"));assert.equal(persisted.moduleChanges.length,1);assert.ok(persisted.profile.totalsMs["codegen-module"]>=0);
+ assert.equal(persisted.semanticCache.stages.source.checkedBodies,1);
  unlinkSync(changed.header);const restored=await buildIncremental(config,compiler);assert.ok(existsSync(restored.header));assert.equal(restored.transpilationCache,"hit");assert.ok(!("check-source" in restored.profile.totalsMs));assert.equal(execFileSync(restored.binary,{encoding:"utf8"}),"9\n");
 }));
 
