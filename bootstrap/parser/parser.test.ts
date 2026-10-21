@@ -14,17 +14,19 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const entry = join(root, "bootstrap/parser/demo.ets");
 const directory = mkdtempSync(join(tmpdir(), "estatic-bootstrap-parser-"));
 const binary = join(directory, "parser-demo");
+let graph: Awaited<ReturnType<typeof loadModuleGraph>>;
 type NativeNode = { kind: string; span: any; attributes: { name: string; value: string }[]; edges: { role: string; node: number }[] };
 type NativeResult = { root: number; nodes: NativeNode[]; diagnostics: { message: string; span: any }[] };
 
 before(async () => {
+  graph = await loadModuleGraph(entry);
   const result = await compileFile(entry, { baseDirectory: root });
   assert.deepEqual(result.moduleNames.map(file => relative(root, file)), ["bootstrap/parser/parser.ets", "bootstrap/parser/demo.ets"]);
   writeFileSync(join(directory, "estatic_common.hpp"), result.header);
   const units = result.modules.map((module, index) => {
     const file = join(directory, `unit-${index}.cpp`); writeFileSync(file, module.cpp); return file;
   });
-  execFileSync(process.env.CXX ?? "g++", ["-std=c++20", "-O0", "-pthread", "-fno-exceptions", `-I${root}`, `-I${directory}`, ...units, "-o", binary], { encoding: "utf8", timeout: 120000 });
+  execFileSync(process.env.CXX ?? "g++", ["-std=c++20", "-O0", "-pthread", "-fno-exceptions", `-I${root}`, `-I${directory}`, ...units, "-o", binary], { encoding: "utf8", timeout: 120000, env: { ...process.env, TMPDIR: directory } });
 });
 after(() => rmSync(directory, { recursive: true, force: true }));
 
@@ -42,8 +44,8 @@ function native(source: string): NativeResult { return nativeTokens(new Lexer(so
 // Compare every supported semantic field/edge, independently of arena order.
 // Spans have dedicated tests: stage 0 has historical differences for classes
 // and synthetic nodes. This projection never evaluates or parses expressions.
-const scalarKeys = new Set(["name", "mutable", "declaredType", "async", "returnType", "type", "constraint", "default", "literalType", "raw", "operator", "callee", "member", "method", "optional", "className", "targetType", "isAsync", "await", "out", "passing", "variadic", "readonly", "access", "isStatic", "exported", "key", "value"]);
-const roleKinds: Record<string, string> = { params: "Parameter", typeParameters: "TypeParameter", fields: "ClassField", methods: "ClassMethod", properties: "ObjectProperty", decorators: "Decorator" };
+const scalarKeys = new Set(["name", "mutable", "declaredType", "async", "returnType", "type", "constraint", "default", "literalType", "raw", "operator", "callee", "member", "method", "optional", "className", "targetType", "isAsync", "await", "out", "passing", "variadic", "readonly", "access", "isStatic", "exported", "key", "value", "underlying", "payload", "field"]);
+const roleKinds: Record<string, string> = { params: "Parameter", typeParameters: "TypeParameter", fields: "ClassField", methods: "ClassMethod", properties: "ObjectProperty", decorators: "Decorator", members: "EnumMember", variants: "UnionVariant", discriminator: "Discriminator" };
 const excludedRoles = new Set(["span", "typeArguments", "variadicTypeParameters", "arrayBindings", "objectBindings", "generatedSources"]);
 function hostShape(node: any, forcedKind?: string): any {
   const kind = node.kind ?? forcedKind;
@@ -51,7 +53,7 @@ function hostShape(node: any, forcedKind?: string): any {
   for (const [key, value] of Object.entries(node)) {
     if (key === "kind" || excludedRoles.has(key) || value === undefined || (value === false && key !== "value")) continue;
     if (scalarKeys.has(key) && (typeof value === "string" || typeof value === "number" || typeof value === "boolean")) {
-      if (key === "value" && node.literalType === "number") continue;
+      if (key === "value" && node.literalType === "number" && node.raw !== undefined) continue;
       attributes[key] = [String(value)];
     } else if (Array.isArray(value)) {
       if (value.length) edges[key] = value.map(item => hostShape(item, kind === "InterfaceDeclaration" && (key === "fields" || key === "methods") ? (key === "fields" ? "InterfaceField" : "InterfaceMethod") : roleKinds[key]));
@@ -59,11 +61,12 @@ function hostShape(node: any, forcedKind?: string): any {
       // The for-of/in binding initializer is synthetic in stage 0.
       if ((kind === "ForOfStatement" || kind === "ForInStatement") && key === "binding") {
         const { initializer, ...binding } = value as any; edges[key] = [hostShape(binding)];
-      } else edges[key] = [hostShape(value)];
+      } else edges[key] = [hostShape(value, roleKinds[key])];
     }
   }
   if (node.mutable === false) attributes.mutable = ["false"];
   if (node.typeArguments?.length) attributes.typeArgument = node.typeArguments;
+  if (kind === "Discriminator") attributes.literalType = [typeof node.value];
   return { kind, attributes, edges };
 }
 function nativeShape(result: NativeResult, id = result.root, visiting = new Set<number>()): any {
@@ -73,7 +76,12 @@ function nativeShape(result: NativeResult, id = result.root, visiting = new Set<
     if (field.value === "false" && field.name !== "mutable" && field.name !== "value") continue;
     (attributes[field.name] ??= []).push(field.value);
   }
-  for (const edge of item.edges) (edges[edge.role] ??= []).push(nativeShape(result, edge.node, visiting));
+  for (const edge of item.edges) {
+    // Stage 0 discards binding names. The new AST retains them and dedicated
+    // tests verify their names, order, types and positions independently.
+    if (item.kind === "UnionVariant" && edge.role === "bindings") continue;
+    (edges[edge.role] ??= []).push(nativeShape(result, edge.node, visiting));
+  }
   visiting.delete(id); return { kind: item.kind, attributes, edges };
 }
 function parity(source: string): NativeResult {
@@ -174,8 +182,8 @@ test("bootstrap parser: every expression span matches stage 0", () => {
 });
 test("bootstrap parser: parses the complete isolated lexer source", () => { parity(readFileSync(join(root, "bootstrap/lexer/lexer.ets"), "utf8")); });
 test("bootstrap parser: parses its own complete ETS source", () => { parity(readFileSync(join(root, "bootstrap/parser/parser.ets"), "utf8")); });
-test("bootstrap parser: graph contains only parser and its driver", async () => {
-  const graph = await loadModuleGraph(entry); assert.equal(graph.modules.length, 2); assert.deepEqual(graph.modules[0].dependencies, []);
+test("bootstrap parser: graph contains only parser and its driver", () => {
+  assert.equal(graph.modules.length, 2); assert.deepEqual(graph.modules[0].dependencies, []);
   assert.ok(graph.modules.every(module => module.file.includes("bootstrap/parser/")));
 });
 
@@ -191,7 +199,7 @@ for (const [name, source] of [
   const result = native(source); assert.ok(result.diagnostics.length > 0); assert.ok(result.diagnostics.length <= 100);
   for (const diagnostic of result.diagnostics) assert.ok(diagnostic.span.start.offset <= source.length);
 });
-for (const source of ["enum Color{Red}", "union Value{ A }", "switch(x){case 1:break;}", "import {x} from 'm';", "export default 1;", "const text=`hello ${name}`;"])
+for (const source of ["import {x} from 'm';", "export default 1;", "const text=`hello ${name}`;"])
   test(`bootstrap parser: explicit pending syntax ${source}`, () => { assert.ok(native(source).diagnostics.some(item => item.message.includes("pendiente"))); });
 
 test("bootstrap parser: bare return and recovery keep subsequent statements", () => {
@@ -235,6 +243,174 @@ test("bootstrap parser: deterministic malformed-token corpus terminates", () => 
   for (let run = 0; run < 30; run++) {
     const parts: string[] = [];
     for (let i = 0; i < 30; i++) { seed = (seed * 16807) % 2147483647; parts.push(pieces[seed % pieces.length]); }
+    native(parts.join(" "));
+  }
+});
+
+const declarationFixtures: [string, string][] = [
+  ["enum automatic values", "enum Color{Red,Green,Blue}"],
+  ["enum explicit reset", "enum Level{Low=2,Medium,High=10,Extreme}"],
+  ["enum zero and duplicate values", "enum Alias{First=0,Same=0,Next}"],
+  ["enum strings", "enum Method{Get='GET',Post='POST'}"],
+  ["enum numeric prefixes", "enum Mask{Hex=0xFF,AfterHex,Binary=0b10,AfterBinary,Octal=0o17,AfterOctal}"],
+  ["enum fractions", "enum Fraction{Start=0.12,Next,Reset=1.250,After}"],
+  ["enum trailing comma", "enum Color{Red,Green,}"],
+  ["enum export and following statement", "export enum Color{Red,Green} const color=Color.Green;"],
+  ["enum unicode values", "enum Label{First='España 🙂',Second='漢字'}"],
+  ["union named variants", "union Flag=On | Off;"],
+  ["union typed payloads", "union Outcome<T,E> = Ok(T) | Err(E);"],
+  ["union generic constraints", "union Item<T extends Value=Value> = Some(T) | Empty;"],
+  ["union composite payloads", "union Data=Items(Map<string,number[]>) | Pair([number,string]) | Callback((x:number)=>string);"],
+  ["union export", "export union Value=Text(string) | Number(number);"],
+  ["union string discriminants", "union Shape={kind:'Circle';radius:number} | {kind:'Square';width:number;height:number};"],
+  ["union boolean discriminants", "union Result<T> = {ok:true;value:T} | {ok:false;error:string};"],
+  ["union zero bindings", "union Flag={ok:true} | {ok:false};"],
+  ["union numeric discriminants", "union Tagged={tag:0x10;value:number} | {tag:2};"],
+  ["union false non-ok discriminant", "union Flags={enabled:false} | {enabled:true};"],
+  ["union comma bindings", "union Entry={kind:'Entry',key:string,value:number};"],
+];
+for (const [name, source] of declarationFixtures) test(`bootstrap parser native declarations parity: ${name}`, () => { parity(source); });
+
+function fields(node: NativeNode): Record<string, string> { return Object.fromEntries(node.attributes.map(field => [field.name, field.value])); }
+function children(result: NativeResult, node: NativeNode, role: string): NativeNode[] { return node.edges.filter(edge => edge.role === role).map(edge => result.nodes[edge.node]); }
+function statements(result: NativeResult): NativeNode[] { return children(result, result.nodes[result.root], "statements"); }
+function values(result: NativeResult, node: NativeNode): string[] { return children(result, node, "members").map(member => fields(children(result, member, "value")[0]).value); }
+
+test("bootstrap parser: enum counters preserve exact integers beyond double precision", () => {
+  const result = native("enum Wide{A=9007199254740992,B,C}"); assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(values(result, statements(result)[0]), ["9007199254740992", "9007199254740993", "9007199254740994"]);
+});
+test("bootstrap parser: enum exact decimal increment and separators", () => {
+  const result = native("enum Exact{A=0001.2300,B,C=0xFF_FF,D,E=1_000,F}"); assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(values(result, statements(result)[0]), ["1.23", "2.23", "65535", "65536", "1000", "1001"]);
+});
+test("bootstrap parser: enum multiline and boundary positions", () => {
+  const source = "enum Color {\n Red=2,\n Green,\n Blue,\n}\nprint(Color.Blue);";
+  const result = native(source); assert.deepEqual(result.diagnostics, []);
+  const declaration = statements(result)[0], members = children(result, declaration, "members");
+  assert.deepEqual(values(result, declaration), ["2", "3", "4"]);
+  assert.equal(declaration.span.start.offset, 0); assert.equal(declaration.span.end.offset, source.indexOf("}") + 1);
+  assert.deepEqual(members[1].span.start, { offset: source.indexOf("Green"), line: 3, column: 2 });
+  assert.equal(statements(result)[1].kind, "ExpressionStatement");
+});
+test("bootstrap parser: union preserves binding names order and source positions", () => {
+  const source = "union Entry={kind:'Entry';key:string;value:Map<string,number>};";
+  const result = parity(source); const variant = children(result, statements(result)[0], "variants")[0];
+  const bindings = children(result, variant, "bindings");
+  assert.deepEqual(bindings.map(fields), [{ name: "key", type: "string" }, { name: "value", type: "Map<string,number>" }]);
+  assert.equal(bindings[0].span.start.offset, source.indexOf("key")); assert.equal(bindings[1].span.end.offset, source.lastIndexOf(">") + 1);
+  assert.equal(fields(variant).payload, "[string,Map<string,number>]");
+});
+test("bootstrap parser: union multiline and trailing binding separators", () => {
+  const result = native("union Result<T> =\n {\n ok:true;\n value:T;\n }\n | {ok:false;error:string,};\nprint(1);");
+  assert.deepEqual(result.diagnostics, []); const variants = children(result, statements(result)[0], "variants");
+  assert.deepEqual(variants.map(item => fields(item).name), ["Ok", "Err"]);
+  assert.deepEqual(variants.map(item => fields(item).payload), ["T", "string"]);
+  assert.equal(statements(result)[1].kind, "ExpressionStatement");
+});
+test("bootstrap parser: union discriminants retain exact numbers and booleans", () => {
+  const result = native("union Tag={code:0x20000000000001} | {ok:false};"); assert.deepEqual(result.diagnostics, []);
+  const variants = children(result, statements(result)[0], "variants");
+  assert.deepEqual(fields(children(result, variants[0], "discriminator")[0]), { field: "code", literalType: "number", value: "9007199254740993" });
+  assert.deepEqual(fields(children(result, variants[1], "discriminator")[0]), { field: "ok", literalType: "boolean", value: "false" });
+});
+
+function shape(kind: string, attributes: Record<string, string> = {}, edges: Record<string, any[]> = {}): any {
+  return { kind, attributes: Object.fromEntries(Object.entries(attributes).map(([key, value]) => [key, [value]])), edges };
+}
+test("bootstrap parser: switch full AST is fixed independently of stage 0", () => {
+  const result = native("switch(value){case 1:print('one');break;default:return;}"); assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(nativeShape(result), shape("Program", {}, { statements: [shape("SwitchStatement", {}, {
+    discriminant: [shape("IdentifierExpression", { name: "value" })],
+    clauses: [shape("CaseClause", {}, {
+      labels: [shape("LiteralExpression", { literalType: "number", raw: "1" })],
+      body: [shape("ExpressionStatement", {}, { expression: [shape("CallExpression", { callee: "print" }, { args: [shape("LiteralExpression", { literalType: "string", value: "one" })] })] }), shape("BreakStatement")],
+    }), shape("DefaultClause", {}, { body: [shape("ReturnStatement")] })],
+  })] }));
+});
+const switchFixtures: [string, string, string[]][] = [
+  ["empty", "switch(x){}", []],
+  ["default only", "switch(x){default:print(0);}", ["DefaultClause"]],
+  ["no default", "switch(x){case 1:break;case 2:break;}", ["CaseClause", "CaseClause"]],
+  ["empty fallthrough cases", "switch(x){case 1:case 2:print(2);break;}", ["CaseClause", "CaseClause"]],
+  ["default first", "switch(x){default:print(0);case 1:print(1);}", ["DefaultClause", "CaseClause"]],
+  ["default in middle", "switch(x){case 1:break;default:print(0);case 2:break;}", ["CaseClause", "DefaultClause", "CaseClause"]],
+  ["multiline", "switch(x){\ncase 1:\nprint(1)\nbreak\ndefault:\nprint(0)\n}", ["CaseClause", "DefaultClause"]],
+  ["string labels", "switch(name){case 'España 🙂':print(1);default:break;}", ["CaseClause", "DefaultClause"]],
+  ["expression labels", "switch(get()){case limit+1:break;case flag?1:2:break;}", ["CaseClause", "CaseClause"]],
+  ["block bodies", "switch(x){case 1:{let n=1;print(n);}break;default:{print(0);}}", ["CaseClause", "DefaultClause"]],
+  ["nested switch", "switch(x){case 1:switch(y){case 2:break;default:break;}break;}", ["CaseClause"]],
+  ["inside loop", "while(ok){switch(x){case 1:continue;default:break;}break;}", ["CaseClause", "DefaultClause"]],
+  ["in function with declarations", "function f(x:number):void{switch(x){case 1:enum E{A}break;default:union U=A | B;return;}}", ["CaseClause", "DefaultClause"]],
+];
+for (const [name, source, clauseKinds] of switchFixtures) test(`bootstrap parser native switch: ${name}`, () => {
+  const result = native(source); assert.deepEqual(result.diagnostics, []);
+  const node = result.nodes.find(node => node.kind === "SwitchStatement")!;
+  assert.ok(node); assert.deepEqual(children(result, node, "clauses").map(item => item.kind), clauseKinds);
+  assert.ok(!result.nodes.some(node => node.kind === "ErrorNode")); nativeShape(result);
+});
+test("bootstrap parser: switch preserves fallthrough and statement order", () => {
+  const result = native("switch(x){case 1:case 2:print(1);print(2);break;default:}");
+  const clauses = children(result, statements(result)[0], "clauses");
+  assert.equal(children(result, clauses[0], "body").length, 0);
+  assert.deepEqual(children(result, clauses[1], "body").map(item => item.kind), ["ExpressionStatement", "ExpressionStatement", "BreakStatement"]);
+  assert.equal(children(result, clauses[2], "body").length, 0);
+});
+test("bootstrap parser: switch clause spans preserve Unicode positions", () => {
+  const source = "switch(x){\ncase '🙂':\n break;\ndefault:\n}\nprint(1);";
+  const result = native(source); const node = statements(result)[0], clauses = children(result, node, "clauses");
+  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(clauses[0].span.start, { offset: source.indexOf("case"), line: 2, column: 1 });
+  assert.deepEqual(clauses[1].span.start, { offset: source.indexOf("default"), line: 4, column: 1 });
+  assert.equal(node.span.end.offset, source.indexOf("}") + 1); assert.equal(statements(result).length, 2);
+});
+for (const [name, source, message] of [
+  ["empty enum", "enum Empty{}", "al menos un miembro"],
+  ["duplicate enum name", "enum E{A,A}", "duplicado"],
+  ["mixed enum numeric string", "enum E{A=1,B='b'}", "mezclar"],
+  ["mixed enum implicit string", "enum E{A,B='b'}", "mezclar"],
+  ["mixed enum string numeric", "enum E{A='a',B=1}", "mezclar"],
+  ["implicit string member", "enum E{A='a',B}", "valores explícitos"],
+  ["negative enum", "enum E{A=-1}", "literal numérico"],
+  ["computed enum", "enum E{A=make()}", "literal numérico"],
+  ["missing enum comma", "enum E{A B}", "entre miembros"],
+  ["incomplete numeric enum", "enum E{A=0x}", "Literal numérico"],
+  ["invalid numeric separator", "enum E{A=1__0}", "Separador numérico"],
+  ["missing enum brace", "enum E{A=1", "'}'"],
+  ["empty union", "union U=;", "variante"],
+  ["duplicate union variant", "union U=A | A;", "duplicada"],
+  ["missing union payload close", "union U=A(number;", "')'"],
+  ["invalid object discriminator", "union U={tag:identifier};", "discriminador"],
+  ["duplicate object binding", "union U={kind:'A';x:number;x:string};", "duplicado"],
+  ["binding reuses discriminator", "union U={kind:'A';kind:number};", "duplicado"],
+  ["trailing union bar", "union U=A | ;", "variante"],
+  ["missing switch case expression", "switch(x){case :break;}", "case necesita"],
+  ["missing switch colon", "switch(x){case 1 break;}", "':'"],
+  ["duplicate switch default", "switch(x){default:break;default:break;}", "solo puede tener un default"],
+  ["statement before case", "switch(x){print(1);case 1:break;}", "case o default"],
+  ["missing switch close", "switch(x){case 1:break;", "'}'"],
+  ["stray case", "case 1:break;", "requiere un switch"],
+  ["stray default", "default:break;", "requiere un switch"],
+  ["exported switch", "export switch(x){}", "export necesita"],
+] as const) test(`bootstrap parser native declaration diagnostics: ${name}`, () => {
+  const result = native(source); assert.ok(result.diagnostics.some(item => item.message.includes(message)), JSON.stringify(result.diagnostics));
+  assert.ok(result.diagnostics.every(item => item.span.start.offset <= source.length));
+});
+test("bootstrap parser: malformed declarations recover to a later declaration", () => {
+  const result = native("enum E{A=-1,B=2}\nunion U={kind:bad} | Good;\nswitch(x){case :break;default:break;}\nconst after=42;");
+  assert.ok(result.diagnostics.length >= 3);
+  assert.equal(fields(statements(result).at(-1)!).name, "after");
+});
+test("bootstrap parser: nested switches respect the existing recursion bound", () => {
+  const source = "switch(x){case 1:".repeat(180) + "break;" + "}".repeat(180);
+  assert.ok(native(source).diagnostics.some(item => item.message.includes("anidamiento")));
+});
+test("bootstrap parser: deterministic declaration token corpus terminates", () => {
+  const pieces = ["enum", "union", "switch", "case", "default", "A", "1", "'tag'", "{", "}", "(", ")", ":", ";", ",", "=", "|", "number"];
+  let seed = 27183;
+  for (let run = 0; run < 40; run++) {
+    const parts: string[] = [];
+    for (let i = 0; i < 35; i++) { seed = (seed * 16807) % 2147483647; parts.push(pieces[seed % pieces.length]); }
     native(parts.join(" "));
   }
 });
