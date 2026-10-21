@@ -63,7 +63,7 @@ Para consultar la versión instalada:
 ```bash
 etsc --version
 etsc -v
-# estatic 1.10.0 (v48)
+# estatic 1.11.0 (v49)
 ```
 
 El `estatic.config.ts` generado NO requiere que listes `-luv`, `-lssl`,
@@ -996,9 +996,17 @@ npm run test:http-routing
 npm run test:e2e
 ```
 
-La última ejecución completa registrada en `status.md` pasó 1150 pruebas
+La última ejecución completa registrada en `status.md` pasó 1194 pruebas
 unitarias. El número puede cambiar al añadir casos; no se mantiene como una
 constante manual en este README.
+
+## Autoalojamiento
+
+El trabajo avanza por módulos independientes en [`bootstrap/`](./bootstrap/README.md).
+El primer módulo es un lexer escrito en Estatic, con una función de inspección
+de tokens. `npm run bootstrap:lexer -- 'let total: number = 42;'` lo transpila,
+compila su C++ y ejecuta el ejemplo. Sus 44 pruebas incluyen comparación nativa
+con el lexer actual. Todavía no se integra con un parser ni autoaloja el compilador.
 
 ## Licencia
 
