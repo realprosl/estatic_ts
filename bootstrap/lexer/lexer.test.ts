@@ -108,8 +108,8 @@ test("bootstrap lexer: implementation tokenizes its own ETS source", () => {
 });
 test("bootstrap lexer: isolated graph has no other compiler modules", async () => {
   const graph = await loadModuleGraph(entry);assert.equal(graph.modules.length, 2);assert.deepEqual(graph.modules[0].dependencies, []);
-  const sources = readdirSync(join(root, "bootstrap"), { recursive: true }).filter(file => typeof file === "string" && file.endsWith(".ets")).sort();
-  assert.deepEqual(sources, ["lexer/demo.ets", "lexer/lexer.ets"]);
+  const sources = readdirSync(join(root, "bootstrap/lexer")).filter(file => file.endsWith(".ets")).sort();
+  assert.deepEqual(sources, ["demo.ets", "lexer.ets"]);
 });
 test("bootstrap lexer: deterministic generated ASCII corpus", () => {
   const pieces = ["alpha", "123", '"hello"', "const", "=>", "+=", "...", "0xFF", ";", "/*x*/", "//x\n", " ", "\n", "(", ")", "[", "]", "{", "}"];

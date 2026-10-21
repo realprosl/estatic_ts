@@ -1,0 +1,646 @@
+// Bootstrap parser. Tokens are supplied by the caller; no lexer/checker imports.
+// An arena owns all nodes. Edges are indices, so recursive ASTs need no cycles.
+export class ParserToken {
+  kind: string; lexeme: string;
+  offset: number; line: number; column: number;
+  endOffset: number; endLine: number; endColumn: number;
+  constructor(kind: string, lexeme: string, offset: number, line: number, column: number,
+              endOffset: number, endLine: number, endColumn: number) {
+    this.kind = kind; this.lexeme = lexeme; this.offset = offset; this.line = line; this.column = column;
+    this.endOffset = endOffset; this.endLine = endLine; this.endColumn = endColumn;
+  }
+}
+export class AstAttribute {
+  name: string; value: string;
+  constructor(name: string, value: string) { this.name = name; this.value = value; }
+}
+export class AstEdge {
+  role: string; node: number;
+  constructor(role: string, node: number) { this.role = role; this.node = node; }
+}
+export class AstNode {
+  kind: string; start: ParserToken; end: ParserToken;
+  attributes: AstAttribute[]; edges: AstEdge[];
+  constructor(kind: string, start: ParserToken, end: ParserToken) {
+    this.kind = kind; this.start = start; this.end = end; this.attributes = []; this.edges = [];
+  }
+  attr(name: string, value: string): void { this.attributes.push(new AstAttribute(name, value)); }
+  edge(role: string, node: number): void { this.edges.push(new AstEdge(role, node)); }
+  get(name: string): string {
+    for (const field of this.attributes) { if (field.name == name) return field.value; }
+    return "";
+  }
+}
+export class ParserDiagnostic {
+  message: string; token: ParserToken;
+  constructor(message: string, token: ParserToken) { this.message = message; this.token = token; }
+}
+export class ParseResult {
+  root: number; nodes: AstNode[]; diagnostics: ParserDiagnostic[];
+  constructor(root: number, nodes: AstNode[], diagnostics: ParserDiagnostic[]) {
+    this.root = root; this.nodes = nodes; this.diagnostics = diagnostics;
+  }
+}
+
+export class Parser {
+  tokens: ParserToken[]; current: number; nodes: AstNode[]; diagnostics: ParserDiagnostic[];
+  nesting: number; exhausted: boolean;
+  constructor(tokens: ParserToken[]) {
+    this.tokens = tokens; this.current = 0; this.nodes = []; this.diagnostics = [];
+    this.nesting = 0; this.exhausted = false;
+    if (tokens.length == 0) {
+      this.tokens.push(new ParserToken("eof", "", 0, 1, 1, 0, 1, 1));
+      this.report("La entrada de tokens necesita un eof final");
+    } else if (tokens[tokens.length - 1].kind != "eof") {
+      const last: ParserToken = tokens[tokens.length - 1];
+      this.tokens.push(new ParserToken("eof", "", last.endOffset, last.endLine, last.endColumn,
+                                      last.endOffset, last.endLine, last.endColumn));
+      this.report("La entrada de tokens necesita un eof final");
+    }
+    for (let i: number = 0; i + 1 < this.tokens.length; i = i + 1) {
+      if (this.tokens[i].kind == "eof") {
+        this.current = i; this.report("eof solo puede aparecer al final de los tokens"); this.current = 0; break;
+      }
+    }
+  }
+  peek(ahead: number): ParserToken { return this.tokens[Math.min(this.current + ahead, this.tokens.length - 1)]; }
+  previous(): ParserToken { return this.tokens[Math.max(0, this.current - 1)]; }
+  check(kind: string): boolean { return this.peek(0).kind == kind; }
+  take(): ParserToken {
+    const token: ParserToken = this.peek(0);
+    if (!this.check("eof")) this.current = this.current + 1;
+    return token;
+  }
+  accept(kind: string): boolean { if (!this.check(kind)) return false; this.take(); return true; }
+  report(message: string): void {
+    if (100 > this.diagnostics.length) this.diagnostics.push(new ParserDiagnostic(message, this.peek(0)));
+  }
+  expect(kind: string): ParserToken {
+    if (this.check(kind)) return this.take();
+    this.report("Se esperaba '" + kind + "'");
+    return this.peek(0);
+  }
+  enter(): boolean {
+    if (this.nesting >= 128) {
+      this.report("Límite de anidamiento del parser (128)"); this.exhausted = true;
+      this.current = this.tokens.length - 1; return false;
+    }
+    this.nesting = this.nesting + 1; return true;
+  }
+  leave(): void { this.nesting = this.nesting - 1; }
+  add(kind: string, start: ParserToken, end: ParserToken): number {
+    this.nodes.push(new AstNode(kind, start, end)); return this.nodes.length - 1;
+  }
+  node(cursor: number): AstNode { return this.nodes[cursor]; }
+  attr(cursor: number, name: string, value: string): void { this.nodes[cursor].attributes.push(new AstAttribute(name, value)); }
+  edge(cursor: number, role: string, child: number): void { this.nodes[cursor].edges.push(new AstEdge(role, child)); }
+  get(cursor: number, name: string): string { return this.nodes[cursor].get(name); }
+  setEnd(cursor: number, end: ParserToken): void { this.nodes[cursor].end = end; }
+  setKind(cursor: number, kind: string): void { this.nodes[cursor].kind = kind; }
+  skipNewlines(): void { while (this.accept("newline")) {} }
+  terminator(): ParserToken {
+    if (this.check(";") || this.check("newline")) return this.take();
+    if (!this.check("}") && !this.check("eof") && !this.check(",")) this.report("Se esperaba un terminador de sentencia");
+    return this.peek(0);
+  }
+  parseProgram(): ParseResult {
+    const start: ParserToken = this.peek(0);
+    const program: number = this.add("Program", start, start);
+    while (!this.check("eof")) {
+      this.skipNewlines();
+      if (this.check("eof")) break;
+      if (!this.accept(";")) {
+        const before: number = this.current;
+        const child: number = this.statement(true);
+        this.edge(program, "statements", child);
+        if (this.current == before && !this.check("eof")) { this.report("Token inesperado en el programa"); this.take(); }
+      }
+    }
+    this.setEnd(program, this.peek(0));
+    return new ParseResult(program, this.nodes, this.diagnostics);
+  }
+  statement(topLevel: boolean): number {
+    const start: ParserToken = this.peek(0);
+    if (!this.enter()) return this.add("ErrorNode", start, start);
+    const result: number = this.statementInner(topLevel);
+    this.leave(); return result;
+  }
+  statementInner(topLevel: boolean): number {
+    this.skipNewlines();
+    const start: ParserToken = this.peek(0);
+    let decorators: number[] = [];
+    while (this.accept("@")) {
+      const at: ParserToken = this.previous();
+      const name: ParserToken = this.expect("identifier");
+      const decorator: number = this.add("Decorator", at, name);
+      this.attr(decorator, "name", name.lexeme);
+      if (this.accept("(")) { this.argumentsInto(decorator, "args", ")"); this.setEnd(decorator, this.previous()); }
+      decorators.push(decorator); this.skipNewlines();
+    }
+    const exported: boolean = this.accept("export");
+    if (exported && !topLevel) this.report("'export' solo es válido en el nivel superior");
+    let result: number = -1;
+    if (this.check("let") || this.check("const") || this.check("using")) result = this.variable(true);
+    else if (this.check("function") || this.check("async")) result = this.functionDeclaration();
+    else if (this.accept("class")) result = this.classDeclaration(this.previous());
+    else if (this.accept("interface")) result = this.interfaceDeclaration(this.previous());
+    else if (this.check("type") && this.peek(0).lexeme == "type") {
+      const keyword: ParserToken = this.take();
+      const name: ParserToken = this.expect("identifier");
+      result = this.add("TypeAliasDeclaration", keyword, name); this.attr(result, "name", name.lexeme);
+      this.typeParameters(result); this.expect("=");
+      this.attr(result, "type", this.typeName()); this.setEnd(result, this.terminator());
+    } else if (this.accept("if")) {
+      const keyword: ParserToken = this.previous();
+      this.expect("("); const condition: number = this.expression(); this.expect(")");
+      const thenBranch: number = this.statement(false); this.skipNewlines();
+      result = this.add("IfStatement", keyword, this.node(thenBranch).end);
+      this.edge(result, "condition", condition); this.edge(result, "thenBranch", thenBranch);
+      if (this.accept("else")) { const branch: number = this.statement(false); this.edge(result, "elseBranch", branch); this.setEnd(result, this.node(branch).end); }
+    } else if (this.accept("while")) {
+      const keyword: ParserToken = this.previous(); this.expect("("); const condition: number = this.expression(); this.expect(")");
+      const body: number = this.statement(false); result = this.add("WhileStatement", keyword, this.node(body).end);
+      this.edge(result, "condition", condition); this.edge(result, "body", body);
+    } else if (this.accept("for")) result = this.forStatement(this.previous());
+    else if (this.accept("{")) result = this.block(this.previous());
+    else if (this.check("return") || this.check("break") || this.check("continue") || this.check("delete")) {
+      const keyword: ParserToken = this.take();
+      let kind: string = "ReturnStatement";
+      if (keyword.kind == "break") kind = "BreakStatement";
+      else if (keyword.kind == "continue") kind = "ContinueStatement";
+      else if (keyword.kind == "delete") kind = "DeleteStatement";
+      result = this.add(kind, keyword, keyword);
+      if (keyword.kind == "delete") {
+        const target: number = this.expression(); this.edge(result, "target", target);
+        if (this.node(target).kind != "IndexExpression") this.report("delete requiere un acceso por índice");
+      } else if (keyword.kind == "return" && !this.check(";") && !this.check("newline") && !this.check("}") && !this.check("eof")) {
+        this.edge(result, "value", this.expression());
+      }
+      this.setEnd(result, this.terminator());
+    } else if (this.check("import") || this.check("enum") || this.check("union") || this.check("switch") || this.check("default") || (exported && this.check("{"))) {
+      this.report("Construcción pendiente en bootstrap/parser: " + this.peek(0).lexeme);
+      result = this.add("ErrorNode", start, this.take()); this.synchronize();
+    } else {
+      const value: number = this.expression();
+      result = this.add("ExpressionStatement", this.node(value).start, this.terminator()); this.edge(result, "expression", value);
+      if (exported || decorators.length > 0) this.report("El modificador necesita una declaración compatible");
+    }
+    const declarationKind: string = this.node(result).kind;
+    if (exported) {
+      if (declarationKind != "VariableDeclaration" && declarationKind != "UsingDeclaration" && declarationKind != "FunctionDeclaration"
+          && declarationKind != "ClassDeclaration" && declarationKind != "InterfaceDeclaration" && declarationKind != "TypeAliasDeclaration"
+          && declarationKind != "ErrorNode") this.report("export necesita una declaración compatible");
+      this.attr(result, "exported", "true");
+    }
+    for (const decorator of decorators) this.edge(result, "decorators", decorator);
+    return result;
+  }
+  synchronize(): void {
+    let depth: number = 0;
+    while (!this.check("eof")) {
+      if (depth == 0 && (this.check(";") || this.check("newline"))) { this.take(); return; }
+      if (this.check("{")) depth = depth + 1;
+      if (this.check("}")) { if (depth == 0) return; depth = depth - 1; }
+      this.take();
+    }
+  }
+  variable(terminated: boolean): number {
+    const keyword: ParserToken = this.take(); const name: ParserToken = this.expect("identifier");
+    const kind: string = keyword.kind == "using" ? "UsingDeclaration" : "VariableDeclaration";
+    const result: number = this.add(kind, keyword, name); this.attr(result, "name", name.lexeme);
+    if (kind == "VariableDeclaration") this.attr(result, "mutable", keyword.kind == "let" ? "true" : "false");
+    if (this.accept(":")) this.attr(result, "declaredType", this.typeName());
+    this.expect("="); this.edge(result, "initializer", this.expression());
+    this.setEnd(result, terminated ? this.terminator() : this.previous()); return result;
+  }
+  block(open: ParserToken): number {
+    const result: number = this.add("BlockStatement", open, open);
+    while (!this.check("}") && !this.check("eof")) {
+      this.skipNewlines();
+      if (this.check("}") || this.check("eof")) break;
+      if (!this.accept(";")) {
+        const before: number = this.current; this.edge(result, "statements", this.statement(false));
+        if (this.current == before && !this.check("eof")) { this.report("Token inesperado en el bloque"); this.take(); }
+      }
+    }
+    this.setEnd(result, this.expect("}")); return result;
+  }
+  parametersInto(owner: number, arrow: boolean): void {
+    this.expect("(");
+    while (!this.check(")") && !this.check("eof")) {
+      const before: number = this.current;
+      const variadic: boolean = this.accept("..."); const isOut: boolean = this.accept("out");
+      const name: ParserToken = this.expect("identifier"); const optional: boolean = this.accept("?");
+      this.expect(":"); const annotation: string = this.typeName();
+      const param: number = this.add("Parameter", name, name);
+      this.attr(param, "name", name.lexeme); this.attr(param, "type", annotation);
+      this.attr(param, "out", isOut ? "true" : "false"); this.attr(param, "passing", isOut ? "out" : "value");
+      if (!arrow) { this.attr(param, "variadic", variadic ? "true" : "false"); this.attr(param, "optional", optional ? "true" : "false"); }
+      if (this.accept("=")) this.edge(param, "defaultValue", this.expression());
+      this.edge(owner, "params", param);
+      if (this.current == before || !this.accept(",")) break;
+    }
+    this.expect(")");
+  }
+  typeParameters(owner: number): void {
+    if (!this.accept("<")) return;
+    while (!this.check(">") && !this.check("eof")) {
+      const name: ParserToken = this.expect("identifier"); const param: number = this.add("TypeParameter", name, name);
+      this.attr(param, "name", name.lexeme);
+      if (this.accept("extends")) this.attr(param, "constraint", this.typeName());
+      if (this.accept("=")) this.attr(param, "default", this.typeName());
+      this.edge(owner, "typeParameters", param);
+      if (!this.accept(",")) break;
+    }
+    this.expect(">");
+  }
+  functionDeclaration(): number {
+    const keyword: ParserToken = this.take(); const isAsync: boolean = keyword.kind == "async";
+    if (isAsync) this.expect("function");
+    const name: ParserToken = this.expect("identifier"); const result: number = this.add("FunctionDeclaration", keyword, name);
+    this.attr(result, "name", name.lexeme); this.attr(result, "async", isAsync ? "true" : "false");
+    this.typeParameters(result); this.parametersInto(result, false); this.expect(":");
+    this.attr(result, "returnType", this.typeName());
+    let body: number = -1;
+    if (this.accept(";")) body = this.add("BlockStatement", this.previous(), this.previous());
+    else { const open: ParserToken = this.expect("{"); body = this.block(open); }
+    this.edge(result, "body", body); this.setEnd(result, this.node(body).end); return result;
+  }
+  classDeclaration(keyword: ParserToken): number {
+    const name: ParserToken = this.expect("identifier"); const result: number = this.add("ClassDeclaration", keyword, name);
+    this.attr(result, "name", name.lexeme); this.typeParameters(result); this.expect("{");
+    while (!this.check("}") && !this.check("eof")) {
+      this.skipNewlines(); if (this.check("}") || this.check("eof")) break;
+      if (!this.accept(";")) {
+        const before: number = this.current;
+        let access: string = "";
+        if (this.check("public") || this.check("private") || this.check("protected")) access = this.take().lexeme;
+        let isReadonly: boolean = this.accept("readonly"); const isStatic: boolean = this.accept("static");
+        if (!isReadonly) isReadonly = this.accept("readonly");
+        const member: ParserToken = this.expect("identifier");
+        const item: number = this.add("ClassField", member, member); this.attr(item, "name", member.lexeme);
+        if (access != "") this.attr(item, "access", access);
+        if (isStatic) this.attr(item, "isStatic", "true");
+        if (isReadonly) this.attr(item, "readonly", "true");
+        if (this.check("(") || this.check("<")) {
+          this.setKind(item, "ClassMethod"); this.typeParameters(item); this.parametersInto(item, false);
+          let returnType: string = "void";
+          if (this.accept(":")) returnType = this.typeName();
+          else if (member.lexeme != "constructor") this.report("El método necesita un tipo de retorno");
+          this.attr(item, "returnType", returnType);
+          const open: ParserToken = this.expect("{"); const body: number = this.block(open);
+          this.edge(item, "body", body); this.setEnd(item, this.node(body).end);
+          this.edge(result, "methods", item);
+        } else {
+          this.expect(":"); this.attr(item, "type", this.typeName());
+          if (this.accept("=")) this.edge(item, "defaultValue", this.expression());
+          this.setEnd(item, this.terminator()); this.edge(result, "fields", item);
+        }
+        if (this.current == before) { this.report("Miembro de clase no reconocido"); this.take(); }
+      }
+    }
+    this.setEnd(result, this.expect("}")); return result;
+  }
+  interfaceDeclaration(keyword: ParserToken): number {
+    const name: ParserToken = this.expect("identifier"); const result: number = this.add("InterfaceDeclaration", keyword, name);
+    this.attr(result, "name", name.lexeme); this.expect("{");
+    while (!this.check("}") && !this.check("eof")) {
+      this.skipNewlines(); if (this.check("}") || this.check("eof")) break;
+      const before: number = this.current; const member: ParserToken = this.expect("identifier");
+      const item: number = this.add("InterfaceField", member, member); this.attr(item, "name", member.lexeme);
+      if (this.check("(") || this.check("<")) {
+        this.setKind(item, "InterfaceMethod"); this.typeParameters(item); this.parametersInto(item, false);
+        this.expect(":"); this.attr(item, "returnType", this.typeName()); this.edge(result, "methods", item);
+      } else {
+        const optional: boolean = this.accept("?"); this.expect(":"); this.attr(item, "type", this.typeName());
+        this.attr(item, "optional", optional ? "true" : "false"); this.edge(result, "fields", item);
+      }
+      this.setEnd(item, this.terminator());
+      if (this.current == before) { this.report("Miembro de interface no reconocido"); this.take(); }
+    }
+    this.setEnd(result, this.expect("}")); return result;
+  }
+  forStatement(keyword: ParserToken): number {
+    const awaited: boolean = this.accept("await"); this.expect("(");
+    const result: number = this.add("ForStatement", keyword, keyword);
+    let iteration: boolean = false;
+    if (this.check("let") || this.check("const")) {
+      const saved: number = this.current;
+      let cursor: number = 0; let depth: number = 0;
+      while (this.peek(cursor).kind != "eof" && !iteration) {
+        const kind: string = this.peek(cursor).kind;
+        if (kind == "(") depth = depth + 1;
+        else if (kind == ")") { if (depth == 0) break; depth = depth - 1; }
+        else if (depth == 0) {
+          if (kind == ";") break;
+          if (kind == "of" || kind == "in") iteration = true;
+        }
+        cursor = cursor + 1;
+      }
+      if (iteration) {
+        const bindingKeyword: ParserToken = this.take(); const name: ParserToken = this.expect("identifier");
+        const binding: number = this.add("VariableDeclaration", bindingKeyword, name);
+        this.attr(binding, "name", name.lexeme); this.attr(binding, "mutable", bindingKeyword.kind == "let" ? "true" : "false");
+        if (this.accept(":")) this.attr(binding, "declaredType", this.typeName());
+        const iterationToken: ParserToken = this.take();
+        this.setKind(result, iterationToken.kind == "of" ? "ForOfStatement" : "ForInStatement");
+        if (iterationToken.kind == "of") this.attr(result, "await", awaited ? "true" : "false");
+        else if (awaited) this.report("for await requiere of");
+        this.edge(result, "binding", binding);
+        const iterable: number = this.expression(); this.edge(result, iterationToken.kind == "of" ? "iterable" : "target", iterable);
+      } else { this.current = saved; this.edge(result, "initializer", this.variable(true)); }
+    } else if (!this.accept(";")) {
+      const value: number = this.expression(); const init: number = this.add("ExpressionStatement", this.node(value).start, this.terminator());
+      this.edge(init, "expression", value); this.edge(result, "initializer", init);
+    }
+    if (!iteration) {
+      if (awaited) this.report("for await requiere of");
+      if (!this.check(";")) this.edge(result, "condition", this.expression());
+      this.expect(";"); if (!this.check(")")) this.edge(result, "increment", this.expression());
+    }
+    this.expect(")"); const body: number = this.statement(false); this.edge(result, "body", body);
+    this.setEnd(result, this.node(body).end); return result;
+  }
+  typeName(): string {
+    if (!this.enter()) return "<error>";
+    const result: string = this.typeInner(); this.leave(); return result;
+  }
+  typeInner(): string {
+    if (this.accept("readonly")) return "readonly<" + this.typeName() + ">";
+    if (this.accept("typeof")) return "$typeof$" + this.expect("identifier").lexeme;
+    if (this.accept("(")) {
+      let params: string[] = [];
+      while (!this.check(")") && !this.check("eof")) {
+        this.expect("identifier"); this.expect(":"); params.push(this.typeName()); if (!this.accept(",")) break;
+      }
+      this.expect(")"); this.expect("=>"); return "(" + params.join(",") + ")=>" + this.typeName();
+    }
+    if (this.accept("[")) {
+      let parts: string[] = [];
+      while (!this.check("]") && !this.check("eof")) { parts.push(this.typeName()); if (!this.accept(",")) break; }
+      this.expect("]"); return "[" + parts.join(",") + "]";
+    }
+    let result: string = "";
+    if (this.check("identifier") || this.check("type")) result = this.take().lexeme;
+    else { this.report("Se esperaba un tipo"); if (!this.check("eof")) this.take(); return "<error>"; }
+    while (this.accept(".")) { if (this.check("default")) result = result + "." + this.take().lexeme; else result = result + "." + this.expect("identifier").lexeme; }
+    if (this.accept("<")) {
+      let args: string[] = [];
+      while (!this.check(">") && !this.check("eof")) { args.push(this.typeName()); if (!this.accept(",")) break; }
+      this.expect(">");
+      if (result == "Array" && args.length == 1) result = args[0] + "[]";
+      else result = result + "<" + args.join(",") + ">";
+    }
+    while (this.accept("[")) {
+      let size: string = "";
+      if (!this.check("]")) { if (this.check("number") || this.check("identifier")) size = this.take().lexeme; else this.report("Tamaño de array no válido"); }
+      this.expect("]"); result = result + "[" + size + "]";
+    }
+    while (this.accept("|")) result = result + " | " + this.typeName();
+    while (this.accept("&")) result = result + " & " + this.typeName();
+    return result;
+  }
+  expression(): number {
+    const token: ParserToken = this.peek(0);
+    if (!this.enter()) return this.add("ErrorNode", token, token);
+    let result: number = -1;
+    if (this.arrowStart()) result = this.arrow();
+    else result = this.assignment();
+    if (this.accept("?")) {
+      const yes: number = this.expression(); this.expect(":"); const no: number = this.expression();
+      const conditional: number = this.add("TernaryExpression", this.node(result).start, this.node(no).end);
+      this.edge(conditional, "condition", result); this.edge(conditional, "thenBranch", yes); this.edge(conditional, "elseBranch", no); result = conditional;
+    }
+    this.leave(); return result;
+  }
+  arrowStart(): boolean {
+    let cursor: number = this.check("async") ? 1 : 0;
+    if (this.peek(cursor).kind != "(") return false;
+    let depth: number = 0;
+    while (this.peek(cursor).kind != "eof") {
+      const kind: string = this.peek(cursor).kind;
+      if (kind == "(") depth = depth + 1;
+      else if (kind == ")") { depth = depth - 1; if (depth == 0) break; }
+      cursor = cursor + 1;
+    }
+    cursor = cursor + 1;
+    if (this.peek(cursor).kind == "=>") return true;
+    if (this.peek(cursor).kind != ":") return false;
+    while (this.peek(cursor).kind != "eof" && this.peek(cursor).kind != ";" && this.peek(cursor).kind != "{" && this.peek(cursor).kind != "newline") {
+      if (this.peek(cursor).kind == "=>") return true; cursor = cursor + 1;
+    }
+    return false;
+  }
+  arrow(): number {
+    const isAsync: boolean = this.accept("async"); const open: ParserToken = this.peek(0);
+    const result: number = this.add("ArrowFunctionExpression", open, open);
+    this.attr(result, "isAsync", isAsync ? "true" : "false"); this.parametersInto(result, true);
+    if (this.accept(":")) this.attr(result, "returnType", this.typeName());
+    this.expect("=>"); let body: number = -1;
+    if (this.accept("{")) body = this.block(this.previous()); else body = this.expression();
+    this.edge(result, "body", body); this.setEnd(result, this.node(body).end); return result;
+  }
+  assignment(): number {
+    const left: number = this.binary(1); const op: ParserToken = this.peek(0);
+    const operators: string[] = ["=", "+=", "-=", "*=", "/=", "%=", "**=", "&=", "|=", "^=", "<<=", ">>="];
+    if (!operators.includes(op.kind)) return left;
+    this.take();
+    if (!this.enter()) return left;
+    const right: number = this.assignment(); this.leave();
+    const kind: string = this.node(left).kind;
+    if (kind != "IdentifierExpression" && kind != "MemberExpression" && kind != "IndexExpression") this.report("El lado izquierdo de una asignación debe ser una variable, campo o índice");
+    const result: number = this.add(op.kind == "=" ? "AssignmentExpression" : "CompoundAssignmentExpression", this.node(left).start, this.node(right).end);
+    if (op.kind != "=") this.attr(result, "operator", op.lexeme);
+    this.edge(result, "target", left); this.edge(result, "value", right); return result;
+  }
+  binaryKind(): string {
+    const first: ParserToken = this.peek(0); const second: ParserToken = this.peek(1);
+    if ((first.kind == "<" || first.kind == ">") && second.kind == first.kind && first.endOffset == second.offset) return first.kind + second.kind;
+    return first.kind;
+  }
+  precedence(kind: string): number {
+    if (kind == "??") return 1; if (kind == "||") return 2; if (kind == "&&") return 3;
+    if (kind == "==" || kind == "!=") return 4;
+    if (kind == "<" || kind == "<=" || kind == ">" || kind == ">=" || kind == "instanceof") return 5;
+    if (kind == "|" || kind == "&" || kind == "^" || kind == "<<" || kind == ">>") return 6;
+    if (kind == "+" || kind == "-") return 7;
+    if (kind == "*" || kind == "/" || kind == "%") return 8;
+    return 0;
+  }
+  binary(minimum: number): number {
+    let left: number = this.unary();
+    while (this.precedence(this.binaryKind()) >= minimum) {
+      const kind: string = this.binaryKind(); const op: ParserToken = this.take(); if (kind != op.kind) this.take();
+      if (!this.enter()) return left;
+      let right: number = -1;
+      if (kind == "instanceof") { const annotation: string = this.typeName(); right = this.add("IdentifierExpression", op, op); this.attr(right, "name", annotation); }
+      else right = this.binary(this.precedence(kind) + 1);
+      this.leave(); const parent: number = this.add("BinaryExpression", this.node(left).start, this.node(right).end);
+      this.attr(parent, "operator", kind); this.edge(parent, "left", left); this.edge(parent, "right", right); left = parent;
+    }
+    return left;
+  }
+  unary(): number {
+    const op: ParserToken = this.peek(0);
+    if (op.kind == "!" || op.kind == "-" || op.kind == "+" || op.kind == "~" || op.kind == "typeof" || op.kind == "await") {
+      this.take(); if (!this.enter()) return this.add("ErrorNode", op, op);
+      const operand: number = this.unary(); this.leave();
+      const result: number = this.add(op.kind == "await" ? "AwaitExpression" : "UnaryExpression", op, this.node(operand).end);
+      if (op.kind != "await") this.attr(result, "operator", op.lexeme);
+      this.edge(result, "operand", operand); return result;
+    }
+    const operand: number = this.postfix();
+    if (this.check("as") || this.check("satisfies")) {
+      const op: ParserToken = this.take(); const annotation: string = this.typeName();
+      const next: ParserToken = this.peek(0);
+      const end: ParserToken = new ParserToken("", "", next.offset, next.line, next.column, next.offset, next.line, next.column);
+      const result: number = this.add(op.kind == "as" ? "AsExpression" : "SatisfiesExpression", this.node(operand).start, end);
+      this.attr(result, op.kind == "as" ? "targetType" : "declaredType", annotation);
+      this.edge(result, op.kind == "as" ? "expression" : "operand", operand); return result;
+    }
+    return operand;
+  }
+  genericFollower(): string {
+    if (!this.check("<")) return "";
+    let depth: number = 0; let cursor: number = 0;
+    while (this.peek(cursor).kind != "eof") {
+      const kind: string = this.peek(cursor).kind;
+      if (kind == "<") depth = depth + 1;
+      else if (kind == ">") { depth = depth - 1; if (depth == 0) return this.peek(cursor + 1).kind; }
+      else if (kind == ";" || kind == "newline" || kind == "=" || kind == "{") return "";
+      cursor = cursor + 1;
+    }
+    return "";
+  }
+  typeArguments(owner: number): void {
+    this.expect("<");
+    while (!this.check(">") && !this.check("eof")) {
+      this.attr(owner, "typeArgument", this.typeName()); if (!this.accept(",")) break;
+    }
+    this.expect(">");
+  }
+  argumentsInto(owner: number, role: string, close: string): void {
+    while (!this.check(close) && !this.check("eof")) {
+      const before: number = this.current; let value: number = -1;
+      if (role != "elements" && this.check("identifier") && this.peek(1).kind == ":") {
+        const name: ParserToken = this.take(); this.take(); const child: number = this.expression();
+        value = this.add("NamedArgumentExpression", this.node(child).start, this.node(child).end);
+        this.attr(value, "name", name.lexeme); this.edge(value, "value", child);
+      } else if (this.accept("...")) {
+        const child: number = this.expression(); value = this.add("SpreadElement", this.node(child).start, this.node(child).end); this.edge(value, "expression", child);
+      } else value = this.expression();
+      this.edge(owner, role, value);
+      if (this.current == before || !this.accept(",")) break;
+      if (this.check(close) && close != "]") this.report("Coma final no admitida aquí");
+    }
+    this.expect(close);
+  }
+  postfix(): number {
+    let result: number = this.primary();
+    let scanning: boolean = true;
+    while (scanning && !this.check("eof")) {
+      if (this.check("(") || (this.node(result).kind == "IdentifierExpression" && this.genericFollower() == "(")) {
+        const parent: number = this.add("CallExpression", this.node(result).start, this.node(result).end);
+        if (this.node(result).kind != "IdentifierExpression") this.report("Solo se pueden invocar funciones por nombre");
+        this.attr(parent, "callee", this.get(result, "name"));
+        if (this.check("<")) this.typeArguments(parent);
+        this.expect("("); this.argumentsInto(parent, "args", ")"); this.setEnd(parent, this.previous()); result = parent;
+      } else if (this.node(result).kind == "IdentifierExpression" && this.genericFollower() == ".") {
+        this.setKind(result, "GenericIdentifierExpression"); this.typeArguments(result);
+      } else if (this.check(".") || this.check("?.")) {
+        const optional: boolean = this.take().kind == "?.";
+        let member: ParserToken = this.peek(0);
+        if (this.check("delete") || this.check("default")) member = this.take(); else member = this.expect("identifier");
+        const parent: number = this.add("MemberExpression", this.node(result).start, member);
+        this.edge(parent, "object", result); this.attr(parent, "optional", optional ? "true" : "false");
+        if (this.check("<")) this.typeArguments(parent);
+        if (this.accept("(")) {
+          this.setKind(parent, "MemberCallExpression"); this.attr(parent, "method", member.lexeme);
+          this.argumentsInto(parent, "args", ")"); this.setEnd(parent, this.previous());
+        } else { this.attr(parent, "member", member.lexeme); if (this.get(parent, "typeArgument") != "") this.report("Los argumentos de tipo requieren una llamada"); }
+        result = parent;
+      } else if (this.accept("[")) {
+        const cursor: number = this.expression(); const close: ParserToken = this.expect("]");
+        const parent: number = this.add("IndexExpression", this.node(result).start, close);
+        this.edge(parent, "object", result); this.edge(parent, "index", cursor); result = parent;
+      } else scanning = false;
+    }
+    return result;
+  }
+  primary(): number {
+    const token: ParserToken = this.take();
+    if (token.kind == "number" || token.kind == "string" || token.kind == "true" || token.kind == "false") {
+      const result: number = this.add("LiteralExpression", token, token);
+      const annotation: string = token.kind == "number" ? "number" : token.kind == "string" ? "string" : "boolean";
+      this.attr(result, "literalType", annotation);
+      this.attr(result, annotation == "number" ? "raw" : "value", token.lexeme); return result;
+    }
+    if (token.kind == "identifier") { const result: number = this.add("IdentifierExpression", token, token); this.attr(result, "name", token.lexeme); return result; }
+    if (token.kind == "(") { const result: number = this.expression(); this.expect(")"); return result; }
+    if (token.kind == "[") {
+      const result: number = this.add("ArrayLiteralExpression", token, token); this.argumentsInto(result, "elements", "]"); this.setEnd(result, this.previous()); return result;
+    }
+    if (token.kind == "{") {
+      const result: number = this.add("ObjectLiteralExpression", token, token);
+      while (!this.check("}") && !this.check("eof")) {
+        const key: ParserToken = this.expect("identifier"); let value: number = -1;
+        if (this.accept(":")) value = this.expression();
+        else { value = this.add("IdentifierExpression", key, key); this.attr(value, "name", key.lexeme); }
+        const property: number = this.add("ObjectProperty", key, this.node(value).end);
+        this.attr(property, "key", key.lexeme); this.edge(property, "value", value); this.edge(result, "properties", property);
+        if (!this.accept(",")) break;
+      }
+      this.setEnd(result, this.expect("}")); return result;
+    }
+    if (token.kind == "new") {
+      let name: string = this.expect("identifier").lexeme;
+      while (this.accept(".")) { if (this.check("default")) name = name + "." + this.take().lexeme; else name = name + "." + this.expect("identifier").lexeme; }
+      const result: number = this.add("NewExpression", token, token);
+      if (this.accept("<")) {
+        let args: string[] = [];
+        while (!this.check(">") && !this.check("eof")) { args.push(this.typeName()); if (!this.accept(",")) break; }
+        this.expect(">"); name = name + "<" + args.join(",") + ">";
+      }
+      this.attr(result, "className", name); this.expect("("); this.argumentsInto(result, "args", ")"); this.setEnd(result, this.previous()); return result;
+    }
+    if (token.kind == "template") this.report("Construcción pendiente en bootstrap/parser: template e interpolación");
+    else this.report("Se esperaba una expresión");
+    return this.add("ErrorNode", token, token);
+  }
+  quote(text: string): string {
+    let result: string = "\""; const hex: string = "0123456789abcdef";
+    for (let i: number = 0; i < text.length; i = i + 1) {
+      const c: string = text.charAt(i); const code: number = text.charCodeAt(i);
+      if (c == "\"") result = result + "\\\""; else if (c == "\\") result = result + "\\\\";
+      else if (code < 32) result = result + "\\u00" + hex.charAt(Math.floor(code / 16)) + hex.charAt(code % 16);
+      else result = result + c;
+    }
+    return result + "\"";
+  }
+  position(offset: number, line: number, column: number): string {
+    return "{\"offset\":" + numberToString(offset) + ",\"line\":" + numberToString(line) + ",\"column\":" + numberToString(column) + "}";
+  }
+  spanJson(start: ParserToken, end: ParserToken): string {
+    return "{\"start\":" + this.position(start.offset, start.line, start.column) + ",\"end\":" + this.position(end.endOffset, end.endLine, end.endColumn) + "}";
+  }
+  inspect(): string {
+    const result: ParseResult = this.parseProgram();
+    let output: string = "{\"root\":" + numberToString(result.root) + ",\"nodes\":["; let separator: string = "";
+    for (const item of result.nodes) {
+      output = output + separator + "{\"kind\":" + this.quote(item.kind) + ",\"span\":" + this.spanJson(item.start, item.end) + ",\"attributes\":[";
+      let comma: string = "";
+      for (const field of item.attributes) { output = output + comma + "{\"name\":" + this.quote(field.name) + ",\"value\":" + this.quote(field.value) + "}"; comma = ","; }
+      output = output + "],\"edges\":["; comma = "";
+      for (const edge of item.edges) { output = output + comma + "{\"role\":" + this.quote(edge.role) + ",\"node\":" + numberToString(edge.node) + "}"; comma = ","; }
+      output = output + "]}"; separator = ",";
+    }
+    output = output + "],\"diagnostics\":["; separator = "";
+    for (const diagnostic of result.diagnostics) {
+      output = output + separator + "{\"phase\":\"parser\",\"message\":" + this.quote(diagnostic.message) + ",\"span\":" + this.spanJson(diagnostic.token, diagnostic.token) + "}"; separator = ",";
+    }
+    return output + "]}";
+  }
+}
+
+export function parseTokens(tokens: ParserToken[]): ParseResult { let parser: Parser = new Parser(tokens); return parser.parseProgram(); }
+export function inspectAst(tokens: ParserToken[]): string { let parser: Parser = new Parser(tokens); return parser.inspect(); }

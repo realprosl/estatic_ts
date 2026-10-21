@@ -14,6 +14,29 @@ import { compile, analyze, parse } from "../../src/compiler.ts";
 
 const compilerRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+test("codegen native: indexed fields mutate this and readonly getters stay const", () => {
+  const source = `
+    class Entry { value:number; values:number[]; }
+    class Store {
+      entries:Entry[]; numbers:number[];
+      constructor(){this.entries=[new Entry(1,[])];this.numbers=[0];}
+      update():void{this.entries[0].value=7;}
+      replace():void{this.numbers[0]=3;}
+      append():void{this.entries[0].values.push(9);}
+      read():number{return this.entries[0].value+this.numbers[0]+this.entries[0].values[0];}
+    }
+    let store:Store=new Store(); store.update();store.replace();store.append();print(store.read());
+  `;
+  const output = compile(source).cpp;
+  assert.match(output, /double read\(\) const/);
+  const dir = mkdtempSync(join(tmpdir(), "ets-indexed-this-"));
+  try {
+    const file = join(dir, "main.cpp"), binary = join(dir, "main"); writeFileSync(file, output);
+    execFileSync(process.env.CXX ?? "g++", ["-std=c++20", "-O0", "-pthread", "-fno-exceptions", `-I${compilerRoot}`, file, "-o", binary], { encoding: "utf8", timeout: 120000 });
+    assert.equal(execFileSync(binary, [], { encoding: "utf8", timeout: 5000 }).trim(), "19");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("HTTP: createServer usa exclusivamente cpp-httplib por defecto", () => {
   const out = compile("let server: Server = http.createServer();").cpp;
   assert.match(out, /#include "runtime\/ets_http_httplib\.hpp"/);

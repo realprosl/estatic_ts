@@ -2184,7 +2184,8 @@ export class CppGenerator {
   private expressionMutatesThis(node: Expression, classDecl: ClassDeclaration, visited: Set<string>): boolean {
     if (node.kind === "AssignmentExpression" || node.kind === "CompoundAssignmentExpression") {
       let target: Expression = node.target;
-      while (target.kind === "MemberExpression") target = target.object;
+      // Arena fields such as this.nodes[i].span still mutate the receiver.
+      while (target.kind === "MemberExpression" || target.kind === "IndexExpression") target = target.object;
       return target.kind === "IdentifierExpression" && target.name === "this";
     }
     // V30.13.4: `this.field.method()` puede mutar `this` (side-effect sobre
@@ -2207,7 +2208,7 @@ export class CppGenerator {
       // el runtime (`push`, `pop`, `insert`, `clear`, `remove`, etc.).
       const startsFromThis = (e: Expression): boolean => {
         if (e.kind === "IdentifierExpression") return e.name === "this";
-        if (e.kind === "MemberExpression") return startsFromThis(e.object);
+        if (e.kind === "MemberExpression" || e.kind === "IndexExpression") return startsFromThis(e.object);
         return false;
       };
       // Metodos del runtime que mutan el receptor in-place.
