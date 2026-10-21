@@ -6,6 +6,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Lexer } from "../../src/lexer/lexer.ts";
 import { Parser } from "../../src/parser/parser.ts";
+import { DiagnosticError } from "../../src/core/diagnostic.ts";
+import { templateCases } from "../fixtures/templates.ts";
 
 function parse(source: string) {
   return new Parser(new Lexer(source).tokenize()).parseProgram();
@@ -16,6 +18,40 @@ function firstStatement(source: string): unknown {
   assert.equal(ast.kind, "Program");
   return ast.statements[0];
 }
+
+for (const [name, source] of templateCases) test(`parser templates: ${name}`, () => {
+  const statement = firstStatement(source + ";") as any;
+  assert.equal(statement.expression.kind, "TemplateLiteralExpression");
+  assert.equal(statement.expression.parts.length, statement.expression.expressions.length + 1);
+  assert.deepEqual(statement.expression.span, new Lexer(source).tokenize()[0].span);
+});
+test("parser templates: escaped interpolation is literal and keeps raw escapes", () => {
+  const statement = firstStatement('`raw \\${name} \\n \\` \\\\`;') as any;
+  assert.deepEqual(statement.expression.parts, ['raw \\${name} \\n \\` \\\\']);
+  assert.deepEqual(statement.expression.expressions, []);
+});
+test("parser templates: nested AST and absolute UTF-16 spans", () => {
+  const source = 'const s=`🙂\nouter ${`inner ${missing}`}`;';
+  const statement = firstStatement(source) as any;
+  assert.deepEqual(statement.initializer.parts, ["🙂\nouter ", ""]);
+  const inner = statement.initializer.expressions[0]; assert.equal(inner.kind, "TemplateLiteralExpression");
+  assert.deepEqual(inner.parts, ["inner ", ""]);
+  const identifier = inner.expressions[0]; assert.equal(identifier.name, "missing");
+  const offset = source.indexOf("missing"), column = offset - source.lastIndexOf("\n", offset);
+  assert.deepEqual(identifier.span, { start: { offset, line: 2, column }, end: { offset: offset + 7, line: 2, column: column + 7 } });
+});
+for (const source of ['`${}`;', '`${a b}`;', '`${1+}`;', '`${1;2}`;']) test(`parser templates reject malformed expression: ${source}`, () => {
+  assert.throws(() => parse(source), (error: any) => error instanceof DiagnosticError && error.diagnostics.some(d => d.phase === "parser"));
+});
+test("parser templates: lexical diagnostics use absolute interpolation position", () => {
+  const source = 'const s=`🙂\nvalue ${$}`;'; const offset = source.indexOf("$}");
+  assert.throws(() => parse(source), (error: any) => error instanceof DiagnosticError && error.diagnostics[0].phase === "lexer" && error.diagnostics[0].span.start.offset === offset && error.diagnostics[0].span.start.line === 2);
+});
+test("parser templates: truncated calls, arrays and objects report diagnostics at EOF", () => {
+  for (const source of ['`${foo(}`;', '`${[1,}`;', '`${({a:})}`;']) {
+    assert.throws(() => parse(source), (error: any) => error instanceof DiagnosticError && error.diagnostics.some(d => d.phase === "parser"), source);
+  }
+});
 
 test("parser: declaración de variable simple", () => {
   const stmt = firstStatement("let x: number = 42;") as { kind: string; name: string; mutable: boolean };

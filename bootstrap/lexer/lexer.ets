@@ -174,23 +174,57 @@ export class Lexer {
     if (this.peek(0) != quote) { this.error("Cadena sin cerrar", offset, line, column); return; }
     this.advance(); this.emit("string", value, offset, line, column);
   }
-  scanTemplate(offset: number, line: number, column: number): void {
-    this.advance();
-    let value: string = "";
-    let depth: number = 0;
-    while (!this.atEnd()) {
-      const c: string = this.peek(0);
-      if (depth == 0 && c == "`") { this.advance(); this.emit("template", value, offset, line, column); return; }
-      if (c == "\\") {
-        value = value + this.advance();
-        if (!this.atEnd()) value = value + this.advance();
-      } else if (c == "$" && this.peek(1) == "{") {
-        value = value + this.advance(); value = value + this.advance(); depth = depth + 1;
-      } else if (c == "}" && depth > 0) {
-        value = value + this.advance(); depth = depth - 1;
-      } else value = value + this.advance();
+  templateFailure(message: string, offset: number, line: number, column: number): void {
+    while (!this.atEnd()) this.advance();
+    this.error(message, offset, line, column);
+  }
+  templateString(): boolean {
+    const quote: string = this.advance();
+    while (!this.atEnd() && this.peek(0) != quote && this.peek(0) != "\n") {
+      if (this.peek(0) == "\\") {
+        this.advance(); if (this.peek(0) == "\n") return false;
+      }
+      if (!this.atEnd()) this.advance();
     }
-    this.error("Template sin cerrar", offset, line, column);
+    if (this.peek(0) != quote) return false;
+    this.advance(); return true;
+  }
+  scanTemplate(offset: number, line: number, column: number): void {
+    this.advance(); const begin: number = this.byteOffset;
+    // 0 = template text; positive values = interpolation brace depth.
+    // An explicit stack avoids recursion and shields strings and comments.
+    let frames: number[] = [0];
+    while (!this.atEnd()) {
+      const top: number = frames.length - 1; const depth: number = frames[top];
+      const c: string = this.peek(0); const next: string = this.peek(1);
+      if (depth == 0) {
+        if (c == "\\") { this.advance(); if (!this.atEnd()) this.advance(); }
+        else if (c == "`") {
+          const end: number = this.byteOffset; this.advance(); frames.pop();
+          if (frames.length == 0) { this.emit("template", this.source.slice(begin, end), offset, line, column); return; }
+        } else if (c == "$" && next == "{") {
+          if (frames.length >= 128) { this.templateFailure("Límite de anidamiento de templates (128)", offset, line, column); return; }
+          frames.push(1); this.advance(); this.advance();
+        } else this.advance();
+      } else if (c == "\"" || c == "'") {
+        if (!this.templateString()) { this.templateFailure("Cadena sin cerrar en interpolación", offset, line, column); return; }
+      } else if (c == "/" && next == "/") {
+        while (!this.atEnd() && this.peek(0) != "\n") this.advance();
+      } else if (c == "/" && next == "*") {
+        this.advance(); this.advance();
+        while (!this.atEnd() && !(this.peek(0) == "*" && this.peek(1) == "/")) this.advance();
+        if (this.atEnd()) { this.templateFailure("Comentario sin cerrar en interpolación", offset, line, column); return; }
+        this.advance(); this.advance();
+      } else if (c == "`") {
+        if (frames.length >= 128) { this.templateFailure("Límite de anidamiento de templates (128)", offset, line, column); return; }
+        frames.push(0); this.advance();
+      } else {
+        if (c == "{") frames[top] = depth + 1;
+        if (c == "}") { frames[top] = depth - 1; if (frames[top] == 0) frames.pop(); }
+        this.advance();
+      }
+    }
+    this.error(frames[frames.length - 1] > 0 ? "Interpolación sin cerrar" : "Template sin cerrar", offset, line, column);
   }
   symbol(offset: number, line: number, column: number): void {
     const three: string = this.peek(0) + this.peek(1) + this.peek(2);

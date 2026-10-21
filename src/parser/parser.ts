@@ -2,6 +2,8 @@ import type { Program, Statement, Expression, Expression as Expr, TypeName, Bloc
 import { DiagnosticError, type Diagnostic } from "../core/diagnostic.ts";
 import { span } from "../core/span.ts";
 import { Lexer } from "../lexer/lexer.ts";
+import { scanTemplate, templatePositions } from "../lexer/template.ts";
+import type { Position } from "../core/span.ts";
 import type { Token, TokenKind } from "../lexer/token.ts";
 import { arrayType, functionType, genericType, readonlyType, tupleType, typeofType } from "../types/type-system.ts";
 
@@ -1168,6 +1170,10 @@ export class Parser {
     return expr;
   }
   private primary(): Expression {
+    if (this.check("eof")) {
+      const token = this.peek(); this.error(token, "Se esperaba una expresión");
+      return { kind: "LiteralExpression", value: 0, literalType: "number", span: token.span };
+    }
     const token = this.advance();
     if (token.kind === "template") return this.templateLiteral(token);
     if (token.kind === "new") {
@@ -1344,47 +1350,32 @@ export class Parser {
   // Convierte el lexema crudo de un `template` token en partes literales y
   // expresiones AST, reusando el lexer+parser para cada `${...}`.
   private templateLiteral(token: Token): TemplateLiteralExpression {
-    const parts: string[] = [];
-    const expressions: Expression[] = [];
-    let buffer = "";
-    let depth = 0;
-    let exprStart = -1;
-    for (let i = 0; i < token.lexeme.length; i++) {
-      const c = token.lexeme[i];
-      if (depth === 0 && c === "$" && token.lexeme[i + 1] === "{") {
-        parts.push(buffer);
-        buffer = "";
-        depth++;
-        i++;
-        exprStart = i + 1;
-        continue;
-      }
-      if (depth > 0 && c === "{") { depth++; buffer += c; continue; }
-      if (depth > 0 && c === "}") {
-        depth--;
-        if (depth === 0) {
-          const exprText = token.lexeme.slice(exprStart, i);
-          expressions.push(this.parseSubexpression(exprText));
-          exprStart = -1;
-          // Resetear el buffer: las letras que cayeron como `buffer += c`
-          // mientras `depth > 0` son el texto de la expresión y NO deben
-          // mezclarse con la siguiente parte literal.
-          buffer = "";
-          continue;
-        }
-        buffer += c;
-        continue;
-      }
-      buffer += c;
+    const source = "`" + token.lexeme + "`", scanned = scanTemplate(source);
+    if (scanned.error || scanned.end !== source.length) {
+      throw new DiagnosticError([{ phase: "parser", message: scanned.error ?? "Token template crudo inválido", span: token.span }]);
     }
-    parts.push(buffer);
+    const positions = templatePositions(source, token.span.start);
+    const parts = scanned.parts.map(part => source.slice(part.start, part.end));
+    const expressions = scanned.expressions.map(range => this.parseSubexpression(source.slice(range.start, range.end), positions[range.start]));
     return { kind: "TemplateLiteralExpression", parts, expressions, span: token.span };
   }
-  private parseSubexpression(source: string): Expression {
-    const subLexer = new Lexer(source);
-    const subTokens = subLexer.tokenize();
+  private parseSubexpression(source: string, origin: Position): Expression {
+    const rebase = (p: Position): Position => ({ offset: origin.offset + p.offset, line: origin.line + p.line - 1, column: p.line === 1 ? origin.column + p.column - 1 : p.column });
+    let subTokens: Token[];
+    try { subTokens = new Lexer(source).tokenize(); }
+    catch (error) {
+      if (!(error instanceof DiagnosticError)) throw error;
+      throw new DiagnosticError(error.diagnostics.map(d => ({ ...d, span: { ...d.span, start: rebase(d.span.start), end: rebase(d.span.end) } })));
+    }
+    subTokens = subTokens.map(token => ({ ...token, span: { ...token.span, start: rebase(token.span.start), end: rebase(token.span.end) } }));
     const subParser = new Parser(subTokens);
-    return subParser.expression();
+    subParser.skipNewlines();
+    if (subParser.check("eof")) throw new DiagnosticError([{ phase: "parser", message: "La interpolación necesita una expresión", span: subParser.peek().span }]);
+    const expression = subParser.expression();
+    subParser.skipNewlines();
+    if (!subParser.check("eof")) subParser.error(subParser.peek(), "Se esperaba fin de interpolación");
+    if (subParser.diagnostics.length) throw new DiagnosticError(subParser.diagnostics);
+    return expression;
   }
   private isGenericCall(): boolean { return this.isGenericFollowedBy("("); }
   // V1.2: igual que `isGenericCall` pero acepta `.` después de `>`, para

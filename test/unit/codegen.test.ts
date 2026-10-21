@@ -14,6 +14,23 @@ import { compile, analyze, parse } from "../../src/compiler.ts";
 
 const compilerRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+test("codegen native: nested templates shield strings, comments and escaped interpolation", () => {
+  const source = [
+    'let value:number=7;',
+    'print(`outer ${`inner ${value}`} end`);',
+    'print(`brace=${"} ` ${"}!`);',
+    'print(`comment=${value /* } ` ${ */ + 2}`);',
+    'print(`escaped \\${notDefined}`);',
+    'print(`raw\\n`);',
+  ].join("\n");
+  const output = compile(source).cpp, dir = mkdtempSync(join(tmpdir(), "ets-templates-"));
+  try {
+    const file = join(dir, "main.cpp"), binary = join(dir, "main"); writeFileSync(file, output);
+    execFileSync(process.env.CXX ?? "g++", ["-std=c++20", "-O0", "-pthread", "-fno-exceptions", `-I${compilerRoot}`, file, "-o", binary], { encoding: "utf8", timeout: 120000, env: { ...process.env, TMPDIR: dir } });
+    assert.equal(execFileSync(binary, [], { encoding: "utf8", timeout: 5000 }), 'outer inner 7 end\nbrace=} ` ${!\ncomment=9\nescaped \\${notDefined}\nraw\\n\n');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("codegen native: indexed fields and for-of/in mutations preserve const getters", () => {
   const source = `
     class Entry { value:number; values:number[]; }

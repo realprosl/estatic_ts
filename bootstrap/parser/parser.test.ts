@@ -11,6 +11,8 @@ import { Parser } from "../../src/parser/parser.ts";
 import { scanModuleSyntax } from "../../src/modules/module-syntax.ts";
 import { transportTokens } from "./token-transport.ts";
 import { prepareParserTokens, type ParserInputToken } from "./template-tokens.ts";
+import { templateCases } from "../../test/fixtures/templates.ts";
+import { DiagnosticError } from "../../src/core/diagnostic.ts";
 import type { Token } from "../../src/lexer/token.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -97,6 +99,7 @@ function parity(source: string): NativeResult {
 }
 
 const fixtures: [string, string][] = [
+  ...templateCases.map(([name, source]): [string, string] => ["complete template " + name, source + ";"]),
   ["empty template", "``;"],
   ["plain template", "`hello world`;"],
   ["template identifier", "const text=`hello ${name}`;"],
@@ -698,7 +701,7 @@ test("bootstrap parser templates diagnose unprepared raw token", () => {
 });
 test("bootstrap parser templates diagnose missing closing brace in raw input", () => {
   const tokens = new Lexer('`hello`;').tokenize(); tokens[0] = { ...tokens[0], lexeme: '${name' };
-  const result = nativeTokens(tokens); assert.ok(result.diagnostics.some(d => d.message === "Interpolación sin cerrar"));
+  const result = nativeTokens(tokens); assert.ok(result.diagnostics.some(d => d.message.includes("sin cerrar")));
 });
 test("bootstrap parser template preparation bounds nested lexical scanning", () => {
   const tokens = new Lexer('`hello`;').tokenize();
@@ -710,6 +713,15 @@ test("bootstrap parser template preparation keeps empty segments and spans", () 
   const parts = tokens.filter(t => t.kind === "template-text");
   assert.deepEqual(parts.map(t => t.lexeme), ["", "", ""]);
   assert.deepEqual(parts.map(t => [t.span.start.offset, t.span.end.offset]), [[1, 1], [5, 5], [9, 9]]);
+});
+test("bootstrap parser template adapter rebases lexical diagnostics", () => {
+  const source = 'const s=`🙂\n${$}`;';
+  assert.throws(() => prepareParserTokens(new Lexer(source).tokenize()), (error: any) => error instanceof DiagnosticError && error.diagnostics[0].span.start.offset === source.lastIndexOf("$") && error.diagnostics[0].span.start.line === 2);
+});
+test("bootstrap parser templates: truncated calls, arrays and objects terminate with diagnostics", () => {
+  for (const source of ['`${foo(}`;', '`${[1,}`;', '`${({a:})}`;']) {
+    const result = native(source); assert.ok(result.diagnostics.length > 0 && result.diagnostics.length <= 100, source);
+  }
 });
 test("bootstrap parser: packed transport uses UTF-8 lengths and one argument per token", () => {
   const tokens = new Lexer("'🙂:España'").tokenize(); const args = transportTokens(tokens);

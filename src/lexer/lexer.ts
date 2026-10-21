@@ -1,6 +1,7 @@
 import { DiagnosticError, type Diagnostic } from "../core/diagnostic.ts";
 import { span, type Position } from "../core/span.ts";
 import { KEYWORDS, type Token, type TokenKind } from "./token.ts";
+import { scanTemplate } from "./template.ts";
 
 export class Lexer {
   private readonly source: string;
@@ -172,40 +173,12 @@ export class Lexer {
     this.add("string", value, start);
   }
 
-  // Template literal: lee el contenido crudo entre backticks. NO tokeniza las
-  // expresiones dentro de `${...}`; las guarda tal cual para que el parser las
-  // re-lexee y parsee recursivamente. Lleva un contador de profundidad para
-  // soportar `${ `${inner}` }` y plantillas anidadas.
+  // Preserve the raw body while balancing template/interpolation contexts.
   private template(start: Position): void {
-    this.advance(); // backtick de apertura
-    let raw = "";
-    let depth = 0;
-    while (!this.atEnd()) {
-      const c = this.peek();
-      if (depth === 0 && c === "`") {
-        this.advance();
-        this.add("template", raw, start);
-        return;
-      }
-      if (c === "\\") {
-        raw += this.advance();
-        if (!this.atEnd()) raw += this.advance();
-        continue;
-      }
-      if (c === "$" && this.peek(1) === "{") {
-        raw += this.advance();
-        raw += this.advance();
-        depth++;
-        continue;
-      }
-      if (c === "}" && depth > 0) {
-        raw += this.advance();
-        depth--;
-        continue;
-      }
-      raw += this.advance();
-    }
-    this.diagnostics.push({ phase: "lexer", message: "Template sin cerrar", span: span(start, this.position()) });
+    const begin = this.offset, result = scanTemplate(this.source, begin);
+    while (this.offset < result.end) this.advance();
+    if (result.error) this.diagnostics.push({ phase: "lexer", message: result.error, span: span(start, this.position()) });
+    else this.add("template", this.source.slice(begin + 1, result.end - 1), start);
   }
 
   private symbol(start: Position): void {

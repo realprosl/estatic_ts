@@ -6,6 +6,22 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v54 (`estatic 1.16.0`): cierre sintáctico de templates ordinarios del dialecto.
+  Los lexers TS y ETS usan una pila explícita de contextos, respetan objetos,
+  strings, comentarios y templates anidados, y conservan lexemas completos.
+  Diagnósticos de cierres ausentes y límite de 128 contextos, sin recursión
+  en el recorrido de delimitadores. El lexer ETS continúa aislado.
+- El parser TS y el adaptador del parser ETS comparten el delimitado léxico
+  host. El parser TS exige una expresión completa y conserva posiciones
+  absolutas UTF-16, incluidos errores léxicos internos. Se corrigen `${a b}`
+  aceptado parcialmente y `\${name}` interpretado como interpolación.
+- Regresiones de objetos, strings/comentarios con llaves/backticks, Unicode,
+  cierres incompletos, límites y ejecución C++ real. Lexer nativo: 64 pruebas;
+  parser/adaptador: 322. Se conserva la semántica de escapes crudos del dialecto.
+- El parser de stage 0 informa un error al pedir una expresión en EOF, en vez
+  de reutilizar el token anterior y recurrir indefinidamente en llamadas
+  truncadas como `${foo(}`.
+
 - v53 (`estatic 1.15.0`): templates e interpolaciones en el parser ETS aislado.
   AST en arena con partes ordenadas, segmentos vacíos, escapes crudos y
   expresiones con precedencia normal. Spans absolutos UTF-16, incluidos Unicode

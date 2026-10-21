@@ -69,7 +69,8 @@ tamaño de entrada.
 
 - Literales, identificadores, arrays y objetos con shorthand, spread y `new`.
 - Templates con segmentos vacíos, multilínea, escapes crudos e interpolaciones
-  de expresiones, incluidas llamadas, objetos y templates anidados básicos.
+  de expresiones, incluidas llamadas, objetos y templates anidados; strings y
+  comentarios dentro de las interpolaciones protegen sus delimitadores.
 - Operadores unarios, binarios y sus precedencias; shifts contiguos, asignación
   simple y compuesta, ternarios, `as`, `satisfies`, `await` e `instanceof`.
 - Llamadas por nombre, argumentos con nombre y spread, genéricos, miembros,
@@ -95,7 +96,7 @@ tamaño de entrada.
 - Exports de listas locales, reexports de listas/estrella/namespace y default
   de expresiones, funciones/clases con nombre o anónimas, incluidas async.
 
-Las 308 pruebas compilan dos unidades C++, enlazan y ejecutan el binario; también
+Las 322 pruebas compilan dos unidades C++, enlazan y ejecutan el binario; también
 comprueban el adaptador léxico host. Incluyen
 comparaciones estructurales con stage 0, precedencia fijada independientemente,
 spans con Unicode, errores y límites de profundidad/diagnósticos, y 30 entradas
@@ -209,25 +210,31 @@ Los spans del template incluyen las comillas; los de las partes las excluyen,
 y los de las expresiones mantienen offset/línea/columna absolutos UTF-16.
 Una prueba suministra directamente tokens preparados al binario, sin lexer.
 
-El adaptador respeta strings, comentarios y templates al buscar llaves de
-cierre; usa el lexer host sólo para tokenizar el texto de cada expresión.
-La preparación y el recorrido léxico anidado tienen límites de 128. No modifica
-los tokens originales. Las entradas inválidas que rechaza el lexer host siguen
-siendo errores léxicos del host, no diagnósticos del parser ETS.
+Ambos lexers delimitan el template completo con una pila explícita que distingue
+texto e interpolaciones y cuenta las llaves de objetos/bloques. Strings y
+comentarios protegen sus llaves y backticks; las comillas dentro del texto son
+texto ordinario. El adaptador y el parser de stage 0 comparten el recorrido
+léxico host de delimitadores; el lexer ETS implementa el mismo contrato sin
+imports. El límite léxico es 128 contextos activos (texto/interpolación),
+independiente del presupuesto de profundidad del parser.
 
-Límite importante: el lexer actual de stage 0 entrega templates crudos con un
-contador simplificado de llaves. Puede truncar combinaciones de templates
-anidados, llaves de objetos/strings/comentarios y backticks. El adaptador no
-puede recuperar texto que ese lexer ya perdió. Se validan los casos indicados,
-no toda combinación de templates de TypeScript. Corregir/completar el contrato
-léxico en ambos lexers y conectarlo se reserva para un bloque independiente.
-Tampoco se añaden tagged templates ni se cambia el frontend de producción.
+El adaptador usa el lexer host para tokenizar cada expresión y no modifica los
+tokens originales. Los errores léxicos de esas expresiones conservan la fase
+lexer y se reubican a sus coordenadas originales. El parser de stage 0 hace lo
+mismo y exige consumir toda la expresión, rechazando `${a b}`, `${}` y otros
+fragmentos incompletos. Los tests comprueban el AST nativo y la salida C++ de
+programas con templates anidados, comentarios y delimitadores en strings.
+
+Con esto se cierra el soporte sintáctico de templates ordinarios del dialecto.
+Se conserva su semántica de escapes crudos: `\n` dentro del texto representa
+barra y letra, y `\${name}` es texto literal. No se pretende adoptar toda la
+semántica de escapes de JavaScript. Tagged templates y regex literals no son
+construcciones soportadas del dialecto. Los módulos ETS siguen aislados;
+su futura conexión nativa no forma parte del análisis de templates de este paso.
 
 ## Pendiente antes de completar el módulo
 
 - Cabeceras `@include`/`@link` y las formas de módulo excluidas arriba.
-- Completar el contrato léxico de templates en ambos lexers y su integración;
-  tagged templates no forman parte de esta cobertura.
 - Destructuring, parameter properties, genéricos variádicos y decoradores sobre
   miembros o colocados después de `export`/`function`.
 - Paridad de todas las posiciones y mensajes de diagnóstico con stage 0, y
