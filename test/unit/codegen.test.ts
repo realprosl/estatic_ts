@@ -14,7 +14,7 @@ import { compile, analyze, parse } from "../../src/compiler.ts";
 
 const compilerRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-test("codegen native: indexed fields mutate this and readonly getters stay const", () => {
+test("codegen native: indexed fields and for-of/in mutations preserve const getters", () => {
   const source = `
     class Entry { value:number; values:number[]; }
     class Store {
@@ -23,17 +23,21 @@ test("codegen native: indexed fields mutate this and readonly getters stay const
       update():void{this.entries[0].value=7;}
       replace():void{this.numbers[0]=3;}
       append():void{this.entries[0].values.push(9);}
+      updateEach():void{for(const value of this.numbers){this.entries[0].value+=value;}}
+      bumpIndices():void{for(const i in this.numbers){this.entries[0].value+=i+1;}}
+      sumRead():number{let sum:number=0;for(const value of this.numbers){sum+=value;}return sum;}
       read():number{return this.entries[0].value+this.numbers[0]+this.entries[0].values[0];}
     }
-    let store:Store=new Store(); store.update();store.replace();store.append();print(store.read());
+    let store:Store=new Store(); store.update();store.replace();store.append();store.updateEach();store.bumpIndices();print(store.read());print(store.sumRead());
   `;
   const output = compile(source).cpp;
   assert.match(output, /double read\(\) const/);
+  assert.match(output, /double sumRead\(\) const/);
   const dir = mkdtempSync(join(tmpdir(), "ets-indexed-this-"));
   try {
     const file = join(dir, "main.cpp"), binary = join(dir, "main"); writeFileSync(file, output);
     execFileSync(process.env.CXX ?? "g++", ["-std=c++20", "-O0", "-pthread", "-fno-exceptions", `-I${compilerRoot}`, file, "-o", binary], { encoding: "utf8", timeout: 120000 });
-    assert.equal(execFileSync(binary, [], { encoding: "utf8", timeout: 5000 }).trim(), "19");
+    assert.equal(execFileSync(binary, [], { encoding: "utf8", timeout: 5000 }).trim(), "23\n3");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

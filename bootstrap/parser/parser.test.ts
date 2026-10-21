@@ -8,6 +8,8 @@ import { execFileSync } from "node:child_process";
 import { compileFile, loadModuleGraph } from "../../src/modules/module-loader.ts";
 import { Lexer } from "../../src/lexer/lexer.ts";
 import { Parser } from "../../src/parser/parser.ts";
+import { scanModuleSyntax } from "../../src/modules/module-syntax.ts";
+import { transportTokens } from "./token-transport.ts";
 import type { Token } from "../../src/lexer/token.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -31,7 +33,7 @@ before(async () => {
 after(() => rmSync(directory, { recursive: true, force: true }));
 
 function transport(tokens: Token[]): string[] {
-  return tokens.flatMap(token => [token.kind, token.lexeme, ...Object.values(token.span.start).map(String), ...Object.values(token.span.end).map(String)]);
+  return transportTokens(tokens);
 }
 function nativeTokens(tokens?: Token[]): NativeResult {
   const result: NativeResult = JSON.parse(execFileSync(binary, tokens === undefined ? [] : transport(tokens), { encoding: "utf8", timeout: 15000, maxBuffer: 32 * 1024 * 1024 }));
@@ -199,7 +201,7 @@ for (const [name, source] of [
   const result = native(source); assert.ok(result.diagnostics.length > 0); assert.ok(result.diagnostics.length <= 100);
   for (const diagnostic of result.diagnostics) assert.ok(diagnostic.span.start.offset <= source.length);
 });
-for (const source of ["import {x} from 'm';", "export default 1;", "const text=`hello ${name}`;"])
+for (const source of ["const text=`hello ${name}`;"])
   test(`bootstrap parser: explicit pending syntax ${source}`, () => { assert.ok(native(source).diagnostics.some(item => item.message.includes("pendiente"))); });
 
 test("bootstrap parser: bare return and recovery keep subsequent statements", () => {
@@ -414,3 +416,210 @@ test("bootstrap parser: deterministic declaration token corpus terminates", () =
     native(parts.join(" "));
   }
 });
+
+// Stage 0 extracts module forms before parsing and discards their AST. Compare
+// preserved requests/exports with that extractor, not its placeholder nodes.
+function moduleMetadata(result: NativeResult): { requests: any[]; exports: any[] } {
+  const requests: any[] = [], exports: any[] = [];
+  for (const node of statements(result)) {
+    const attrs = fields(node), specifiers = children(result, node, "specifiers").map(fields);
+    if (node.kind === "ImportDeclaration") {
+      const bindings = specifiers.filter(item => item.form !== "namespace").map(item => ({ imported: item.imported, local: item.local }));
+      const namespace = specifiers.find(item => item.form === "namespace")?.local;
+      requests.push({ specifier: attrs.source, names: bindings.map(item => item.imported), ...(bindings.length ? { bindings } : {}), ...(namespace ? { namespace } : {}), line: node.span.start.line });
+    } else if (node.kind === "ExportNamedDeclaration") {
+      const bindings = specifiers.map(item => ({ imported: item.name, local: item.alias ?? item.name }));
+      if (attrs.source !== undefined) requests.push({ specifier: attrs.source, names: bindings.map(item => item.imported), ...(bindings.length ? { bindings } : {}), reexport: true, line: node.span.start.line });
+      else exports.push(...bindings.map(item => ({ name: item.imported, exported: item.local })));
+    } else if (node.kind === "ExportAllDeclaration") {
+      requests.push({ specifier: attrs.source, names: [], ...(attrs.namespace ? { namespace: attrs.namespace } : { star: true }), reexport: true, line: node.span.start.line });
+    }
+  }
+  return { requests, exports };
+}
+const moduleFixtures: [string, string][] = [
+  ["side effect", "import './setup';"],
+  ["default import", "import entry from './entry';"],
+  ["contextual from binding", "import from from './entry';"],
+  ["contextual from namespace", "import * as from from './entry';"],
+  ["named imports", "import {one,two} from './values';"],
+  ["named aliases", "import {increment as add,base as seed} from './values';"],
+  ["default as named", "import {default as entry} from './entry';"],
+  ["namespace", "import * as values from './values';"],
+  ["default and named", "import entry,{one,two as second} from './entry';"],
+  ["default and namespace", "import entry,* as values from './entry';"],
+  ["empty import list", "import {} from './setup';"],
+  ["trailing import comma", "import {one,two as second,} from './values';"],
+  ["import type list", "import type {Shape,Box as Crate} from './types';"],
+  ["import type default", "import type Shape from './types';"],
+  ["import type namespace", "import type * as Types from './types';"],
+  ["per specifier type", "import {type Shape,increment,type Box as Crate} from './values';"],
+  ["multiline list", "import {\n one,\n two as second,\n}\nfrom './values';"],
+  ["multiline default namespace", "import\n entry,\n *\n as\n values\n from\n './values';"],
+  ["comments", "import /*binding*/ {one /*alias*/ as first} /*source*/ from './values';"],
+  ["bare package specifier", "import {join as pathJoin} from '@example/path';"],
+  ["no semicolon", "import {one} from './values'\nprint(one);"],
+  ["several imports", "import './setup'; import first from './a'; import {x as value} from './b';"],
+  ["local export list", "export {one,two};"],
+  ["local export alias", "export {one as first,two as second};"],
+  ["local export default alias", "export {entry as default};"],
+  ["empty local export", "export {};"],
+  ["trailing export comma", "export {one as first,};"],
+  ["named reexport", "export {one,two as second} from './values';"],
+  ["default reexport", "export {default as entry} from './entry';"],
+  ["reexport as default", "export {entry as default} from './entry';"],
+  ["reexport star", "export * from './values';"],
+  ["reexport namespace", "export * as values from './values';"],
+  ["reexport namespace as default", "export * as default from './values';"],
+  ["type local export", "export type {Shape,Box as Crate};"],
+  ["type named reexport", "export type {Shape,Box as Crate} from './types';"],
+  ["type star reexport", "export type * from './types';"],
+  ["type namespace reexport", "export type * as Types from './types';"],
+  ["per specifier type export", "export {type Shape,increment as add};"],
+  ["multiline reexport", "export\n type\n {Shape as View,}\n from\n './types';"],
+  ["export newline terminates", "export {one as first}\nconst next=2;"],
+  ["empty reexport", "export {} from './setup';"],
+  ["unicode source", "import {value as local} from './España-🙂';"],
+];
+for (const [name, source] of moduleFixtures) test(`bootstrap parser native module metadata parity: ${name}`, () => {
+  const result = native(source); assert.deepEqual(result.diagnostics, [], JSON.stringify(result.diagnostics));
+  const expected = scanModuleSyntax(source);
+  assert.deepEqual(moduleMetadata(result), { requests: expected.requests, exports: expected.exports.map(({name,exported}) => ({name,exported})) });
+});
+
+const defaultFixtures: [string, string][] = [
+  ["number", "export default 42;"],
+  ["identifier", "export default answer;"],
+  ["object", "export default {ok:true,value:42};"],
+  ["array", "export default [1,2,3];"],
+  ["call", "export default create();"],
+  ["arrow", "export default (x:number)=>x+1;"],
+  ["named function", "export default function add(x:number):number{return x+1;}"],
+  ["named async function", "export default async function load():Promise<number>{return await read();}"],
+  ["named class", "export default class Box{value:number;constructor(value:number){this.value=value;}}"],
+  ["variable declaration compatibility", "export default const answer:number=42;"],
+  ["decorated named function", "@trace('f') export default function f():void{}"],
+];
+for (const [name, source] of defaultFixtures) test(`bootstrap parser native default export parity: ${name}`, () => { parity(source); });
+
+test("bootstrap parser: module AST is pinned independently including alias token kind", () => {
+  const source = "import {value as local} from './m'; export {local as publicValue};";
+  assert.equal(new Lexer(source).tokenize().find(token => token.lexeme === "as")!.kind, "as");
+  const result = native(source); assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(nativeShape(result), shape("Program", {}, { statements: [
+    shape("ImportDeclaration", { source: "./m" }, { specifiers: [shape("ImportSpecifier", { imported: "value", local: "local", form: "named" })] }),
+    shape("ExportNamedDeclaration", {}, { specifiers: [shape("ExportSpecifier", { name: "local", alias: "publicValue" })] }),
+  ] }));
+});
+test("bootstrap parser: type flags survive on declarations and individual bindings", () => {
+  const result = native("import type Default,{Box as Crate} from './types'; import {type Shape,run} from './values'; export {type Shape as View,run}; export type * as Types from './types';");
+  assert.deepEqual(result.diagnostics, []); const nodes = statements(result);
+  assert.equal(fields(nodes[0]).typeOnly, "true");
+  assert.deepEqual(children(result, nodes[0], "specifiers").map(node => fields(node).typeOnly), ["true", "true"]);
+  assert.deepEqual(children(result, nodes[1], "specifiers").map(node => fields(node).typeOnly), ["true", undefined]);
+  assert.deepEqual(children(result, nodes[2], "specifiers").map(node => fields(node).typeOnly), ["true", undefined]);
+  assert.deepEqual(fields(nodes[3]), { namespace: "Types", source: "./types", typeOnly: "true" });
+});
+test("bootstrap parser: contextual type name is distinguished from type modifier", () => {
+  const result = native("import {type as typeValue} from './m'; export {typeValue as type};");
+  assert.deepEqual(result.diagnostics, []); const nodes = statements(result);
+  assert.deepEqual(fields(children(result, nodes[0], "specifiers")[0]), { imported: "type", local: "typeValue", form: "named" });
+  assert.deepEqual(fields(children(result, nodes[1], "specifiers")[0]), { name: "typeValue", alias: "type" });
+});
+for (const [name, source, kind] of [
+  ["anonymous function", "export default function(x:number):number{return x;}", "FunctionDeclaration"],
+  ["anonymous async function", "export default async function():Promise<number>{return await read();}", "FunctionDeclaration"],
+  ["anonymous generic function", "export default function<T>(x:T):T{return x;}", "FunctionDeclaration"],
+  ["anonymous class", "export default class{value:number;}", "ClassDeclaration"],
+  ["anonymous generic class", "export default class<T>{value:T;}", "ClassDeclaration"],
+] as const) test(`bootstrap parser: ${name} keeps anonymous identity without synthetic global`, () => {
+  const result = native(source); assert.deepEqual(result.diagnostics, []); const declaration = children(result, statements(result)[0], "declaration")[0];
+  assert.equal(declaration.kind, kind); assert.equal(fields(declaration).anonymous, "true");
+  assert.equal(fields(declaration).name, undefined);
+  assert.ok(!result.nodes.some(node => node.attributes.some(field => field.value.startsWith("ets_default_"))));
+});
+test("bootstrap parser: default async arrow remains an expression", () => {
+  const result = native("export default async (x:number)=>await load(x);"); assert.deepEqual(result.diagnostics, []);
+  const declaration = children(result, statements(result)[0], "declaration")[0]; assert.equal(declaration.kind, "ArrowFunctionExpression"); assert.equal(fields(declaration).isAsync, "true");
+});
+test("bootstrap parser: module source names are metadata and never resolved", () => {
+  const result = native("import {missing as local} from './does-not-exist'; export * from 'unknown-package'; export {local as publicName};");
+  assert.deepEqual(result.diagnostics, []); assert.equal(moduleMetadata(result).requests.length, 2);
+});
+test("bootstrap parser: module spans include aliases and preserve following statements", () => {
+  const source = "import {value as local} from './🙂'\nexport {local as publicValue};\nconst after=1;";
+  const result = native(source); assert.deepEqual(result.diagnostics, []); const nodes = statements(result);
+  const item = children(result, nodes[0], "specifiers")[0];
+  assert.equal(item.span.start.offset, source.indexOf("value")); assert.equal(item.span.end.offset, source.indexOf("local") + 5);
+  assert.equal(nodes[0].span.end.offset, source.indexOf("\n")); assert.equal(nodes[1].span.start.line, 2);
+  assert.equal(fields(nodes[2]).name, "after");
+});
+test("bootstrap parser: both complete drivers now parse their import statements", () => {
+  for (const path of ["bootstrap/lexer/demo.ets", "bootstrap/parser/demo.ets"]) {
+    const result = native(readFileSync(join(root, path), "utf8")); assert.deepEqual(result.diagnostics, [], path);
+    assert.equal(statements(result)[0].kind, "ImportDeclaration");
+  }
+});
+for (const [name, source, message] of [
+  ["missing import from", "import {value} './m';", "'from'"],
+  ["missing module string", "import {value} from 42;", "literal de módulo"],
+  ["missing imported name", "import {,} from './m';", "nombre de import/export"],
+  ["missing local alias", "import {value as } from './m';", "'identifier'"],
+  ["default cannot be local binding", "import {value as default} from './m';", "'identifier'"],
+  ["named default needs alias", "import {default} from './m';", "nombre local"],
+  ["duplicate import aliases", "import {one as local,two as local} from './m';", "duplicado"],
+  ["duplicate default and named", "import local,{one as local} from './m';", "duplicado"],
+  ["namespace requires as", "import * ns from './m';", "requiere 'as nombre'"],
+  ["namespace requires name", "import * as from './m';", "'from'"],
+  ["missing import comma", "import {one two} from './m';", "entre nombres"],
+  ["missing import close", "import {one from './m';", "'}'"],
+  ["default trailing comma", "import local, from './m';", "binding, namespace"],
+  ["dynamic import", "import('./m');", "import dinámico"],
+  ["import in function", "function f():void{import {x} from './m';}", "nivel superior"],
+  ["export in function", "function f():void{export {x};}", "nivel superior"],
+  ["export import", "export import {x} from './m';", "no puede preceder"],
+  ["missing export alias", "export {value as };", "nombre de import/export"],
+  ["missing export comma", "export {one two};", "entre nombres"],
+  ["duplicate exported names", "export {one as publicName,two as publicName};", "duplicado"],
+  ["missing reexport module", "export {x} from;", "literal de módulo"],
+  ["star reexport requires source", "export *;", "'from'"],
+  ["namespace export requires name", "export * as from './m';", "'from'"],
+  ["default missing expression", "export default;", "expresión"],
+  ["default missing function body", "export default function f():void", "'{'"],
+  ["decorated import", "@trace import {x} from './m';", "decoradores"],
+  ["decorated export list", "@trace export {x};", "decoradores"],
+  ["decorated default expression", "@trace export default 42;", "decoradores"],
+  ["quoted exported name", "export {x as 'public-name'};", "nombre de import/export"],
+  ["import attributes remain unsupported", "import data from './m' with {type:'json'};", "terminador"],
+] as const) test(`bootstrap parser native module diagnostics: ${name}`, () => {
+  const result = native(source); assert.ok(result.diagnostics.some(item => item.message.includes(message)), JSON.stringify(result.diagnostics));
+});
+test("bootstrap parser: incomplete imports recover before a following declaration", () => {
+  for (const source of ["import {x}\nconst after=1;", "export {x} from\nconst after=1;", "import {x as } from './m';\nconst after=1;"]) {
+    const result = native(source); assert.ok(result.diagnostics.length > 0);
+    assert.equal(fields(statements(result).at(-1)!).name, "after");
+  }
+});
+test("bootstrap parser: anonymous default identity does not collide with source names", () => {
+  const result = native("const ets_default_0=1; export default function():number{return ets_default_0;}");
+  assert.deepEqual(result.diagnostics, []); const declaration = children(result, statements(result)[1], "declaration")[0];
+  assert.deepEqual(fields(declaration), { anonymous: "true", async: "false", returnType: "number" });
+});
+test("bootstrap parser: deterministic malformed module token corpus terminates", () => {
+  const pieces = ["import", "export", "default", "type", "as", "from", "local", "other", "'./m'", "{", "}", ",", ";", "*", "(", ")", "function"];
+  let seed = 47329;
+  for (let run = 0; run < 40; run++) {
+    const parts: string[] = [];
+    for (let i = 0; i < 35; i++) { seed = (seed * 16807) % 2147483647; parts.push(pieces[seed % pieces.length]); }
+    native(parts.join(" "));
+  }
+});
+test("bootstrap parser: packed transport uses UTF-8 lengths and one argument per token", () => {
+  const tokens = new Lexer("'🙂:España'").tokenize(); const args = transportTokens(tokens);
+  assert.equal(args.length, tokens.length + 1); assert.ok(args[1].startsWith("6:string12:🙂:España"));
+  assert.deepEqual(nativeTokens(tokens).diagnostics, []);
+});
+for (const record of ["", "x:bad", "999:a", "6:number1:10:1:11:11:11:11:1", transportTokens(new Lexer("1").tokenize())[1] + "junk"])
+  test(`bootstrap parser: malformed token frame is rejected ${record}`, () => {
+    assert.throws(() => execFileSync(binary, ["--tokens", record], { encoding: "utf8", timeout: 5000 }), (error: any) => error.status === 2 && error.stdout.includes("Invalid token transport"));
+  });
