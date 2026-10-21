@@ -63,7 +63,7 @@ Para consultar la versión instalada:
 ```bash
 etsc --version
 etsc -v
-# estatic 1.14.0 (v52)
+# estatic 1.15.0 (v53)
 ```
 
 El `estatic.config.ts` generado NO requiere que listes `-luv`, `-lssl`,
@@ -996,7 +996,7 @@ npm run test:http-routing
 npm run test:e2e
 ```
 
-La última verificación del conjunto estable registrada en `status.md` pasó 1471 pruebas
+La última verificación del conjunto estable registrada en `status.md` pasó 1503 pruebas
 unitarias. El número puede cambiar al añadir casos; no se mantiene como una
 constante manual en este README.
 
@@ -1008,9 +1008,9 @@ de tokens. `npm run bootstrap:lexer -- 'let total: number = 42;'` lo transpila,
 compila su C++ y ejecuta el ejemplo. Sus 44 pruebas incluyen comparación nativa
 con el lexer actual. El parser avanza como segundo módulo independiente:
 `npm run bootstrap:parser` ejecuta un ejemplo con tokens preparados y muestra
-su AST. Sus 276 pruebas incluyen analizar su propio fuente ETS, el del lexer y
+su AST. Sus 308 pruebas incluyen analizar su propio fuente ETS, el del lexer y
 los drivers, declaraciones enum/union, imports/exports con alias y árboles de
-switch. Esto valida el análisis sintáctico
+switch, además de templates e interpolaciones mediante tokens preparados. Esto valida el análisis sintáctico
 del bootstrap; todavía no añade switch al frontend ni al backend de stage 0.
 La [cobertura y los pendientes](./bootstrap/parser/README.md) están documentados;
 todavía no se integra la cadena nativa entre fases ni autoaloja el compilador.
