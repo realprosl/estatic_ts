@@ -10,6 +10,7 @@ import { Lexer } from "../../src/lexer/lexer.ts";
 import { Parser } from "../../src/parser/parser.ts";
 import { scanModuleSyntax } from "../../src/modules/module-syntax.ts";
 import { transportTokens } from "./token-transport.ts";
+import { prepareParserTokens, type ParserInputToken } from "./template-tokens.ts";
 import type { Token } from "../../src/lexer/token.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -32,10 +33,10 @@ before(async () => {
 });
 after(() => rmSync(directory, { recursive: true, force: true }));
 
-function transport(tokens: Token[]): string[] {
+function transport(tokens: ParserInputToken[]): string[] {
   return transportTokens(tokens);
 }
-function nativeTokens(tokens?: Token[]): NativeResult {
+function nativeTokens(tokens?: ParserInputToken[]): NativeResult {
   const result: NativeResult = JSON.parse(execFileSync(binary, tokens === undefined ? [] : transport(tokens), { encoding: "utf8", timeout: 15000, maxBuffer: 32 * 1024 * 1024 }));
   assert.ok(Number.isInteger(result.root) && result.root >= 0 && result.root < result.nodes.length);
   for (const node of result.nodes) for (const edge of node.edges) assert.ok(Number.isInteger(edge.node) && edge.node >= 0 && edge.node < result.nodes.length);
@@ -54,7 +55,9 @@ function hostShape(node: any, forcedKind?: string): any {
   const attributes: Record<string, string[]> = {}, edges: Record<string, any[]> = {};
   for (const [key, value] of Object.entries(node)) {
     if (key === "kind" || excludedRoles.has(key) || value === undefined || (value === false && key !== "value")) continue;
-    if (scalarKeys.has(key) && (typeof value === "string" || typeof value === "number" || typeof value === "boolean")) {
+    if (key === "parts" && kind === "TemplateLiteralExpression") {
+      edges.parts = (value as string[]).map(value => ({ kind: "TemplatePart", attributes: { value: [value] }, edges: {} }));
+    } else if (scalarKeys.has(key) && (typeof value === "string" || typeof value === "number" || typeof value === "boolean")) {
       if (key === "value" && node.literalType === "number" && node.raw !== undefined) continue;
       attributes[key] = [String(value)];
     } else if (Array.isArray(value)) {
@@ -94,6 +97,17 @@ function parity(source: string): NativeResult {
 }
 
 const fixtures: [string, string][] = [
+  ["empty template", "``;"],
+  ["plain template", "`hello world`;"],
+  ["template identifier", "const text=`hello ${name}`;"],
+  ["template adjacent expressions", "`${a}${b}`;"],
+  ["template precedence", "`sum=${1+2*3}!`;"],
+  ["template calls", "`value=${items.map(convert)[0]}`;"],
+  ["template ternary", "`${ok?left:right}`;"],
+  ["template multiline", "`first\n${value}\nlast`;"],
+  ["template unicode", "`España 🙂 ${name}`;"],
+  ["template member chain", "`x=${value}`.trim().length;"],
+  ["template as call argument", "print(`x=${value}`,`done`);"],
   ["empty program", ""],
   ["empty separators", ";;\n;"],
   ["variable and const", "let x:number=42; const label:string='hello';"],
@@ -201,8 +215,6 @@ for (const [name, source] of [
   const result = native(source); assert.ok(result.diagnostics.length > 0); assert.ok(result.diagnostics.length <= 100);
   for (const diagnostic of result.diagnostics) assert.ok(diagnostic.span.start.offset <= source.length);
 });
-for (const source of ["const text=`hello ${name}`;"])
-  test(`bootstrap parser: explicit pending syntax ${source}`, () => { assert.ok(native(source).diagnostics.some(item => item.message.includes("pendiente"))); });
 
 test("bootstrap parser: bare return and recovery keep subsequent statements", () => {
   const result = native("function f():void{return\nprint(1);}\nlet bad=;\nprint(2);");
@@ -613,6 +625,91 @@ test("bootstrap parser: deterministic malformed module token corpus terminates",
     for (let i = 0; i < 35; i++) { seed = (seed * 16807) % 2147483647; parts.push(pieces[seed % pieces.length]); }
     native(parts.join(" "));
   }
+});
+for (const [name, source, parts, expressions] of [
+  ["escaped interpolation", '`raw \\${name}`;', ['raw \\${name}'], 0],
+  ["escaped backtick", '`a\\`b`;', ['a\\`b'], 0],
+  ["escaped backslash before interpolation", '`a\\\\${value}`;', ['a\\\\', ''], 1],
+  ["object braces", '`${({value:1}).value}`;', ['', ''], 1],
+  ["string brace", '`${"}"}`;', ['', ''], 1],
+  ["comment braces", '`${1 /* } { */ + 2}`;', ['', ''], 1],
+  ["line comment braces", '`${1 // }\n +2}`;', ['', ''], 1],
+  ["nested template", '`outer ${`inner ${name}`} end`;', ['outer ', ' end'], 1],
+  ["interpolation edge newlines", '`${\n value\n}`;', ['', ''], 1],
+] as const) test(`bootstrap parser templates independent: ${name}`, () => {
+  const result = native(source); assert.deepEqual(result.diagnostics, []);
+  const statement = result.nodes[result.root].edges[0].node;
+  const template = result.nodes[result.nodes[statement].edges[0].node];
+  assert.equal(template.kind, "TemplateLiteralExpression");
+  assert.deepEqual(template.edges.filter(edge => edge.role === "parts").map(edge => result.nodes[edge.node].attributes[0].value), parts);
+  assert.equal(template.edges.filter(edge => edge.role === "expressions").length, expressions);
+  if (name === "nested template") {
+    const inner = result.nodes[template.edges.find(edge => edge.role === "expressions")!.node];
+    assert.equal(inner.kind, "TemplateLiteralExpression");
+    assert.deepEqual(inner.edges.filter(edge => edge.role === "parts").map(edge => result.nodes[edge.node].attributes[0].value), ["inner ", ""]);
+    const identifier = result.nodes[inner.edges.find(edge => edge.role === "expressions")!.node];
+    assert.equal(identifier.kind, "IdentifierExpression"); assert.deepEqual(identifier.attributes, [{ name: "name", value: "name" }]);
+  }
+});
+for (const source of ['`${}`; print(7);', '`${a b}`; print(7);', '`${1+}`; print(7);'])
+  test(`bootstrap parser templates reject malformed expression: ${source}`, () => {
+    const result = native(source); assert.ok(result.diagnostics.length > 0);
+    assert.ok(result.nodes.some(node => node.kind === "CallExpression" && node.attributes.some(a => a.name === "callee" && a.value === "print")));
+  });
+test("bootstrap parser templates preserve absolute UTF-16 positions", () => {
+  const source = 'const s=`🙂\nhello ${name + 1}!`;'; const result = native(source);
+  assert.deepEqual(result.diagnostics, []);
+  const name = result.nodes.find(node => node.kind === "IdentifierExpression" && node.attributes.some(a => a.name === "name" && a.value === "name"))!;
+  assert.deepEqual(name.span, { start: { offset: source.indexOf("name"), line: 2, column: 9 }, end: { offset: source.indexOf("name") + 4, line: 2, column: 13 } });
+  const template = result.nodes.find(node => node.kind === "TemplateLiteralExpression")!;
+  assert.equal(template.span.start.offset, source.indexOf('`'));
+  assert.equal(template.span.end.offset, source.lastIndexOf('`') + 1);
+});
+test("bootstrap parser templates accept hand-prepared tokens without lexer dependency", () => {
+  const token = (kind: string, lexeme: string, start: number, end: number): ParserInputToken => ({ kind, lexeme, span: { start: { offset: start, line: 1, column: start + 1 }, end: { offset: end, line: 1, column: end + 1 } } });
+  const result = nativeTokens([token("template-start", "`", 0, 1), token("template-text", "", 1, 1), token("interpolation-start", "${", 1, 3), token("number", "42", 3, 5), token("interpolation-end", "}", 5, 6), token("template-text", "", 6, 6), token("template-end", "`", 6, 7), token("eof", "", 7, 7)]);
+  assert.deepEqual(result.diagnostics, []); assert.ok(result.nodes.some(node => node.kind === "TemplateLiteralExpression"));
+  // Bound the native parser independently of the host adapter's lexical limit.
+  const deep: ParserInputToken[] = [];
+  for (let i = 0; i < 140; i++) deep.push(token("template-start", "`", 0, 1), token("template-text", "", 1, 1), token("interpolation-start", "${", 1, 3));
+  deep.push(token("number", "1", 3, 4));
+  for (let i = 0; i < 140; i++) deep.push(token("interpolation-end", "}", 4, 5), token("template-text", "", 5, 5), token("template-end", "`", 5, 6));
+  deep.push(token("eof", "", 6, 6));
+  const limited = nativeTokens(deep); assert.ok(limited.diagnostics.some(d => d.message.includes("Límite de anidamiento")));
+  assert.ok(limited.diagnostics.length <= 100);
+});
+test("bootstrap parser template adapter is idempotent and retains original tokens", () => {
+  const tokens = new Lexer('`x=${name}`;').tokenize(); const saved = JSON.stringify(tokens);
+  const prepared = prepareParserTokens(tokens); assert.deepEqual(prepareParserTokens(prepared), prepared);
+  assert.equal(JSON.stringify(tokens), saved);
+});
+for (const omitted of ["template-text", "interpolation-end", "template-end"])
+  test(`bootstrap parser templates diagnose missing prepared ${omitted}`, () => {
+    const tokens = prepareParserTokens(new Lexer('`x=${name}`; print(7);').tokenize());
+    tokens.splice(tokens.findIndex(token => token.kind === omitted), 1);
+    const result = nativeTokens(tokens); assert.ok(result.diagnostics.length > 0 && result.diagnostics.length <= 100);
+  });
+test("bootstrap parser templates diagnose unprepared raw token", () => {
+  const tokens = new Lexer('`hello`;').tokenize().map(t => t.kind === "template" ? { ...t, kind: "raw-template" } : t);
+  // Bypass host preparation by changing the packed kind after encoding.
+  const args = transportTokens(tokens).map(s => s.replace("12:raw-template", "8:template"));
+  const result: NativeResult = JSON.parse(execFileSync(binary, args, { encoding: "utf8", timeout: 15000 }));
+  assert.ok(result.diagnostics.some(d => d.message.includes("preparación léxica")));
+});
+test("bootstrap parser templates diagnose missing closing brace in raw input", () => {
+  const tokens = new Lexer('`hello`;').tokenize(); tokens[0] = { ...tokens[0], lexeme: '${name' };
+  const result = nativeTokens(tokens); assert.ok(result.diagnostics.some(d => d.message === "Interpolación sin cerrar"));
+});
+test("bootstrap parser template preparation bounds nested lexical scanning", () => {
+  const tokens = new Lexer('`hello`;').tokenize();
+  tokens[0] = { ...tokens[0], lexeme: '${`'.repeat(200) + 'name' + '`}'.repeat(200) };
+  assert.ok(prepareParserTokens(tokens).some(token => token.kind === "template-error"));
+});
+test("bootstrap parser template preparation keeps empty segments and spans", () => {
+  const source = '`${a}${b}`'; const tokens = prepareParserTokens(new Lexer(source).tokenize());
+  const parts = tokens.filter(t => t.kind === "template-text");
+  assert.deepEqual(parts.map(t => t.lexeme), ["", "", ""]);
+  assert.deepEqual(parts.map(t => [t.span.start.offset, t.span.end.offset]), [[1, 1], [5, 5], [9, 9]]);
 });
 test("bootstrap parser: packed transport uses UTF-8 lengths and one argument per token", () => {
   const tokens = new Lexer("'🙂:España'").tokenize(); const args = transportTokens(tokens);

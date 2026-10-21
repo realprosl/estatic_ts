@@ -894,8 +894,35 @@ export class Parser {
     }
     return result;
   }
+  templateLiteral(start: ParserToken): number {
+    const result: number = this.add("TemplateLiteralExpression", start, start);
+    let scanning: boolean = true;
+    while (scanning && !this.check("eof")) {
+      if (!this.check("template-text")) { this.report("Se esperaba texto de template"); break; }
+      const part: ParserToken = this.take();
+      const segment: number = this.add("TemplatePart", part, part);
+      this.attr(segment, "value", part.lexeme); this.edge(result, "parts", segment);
+      if (!this.accept("interpolation-start")) { scanning = false; }
+      else {
+        this.skipNewlines();
+        if (this.check("interpolation-end")) {
+          this.report("La interpolación necesita una expresión");
+          const missing: number = this.add("ErrorNode", this.peek(0), this.peek(0)); this.edge(result, "expressions", missing);
+        } else this.edge(result, "expressions", this.expression());
+        this.skipNewlines();
+        if (!this.check("interpolation-end")) {
+          this.report("Se esperaba fin de interpolación");
+          while (!this.check("interpolation-end") && !this.check("template-end") && !this.check("eof")) this.take();
+        }
+        this.accept("interpolation-end");
+      }
+    }
+    this.setEnd(result, this.expect("template-end")); return result;
+  }
   primary(): number {
     const token: ParserToken = this.take();
+    if (token.kind == "template-start") return this.templateLiteral(token);
+    if (token.kind == "template-error") { this.reportAt(token, token.lexeme); return this.add("ErrorNode", token, token); }
     if (token.kind == "number" || token.kind == "string" || token.kind == "true" || token.kind == "false") {
       const result: number = this.add("LiteralExpression", token, token);
       const annotation: string = token.kind == "number" ? "number" : token.kind == "string" ? "string" : "boolean";
@@ -930,7 +957,7 @@ export class Parser {
       }
       this.attr(result, "className", name); this.expect("("); this.argumentsInto(result, "args", ")"); this.setEnd(result, this.previous()); return result;
     }
-    if (token.kind == "template") this.report("Construcción pendiente en bootstrap/parser: template e interpolación");
+    if (token.kind == "template") this.reportAt(token, "El token template requiere preparación léxica: template-start/text/end e interpolaciones");
     else this.report("Se esperaba una expresión");
     return this.add("ErrorNode", token, token);
   }

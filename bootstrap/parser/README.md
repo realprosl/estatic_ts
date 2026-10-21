@@ -11,6 +11,7 @@ npm run bootstrap:parser
 npm run bootstrap:parser -- 'function add(a:number,b:number):number{return a+b;}'
 npm run bootstrap:parser -- 'enum Color{Red,Green} switch(color){case Color.Red:break;default:break;}'
 npm run bootstrap:parser -- 'import {value as local} from "./values"; export {local as publicValue};'
+npm run bootstrap:parser -- 'const greeting=`Hola ${name}, total=${1+2*3}`;'
 npm run test:bootstrap:parser
 ```
 
@@ -67,6 +68,8 @@ tamaño de entrada.
 ## Cobertura comprobada
 
 - Literales, identificadores, arrays y objetos con shorthand, spread y `new`.
+- Templates con segmentos vacíos, multilínea, escapes crudos e interpolaciones
+  de expresiones, incluidas llamadas, objetos y templates anidados básicos.
 - Operadores unarios, binarios y sus precedencias; shifts contiguos, asignación
   simple y compuesta, ternarios, `as`, `satisfies`, `await` e `instanceof`.
 - Llamadas por nombre, argumentos con nombre y spread, genéricos, miembros,
@@ -92,7 +95,8 @@ tamaño de entrada.
 - Exports de listas locales, reexports de listas/estrella/namespace y default
   de expresiones, funciones/clases con nombre o anónimas, incluidas async.
 
-Las 276 pruebas compilan dos unidades C++, enlazan y ejecutan el binario. Incluyen
+Las 308 pruebas compilan dos unidades C++, enlazan y ejecutan el binario; también
+comprueban el adaptador léxico host. Incluyen
 comparaciones estructurales con stage 0, precedencia fijada independientemente,
 spans con Unicode, errores y límites de profundidad/diagnósticos, y 30 entradas
 malformadas deterministas. El parser analiza el fuente completo del lexer y su
@@ -183,11 +187,47 @@ fuera de esta cobertura y producen diagnósticos. Duplicados entre statements,
 múltiples default y existencia/visibilidad de símbolos quedan para el futuro
 vinculador/checker.
 
+## Templates: contrato de entrada
+
+`template-tokens.ts` es un adaptador léxico host, sin uso del parser TS ni
+construcción de AST. `transportTokens` lo aplica automáticamente a los tokens
+crudos de stage 0. La API ETS recibe este protocolo plano:
+
+`template-start`, `template-text`, cero o más grupos de `interpolation-start`,
+tokens ordinarios de expresión, `interpolation-end`, `template-text`, y por
+último `template-end`. Se preservan los segmentos vacíos. Los templates
+anidados usan el mismo protocolo dentro de una interpolación. El parser ETS
+analiza las expresiones con su precedencia habitual y diagnostica expresiones
+vacías, contenido sobrante y marcadores ausentes. Un token crudo `template`
+sin preparar se diagnostica, no se acepta silenciosamente.
+
+El AST `TemplateLiteralExpression` tiene aristas ordenadas `parts` a nodos
+`TemplatePart` con atributo `value`, y `expressions` hacia las expresiones.
+En una entrada válida hay una parte más que expresiones. Los escapes del texto
+se conservan crudos, como en stage 0; no se introduce una decodificación nueva.
+Los spans del template incluyen las comillas; los de las partes las excluyen,
+y los de las expresiones mantienen offset/línea/columna absolutos UTF-16.
+Una prueba suministra directamente tokens preparados al binario, sin lexer.
+
+El adaptador respeta strings, comentarios y templates al buscar llaves de
+cierre; usa el lexer host sólo para tokenizar el texto de cada expresión.
+La preparación y el recorrido léxico anidado tienen límites de 128. No modifica
+los tokens originales. Las entradas inválidas que rechaza el lexer host siguen
+siendo errores léxicos del host, no diagnósticos del parser ETS.
+
+Límite importante: el lexer actual de stage 0 entrega templates crudos con un
+contador simplificado de llaves. Puede truncar combinaciones de templates
+anidados, llaves de objetos/strings/comentarios y backticks. El adaptador no
+puede recuperar texto que ese lexer ya perdió. Se validan los casos indicados,
+no toda combinación de templates de TypeScript. Corregir/completar el contrato
+léxico en ambos lexers y conectarlo se reserva para un bloque independiente.
+Tampoco se añaden tagged templates ni se cambia el frontend de producción.
+
 ## Pendiente antes de completar el módulo
 
 - Cabeceras `@include`/`@link` y las formas de módulo excluidas arriba.
-- Templates e interpolaciones: deben recibir una entrada tokenizada adecuada,
-  manteniendo el parser independiente del lexer.
+- Completar el contrato léxico de templates en ambos lexers y su integración;
+  tagged templates no forman parte de esta cobertura.
 - Destructuring, parameter properties, genéricos variádicos y decoradores sobre
   miembros o colocados después de `export`/`function`.
 - Paridad de todas las posiciones y mensajes de diagnóstico con stage 0, y

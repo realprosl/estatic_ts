@@ -6,6 +6,17 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v53 (`estatic 1.15.0`): templates e interpolaciones en el parser ETS aislado.
+  AST en arena con partes ordenadas, segmentos vacíos, escapes crudos y
+  expresiones con precedencia normal. Spans absolutos UTF-16, incluidos Unicode
+  y texto multilínea; diagnósticos para interpolaciones y marcadores incompletos.
+- Adaptador léxico host que descompone templates crudos en tokens, sin construir
+  AST ni invocar el parser TS. Mantiene el parser ETS independiente del lexer.
+  Pruebas nativas con tokens preparados a mano y paridad compartida con stage 0.
+  Se documentan las limitaciones del lexer crudo actual; no se modifica su
+  implementación ni se afirma integración lexer-parser o autoalojamiento completo.
+- El parser y su adaptador pasan de 276 a 308 pruebas; versión CLI actualizada.
+
 - v52 (`estatic 1.14.0`): imports y exports en el parser aislado. Imports
   por efecto lateral, default, listas y namespaces; aliases con `as`, formas
   combinadas, multilinea y marcas `type`. Exports de listas, reexports de
