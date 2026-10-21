@@ -1,6 +1,6 @@
 # Ts2cpp — Estado actual
 
-Última revisión documental: **2026-10-20**. Este archivo es una fotografía
+Última revisión documental: **2026-10-21**. Este archivo es una fotografía
 del repositorio, no un historial de sesiones. El historial vive en
 [`CHANGELOG.md`](./CHANGELOG.md) y en [`docs/historical/`](./docs/historical/).
 
@@ -15,6 +15,7 @@ producción concurrente.
 | Área | Estado | Observación |
 |---|---|---|
 | Lexer, parser y diagnósticos | Estable para el dialecto documentado | No pretende aceptar TypeScript completo |
+| Autoalojamiento | Primer módulo aislado | Lexer en Estatic compilado y ejecutado como C++; parser/checker aún no migrados |
 | Tipos, genéricos, unions y clases | Funcional | Checker y codegen siguen muy acoplados |
 | Módulos | Funcional con límites | Default, reexports y multilínea; análisis mediante AST combinado |
 | Ownership y borrow checking | Funcional, conservador | Hay moves, conflictos y NLL; no hay lifetime parameters |
@@ -28,7 +29,7 @@ Las declaraciones del editor tienen una única fuente canónica en
 `types/estatic.d.ts`. `etsc init` la copia y `etsc update-types` actualiza
 proyectos existentes con respaldo `.bak`. El registro semántico y el archivo
 se comprueban mediante una regresión automática. La versión visible por CLI es
-`estatic 1.10.0 (v48)` mediante `--version` o `-v`; verbose usa `--verbose`.
+`estatic 1.11.0 (v49)` mediante `--version` o `-v`; verbose usa `--verbose`.
 
 El incremental informa tiempos reales por fase y registra interfaces/dependencias
 por módulo para planificar invalidaciones. v48 restaura cuerpos de funciones
@@ -41,7 +42,10 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 ## Verificación conocida
 
 - La última ejecución completa del conjunto unitario estable realizada durante
-  esta revisión pasó **1150/1150 pruebas**.
+  esta revisión pasó **1194/1194 pruebas**.
+- El lexer de `bootstrap/lexer/` pasa **44/44** pruebas nativas, incluidas
+  comparaciones con stage 0, su propio código ETS y aislamiento del módulo.
+  Ver [`bootstrap/README.md`](./bootstrap/README.md) para ejecutarlo por separado.
 - El proyecto modular de ejemplo `examples/todo-project/` pasó **8/8**
   comprobaciones de integración.
 - Las correcciones de `Timer` y `FsWatcher` tienen regresiones específicas.

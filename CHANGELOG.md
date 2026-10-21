@@ -2,9 +2,20 @@
 
 Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
-## Sin publicar (2026-10-20)
+## Sin publicar (2026-10-21)
 
 ### Added
+
+- v49 (`estatic 1.11.0`): reinicio de `bootstrap/` con un lexer autónomo en
+  Estatic, tipos locales, tokens con posiciones y diagnósticos recuperables.
+  `inspectTokens` devuelve JSON y el driver permite observar el resultado.
+  `npm run bootstrap:lexer` transpila, compila C++20 y ejecuta el módulo.
+  No añade parser ni checker al bootstrap; stage 0 continúa en TypeScript.
+- 44 pruebas del ejecutable nativo: paridad con stage 0, Unicode, errores,
+  tokenización del propio lexer y aislamiento. Se documentan las diferencias
+  de recuperación frente al lexer original. Suite estable: 1194/1194.
+- Retirados los ocho archivos del intento anterior de bootstrap; recuperables
+  en Git. El proceso documentado valida cada módulo antes de añadir el siguiente.
 
 - v48 (`estatic 1.10.0`): caché persistente de comprobación de cuerpos por módulo
   para un conjunto cerrado de funciones escalares, con restauración en checks
