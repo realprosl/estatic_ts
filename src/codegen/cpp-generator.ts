@@ -2178,6 +2178,8 @@ export class CppGenerator {
       case "IfStatement": return this.expressionMutatesThis(node.condition, classDecl, visited) || this.statementMutatesThis(node.thenBranch, classDecl, visited) || (!!node.elseBranch && this.statementMutatesThis(node.elseBranch, classDecl, visited));
       case "WhileStatement": return this.expressionMutatesThis(node.condition, classDecl, visited) || this.statementMutatesThis(node.body, classDecl, visited);
       case "ForStatement": return (!!node.initializer && this.statementMutatesThis(node.initializer, classDecl, visited)) || (!!node.condition && this.expressionMutatesThis(node.condition, classDecl, visited)) || (!!node.increment && this.expressionMutatesThis(node.increment, classDecl, visited)) || this.statementMutatesThis(node.body, classDecl, visited);
+      case "ForOfStatement": return this.expressionMutatesThis(node.iterable, classDecl, visited) || this.statementMutatesThis(node.body, classDecl, visited);
+      case "ForInStatement": return this.expressionMutatesThis(node.target, classDecl, visited) || this.statementMutatesThis(node.body, classDecl, visited);
       default: return false;
     }
   }

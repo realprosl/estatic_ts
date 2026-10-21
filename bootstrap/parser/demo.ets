@@ -2,9 +2,26 @@ import { ParserToken, inspectAst } from "./parser";
 
 // Decimal conversion is only for the host-to-demo token transport.
 function decimal(text: string): number {
+  if (text.length == 0) badTransport();
   let value: number = 0;
-  for (let i: number = 0; i < text.length; i = i + 1) value = value * 10 + text.charCodeAt(i) - 48;
+  for (let i: number = 0; i < text.length; i = i + 1) {
+    const code: number = text.charCodeAt(i); if (code < 48 || code > 57) badTransport();
+    value = value * 10 + code - 48; if (value > 2147483647) badTransport();
+  }
   return value;
+}
+function badTransport(): void { print("Invalid token transport"); exitProcess(2); }
+function decodeToken(record: string): ParserToken {
+  let values: string[] = []; let cursor: number = 0;
+  for (let field: number = 0; field < 8; field = field + 1) {
+    const colon: number = record.indexOf(":", cursor); if (colon <= cursor) badTransport();
+    const size: number = decimal(record.slice(cursor, colon));
+    cursor = colon + 1; if (size > record.length - cursor) badTransport();
+    values.push(record.slice(cursor, cursor + size)); cursor = cursor + size;
+  }
+  if (cursor != record.length) badTransport();
+  return new ParserToken(values[0], values[1], decimal(values[2]), decimal(values[3]), decimal(values[4]),
+    decimal(values[5]), decimal(values[6]), decimal(values[7]));
 }
 function demonstrateParser(tokens: ParserToken[]): void { print(inspectAst(tokens)); }
 
@@ -12,11 +29,8 @@ const tokens: ParserToken[] = [];
 if (argumentCount() == 2 && argument(1) == "--empty") {
   // Exercise the public empty-input contract without selecting the demo.
 } else if (argumentCount() > 1) {
-  if ((argumentCount() - 1) % 8 != 0) { print("Token transport requires eight fields per token"); exitProcess(2); }
-  for (let i: number = 1; i + 7 < argumentCount(); i = i + 8) {
-    tokens.push(new ParserToken(argument(i), argument(i + 1), decimal(argument(i + 2)), decimal(argument(i + 3)),
-      decimal(argument(i + 4)), decimal(argument(i + 5)), decimal(argument(i + 6)), decimal(argument(i + 7))));
-  }
+  if (argument(1) != "--tokens") badTransport();
+  for (let i: number = 2; i < argumentCount(); i = i + 1) tokens.push(decodeToken(argument(i)));
 } else {
   tokens.push(new ParserToken("number", "1", 0, 1, 1, 1, 1, 2));
   tokens.push(new ParserToken("+", "+", 2, 1, 3, 3, 1, 4));

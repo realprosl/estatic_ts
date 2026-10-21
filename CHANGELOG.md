@@ -6,6 +6,26 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v52 (`estatic 1.14.0`): imports y exports en el parser aislado. Imports
+  por efecto lateral, default, listas y namespaces; aliases con `as`, formas
+  combinadas, multilinea y marcas `type`. Exports de listas, reexports de
+  nombres/estrella/namespace y default de expresiones, funciones y clases.
+  El AST conserva nombres, aliases, origen, posiciones e intención type-only;
+  no resuelve archivos ni símbolos ni cambia la semántica del loader actual.
+- Default anónimos se conservan con `anonymous: true`, sin inventar nombres
+  globales. Los decoradores previos se asocian a la declaración compatible.
+  Diagnósticos para formas incompletas, duplicados en listas y usos anidados.
+- El parser pasa de 174 a 276 pruebas nativas, con comparación contra el
+  extractor de módulos de stage 0, ASTs independientes, Unicode y entradas
+  malformadas. Los dos drivers ETS también se analizan íntegramente. Total
+  estable verificado por bloques: 1471/1471.
+- El transporte del driver empaqueta ocho campos por token con longitudes
+  UTF-8; reduce argumentos y permite analizar el fuente ampliado del parser.
+  Incluye rechazo de frames inválidos. La API ETS de arrays no cambia.
+- Codegen incluye los cuerpos y fuentes de for-of/in al detectar mutación
+  del receptor, evitando métodos C++ incorrectamente const. Regresión nativa
+  ampliada para escrituras en ambos bucles y getters que permanecen const.
+
 - v51 (`estatic 1.13.0`): el parser aislado de bootstrap reconoce enum,
   union y switch. Los enums admiten numeración implícita/expresa y cadenas;
   sus números se normalizan e incrementan como texto decimal exacto, sin

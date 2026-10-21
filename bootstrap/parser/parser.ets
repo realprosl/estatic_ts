@@ -141,15 +141,27 @@ export class Parser {
       decorators.push(decorator); this.skipNewlines();
     }
     const exported: boolean = this.accept("export");
+    if (exported) this.skipNewlines();
     if (exported && !topLevel) this.report("'export' solo es válido en el nivel superior");
     let result: number = -1;
     if (this.check("let") || this.check("const") || this.check("using")) result = this.variable(true);
-    else if (this.check("function") || this.check("async")) result = this.functionDeclaration();
-    else if (this.accept("class")) result = this.classDeclaration(this.previous());
+    else if (this.check("function") || this.check("async")) result = this.functionDeclaration(false);
+    else if (this.accept("class")) result = this.classDeclaration(this.previous(), false);
     else if (this.accept("interface")) result = this.interfaceDeclaration(this.previous());
     else if (this.accept("enum")) result = this.enumDeclaration(this.previous());
     else if (this.accept("union")) result = this.unionDeclaration(this.previous());
     else if (this.accept("switch")) result = this.switchStatement(this.previous());
+    else if (this.accept("import")) {
+      const keyword: ParserToken = this.previous();
+      if (!topLevel) this.reportAt(keyword, "import solo es válido en el nivel superior");
+      if (exported) this.reportAt(keyword, "export no puede preceder a import");
+      result = this.importDeclaration(keyword);
+    } else if (exported && this.accept("default")) result = this.exportDefault(start);
+    else if (exported && (this.check("{") || this.check("*") || (this.word("type") && (this.moduleNextKind() == "{" || this.moduleNextKind() == "*")))) {
+      const typeOnly: boolean = this.acceptWord("type");
+      this.skipNewlines();
+      result = this.exportList(start, typeOnly);
+    }
     else if (this.check("type") && this.peek(0).lexeme == "type") {
       const keyword: ParserToken = this.take();
       const name: ParserToken = this.expect("identifier");
@@ -183,9 +195,6 @@ export class Parser {
         this.edge(result, "value", this.expression());
       }
       this.setEnd(result, this.terminator());
-    } else if (this.check("import") || (exported && (this.check("default") || this.check("{")))) {
-      this.report("Construcción pendiente en bootstrap/parser: " + this.peek(0).lexeme);
-      result = this.add("ErrorNode", start, this.take()); this.synchronize();
     } else if (this.check("case") || this.check("default")) {
       this.report("case/default requiere un switch"); result = this.add("ErrorNode", start, this.take());
     } else {
@@ -194,15 +203,146 @@ export class Parser {
       if (exported || decorators.length > 0) this.report("El modificador necesita una declaración compatible");
     }
     const declarationKind: string = this.node(result).kind;
-    if (exported) {
+    const moduleExport: boolean = declarationKind == "ExportDefaultDeclaration" || declarationKind == "ExportNamedDeclaration" || declarationKind == "ExportAllDeclaration";
+    if (exported && !moduleExport) {
       if (declarationKind != "VariableDeclaration" && declarationKind != "UsingDeclaration" && declarationKind != "FunctionDeclaration"
           && declarationKind != "ClassDeclaration" && declarationKind != "InterfaceDeclaration" && declarationKind != "TypeAliasDeclaration"
           && declarationKind != "EnumDeclaration" && declarationKind != "UnionDeclaration"
           && declarationKind != "ErrorNode") this.report("export necesita una declaración compatible");
       this.attr(result, "exported", "true");
     }
-    for (const decorator of decorators) this.edge(result, "decorators", decorator);
+    let decorated: number = result;
+    if (declarationKind == "ExportDefaultDeclaration") decorated = this.nodes[result].edges[0].node;
+    if (decorators.length > 0 && (declarationKind == "ImportDeclaration" || declarationKind == "ExportNamedDeclaration" || declarationKind == "ExportAllDeclaration"
+        || (declarationKind == "ExportDefaultDeclaration" && this.node(decorated).kind != "FunctionDeclaration" && this.node(decorated).kind != "ClassDeclaration" && this.node(decorated).kind != "VariableDeclaration"))) {
+      this.reportAt(start, "Los decoradores requieren una declaración compatible");
+    } else for (const decorator of decorators) this.edge(decorated, "decorators", decorator);
     return result;
+  }
+  word(value: string): boolean {
+    const token: ParserToken = this.peek(0);
+    return token.lexeme == value && (token.kind == "identifier" || token.kind == "type" || token.kind == value);
+  }
+  acceptWord(value: string): boolean { if (!this.word(value)) return false; this.take(); return true; }
+  moduleNextKind(): string {
+    let cursor: number = 1; while (this.peek(cursor).kind == "newline") cursor = cursor + 1;
+    return this.peek(cursor).kind;
+  }
+  moduleName(): ParserToken {
+    if (this.check("identifier") || this.check("default") || this.word("type")) return this.take();
+    this.report("Se esperaba un nombre de import/export"); return this.peek(0);
+  }
+  moduleEnd(): ParserToken {
+    const end: ParserToken = this.previous();
+    if (this.accept(";")) return this.previous();
+    if (this.accept("newline")) return end;
+    if (!this.check("eof") && !this.check("}")) this.report("Se esperaba un terminador después de import/export");
+    return end;
+  }
+  moduleSource(owner: number): void {
+    this.skipNewlines();
+    if (!this.acceptWord("from")) this.report("Se esperaba 'from' en import/export");
+    this.skipNewlines();
+    if (this.check("string")) this.attr(owner, "source", this.take().lexeme);
+    else this.report("Se esperaba un literal de módulo después de 'from'");
+  }
+  fromAfterNewlines(): boolean {
+    let cursor: number = 0; while (this.peek(cursor).kind == "newline") cursor = cursor + 1;
+    const token: ParserToken = this.peek(cursor);
+    return token.kind == "identifier" && token.lexeme == "from";
+  }
+  moduleSpecifiers(owner: number, importing: boolean, typeOnly: boolean): void {
+    this.expect("{"); this.skipNewlines();
+    while (!this.check("}") && !this.check("eof")) {
+      const before: number = this.current; const start: ParserToken = this.peek(0);
+      let itemTypeOnly: boolean = typeOnly;
+      if (this.word("type") && (this.moduleNextKind() == "identifier" || this.moduleNextKind() == "default")) {
+        this.take(); itemTypeOnly = true; this.skipNewlines();
+      }
+      const name: ParserToken = this.moduleName(); let alias: ParserToken = name; let renamed: boolean = false;
+      this.skipNewlines();
+      if (this.acceptWord("as")) {
+        renamed = true; this.skipNewlines(); alias = (importing ? this.expect("identifier") : this.moduleName());
+      }
+      const specifier: number = this.add(importing ? "ImportSpecifier" : "ExportSpecifier", start, alias);
+      if (importing) {
+        this.attr(specifier, "imported", name.lexeme); this.attr(specifier, "local", alias.lexeme); this.attr(specifier, "form", "named");
+        if (alias.kind != "identifier") this.reportAt(alias, "El nombre local del import necesita un identificador; usa 'as nombre'");
+      } else { this.attr(specifier, "name", name.lexeme); if (renamed) this.attr(specifier, "alias", alias.lexeme); }
+      if (itemTypeOnly) this.attr(specifier, "typeOnly", "true");
+      this.edge(owner, "specifiers", specifier); this.skipNewlines();
+      if (this.current == before) break;
+      if (this.check("}")) break;
+      if (!this.accept(",")) {
+        this.report("Se esperaba ',' o '}' entre nombres de import/export");
+        if (this.word("from") || (!this.check("identifier") && !this.check("default") && !this.word("type"))) break;
+      }
+      this.skipNewlines();
+    }
+    this.expect("}");
+  }
+  checkModuleNames(owner: number, importing: boolean): void {
+    let names: string[] = [];
+    for (const edge of this.nodes[owner].edges) {
+      if (edge.role == "specifiers") {
+        const name: string = importing ? this.get(edge.node, "local") : this.get(edge.node, "alias");
+        const effective: string = name == "" ? this.get(edge.node, "name") : name;
+        if (names.includes(effective)) this.reportAt(this.node(edge.node).start, "Nombre duplicado en la lista de import/export");
+        names.push(effective);
+      }
+    }
+  }
+  importDeclaration(keyword: ParserToken): number {
+    const result: number = this.add("ImportDeclaration", keyword, keyword); this.skipNewlines();
+    if (this.check("string")) {
+      this.attr(result, "source", this.take().lexeme); this.attr(result, "sideEffect", "true");
+      this.setEnd(result, this.moduleEnd()); return result;
+    }
+    if (this.check("(")) {
+      this.report("import dinámico no está soportado por este parser"); this.synchronize(); this.setEnd(result, this.previous()); return result;
+    }
+    const typeOnly: boolean = this.acceptWord("type"); if (typeOnly) this.attr(result, "typeOnly", "true");
+    this.skipNewlines(); let hasDefault: boolean = false; let more: boolean = true;
+    if (this.check("identifier")) {
+      const local: ParserToken = this.take(); const item: number = this.add("ImportSpecifier", local, local);
+      this.attr(item, "imported", "default"); this.attr(item, "local", local.lexeme); this.attr(item, "form", "default");
+      if (typeOnly) this.attr(item, "typeOnly", "true"); this.edge(result, "specifiers", item);
+      hasDefault = true; this.skipNewlines(); more = this.accept(","); if (more) this.skipNewlines();
+    }
+    if (more) {
+      if (this.accept("*")) {
+        const star: ParserToken = this.previous(); this.skipNewlines();
+        if (!this.acceptWord("as")) this.report("Un import '*' requiere 'as nombre'");
+        this.skipNewlines(); const local: ParserToken = this.expect("identifier");
+        const item: number = this.add("ImportSpecifier", star, local);
+        this.attr(item, "imported", "*"); this.attr(item, "local", local.lexeme); this.attr(item, "form", "namespace");
+        if (typeOnly) this.attr(item, "typeOnly", "true"); this.edge(result, "specifiers", item);
+      } else if (this.check("{")) this.moduleSpecifiers(result, true, typeOnly);
+      else this.report("Se esperaba un binding, namespace o lista de nombres en import");
+    } else if (!hasDefault) this.report("Se esperaba un nombre local en import");
+    this.moduleSource(result); this.checkModuleNames(result, true); this.setEnd(result, this.moduleEnd()); return result;
+  }
+  exportList(keyword: ParserToken, typeOnly: boolean): number {
+    const result: number = this.add(this.check("*") ? "ExportAllDeclaration" : "ExportNamedDeclaration", keyword, keyword);
+    if (typeOnly) this.attr(result, "typeOnly", "true");
+    if (this.accept("*")) {
+      this.skipNewlines(); if (this.acceptWord("as")) { this.skipNewlines(); this.attr(result, "namespace", this.moduleName().lexeme); }
+      this.moduleSource(result);
+    } else {
+      this.moduleSpecifiers(result, false, typeOnly);
+      if (this.fromAfterNewlines()) this.moduleSource(result);
+      this.checkModuleNames(result, false);
+    }
+    this.setEnd(result, this.moduleEnd()); return result;
+  }
+  exportDefault(keyword: ParserToken): number {
+    const result: number = this.add("ExportDefaultDeclaration", keyword, keyword); this.skipNewlines();
+    let declaration: number = -1;
+    if (this.check("function") || (this.check("async") && this.peek(1).kind == "function")) declaration = this.functionDeclaration(true);
+    else if (this.accept("class")) declaration = this.classDeclaration(this.previous(), true);
+    else if (this.check("let") || this.check("const")) declaration = this.variable(true);
+    else { declaration = this.expression(); this.terminator(); }
+    this.edge(result, "declaration", declaration); this.setEnd(result, this.node(declaration).end); return result;
   }
   synchronize(): void {
     let depth: number = 0;
@@ -436,11 +576,14 @@ export class Parser {
     }
     this.expect(">");
   }
-  functionDeclaration(): number {
+  functionDeclaration(allowAnonymous: boolean): number {
     const keyword: ParserToken = this.take(); const isAsync: boolean = keyword.kind == "async";
     if (isAsync) this.expect("function");
-    const name: ParserToken = this.expect("identifier"); const result: number = this.add("FunctionDeclaration", keyword, name);
-    this.attr(result, "name", name.lexeme); this.attr(result, "async", isAsync ? "true" : "false");
+    const anonymous: boolean = allowAnonymous && (this.check("(") || this.check("<"));
+    const name: ParserToken = anonymous ? this.peek(0) : this.expect("identifier");
+    const result: number = this.add("FunctionDeclaration", keyword, name);
+    if (anonymous) this.attr(result, "anonymous", "true"); else this.attr(result, "name", name.lexeme);
+    this.attr(result, "async", isAsync ? "true" : "false");
     this.typeParameters(result); this.parametersInto(result, false); this.expect(":");
     this.attr(result, "returnType", this.typeName());
     let body: number = -1;
@@ -448,9 +591,11 @@ export class Parser {
     else { const open: ParserToken = this.expect("{"); body = this.block(open); }
     this.edge(result, "body", body); this.setEnd(result, this.node(body).end); return result;
   }
-  classDeclaration(keyword: ParserToken): number {
-    const name: ParserToken = this.expect("identifier"); const result: number = this.add("ClassDeclaration", keyword, name);
-    this.attr(result, "name", name.lexeme); this.typeParameters(result); this.expect("{");
+  classDeclaration(keyword: ParserToken, allowAnonymous: boolean): number {
+    const anonymous: boolean = allowAnonymous && (this.check("{") || this.check("<"));
+    const name: ParserToken = anonymous ? this.peek(0) : this.expect("identifier"); const result: number = this.add("ClassDeclaration", keyword, name);
+    if (anonymous) this.attr(result, "anonymous", "true"); else this.attr(result, "name", name.lexeme);
+    this.typeParameters(result); this.expect("{");
     while (!this.check("}") && !this.check("eof")) {
       this.skipNewlines(); if (this.check("}") || this.check("eof")) break;
       if (!this.accept(";")) {

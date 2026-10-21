@@ -1,4 +1,4 @@
-# Parser aislado: expresiones, declaraciones y control de flujo
+# Parser aislado: expresiones, declaraciones, módulos y control de flujo
 
 Este módulo está escrito en Estatic y se ejecuta como C++20 generado. No importa
 el lexer, el checker, el sistema de tipos ni otros módulos ETS. Todavía no cubre
@@ -10,6 +10,7 @@ toda la gramática del parser TypeScript de stage 0.
 npm run bootstrap:parser
 npm run bootstrap:parser -- 'function add(a:number,b:number):number{return a+b;}'
 npm run bootstrap:parser -- 'enum Color{Red,Green} switch(color){case Color.Red:break;default:break;}'
+npm run bootstrap:parser -- 'import {value as local} from "./values"; export {local as publicValue};'
 npm run test:bootstrap:parser
 ```
 
@@ -20,9 +21,13 @@ En ambos casos, el análisis sintáctico lo realiza el parser ETS compilado.
 
 El adaptador necesita Node y g++ con C++20, o un `CXX` compatible con sus flags.
 Genera `build/bootstrap/parser/demo.cpp` y el ejecutable. No requiere libuv.
-Los tokens del adaptador se pasan por argumentos del proceso: es una herramienta
-de demostración y pruebas, sujeta al límite de argumentos del sistema y sin NUL
-embebido. La API ETS recibe directamente un array y no depende de ese transporte.
+Los tokens del adaptador se pasan por argumentos del proceso: un argumento por
+token, con ocho campos prefijados por su longitud en bytes UTF-8. El empaquetado
+reduce el número de argumentos y permite analizar el fuente del parser ampliado.
+El driver valida los frames y sus coordenadas decimales (hasta 2^31-1). Sigue
+siendo una herramienta de demostración/pruebas, sujeta al límite de argumentos
+del sistema, al tamaño máximo por argumento y sin NUL embebido. La API ETS
+recibe directamente un array y no depende de ese transporte ni de esos límites.
 
 ## API y AST
 
@@ -82,12 +87,17 @@ tamaño de entrada.
   genéricos y discriminadores literales de cadena, número o booleano.
 - Switch con casos, default, cláusulas vacías, bloques, anidamiento y control
   de flujo dentro de sus cuerpos. El AST preserva el orden de las cláusulas.
+- Imports por efecto lateral, default, listas con `as`, namespaces y formas
+  combinadas; marcas type-only completas o por specifier.
+- Exports de listas locales, reexports de listas/estrella/namespace y default
+  de expresiones, funciones/clases con nombre o anónimas, incluidas async.
 
-Las 174 pruebas compilan dos unidades C++, enlazan y ejecutan el binario. Incluyen
+Las 276 pruebas compilan dos unidades C++, enlazan y ejecutan el binario. Incluyen
 comparaciones estructurales con stage 0, precedencia fijada independientemente,
 spans con Unicode, errores y límites de profundidad/diagnósticos, y 30 entradas
 malformadas deterministas. El parser analiza el fuente completo del lexer y su
-propio fuente ETS; los tokens los prepara el host, no el lexer ETS. No es aún una
+propio fuente ETS y ambos drivers, incluidos sus imports; los tokens los prepara
+el host, no el lexer ETS. No es aún una
 cadena nativa lexer-parser ni demuestra autoalojamiento del compilador completo.
 
 ## Enum, union y switch: contrato de este bloque
@@ -127,9 +137,55 @@ insertan breaks. Default repetido, case sin expresión, `:` ausente y cláusulas
 fuera de switch producen diagnósticos. Duplicación de etiquetas, exhaustividad
 y validez contextual de break/continue se dejan al futuro checker.
 
+## Imports y exports: contrato de este bloque
+
+El parser trabaja sólo con tokens. Un nombre de módulo inexistente no produce
+error sintáctico: no abre archivos, no crea un grafo ni resuelve aliases a
+declaraciones. Tampoco cambia la carga o el borrado de tipos de stage 0.
+
+- `ImportDeclaration` guarda `source` y, cuando procede, `typeOnly` o
+  `sideEffect`. Sus aristas `specifiers` apuntan a nodos `ImportSpecifier`
+  con `imported`, `local`, `form` (named/default/namespace) y una marca
+  `typeOnly` efectiva. Namespace usa `imported: "*"`.
+- `ExportNamedDeclaration` guarda `source` para reexports y `typeOnly`
+  cuando procede. Cada `ExportSpecifier` contiene `name`, `alias` opcional
+  y su marca `typeOnly`. Se conservan listas vacías y comas finales.
+- `ExportAllDeclaration` conserva `source`, `namespace` opcional para
+  `export * as Nombre`, y `typeOnly` cuando corresponde.
+- `ExportDefaultDeclaration` contiene una arista `declaration`. Funciones
+  y clases anónimas tienen `anonymous: "true"` y carecen de `name`; no se
+  inyecta un identificador global sintético. La fase de vinculación futura
+  deberá dar identidad al default dentro de su módulo.
+- Los spans de import/export de listas empiezan en la palabra clave y
+  terminan en `;` o en el último token significativo si hay ASI. El span de
+  default termina en la declaración/expresión hija, como stage 0; sus
+  expresiones no incluyen el terminador. Los alias guardan sus propios spans.
+
+Las pruebas comparan los requests/exports con `scanModuleSyntax` de stage 0,
+porque éste extrae esa sintaxis antes del parser y no conserva esos nodos.
+Además fijan ASTs y marcas type-only independientemente. Los exports default
+con nombre se comparan con el parser TS; los anónimos se comprueban según su
+contrato nuevo, sin los nombres `ets_default_*` que inventa stage 0.
+
+Se diagnostican nombres duplicados dentro de una lista, aliases incompletos,
+orígenes no literales, delimitadores ausentes e import/export fuera del nivel
+superior. Los decoradores previos a default se pasan a la función/clase o
+variable compatible; no se admiten en imports, listas ni default expresiones.
+Se conserva por compatibilidad del dialecto `export default let/const`.
+Las marcas type-only expresan intención; no se aplica aquí todo el conjunto de
+restricciones de TypeScript sobre combinaciones de imports de tipos.
+
+Los nombres admitidos son identificadores y los contextuales default/type en
+las posiciones de origen/export; el nombre local importado debe ser un
+identificador del dialecto. Nombres entre comillas, otros nombres reservados,
+atributos `with`/`assert`, import dinámico y la forma `import x = ...` quedan
+fuera de esta cobertura y producen diagnósticos. Duplicados entre statements,
+múltiples default y existencia/visibilidad de símbolos quedan para el futuro
+vinculador/checker.
+
 ## Pendiente antes de completar el módulo
 
-- Imports, reexports, export default y cabeceras `@include`/`@link`.
+- Cabeceras `@include`/`@link` y las formas de módulo excluidas arriba.
 - Templates e interpolaciones: deben recibir una entrada tokenizada adecuada,
   manteniendo el parser independiente del lexer.
 - Destructuring, parameter properties, genéricos variádicos y decoradores sobre
