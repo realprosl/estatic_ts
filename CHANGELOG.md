@@ -6,6 +6,26 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v61 (`estatic 1.23.0`): binding nativo ETS por proyecto en `binder.ets`,
+  separado del futuro checker. Ámbitos, símbolos y referencias en tablas
+  asociadas a nodos, preservando el AST sintáctico cacheado.
+- Imports/exports/default/namespaces/type-only, aliases y origen canónico de
+  reexports; colisiones léxicas, privados/ausentes y estrellas ambiguas.
+  Ámbitos de funciones/arrows/clases/bloques/bucles/switch, genéricos,
+  destructuring, receptores y parámetros-propiedad; grupos de sobrecargas
+  sin seleccionar firmas. `typeof` consulta valores sin habilitar su ejecución.
+- 63 pruebas nativas del binder: identidades, sombreado, genéricos, typeof,
+  imports/exports/namespaces, sobrecargas, propiedades y errores con posición.
+  Vincula su propio proyecto y todo-project; compara cargas desde caché.
+  Conjunto estable: 2004/2004 (1236 stage 0 + 64 lexer + 542 parser +
+  57 puente + 42 cargador + 63 binder), por bloques y sin skips.
+  Se excluyen test/runner.ts y E2E/libuv. CLI --version/-v y diff correctos.
+- Demo `bootstrap:binder`: integra nueve módulos ETS en un ejecutable C++20,
+  comprueba binding repetible y AST intacto. El constructor de build admite
+  una unidad C++ opcional para evitar compilar la misma cabecera nueve veces;
+  el cargador conserva su modo modular por defecto. No añade inferencia,
+  comprobación de tipos/miembros, caché semántica ni scheduler concurrente.
+
 - v60 (`estatic 1.22.0`): cargador nativo ETS con identidad realpath, imports y
   reexports desde AST, aliases de rutas por prefijo más largo, raíces ordenadas,
   precedencia `.ts`/`.ets`, deduplicación y DFS iterativo con ciclos/ausencias.

@@ -143,3 +143,15 @@ npm run test:bootstrap:modules
 Node construye el binario. Ese binario abre los fuentes del proyecto, ejecuta
 el frontend ETS, resuelve sus dependencias y publica registros por archivo.
 El checker ETS sigue siendo el siguiente bloque funcional.
+
+## Paso 5: binding del proyecto (v61)
+
+[`binder/README.md`](./binder/README.md) documenta ámbitos, símbolos y vínculos
+de nombres/imports/exports como tablas independientes del AST sintáctico.
+
+```bash
+npm run bootstrap:binder -- examples/todo-project/main.ets
+npm run test:bootstrap:binder
+```
+
+El checker y su inferencia se implementarán después, en otro módulo.

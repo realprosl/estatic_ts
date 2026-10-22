@@ -15,7 +15,7 @@ producción concurrente.
 | Área | Estado | Observación |
 |---|---|---|
 | Lexer, parser y diagnósticos | Estable para el dialecto documentado | No pretende aceptar TypeScript completo |
-| Autoalojamiento | Grafo y caché sintáctica por archivo | Lexer/parser/resolver ejecutados como C++; checker ETS y scheduler pendientes |
+| Autoalojamiento | Binding con ámbitos/símbolos entre archivos | Lexer/parser/cargador/binder ejecutados como C++; checker ETS y scheduler pendientes |
 | Tipos, genéricos, unions y clases | Funcional | Checker y codegen siguen muy acoplados |
 | Módulos | Funcional con límites | Default, reexports y multilínea; análisis mediante AST combinado |
 | Ownership y borrow checking | Funcional, conservador | Hay moves, conflictos y NLL; no hay lifetime parameters |
@@ -29,7 +29,7 @@ Las declaraciones del editor tienen una única fuente canónica en
 `types/estatic.d.ts`. `etsc init` la copia y `etsc update-types` actualiza
 proyectos existentes con respaldo `.bak`. El registro semántico y el archivo
 se comprueban mediante una regresión automática. La versión visible por CLI es
-`estatic 1.22.0 (v60)` mediante `--version` o `-v`; verbose usa `--verbose`.
+`estatic 1.23.0 (v61)` mediante `--version` o `-v`; verbose usa `--verbose`.
 
 El incremental informa tiempos reales por fase y registra interfaces/dependencias
 por módulo para planificar invalidaciones. v48 restaura cuerpos de funciones
@@ -41,6 +41,14 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
 ## Verificación conocida
 
+- v61 añade [`bootstrap/binder/`](./bootstrap/binder/README.md): ámbitos, símbolos,
+  referencias léxicas y de tipos, imports/exports y namespaces. Tablas separadas
+  del AST, grupos de sobrecargas y miembros ordinarios diferidos al checker.
+  Sus 63 pruebas nativas pasan, incluidas las de su propio proyecto ETS y
+  todo-project; no infiere tipos ni
+  selecciona firmas. La caché de sintaxis permanece sin anotaciones semánticas.
+
+
 - v60 incorpora [`bootstrap/modules/`](./bootstrap/modules/README.md): resolución
   de imports/reexports con aliases/raíces, identidad canónica, ciclos y ausencias.
   Registro atómico por archivo con tamaño, mtime/ctime nanosegundo, identidad
@@ -51,7 +59,7 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
 
 - La verificación del conjunto unitario estable realizada durante esta revisión
-  pasó **1941/1941 pruebas**: 1236 unitarias de stage 0 y 705 de bootstrap,
+  pasó **2004/2004 pruebas**: 1236 unitarias de stage 0 y 768 de bootstrap,
   ejecutadas por bloques. No incluye `test/runner.ts` ni la suite E2E/libuv.
 - El lexer de `bootstrap/lexer/` pasa **64/64** pruebas nativas, incluidas
   comparaciones con stage 0, su propio código ETS y aislamiento del módulo.
