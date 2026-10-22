@@ -9,6 +9,7 @@ import { compileFile, loadModuleGraph } from "../../src/modules/module-loader.ts
 import { Lexer } from "../../src/lexer/lexer.ts";
 import { KEYWORDS } from "../../src/lexer/token.ts";
 import { DiagnosticError } from "../../src/core/diagnostic.ts";
+import { templateCases, invalidTemplateCases } from "../../test/fixtures/templates.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const entry = join(root, "bootstrap/lexer/demo.ets");
@@ -68,6 +69,32 @@ const fixtures: [string, string][] = [
   ["trailing whitespace", "answer \n \n"],
   ["unmatched brackets terminate", ")] } ( ["],
 ];
+
+for (const [name, template] of templateCases) test(`bootstrap lexer templates: ${name}`, () => {
+  const source = template + '; const after=9;'; const actual = native(source);
+  assert.deepEqual(actual.diagnostics, []);
+  const token = actual.tokens[0] as any;
+  assert.equal(token.kind, "template"); assert.equal(token.lexeme, template.slice(1, -1));
+  assert.equal(token.span.start.offset, 0); assert.equal(token.span.end.offset, template.length);
+  assert.deepEqual(actual.tokens, new Lexer(source).tokenize());
+  assert.ok(actual.tokens.some((token: any) => token.kind === "identifier" && token.lexeme === "after"));
+});
+for (const [name, source, message] of invalidTemplateCases) test(`bootstrap lexer templates reject: ${name}`, () => {
+  const actual = native(source); assert.equal(actual.diagnostics.length, 1);
+  assert.equal(actual.diagnostics[0].message, message);
+  assert.deepEqual(actual.diagnostics[0].span, { start: { offset: 0, line: 1, column: 1 }, end: { offset: source.length, line: source.split("\n").length, column: source.length - source.lastIndexOf("\n") } });
+  assert.throws(() => new Lexer(source).tokenize(), (error: any) => error instanceof DiagnosticError && JSON.stringify(error.diagnostics) === JSON.stringify(actual.diagnostics));
+});
+test("bootstrap lexer templates bound context depth and keep EOF in source", () => {
+  const boundary = '`${'.repeat(64) + 'value' + '}`'.repeat(64);
+  const accepted = native(boundary); assert.deepEqual(accepted.diagnostics, []);
+  assert.deepEqual(accepted.tokens, new Lexer(boundary).tokenize());
+  const source = '`outer ${'.repeat(100) + 'value' + '}`'.repeat(100);
+  const actual = native(source); assert.equal(actual.diagnostics.length, 1);
+  assert.equal(actual.diagnostics[0].message, "Límite de anidamiento de templates (128)");
+  assert.equal((actual.tokens.at(-1) as any).span.end.offset, source.length);
+  assert.throws(() => new Lexer(source).tokenize(), (error: any) => error instanceof DiagnosticError && error.diagnostics[0].message === actual.diagnostics[0].message);
+});
 
 for (const [name, source] of fixtures) test(`bootstrap lexer native parity: ${name}`, () => {
   const actual = native(source);

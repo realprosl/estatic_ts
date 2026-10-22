@@ -5,10 +5,22 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Lexer } from "../../src/lexer/lexer.ts";
+import { templateCases, invalidTemplateCases } from "../fixtures/templates.ts";
+import { DiagnosticError } from "../../src/core/diagnostic.ts";
 
 function tokens(source: string) {
   return new Lexer(source).tokenize();
 }
+
+for (const [name, template] of templateCases) test(`lexer templates: ${name}`, () => {
+  const result = tokens(template + '; next;');
+  assert.equal(result[0].kind, "template"); assert.equal(result[0].lexeme, template.slice(1, -1));
+  assert.equal(result[0].span.end.offset, template.length);
+  assert.deepEqual(result.slice(1).map(token => token.lexeme), [";", "next", ";", ""]);
+});
+for (const [name, source, message] of invalidTemplateCases) test(`lexer templates reject: ${name}`, () => {
+  assert.throws(() => tokens(source), (error: any) => error instanceof DiagnosticError && error.diagnostics.length === 1 && error.diagnostics[0].message === message);
+});
 
 test("lexer: identificador simple", () => {
   const ts = tokens("foo");

@@ -54,7 +54,7 @@ g++ -std=c++20 -O0 -pthread -fno-exceptions -I. build/bootstrap/lexer/demo.cpp -
 npm run test:bootstrap:lexer
 ```
 
-Las 44 pruebas transpilan el módulo y su driver a dos unidades C++, compilan
+Las 64 pruebas transpilan el módulo y su driver a dos unidades C++, compilan
 y enlazan con g++ y ejecutan el binario. Incluyen palabras clave, comentarios,
 cadenas/escapes, números, operadores, templates crudos, newline significativo,
 CRLF, whitespace Unicode, recuperación tras errores y posiciones. Hay 40
@@ -75,7 +75,9 @@ generado desde Estatic, no como una copia JavaScript del lexer.
   1 y avanzan con LF. Identificadores ASCII, igual que el lexer actual.
 - Se conserva la tokenización de stage 0: `<<`/`>>` son dos símbolos; números
   con prefijos y `_` se recogen sin validación numérica completa; templates
-  contienen texto crudo para un parser futuro. No se evalúa interpolación.
+  contienen texto crudo. Una pila de hasta 128 contextos distingue texto,
+  interpolaciones y templates anidados; strings/comentarios protegen sus
+  llaves y backticks. El lexer no evalúa las interpolaciones.
 - `LexerResult` sustituye las excepciones: siempre contiene tokens, `eof` y
   un array de diagnósticos. El caller decide cómo tratar los errores.
 - Un comentario de bloque sin cerrar produce diagnóstico, mientras stage 0

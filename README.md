@@ -63,7 +63,7 @@ Para consultar la versión instalada:
 ```bash
 etsc --version
 etsc -v
-# estatic 1.15.0 (v53)
+# estatic 1.16.0 (v54)
 ```
 
 El `estatic.config.ts` generado NO requiere que listes `-luv`, `-lssl`,
@@ -996,7 +996,7 @@ npm run test:http-routing
 npm run test:e2e
 ```
 
-La última verificación del conjunto estable registrada en `status.md` pasó 1503 pruebas
+La última verificación del conjunto estable registrada en `status.md` pasó 1577 pruebas
 unitarias. El número puede cambiar al añadir casos; no se mantiene como una
 constante manual en este README.
 
@@ -1005,12 +1005,15 @@ constante manual en este README.
 El trabajo avanza por módulos independientes en [`bootstrap/`](./bootstrap/README.md).
 El primer módulo es un lexer escrito en Estatic, con una función de inspección
 de tokens. `npm run bootstrap:lexer -- 'let total: number = 42;'` lo transpila,
-compila su C++ y ejecuta el ejemplo. Sus 44 pruebas incluyen comparación nativa
+compila su C++ y ejecuta el ejemplo. Sus 64 pruebas incluyen comparación nativa
 con el lexer actual. El parser avanza como segundo módulo independiente:
 `npm run bootstrap:parser` ejecuta un ejemplo con tokens preparados y muestra
-su AST. Sus 308 pruebas incluyen analizar su propio fuente ETS, el del lexer y
+su AST. Sus 322 pruebas incluyen analizar su propio fuente ETS, el del lexer y
 los drivers, declaraciones enum/union, imports/exports con alias y árboles de
-switch, además de templates e interpolaciones mediante tokens preparados. Esto valida el análisis sintáctico
+switch, además de templates anidados e interpolaciones mediante tokens preparados.
+Ambos lexers preservan los templates completos incluso con objetos, strings y
+comentarios internos. El parser de stage 0 también valida sus expresiones y
+conserva las posiciones originales. Esto valida el análisis sintáctico
 del bootstrap; todavía no añade switch al frontend ni al backend de stage 0.
 La [cobertura y los pendientes](./bootstrap/parser/README.md) están documentados;
 todavía no se integra la cadena nativa entre fases ni autoaloja el compilador.
