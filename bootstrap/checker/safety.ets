@@ -1,3 +1,4 @@
+import { EffectAnalyzer } from "./effects";
 import { ModuleGraph } from "../modules/loader";
 import { BindingResult, BindingSymbol, bindingChild, callableBinding } from "../binder/binder";
 import { AstNode } from "../parser/parser";
@@ -21,6 +22,10 @@ export class SafetyCallSite {
   module: number; node: number;
   constructor(module: number, node: number) { this.module = module; this.node = node; }
 }
+export class SafetyArgument {
+  parameter: number; module: number; node: number; root: number;
+  constructor(parameter: number, module: number, node: number, root: number) { this.parameter = parameter; this.module = module; this.node = node; this.root = root; }
+}
 export class SafetyTarget {
   module: number; node: number;
   constructor(module: number, node: number) { this.module = module; this.node = node; }
@@ -30,12 +35,12 @@ export class SafetyTarget {
 // Flow joins preserve possible moves; provenance is a monotone graph keyed by
 // symbol identity, independent of source order and aliases.
 export class SafetyAnalyzer {
-  graph: ModuleGraph; binding: BindingResult; result: CheckResult;
+  graph: ModuleGraph; binding: BindingResult; result: CheckResult; effects: EffectAnalyzer; arguments: SafetyArgument[];
   offsets: number[]; nodes: number; edges: SafetyEdge[]; seeds: number[]; escapes: EscapeSite[];
   borrowSources: number[]; leases: BorrowLease[]; breaks: SafetyState[]; continues: SafetyState[]; returns: SafetyState[]; sites: SafetyCallSite[];
   constructor(graph: ModuleGraph, binding: BindingResult, result: CheckResult) {
-    this.graph = graph; this.binding = binding; this.result = result; this.offsets = []; this.nodes = 0;
-    this.edges = []; this.seeds = []; this.escapes = []; this.borrowSources = []; this.leases = []; this.breaks = []; this.continues = []; this.returns = []; this.sites = [];
+    this.graph = graph; this.binding = binding; this.result = result; this.effects = new EffectAnalyzer(graph,binding,result); this.arguments = []; this.offsets = []; this.nodes = 0;
+    this.edges = []; this.seeds = []; this.escapes = []; this.borrowSources = []; this.leases = []; this.breaks = []; this.continues = []; this.returns = []; this.sites = []; this.arguments = [];
     for (const m of graph.modules) { this.offsets.push(this.nodes); this.nodes = this.nodes + m.cached.result.ast.nodes.length; }
     for (const s of binding.symbols) this.borrowSources.push(-1);
   }
@@ -81,7 +86,11 @@ export class SafetyAnalyzer {
       const n: AstNode = this.node(module,at);
       if (n.kind == "IdentifierExpression") {
         let sid: number = this.reference(module,at); let remaining: number = this.binding.symbols.length;
-        while (sid >= 0 && this.borrowSources[sid] >= 0 && remaining > 0) { sid = this.borrowSources[sid]; remaining = remaining - 1; } return sid;
+        while (sid >= 0 && remaining > 0) {
+          let source: number = this.borrowSources[sid];
+          if (borrowedType(this.result.symbolTypes[sid])) for (let a: number = this.arguments.length - 1; a >= 0; a = a - 1) if (this.arguments[a].parameter == sid) { source = this.arguments[a].root; break; }
+          if (source < 0 || source == sid) break; sid = source; remaining = remaining - 1;
+        } return sid;
       }
       if (n.kind == "MemberExpression" || n.kind == "IndexExpression") at = bindingChild(n,"object");
       else if (this.helper(module,at) == "ref" || this.helper(module,at) == "constRef" || this.helper(module,at) == "move") at = bindingChild(n,"args");
@@ -261,7 +270,11 @@ export class SafetyAnalyzer {
         const knownPush: boolean = n.kind == "MemberCallExpression" && n.get("method") == "push";
         const root: number = knownPush ? this.root(m,bindingChild(n,"object")) : -1;
         const localPush: boolean = root >= 0 && this.owner(this.binding.symbols[root].scope) == this.owner(this.binding.files[m].nodeScopes[id]);
-        if (!knownPush || !localPush) for (const edge of n.edges) if (edge.role == "args") this.escapes.push(new EscapeSite(m,edge.node,this.vertex(m,edge.node),"callback con retención no demostrada"));
+        let argumentIndex: number = 0;
+        if (!knownPush || !localPush) for (const edge of n.edges) if (edge.role == "args") {
+          if (this.effects.canRetain(m,id,argumentIndex)) this.escapes.push(new EscapeSite(m,edge.node,this.vertex(m,edge.node),"callback retenido o retención no demostrada"));
+          argumentIndex = argumentIndex + 1;
+        }
       }
     }
     let risk: number[] = []; for (let i: number = 0; i < this.nodes + this.binding.symbols.length; i = i + 1) risk.push(-1);
@@ -313,14 +326,14 @@ export class SafetyAnalyzer {
     } return result;
   }
   access(module: number, id: number, sid: number, mode: string): void {
-    if (sid < 0) return; const handle: number = this.directRoot(module,id); if (handle >= 0 && this.borrowSources[handle] >= 0) return; const position: number = this.node(module,id).start.offset;
+    if (sid < 0) return; const handle: number = this.directRoot(module,id); if (handle >= 0 && (this.borrowSources[handle] >= 0 || borrowedType(this.result.symbolTypes[handle]))) return; const position: number = this.node(module,id).start.offset;
     const currentOwner: number = this.owner(this.binding.files[module].nodeScopes[id]);
     for (const c of this.result.captures) if (this.vertex(c.module,c.closure) == currentOwner && c.symbol == sid && c.mode == "value") return;
     for (const lease of this.leases) {
-      let live: boolean = lease.module == module && lease.owner == currentOwner && lease.begin <= position && position <= lease.end;
+      let live: boolean = lease.module == module && lease.owner == currentOwner && (lease.begin) <= position && position <= lease.end;
       for (const site of this.sites) {
         const offset: number = this.node(site.module,site.node).start.offset;
-        if (lease.module == site.module && lease.owner == this.owner(this.binding.files[site.module].nodeScopes[site.node]) && lease.begin <= offset && offset <= lease.end) live = true;
+        if (lease.module == site.module && lease.owner == this.owner(this.binding.files[site.module].nodeScopes[site.node]) && (lease.begin) <= offset && offset <= lease.end) live = true;
       }
       if (live && lease.root == sid && lease.end > lease.begin && (lease.mode == "ref" || mode != "read")) this.report(module,id,"E4207: acceso a la fuente durante un préstamo activo");
     }
@@ -350,62 +363,92 @@ export class SafetyAnalyzer {
       roots.push(root); modes.push(mode); at = at + 1;
     }
   }
-  target(module: number, id: number): SafetyTarget {
-    const selected: number = this.result.files[module].selected[id];
-    if (selected >= 0) return new SafetyTarget(this.result.files[module].selectedModules[id],selected);
-    let sid: number = this.reference(module,id); let remaining: number = this.binding.symbols.length;
-    while (sid >= 0 && remaining > 0) {
-      const s: BindingSymbol = this.binding.symbols[sid]; if ((s.module) < 0 || (s.node) < 0) break;
-      if (s.kind == "FunctionDeclaration") return new SafetyTarget(s.module,s.node);
-      if (s.kind != "VariableDeclaration") break;
-      const init: number = bindingChild(this.node(s.module,s.node),"initializer");
-      if (init < 0) break;
-      if (this.node(s.module,init).kind == "ArrowFunctionExpression") return new SafetyTarget(s.module,init);
-      if (this.node(s.module,init).kind != "IdentifierExpression" && this.node(s.module,init).kind != "MemberExpression") break;
-      sid = this.reference(s.module,init); remaining = remaining - 1;
+  targets(module: number, id: number): number[] {
+    const sid: number = this.reference(module,id);
+    if (sid >= 0) for (let at: number = this.arguments.length - 1; at >= 0; at = at - 1) if (this.arguments[at].parameter == sid) {
+      const actual = this.arguments[at]; return this.effects.points[this.effects.vertex(actual.module,actual.node)].targets;
     }
-    return new SafetyTarget(-1,-1);
+    return this.effects.callTargets(module,id);
+  }
+  observable(summaryId: number, sid: number, module: number, id: number): number {
+    const summary = this.effects.summaries[summaryId];
+    for (let at: number = 0; at < summary.parameters.length; at = at + 1) if (sid == summary.parameters[at]) {
+      if (!borrowedType(this.result.symbolTypes[sid])) return -1;
+      let position: number = 0; for (const e of this.node(module,id).edges) if (e.role == "args") { if (position == at) return this.root(module,e.node); position = position + 1; } return -1;
+    }
+    if (this.binding.symbols[sid].kind == "receiver") return this.root(module,bindingChild(this.node(module,id),"object"));
+    if (this.owner(this.binding.symbols[sid].scope) == this.vertex(summary.module,summary.node)) return -1;
+    for (const c of this.result.captures) if (c.module == summary.module && c.closure == summary.node && c.symbol == sid && c.mode == "value") return -1;
+    return sid;
+  }
+  summary(summaryId: number, module: number, id: number, out state: SafetyState): void {
+    const summary = this.effects.summaries[summaryId];
+    if (summary.unknown || summary.invokes.length > 0) { this.report(module,id,"E4104: resumen recursivo con efectos opacos todavía no demostrados"); return; }
+    for (const sid of summary.reads) { const root: number = this.observable(summaryId,sid,module,id); if (root >= 0) this.read(module,id,root,state); }
+    for (const sid of summary.writes) { const root: number = this.observable(summaryId,sid,module,id); if (root >= 0) this.access(module,id,root,"write"); }
+    for (const sid of summary.moves) {
+      const root: number = this.observable(summaryId,sid,module,id);
+      if (root >= 0) { this.read(module,id,root,state); this.access(module,id,root,"move"); if (state.slots[root] != 2) state.slots[root] = 3; }
+    }
+  }
+  unknown(module: number, id: number, state: SafetyState): void {
+    // A symbolic callback parameter is an obligation on callers. Definitions
+    // with no concrete caller keep that obligation in their effect summary.
+    let symbolic: number = this.reference(module,id); let remaining: number = this.arguments.length + 1;
+    while (symbolic >= 0 && this.binding.symbols[symbolic].kind == "Parameter" && remaining > 0) {
+      let found: number = -1;
+      for (let at: number = this.arguments.length - 1; at >= 0; at = at - 1) if (this.arguments[at].parameter == symbolic) { found = at; break; }
+      if (found < 0) return;
+      const actual = this.arguments[found]; const next: number = this.directRoot(actual.module,actual.node);
+      if (next == symbolic) break; symbolic = next; remaining = remaining - 1;
+    }
+    for (const lease of this.leases) if (lease.end > lease.begin) {
+      let live: boolean = lease.module == module && lease.owner == this.owner(this.binding.files[module].nodeScopes[id]) && (lease.begin) <= this.node(module,id).start.offset && (this.node(module,id).start.offset) <= lease.end;
+      for (const site of this.sites) if (lease.module == site.module && lease.owner == this.owner(this.binding.files[site.module].nodeScopes[site.node]) && (lease.begin) <= this.node(site.module,site.node).start.offset && (this.node(site.module,site.node).start.offset) <= lease.end) live = true;
+      if (live) this.report(module,id,"E4104: efectos opacos durante un préstamo activo no demostrados");
+    }
+    for (let global: number = 0; global < this.binding.symbols.length; global = global + 1) {
+      const s = this.binding.symbols[global];
+      if (s.kind == "VariableDeclaration" && this.owner(s.scope) < 0 && (ownedType(this.result.symbolTypes[global]) || state.slots[global] != 1)) this.report(module,id,"E4104: efectos opacos sobre globals no demostrados");
+    }
   }
   invoke(module: number, id: number, out state: SafetyState, active: number[]): void {
-    const sid: number = this.reference(module,id);
-    if (sid >= 0 && this.binding.symbols[sid].kind == "VariableDeclaration") for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let at: number = 0; at < this.result.files[m].types.length; at = at + 1) {
-      const n: AstNode = this.node(m,at);
-      if (n.kind == "AssignmentExpression" && this.reference(m,bindingChild(n,"target")) == sid) { this.report(module,id,"E4104: efectos de callable reasignado pendientes de resumen"); return; }
+    if (this.effects.builtin(module,id)) return;
+    const targets: number[] = this.targets(module,id);
+    if (targets.length == 0) { this.unknown(module,id,state); return; }
+    const before: SafetyState = state; let joined: SafetyState = state; joined.exit = "unreachable";
+    for (const summaryId of targets) {
+      const summary = this.effects.summaries[summaryId]; let choice: SafetyState = before;
+      const target: SafetyTarget = new SafetyTarget(summary.module,summary.node); const owner: number = this.vertex(target.module,target.node);
+      if (bindingChild(this.node(target.module,target.node),"body") < 0) this.unknown(module,id,choice);
+      else if (active.includes(owner) || active.length >= 64) this.summary(summaryId,module,id,choice);
+      else this.invokeTarget(module,id,target,choice,active);
+      joined = this.join(joined,choice);
     }
-    const target: SafetyTarget = this.target(module,id);
-    const call: AstNode = this.node(module,id);
-    if (call.kind == "NewExpression" && (target.node) < 0) return;
-    if (call.kind == "MemberCallExpression") {
-      const object: number = bindingChild(call,"object"); const receiver: string = memoryValue(this.result.files[module].types[object]);
-      if (receiver == "string" || receiver.endsWith("[]")) return;
-    }
-    if ((target.node) < 0 || bindingChild(this.node(target.module,target.node),"body") < 0) {
-      for (const lease of this.leases) if (lease.end > lease.begin) {
-        let live: boolean = lease.module == module && lease.owner == this.owner(this.binding.files[module].nodeScopes[id]) && lease.begin <= this.node(module,id).start.offset && this.node(module,id).start.offset <= lease.end;
-        for (const site of this.sites) if (lease.module == site.module && lease.owner == this.owner(this.binding.files[site.module].nodeScopes[site.node]) && lease.begin <= this.node(site.module,site.node).start.offset && this.node(site.module,site.node).start.offset <= lease.end) live = true;
-        if (live) this.report(module,id,"E4104: efectos de callback/método opaco durante un préstamo activo no demostrados");
-      }
-      for (let global: number = 0; global < this.binding.symbols.length; global = global + 1) {
-        const s: BindingSymbol = this.binding.symbols[global];
-        if (s.kind == "VariableDeclaration" && this.owner(s.scope) < 0 && (ownedType(this.result.symbolTypes[global]) || state.slots[global] != 1)) this.report(module,id,"E4104: efectos de callback/método opaco sobre globals no demostrados");
-      }
-      return;
-    }
+    state = joined;
+  }
+  invokeTarget(module: number, id: number, target: SafetyTarget, out state: SafetyState, active: number[]): void {
     const owner: number = this.vertex(target.module,target.node);
-    if (active.includes(owner) || active.length >= 64) {
-      // Recursive numeric calls are harmless for this pass. Ownership recursion
-      // needs a summary, so fail explicitly rather than dropping effects.
-      for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (ownedType(this.result.symbolTypes[sid]) && (this.owner(this.binding.symbols[sid].scope) == owner || this.owner(this.binding.symbols[sid].scope) < 0)) this.report(module,id,"Ownership recursivo pendiente de resumen de efectos");
-      return;
-    }
+    const argumentStart: number = this.arguments.length; const leaseStart: number = this.leases.length;
     let saved: SafetyState = state; const returnStart: number = this.returns.length; this.sites.push(new SafetyCallSite(module,id));
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (this.owner(this.binding.symbols[sid].scope) == owner) state.slots[sid] = (this.binding.symbols[sid].kind == "receiver" ? 1 : 0);
     let next: number[] = active; next.push(owner);
     let actualCount: number = 0; for (const edge of this.node(module,id).edges) if (edge.role == "args") actualCount = actualCount + 1;
-    let parameterIndex: number = 0;
+    let parameterIndex: number = 0; let actualNodes: number[] = [];
+    for (const edge of this.node(module,id).edges) if (edge.role == "args") actualNodes.push(edge.node);
     for (const edge of this.node(target.module,target.node).edges) if (edge.role == "params") {
       if (parameterIndex >= actualCount) this.expression(target.module,bindingChild(this.node(target.module,edge.node),"defaultValue"),state,next);
       const parameter: number = this.binding.files[target.module].declarations[edge.node]; if (parameter >= 0) state.slots[parameter] = 1;
+      const value: number = parameterIndex < actualNodes.length ? actualNodes[parameterIndex] : bindingChild(this.node(target.module,edge.node),"defaultValue");
+      const valueModule: number = parameterIndex < actualNodes.length ? module : target.module;
+      if (value >= 0) {
+        const root: number = this.root(valueModule,value); this.arguments.push(new SafetyArgument(parameter,valueModule,value,root));
+        if (root >= 0 && borrowedType(this.result.symbolTypes[parameter])) {
+          const bodyNode: number = bindingChild(this.node(target.module,target.node),"body");
+          let lease: BorrowLease = new BorrowLease(target.module,parameter,root,owner,this.node(target.module,bodyNode).start.offset,memoryMode(this.result.symbolTypes[parameter]));
+          lease.end = this.node(target.module,bodyNode).end.offset; this.leases.push(lease);
+        }
+      }
       parameterIndex = parameterIndex + 1;
     }
     const body: number = bindingChild(this.node(target.module,target.node),"body");
@@ -415,6 +458,7 @@ export class SafetyAnalyzer {
     while (this.returns.length > returnStart) this.returns.pop(); this.sites.pop();
     state.exit = "";
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (this.owner(this.binding.symbols[sid].scope) == owner) state.slots[sid] = saved.slots[sid];
+    while (this.arguments.length > argumentStart) this.arguments.pop(); while (this.leases.length > leaseStart) this.leases.pop();
     while (this.breaks.length > breakStart) this.breaks.pop(); while (this.continues.length > continueStart) this.continues.pop();
   }
   constant(module: number, id: number): string {
@@ -531,7 +575,7 @@ export class SafetyAnalyzer {
         const sid: number = this.binding.files[m].declarations[edge.node]; if (sid >= 0) state.slots[sid] = 1;
       }
       const body: number = bindingChild(n,"body"); if (body < 0) continue;
-      this.breaks = []; this.continues = []; this.returns = []; this.sites = [];
+      this.breaks = []; this.continues = []; this.returns = []; this.sites = []; this.arguments = [];
       if (this.node(m,body).kind == "BlockStatement") {
         this.walk(m,body,state,[owner]);
         if (this.node(m,body).start.kind != ";" && functionReturn(this.result.files[m].types[id]) != "void" && state.exit != "return") this.report(m,id,"No todas las rutas devuelven un valor");
@@ -539,7 +583,9 @@ export class SafetyAnalyzer {
     }
   }
   run(): CheckResult {
-    this.memoryContracts(); this.captures(); this.provenance(); this.visibility(); this.flow(); this.result.borrows = this.leases; return this.result;
+    this.memoryContracts(); this.captures(); this.result.borrows = this.leases;
+    this.effects = new EffectAnalyzer(this.graph,this.binding,this.result); this.effects.analyze(); this.result.effects = this.effects.summaries;
+    this.provenance(); this.visibility(); this.flow(); this.result.borrows = this.leases; return this.result;
   }
 }
 export function validateSafety(graph: ModuleGraph, binding: BindingResult, out result: CheckResult): void {

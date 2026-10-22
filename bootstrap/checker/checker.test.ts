@@ -228,7 +228,7 @@ const safetyInvalid:[string,string,RegExp][]=[
  ['pushEscape','type Reader=()=>number;function f():Reader[]{let x=0;const g=():number=>{x+=1;return x;};let a:Reader[]=[];a.push(g);return a;}',/E4210/],
  ['transitiveEscape','function f():()=>number{let x=0;const g=():number=>{x+=1;return x;};return ():number=>g();}',/E4210/],
  ['globalEscape','let global:()=>number=():number=>1;function f():void{let x=0;const g=():number=>{x+=1;return x;};global=g;}',/E4210/],
- ['callbackEscape','function consume(f:()=>number):void{print(f());}function f():void{let x=0;consume(():number=>{x+=1;return x;});}',/E4210/],
+
  ['indirectTdz','const n=f();let x=1;function f():number{return x;}',/E4001/],
  ['defaultTdz','function f(x:number=y,y:number=1):number{return x;}',/E4001/],
  ['creationTdz','function f():void{const g=():number=>x;let x=1;print(g());}',/E4001/],
@@ -281,7 +281,7 @@ test('native public surface: type-only reexport provides public identity',()=>ch
 test('native public surface: barrel cannot hide a private type leak',()=>error('import {make} from "./barrel";print(make().value);',/E4401/,{'barrel.ets':'export {make} from "./lib";','lib.ets':'class Hidden{value:number=1;}export function make():Hidden{return new Hidden();}'}));
 test('native public surface: identical type names in another module do not publish a private origin',()=>error('import {Public} from "./a";export class Hidden{}',/E4401/,{'a.ets':'class Hidden{}export interface Public{value:Hidden;}'}));
 test('native safety: field initializer may read a global initialized before construction',()=>check('class C{x:number=late;}let late=1;const c=new C();print(c.x);'));
-test('native safety: reassigned callables fail explicitly without an effect summary',()=>error('let f:()=>number=():number=>1;const g=():number=>2;f=g;print(f());',/E4104/));
+test('native effects: reassigned safe callables are resolved',()=>check('let f:()=>number=():number=>1;const g=():number=>2;f=g;print(f());'));
 test('native safety: interface method calls do not dereference a missing body',()=>check('interface I{get():number;}function f(i:I):number{return i.get();}'));
 for(const name of ['move','borrowedParameter','sharedParameter','sharedBorrows','localClosure','returnedReader','globalClosure','fullRoutes'])test(`native safety differential accepts ${name}`,()=>{const source=safetyValid[name];const ast=new Parser(new Lexer(source).tokenize()).parseProgram();new TypeChecker().check(ast);check(source);});
 for(const name of ['useMoved','doubleMove','movePlain','maybeMove','borrowField','borrowReturn','overlap','closureBorrow','directEscape','aliasEscape'])test(`native safety differential rejects ${name}`,()=>{const [,source]=safetyInvalid.find(([key])=>key===name)!;assert.throws(()=>{const ast=new Parser(new Lexer(source).tokenize()).parseProgram();new TypeChecker().check(ast);},DiagnosticError);run(fixture(source),1);});
@@ -299,4 +299,82 @@ test('native safety: generic function arrays preserve callable element identity'
 
 test('native safety: known push may retain a reference closure within its own local scope',()=>check('type Reader=()=>number;function f():number{let x=0;const g=():number=>{x+=1;return x;};let a:Reader[]=[];a.push(g);const h=a[0];return h();}'));
 
-test('native safety: opaque callback effects cannot bypass an active loan',()=>error(box+'let b=new Box();const write=():number=>{b.value=2;return 2;};function consume(cb:()=>number):void{print(cb());}function f():void{const r=constRef(b);consume(write);print(r.value);}',/E4104/));
+test('native effects: known callback writes cannot bypass an active loan',()=>error(box+'let b=new Box();const write=():number=>{b.value=2;return 2;};function consume(cb:()=>number):void{print(cb());}function f():void{const r=constRef(b);consume(write);print(r.value);}',/E4207/));
+
+// Summary and call-site regressions: these intentionally extend v63.
+const effectValid:Record<string,string>={
+ ephemeral:'function consume(f:()=>number):void{print(f());}function f():void{let x=0;consume(():number=>{x+=1;return x;});}f();',
+ alias:'const first=():number=>1;const second=first;print(second());',
+ branchTargets:'const a=():number=>1;const b=():number=>2;let f=true?a:b;print(f());',
+ arrayTargets:'type Reader=()=>number;let a:Reader[]=[():number=>1];const f=a[0];print(f());',
+ factory:'function make():()=>number{return ():number=>1;}const f=make();print(f());',
+ identity:'function identity(f:()=>number):()=>number{return f;}function use():number{let n=0;const f=():number=>{n+=1;return n;};const g=identity(f);return g();}print(use());',
+ localCarrier:'type Reader=()=>number;function consume(a:Reader[]):number{const f=a[0];return f();}function use():number{let n=0;return consume([():number=>{n+=1;return n;}]);}print(use());',
+ defaultCallback:'function consume(f:()=>number=():number=>1):number{return f();}print(consume());',
+ forwardEffects:'function a():number{return b();}function b():number{return 1;}print(a());',
+ unrelatedOwner:box+'let p:ptr<Box> = new Box();function count(n:number):number{if(n==0)return 0;return count(n-1);}print(count(2));print(p.value);',
+ recursiveOwner:box+'function consume(p:ptr<Box>,n:number):void{if(n==0)return;consume(move(p),n-1);}let p:ptr<Box> = new Box();consume(move(p),2);',
+ mutualOwner:box+'let p:ptr<Box> = new Box();function a(n:number):number{if(n==0)return 0;return b(n-1);}function b(n:number):number{if(n==0)return 0;return a(n-1);}print(a(2));print(p.value);',
+ recursiveBorrow:box+'function visit(b:constRef<Box>,n:number):number{if(n==0)return b.value;return visit(b,n-1);}let b=new Box();print(visit(b,2));',
+ borrowerWrite:box+'function write(b:ref<Box>):void{b.value=2;}let b=new Box();write(b);',
+ borrowerAlias:box+'function write(b:ref<Box>):void{const r=ref(b);r.value=2;}let b=new Box();write(b);',
+ nestedBorrow:box+'function write(b:ref<Box>):void{b.value=2;}function outer(b:ref<Box>):void{write(b);}let b=new Box();outer(b);',
+ readCallback:'let n=1;function apply(f:()=>number):number{return f();}function use():number{const r=constRef(n);const x=apply(():number=>n);return x+r;}print(use());',
+ protectedUnrelated:'let n=1;let other=2;function apply(f:()=>number):number{return f();}function use():number{const r=ref(n);const x=apply(():number=>other);return x+r;}print(use());',
+ interfaceTarget:'interface I{read():number;}const i:I={read:():number=>1};print(i.read());',
+ interfaceField:'interface I{read:()=>number;}const i:I={read:():number=>1};const f=i.read;print(f());',
+ transitiveUse:'function inner(f:()=>number):number{return f();}function outer(f:()=>number):number{return inner(f);}function use():number{let n=0;return outer(():number=>{n+=1;return n;});}print(use());',
+ nestedUse:'function apply(f:()=>number):number{const g=():number=>f();return g();}function use():number{let n=0;return apply(():number=>{n+=1;return n;});}print(use());',
+};
+for(const[name,source]of Object.entries(effectValid))test(`native effects accepts ${name}`,()=>check(source));
+const effectInvalid:[string,string,RegExp][]=[
+ ['retained','let saved:()=>number=():number=>1;function keep(f:()=>number):void{saved=f;}function use():void{let n=0;keep(():number=>{n+=1;return n;});}',/E4210/],
+ ['transitiveRetained','let saved:()=>number=():number=>1;function keep(f:()=>number):void{saved=f;}function outer(f:()=>number):void{keep(f);}function use():void{let n=0;outer(():number=>{n+=1;return n;});}',/E4210/],
+ ['nestedRetained','let saved:()=>number=():number=>1;function keep(f:()=>number):void{const g=():void=>{saved=f;};g();}function use():void{let n=0;keep(():number=>{n+=1;return n;});}',/E4210/],
+ ['identityEscape','function identity(f:()=>number):()=>number{return f;}function use():()=>number{let n=0;return identity(():number=>{n+=1;return n;});}',/E4210/],
+ ['globalOwnerTarget',box+'let p:ptr<Box> = new Box();let f=():number=>1;const g=():number=>{const q=move(p);return q.value;};f=g;print(f());print(p.value);',/E4102|E4103/],
+ ['targetLoan','let n=1;let f=():number=>1;const write=():number=>{n=2;return n;};f=write;function use():number{const r=constRef(n);const x=f();return r+x;}',/E4207/],
+ ['borrowCallback',box+'let b=new Box();function apply(x:ref<Box>,f:()=>number):number{return f()+x.value;}const write=():number=>{b.value=2;return 1;};print(apply(b,write));',/E4207/],
+ ['sharedBorrowCallback',box+'let b=new Box();function apply(x:constRef<Box>,f:()=>number):number{return f()+x.value;}const write=():number=>{b.value=2;return 1;};print(apply(b,write));',/E4207/],
+ ['nestedBorrowCallback',box+'let b=new Box();function apply(x:ref<Box>,f:()=>number):number{return f()+x.value;}function outer(x:ref<Box>,f:()=>number):number{return apply(x,f);}const write=():number=>{b.value=2;return 1;};print(outer(b,write));',/E4207/],
+ ['hiddenRead','const read=():number=>n;const f=read;print(f());let n=1;',/E4001/],
+ ['factoryRead','function make():()=>number{return ():number=>n;}const f=make();print(f());let n=1;',/E4001/],
+ ['recursiveGlobalMove',box+'let p:ptr<Box> = new Box();function f(n:number):void{if(n==0){const q=move(p);return;}f(n-1);}f(2);print(p.value);',/E4102|E4103/],
+ ['recursiveOpaque','function apply(f:()=>number,n:number):number{if(n==0)return f();return apply(f,n-1);}',/E4104/],
+];
+for(const[name,source,pattern]of effectInvalid)test(`native effects rejects ${name}`,()=>error(source,pattern));
+function effect(g:any,name:string){const s=g.effects.find((s:any)=>g.binding.files[s.module].nodes[s.node].name===name);assert.ok(s,`missing summary ${name}`);return s;}
+function names(g:any,ids:number[]){return ids.map(i=>g.binding.symbols[i].name);}
+test('native effects exposes direct and transitive symbol effects',()=>{
+ const g=check('let n=1;function write():void{n=2;}function outer():void{write();}outer();');
+ assert.ok(names(g,effect(g,'write').writes).includes('n'));assert.ok(names(g,effect(g,'outer').writes).includes('n'));
+});
+test('native effects distinguishes invoked, retained and returned callback parameters',()=>{
+ const g=check('let saved:()=>number=():number=>1;function invoke(cb:()=>number):number{return cb();}function keep(cb:()=>number):void{saved=cb;}function identity(cb:()=>number):()=>number{return cb;}');
+ assert.deepEqual(names(g,effect(g,'invoke').invokes),['cb']);assert.deepEqual(effect(g,'invoke').retains,[]);
+ assert.ok(names(g,effect(g,'keep').retains).includes('cb'));assert.ok(names(g,effect(g,'identity').returned).includes('cb'));
+});
+test('native effects marks both members of a recursive component',()=>{const g=check('function a(n:number):number{if(n==0)return 0;return b(n-1);}function b(n:number):number{if(n==0)return 0;return a(n-1);}');assert.equal(effect(g,'a').recursive,true);assert.equal(effect(g,'b').recursive,true);});
+test('native effects keeps callback borrow obligations',()=>{const g=check(box+'function apply(b:constRef<Box>,cb:()=>number):number{return cb()+b.value;}');const s=effect(g,'apply');assert.ok(s.borrows.some((b:any)=>g.binding.symbols[b.root].name==='b'&&b.mode==='constRef'));});
+test('native effects preserves aliases and origin files across modules',()=>{
+ const g=error('import {write as f} from "./barrel";let n=f();',/E4001/,{'barrel.ets':'export {write} from "./lib";','lib.ets':'export function write():number{return value;}export const early=write();let value=1;'});assert.ok(g.diagnostics.some((d:any)=>d.file.endsWith('/lib.ets')));
+});
+test('native effects summaries repeat unchanged across process/cache reuse',()=>{const f=fixture('function apply(cb:()=>number):number{return cb();}print(apply(():number=>1));');assert.deepEqual(run(f),run(f));});
+test('native effects propagates borrow obligations through a wrapper',()=>{
+ const g=check(box+'function inner(b:constRef<Box>,cb:()=>number):number{return cb()+b.value;}function outer(b:constRef<Box>,cb:()=>number):number{return inner(b,cb);}');
+ const s=effect(g,'outer');assert.ok(s.borrows.some((b:any)=>g.binding.symbols[b.root].name==='b'&&g.binding.symbols[b.callback].name==='cb'));
+});
+test('native effects propagates callback obligations under a wrapper local loan',()=>{
+ const g=check('let n=1;function inner(cb:()=>number):number{return cb();}function outer(cb:()=>number):number{const r=constRef(n);const value=inner(cb);return value+r;}');
+ const s=effect(g,'outer');assert.ok(s.borrows.some((b:any)=>g.binding.symbols[b.root].name==='n'));
+});
+test('native effects keeps transitive callback invocation symbolic',()=>{
+ const g=check('function inner(cb:()=>number):number{return cb();}function outer(cb:()=>number):number{return inner(cb);}');assert.deepEqual(names(g,effect(g,'outer').invokes),['cb']);
+});
+test('native effects rejects a recursive wrapper around a symbolic callback',()=>error('function inner(cb:()=>number):number{return cb();}function outer(cb:()=>number,n:number):number{if(n==0)return inner(cb);return outer(cb,n-1);}',/E4104/));
+test('native effects composes summaries beyond the precise-call expansion limit',()=>{
+ const source=Array.from({length:80},(_,i)=>`function f${i}():number{return ${i===79?'1':`f${i+1}()`};}`).join('');const g=check(source+'print(f0());');assert.equal(effect(g,'f0').unknown,false);
+});
+test('native effects resolves imported callback aliases',()=>check('import {reader as f} from "./barrel";print(f());',{'barrel.ets':'export {reader} from "./lib";','lib.ets':'export const reader=():number=>1;'}));
+test('native effects joins alternative ownership effects conservatively',()=>error(box+'let p:ptr<Box> = new Box();const a=():number=>1;const b=():number=>{const q=move(p);return q.value;};const f=true?a:b;print(f());print(p.value);',/E4103|E4102/));
+test('native effects preserves opaque interface callback retention',()=>error('interface I{keep(cb:()=>number):void;}function use(i:I):void{let n=0;i.keep(():number=>{n+=1;return n;});}',/E4210/));

@@ -1,9 +1,9 @@
-# Flujo, memoria, capturas y API pública nativos (v63)
+# Flujo, memoria, capturas y API pública nativos (v64)
 
 `safety.ets` ejecuta una pasada ETS después de la comprobación de tipos. Consume
 el grafo, el binding y las tablas tipadas de **la misma carga**. No modifica
 fuentes, AST, binding ni tablas de tipos. Añade diagnósticos y las tablas
-`captures` y `borrows` de `model.ets`. Los errores de tipos impiden iniciarla;
+`captures`, `borrows` y `effects` de `model.ets`. Los errores de tipos impiden iniciarla;
 no se interpretan tablas parciales como un programa correcto.
 
 ## Flujo y ownership
@@ -96,8 +96,9 @@ invocado una closure mutable para calcularlos.
 Se rechaza E4210 cuando una closure conocida por capturar por referencia puede
 salir por un retorno explícito/implícito, un contenedor retornado, almacenamiento
 global/exterior o un argumento callback cuya retención no se ha demostrado.
-Esto último es conservador: incluso un consumidor que realmente use el callback
-sólo durante la llamada puede necesitar una futura anotación/resumen para pasar.
+v64 consulta [resúmenes de efectos](./EFFECTS.md): un consumidor demostrado
+como no retenedor permite closures locales por referencia. Una llamada opaca
+conserva el rechazo conservador.
 Los lectores devueltos por valor y la mutación de globals de vida estática
 continúan permitidos.
 
@@ -139,8 +140,9 @@ reexports y homónimos entre módulos. Se conservan las regresiones anteriores.
 Hay contrastes con stage 0 y diferencias expresamente registradas. A las cuatro
 diferencias de v62 se añaden dos casos de préstamos en una sola línea que el
 checker TS directo rechaza por su granularidad de líneas y el nativo acepta
-usando offsets. También son conservadoras las restricciones nativas a callbacks
-retenidos, callables reasignados, owners capturados y ownership en agregados.
+usando offsets. Los callables reasignados usan conjuntos conservadores de destinos y la
+recursión consulta resúmenes; los casos opacos siguen restringidos. Permanecen
+las restricciones a callbacks retenidos, owners capturados y ownership en agregados.
 No se anuncia paridad general ni se cambia el checker TS para ocultar diferencias.
 
 El CLI principal y el codegen conservan su cadena. Estos resultados semánticos

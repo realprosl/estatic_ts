@@ -1,4 +1,4 @@
-# Checker nativo con flujo y memoria (v63)
+# Checker nativo con flujo y memoria (v64)
 
 ```bash
 npm run bootstrap:checker -- examples/hello.ets --cache build/project-cache
@@ -38,6 +38,8 @@ compartidas, evitando dependencias circulares. `CheckResult` devuelve:
   consultan el destino del binder, sin crear una copia de la identidad nominal.
 - `captures`: símbolos capturados por arrow y modo `value`/`reference`.
 - `borrows`: raíz e intervalo por offsets de cada préstamo local.
+- `effects`: efectos por función, destinos de llamadas, callbacks invocados/retenidos,
+  procedencia del retorno y obligaciones de préstamos; ver [EFFECTS.md](./EFFECTS.md).
 - `diagnostics`: fase `checker`, archivo canónico y posición UTF-16 original.
   Los errores previos se conservan e impiden crear las tablas tipadas.
 - `success`: no hubo errores en las comprobaciones de este núcleo. **No acredita
@@ -133,9 +135,9 @@ Incluye comparaciones de aceptación/rechazo y tipos inferidos con stage 0, adem
 de las diferencias documentadas de v62/v63. Cada invocación repite el checker y
 verifica que sintaxis y binding permanezcan intactos.
 
-Validación de v63: **300/300** tests del checker (137 regresiones adicionales).
-Conjunto estable: **2304/2304** por bloques: 1236 stage 0 + 64 lexer +
-542 parser + 57 puente + 42 cargador + 63 binder + 300 checker; cero fallos y
+Validación de v64: **348/348** tests del checker (48 adicionales respecto de v63).
+Conjunto estable: **2352/2352** por bloques: 1236 stage 0 + 64 lexer +
+542 parser + 57 puente + 42 cargador + 63 binder + 348 checker; cero fallos y
 cero skips. Se excluyen `test/runner.ts` y E2E/libuv.
 
 La demo de `examples/native-semantics/` comprueba tres módulos: fábrica que devuelve
@@ -143,3 +145,6 @@ ownership, préstamo local mutable y lector devuelto por valor. Devuelve cero
 diagnósticos, una captura por valor y un intervalo de préstamo. Otro proceso
 produce la misma salida completa y conserva los tres registros de sintaxis
 sin reescribirlos. Es una demostración del frontend; no ejecuta el programa.
+
+El siguiente paso es el IR común descrito en [IR.md](./IR.md). Es un contrato de
+diseño: esta entrega no implementa el IR ni sus codegens.

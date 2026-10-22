@@ -175,3 +175,12 @@ ownership por ruta, préstamos/readonly, capturas por identidad y procedencia de
 escapes. Valida la superficie exportada usando los símbolos de origen, también
 a través de aliases y barrels. Añade tablas de capturas y duraciones de préstamos,
 sin anotar AST/binding ni persistir semántica. Ver [contrato y límites](./checker/SAFETY.md).
+
+## Paso 8: resúmenes de efectos y préstamos (v64)
+
+[`checker/effects.ets`](./checker/effects.ets) construye conjuntos de destinos y
+resúmenes por función mediante puntos fijos. Distingue invocar, retener y devolver
+callbacks; propaga efectos sobre símbolos originales y obligaciones de préstamos.
+La pasada de seguridad los consume para llamadas indirectas y recursivas. Ver
+[contrato y límites](./checker/EFFECTS.md). El siguiente paso es el
+[IR común para los codegens](./checker/IR.md), todavía como diseño.

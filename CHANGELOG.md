@@ -6,6 +6,22 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v64 (`estatic 1.26.0`): resúmenes nativos ETS de efectos por función y
+  obligaciones de préstamos. Conjuntos conservadores de destinos de callables,
+  aliases/retornos/contenedores y llamadas entre módulos; propagación por punto
+  fijo de lecturas, escrituras, moves, callbacks invocados/retenidos y retornos.
+- Seguridad conecta esos contratos con llamadas indirectas, recursión y préstamos
+  de parámetros. Admite consumidores locales no retenedores y callables
+  reasignados demostrados; mantiene rechazos explícitos para efectos opacos.
+  Exporta `effects` sin modificar el AST/binding ni persistir semántica.
+- 348/348 pruebas del checker y 2352/2352 del conjunto estable por bloques
+  (1236 stage 0 + 768 bootstrap anterior + 348 checker), cero skips. Cambian
+  expresamente tres expectativas conservadoras de v63; no se altera stage 0.
+- Contratos y límites en `bootstrap/checker/EFFECTS.md`, más el diseño del IR
+  común y la separación de codegens por backend en `bootstrap/checker/IR.md`.
+  El IR y su generación de código todavía no están implementados.
+
+
 - v63 (`estatic 1.25.0`): pasada nativa ETS de flujo, memoria, capturas/escapes y
   API pública en `bootstrap/checker/safety.ets`, con modelo compartido separado.
   Estados por símbolo/ruta para inicialización, move y posibles movimientos;
