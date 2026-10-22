@@ -1,5 +1,10 @@
 # Checker nativo con flujo y memoria (v64)
 
+El lenguaje completo sigue pendiente. El [registro de cierre](../PENDING.md)
+es la referencia para completar este núcleo antes de empezar el IR.
+`npm run audit:bootstrap` es una puerta de cobertura separada de las regresiones:
+actualmente falla y no se interpreta como una suite terminada.
+
 ```bash
 npm run bootstrap:checker -- examples/hello.ets --cache build/project-cache
 npm run bootstrap:checker -- examples/native-semantics/main.ets --cache build/project-cache
@@ -91,8 +96,9 @@ semántica ni ejecución concurrente del checker.
   con stage 0; los otros builtins se rechazan explícitamente.
 - Lecturas locales evidentes antes de inicialización, ciclos de inferencia y
   aliases circulares. Rangos de literales enteros decimales en contextos
-  numéricos concretos, también al pasar argumentos. Los otros formatos de
-  literal en esos contextos producen un diagnóstico de cobertura pendiente.
+  numéricos concretos, también al pasar argumentos. La rama de cierre añade
+  bases 2/8/16, separadores y fracciones, validación de tokens/finitud y
+  promociones numéricas; i64/u64 exactos siguen pendientes.
 
 ## Límites y diferencias conocidas
 

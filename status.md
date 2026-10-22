@@ -6,6 +6,11 @@ del repositorio, no un historial de sesiones. El historial vive en
 
 ## Resumen
 
+La siguiente etapa del bootstrap es **completar el lenguaje antes del IR**.
+[`bootstrap/PENDING.md`](./bootstrap/PENDING.md) registra el trabajo abierto y
+sus criterios de cierre. La matriz `audit:bootstrap` mide obligaciones todavía
+pendientes; no sustituye la suite estable ni certifica paridad semántica.
+
 Ts2cpp transpila el dialecto Estatic a C++20. El frontend, el checker, el
 codegen y el flujo modular son utilizables para proyectos y ejemplos. El
 runtime async y HTTP todavía necesita validación con sanitizers, cancelación

@@ -7,6 +7,7 @@ import { splitTypes, functionClose, functionParams, functionReturn, numericType,
 import { TypedFile, CheckResult } from "./model";
 export { TypedFile, CheckResult } from "./model";
 import { validateSafety } from "./safety";
+import { nativeNumericLiteral, nativeUnaryPromotion, nativeBinaryPromotion } from "./numeric";
 
 export class NativeChecker {
   graph: ModuleGraph; binding: BindingResult; result: CheckResult; symbolStates: number[]; depth: number;
@@ -27,17 +28,16 @@ export class NativeChecker {
     if (!typeCompatible(actual, expected)) this.report(module, id, "Tipo '" + actual + "' incompatible con '" + expected + "'");
   }
   literalRange(module: number, id: number, expected: string): void {
-    if (!numericType(expected) || expected == "number" || expected == "f64" || id < 0) return;
+    if (!numericType(expected) || id < 0) return;
     let n: AstNode = this.node(module,id); let sign: number = 1;
     if (n.kind == "UnaryExpression" && (n.get("operator") == "-" || n.get("operator") == "+")) { if (n.get("operator") == "-") sign = -1; n = this.node(module,bindingChild(n,"operand")); }
     if (n.kind != "LiteralExpression" || n.get("literalType") != "number") return;
-    let value: number = 0; const raw: string = n.get("raw");
-    for (let at: number = 0; at < raw.length; at = at + 1) {
-      const digit: number = raw.charCodeAt(at) - 48;
-      if (digit < 0 || digit > 9) { this.unsupported(module,id,"rango de literal numérico no decimal entero"); return; }
-      value = value * 10 + digit;
-    }
-    value = value * sign; let minimum: number = -340282346638528860000000000000000000000; let maximum: number = 340282346638528860000000000000000000000;
+    const parsed = nativeNumericLiteral(n.get("raw"));
+    if (!parsed.valid) { this.report(module,id,"Literal numérico no válido o no finito"); return; }
+    if (expected == "number" || expected == "f64") return;
+    let value: number = parsed.value * sign;
+    if (expected != "f32" && value % 1 != 0) { this.report(module,id,"Literal fuera de rango para " + expected + ": se esperaba un entero"); return; }
+    let minimum: number = -340282346638528860000000000000000000000; let maximum: number = 340282346638528860000000000000000000000;
     if (expected == "i8") { minimum = -128; maximum = 127; }
     if (expected == "u8") { minimum = 0; maximum = 255; }
     if (expected == "i16") { minimum = -32768; maximum = 32767; }
@@ -333,7 +333,7 @@ export class NativeChecker {
   }
   expressionInner(module: number, id: number, expected: string): string {
     const n: AstNode = this.node(module,id); const kind: string = n.kind;
-    if (kind == "LiteralExpression") return n.get("literalType");
+    if (kind == "LiteralExpression") { if (n.get("literalType") == "number") this.literalRange(module,id,"number"); return n.get("literalType"); }
     if (kind == "IdentifierExpression") {
       const sid: number = this.reference(module,id);
       if (sid >= 0) {
@@ -375,13 +375,16 @@ export class NativeChecker {
       if (!numericType(left) && left != "!error") this.report(module,id,"Operador numérico sobre '" + left + "'");
       if (!numericType(right) && right != "!error") this.report(module,id,"Operador numérico sobre '" + right + "'");
       if (op == "??" || op == "instanceof") return this.unsupported(module,id,op);
-      return left;
+      if (["&","|","^","<<",">>"].includes(op) && (["f32","f64"].includes(left) || ["f32","f64"].includes(right))) this.report(module,id,"Los operadores bitwise requieren operandos enteros");
+      return nativeBinaryPromotion(left,right,op);
     }
     if (kind == "UnaryExpression") {
       const operand: string = memoryValue(this.expression(module,bindingChild(n,"operand"),"")); const op: string = n.get("operator");
       if (op == "typeof") return "string";
       if (op == "!") { this.requireType(module,id,operand,"boolean"); return "boolean"; }
-      if (!numericType(operand) && operand != "!error") this.report(module,id,"Operador numérico sobre '" + operand + "'"); return operand;
+      if (!numericType(operand) && operand != "!error") this.report(module,id,"Operador numérico sobre '" + operand + "'");
+      if (op == "~" && ["f32","f64"].includes(operand)) this.report(module,id,"Los operadores bitwise requieren operandos enteros");
+      return nativeUnaryPromotion(operand);
     }
     if (kind == "AssignmentExpression" || kind == "CompoundAssignmentExpression") {
       const target: number = bindingChild(n,"target"); const valueType: string = this.expression(module,target,"");
@@ -438,7 +441,7 @@ export class NativeChecker {
       const actual: string = this.expression(module,bindingChild(n,kind == "AsExpression" ? "expression" : "operand"),valueType);
       if (kind == "SatisfiesExpression") this.requireType(module,id,actual,valueType);
       else if (containsMemory(actual) || containsMemory(valueType)) this.report(module,id,"E4301: un cast no puede cambiar un contrato de memoria");
-      return valueType;
+      return kind == "SatisfiesExpression" ? actual : valueType;
     }
     if (kind == "TernaryExpression") {
       const condition: number = bindingChild(n,"condition"); this.requireType(module,condition,this.expression(module,condition,""),"boolean");

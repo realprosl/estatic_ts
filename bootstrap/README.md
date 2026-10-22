@@ -182,5 +182,9 @@ sin anotar AST/binding ni persistir semántica. Ver [contrato y límites](./chec
 resúmenes por función mediante puntos fijos. Distingue invocar, retener y devolver
 callbacks; propaga efectos sobre símbolos originales y obligaciones de préstamos.
 La pasada de seguridad los consume para llamadas indirectas y recursivas. Ver
-[contrato y límites](./checker/EFFECTS.md). El siguiente paso es el
-[IR común para los codegens](./checker/IR.md), todavía como diseño.
+[contrato y límites](./checker/EFFECTS.md). Antes del
+[IR común para los codegens](./checker/IR.md) se completará el lenguaje en el
+frontend nativo. El [registro de pendientes](./PENDING.md) define las obligaciones
+de cierre; `npm run audit:bootstrap` ejecuta la primera matriz de aceptación y
+rechazo. El IR sigue como diseño y su implementación queda bloqueada hasta
+cerrar ese registro.

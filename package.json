@@ -40,7 +40,8 @@
     "setup:link": "npm link",
     "setup:unlink": "npm unlink -g estatic-ts-cpp",
     "bootstrap:checker": "node --experimental-strip-types bootstrap/checker/run.ts",
-    "test:bootstrap:checker": "node --experimental-strip-types --test bootstrap/checker/checker.test.ts"
+    "test:bootstrap:checker": "node --experimental-strip-types --test bootstrap/checker/checker.test.ts",
+    "audit:bootstrap": "node --experimental-strip-types bootstrap/audit/run.ts"
   },
   "engines": { "node": ">=22.6" }
 }
