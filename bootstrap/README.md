@@ -155,3 +155,15 @@ npm run test:bootstrap:binder
 ```
 
 El checker y su inferencia se implementarán después, en otro módulo.
+
+## Paso 6: checker inicial del proyecto (v62)
+
+[`checker/checker.ets`](./checker/checker.ets) consume el grafo y el binding,
+resuelve e infiere tipos mediante tablas separadas y comprueba expresiones,
+llamadas, retornos, miembros y compatibilidades entre módulos. La demo
+`npm run bootstrap:checker -- examples/hello.ets` conserva el AST sintáctico y
+entrega tipos, símbolos de miembros y firmas seleccionadas/instanciadas. Se
+construye el ejecutable con stage 0; el análisis solicitado se ejecuta en C++.
+
+Es una cobertura inicial con límites explícitos, no paridad con stage 0 ni
+codegen nativo desde esas tablas. Ver el [contrato y cobertura](./checker/README.md).

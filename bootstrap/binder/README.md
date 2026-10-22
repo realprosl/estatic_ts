@@ -14,7 +14,7 @@ una unidad C++; el adaptador de módulos conserva su modo separado por defecto.
 
 `binder.ets` contiene el binding y sus estructuras. `format.ets` serializa el
 resultado de demostración. **Todavía no se infieren ni comprueban tipos**: el
-futuro `checker.ets` consumirá estas tablas y el AST sintáctico original.
+[checker inicial v62](../checker/README.md) consume estas tablas y el AST sintáctico original.
 
 ## Resultado y propiedad de los datos
 
