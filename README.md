@@ -63,7 +63,7 @@ Para consultar la versión instalada:
 ```bash
 etsc --version
 etsc -v
-# estatic 1.19.0 (v57)
+# estatic 1.20.0 (v58)
 ```
 
 El `estatic.config.ts` generado NO requiere que listes `-luv`, `-lssl`,
@@ -996,7 +996,7 @@ npm run test:http-routing
 npm run test:e2e
 ```
 
-La última verificación del conjunto estable registrada en `status.md` pasó 1766 pruebas
+La última verificación del conjunto estable registrada en `status.md` pasó 1842 pruebas
 unitarias. El número puede cambiar al añadir casos; no se mantiene como una
 constante manual en este README.
 
@@ -1006,19 +1006,20 @@ El trabajo avanza por módulos independientes en [`bootstrap/`](./bootstrap/READ
 El primer módulo es un lexer escrito en Estatic, con una función de inspección
 de tokens. `npm run bootstrap:lexer -- 'let total: number = 42;'` lo transpila,
 compila su C++ y ejecuta el ejemplo. Sus 64 pruebas incluyen comparación nativa
-con el lexer actual. El parser avanza como segundo módulo independiente:
+con el lexer actual. El parser cierra su primera etapa como módulo independiente:
 `npm run bootstrap:parser` ejecuta un ejemplo con tokens preparados y muestra
-su AST. Sus 486 pruebas incluyen analizar su propio fuente ETS, el del lexer y
+su AST. Sus 542 pruebas incluyen analizar su propio fuente ETS, el del lexer y
 los drivers, declaraciones enum/union, imports/exports con alias y árboles de
 switch, destructuring plano de variables, propiedades de parámetros de constructor,
-metadatos de packs genéricos y parámetros rest,
-templates anidados e interpolaciones
-mediante tokens preparados.
+metadatos de packs genéricos, parámetros rest, cabeceras include/link y decoradores
+de declaraciones/miembros. La auditoría acepta en C++ los 120 ejemplos que admite
+el parser TS directo. También se comprueban posiciones de tokens y recuperación,
+templates anidados e interpolaciones mediante tokens preparados.
 Ambos lexers preservan los templates completos incluso con objetos, strings y
 comentarios internos. El parser de stage 0 también valida sus expresiones y
 conserva las posiciones originales. Esto valida el análisis sintáctico
 del bootstrap; todavía no añade switch al frontend ni al backend de stage 0.
-La [cobertura y los pendientes](./bootstrap/parser/README.md) están documentados;
+La [cobertura y los límites](./bootstrap/parser/README.md) están documentados;
 todavía no se integra la cadena nativa entre fases ni autoaloja el compilador.
 
 ## Licencia

@@ -14,6 +14,17 @@ import { compile, analyze, parse } from "../../src/compiler.ts";
 
 const compilerRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+test("codegen native: comptime decorators after export and function remain effective", () => {
+  const source = 'export @comptime function twice(n:number):number{return n*2;} function @comptime inc(n:number):number{return n+1;} const answer:number=twice(inc(20)); print(answer);';
+  const output = compile(source).cpp, dir = mkdtempSync(join(tmpdir(), "ets-inline-decorators-"));
+  try {
+    const file = join(dir,"main.cpp"), binary = join(dir,"main"); writeFileSync(file,output);
+    execFileSync(process.env.CXX??"g++",["-std=c++20","-O0","-pthread","-fno-exceptions",`-I${compilerRoot}`,file,"-o",binary],{encoding:"utf8",timeout:120000,env:{...process.env,TMPDIR:dir}});
+    assert.equal(execFileSync(binary,[],{encoding:"utf8",timeout:5000}),"42\n");
+    assert.doesNotMatch(output,/double (?:twice|inc)\(/);
+  } finally { rmSync(dir,{recursive:true,force:true}); }
+});
+
 test("codegen native: generic packs support inferred, explicit, empty and forwarded arguments", () => {
   const source = [
     'function show<...T>(...values:T):void{print(values);}',

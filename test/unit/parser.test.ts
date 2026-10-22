@@ -327,3 +327,45 @@ test("parser: 'for' con newlines funciona", () => {
   const ast = parse("for (let i = 0; i < 10; i = i + 1) { f() }");
   assert.equal(ast.statements.length, 1);
 });
+
+for (const [kind, source] of [
+  ['FunctionDeclaration','@first export @second function @third f():void{}'],
+  ['ClassDeclaration','@first export @second class @third C{}'],
+  ['InterfaceDeclaration','@first export @second interface @third I{}'],
+] as const) test(`parser decorators: preserves all positions in order on ${kind}`, () => {
+  const statement = parse(source).statements[0] as any;
+  assert.equal(statement.kind, kind); assert.equal(statement.exported, true);
+  assert.deepEqual(statement.decorators.map(d => d.name), ['first','second','third']);
+});
+test("parser decorators: retains interface field and method annotations", () => {
+  const statement = firstStatement('interface I{@field("native") value?:number; @method read():number;}') as any;
+  assert.deepEqual(statement.fields[0].decorators.map(d => d.name), ['field']);
+  assert.equal(statement.fields[0].decorators[0].args[0].value, 'native');
+  assert.deepEqual(statement.methods[0].decorators.map(d => d.name), ['method']);
+});
+test("parser decorators: leading include/link stay module headers", () => {
+  const statements = parse('@include("x.hpp") @link("m") @native function f():void;').statements as any[];
+  assert.deepEqual(statements.map(s => s.kind), ['ModuleHeaderDeclaration','FunctionDeclaration']);
+  assert.deepEqual(statements[0].decorators.map(d => d.name), ['include','link']);
+  assert.deepEqual(statements[1].decorators.map(d => d.name), ['native']);
+});
+for (const declaration of ['function @third f():void{}','class @third C{}','async function @third f():Promise<void>{}'])
+  test(`parser decorators: default export retains inline decorators: ${declaration}`, () => {
+    const statement = firstStatement('@first export @second default '+declaration) as any;
+    assert.deepEqual(statement.declaration.decorators.map(d => d.name), ['first','second','third']);
+    assert.ok(['f','C'].includes(statement.declaration.name));
+  });
+for (const declaration of ['function @native() ():void{}','class @native {}','async function @native() ():Promise<void>{}'])
+  test(`parser decorators: anonymous default export parses annotations before assigning internal name: ${declaration}`, () => {
+    const statement = firstStatement('export default '+declaration) as any;
+    assert.deepEqual(statement.declaration.decorators.map(d => d.name), ['native']);
+    assert.match(statement.declaration.name, /^ets_default_/);
+  });
+test("parser decorators: default variable keeps declaration decorators", () => {
+  const statement = firstStatement('@native export default const value=1;') as any;
+  assert.deepEqual(statement.declaration.decorators.map(d => d.name), ['native']);
+});
+for (const source of ['@tag if(true){}','@tag type X=number;','@tag enum E{A}','@tag union U{A}','@tag using value=resource;','@tag export {value};','@tag export default 1;'])
+  test(`parser decorators: rejects annotations that would be discarded: ${source}`, () => {
+    assert.throws(() => parse(source), (error:any) => error instanceof DiagnosticError && error.diagnostics.some(d => d.message.includes('decoradores')));
+  });

@@ -40,7 +40,7 @@ export interface InterfaceMethod { name: string; typeParameters?: TypeParameter[
 // porque las interfaces son contratos estructurales, no declaraciones de
 // almacenamiento: el codegen emite los campos como miembros del struct C++
 // cuando la interface se usa como tipo de dato (no solo como concepto).
-export interface InterfaceField { name: string; type: TypeName; optional: boolean; span: Span }
+export interface InterfaceField { name: string; type: TypeName; optional: boolean; decorators?: Decorator[]; span: Span }
 export interface InterfaceDeclaration { kind: "InterfaceDeclaration"; exported?: boolean; name: string; methods: InterfaceMethod[]; /** V30.11: campos de la shape (ademas de los metodos). Un interface con solo campos es una "shape type" pura; un interface con ambos es un contrato hibrido. */ fields: InterfaceField[]; /** V0.4: tipo concreto en runtime C++. */ resolvedRuntimeType?: import("../types/type-system.ts").ResolvedRuntimeType; /** V18: decoradores sobre la interface en sí (`@cpp_type(...)`). */ decorators?: Decorator[]; span: Span }
 export type Decorator = { name: string; args: Expression[] };
 

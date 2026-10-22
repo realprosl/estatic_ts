@@ -1,6 +1,6 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -108,6 +108,32 @@ function parity(source: string): NativeResult {
 }
 
 const fixtures: [string, string][] = [
+  ["module include header only", '@include("<vector>")'],
+  ["module link header only", '@link("pthread")'],
+  ["module headers and blank lines", '\n// header\n@include("<string>")\n\n@link("m")\nconst x=1;'],
+  ["module headers stop at declaration decorator", '@include("x.hpp")\n@cpp_name("native")\nfunction f():void;'],
+  ["module headers preserve expressions", '@include(path+".hpp") @link(select("m"))'],
+  ["module header without arguments", '@include @link'],
+  ["leading and inline function decorators", '@first export @second function @third f():void{}'],
+  ["inline async function decorator", 'export async function @native("f") f():Promise<void>{}'],
+  ["inline forward declaration decorator", 'function @cpp_name("puts") puts(x:string):void;'],
+  ["inline class decorator", 'class @cpp_type("C") C{}'],
+  ["leading and inline class decorators", '@first export @second class @third C{}'],
+  ["inline interface decorator", 'interface @cpp_type("I") I{}'],
+  ["leading and inline interface decorators", '@first export @second interface @third I{}'],
+  ["decorator after export variable", 'export @cpp_name("value") const value=1;'],
+  ["decorators around export variable", '@first export @second let value:number=1;'],
+  ["class field decorator", 'class C{@field("n") value:number=1;}'],
+  ["class method decorator", 'class C{@cpp_name("native") method():void{}}'],
+  ["class constructor decorator", 'class C{@ctor constructor(public value:number){}}'],
+  ["class static access decorator", 'class C{@field private readonly static count:number=1; @method public static get():number{return 1;}}'],
+  ["class stacked multiline member decorators", 'class C{\n@first\n@second(1)\nvalue:number;\n@third\nmethod():void{}\n}'],
+  ["interface method decorator", 'interface I{@cpp_name("read") read():number;}'],
+  ["interface field decorator retained", 'interface I{@field("native") value:number;}'],
+  ["interface optional field decorator", 'interface I{@first @second value?:string;}'],
+  ["decorator template and nested arguments", 'class C{@label(`España ${name}`,{x:1},[2,3],f(4)) value:string;}'],
+  ["default inline function decorator", 'export default function @native f():void{}'],
+  ["default inline class decorator", 'export default class @native C{}'],
   ["variadic generic function", "function log<...T>(...values:T):void{print(values);}"],
   ["fixed generic and pack", "function log<Head,...Tail>(head:Head,...tail:Tail):void{print(head,tail);}"],
   ["multiple type packs metadata", "function f<...A,...B>(...a:A):void{}"],
@@ -454,6 +480,20 @@ test("bootstrap parser: every expression span matches stage 0", () => {
 });
 test("bootstrap parser: parses the complete isolated lexer source", () => { parity(readFileSync(join(root, "bootstrap/lexer/lexer.ets"), "utf8")); });
 test("bootstrap parser: parses its own complete ETS source", () => { parity(readFileSync(join(root, "bootstrap/parser/parser.ets"), "utf8")); });
+test("bootstrap parser: accepts repository examples accepted by the stage 0 grammar", t => {
+  const files = readdirSync(join(root, "examples"), { recursive: true }).map(String).filter(file => file.endsWith(".ets")).sort();
+  let accepted = 0; const failures: string[] = [], excluded: string[] = [];
+  for (const file of files) {
+    const source = readFileSync(join(root, "examples", file), "utf8");
+    try { new Parser(new Lexer(source).tokenize()).parseProgram(); }
+    catch (error) { if (!(error instanceof DiagnosticError)) throw error; excluded.push(file); continue; }
+    const result = native(source); accepted++;
+    if (result.diagnostics.length) failures.push(`${file}: ${JSON.stringify(result.diagnostics.slice(0, 3))}`);
+  }
+  t.diagnostic(`${accepted}/${files.length} examples accepted by stage 0; excluded with stage 0 diagnostics: ${excluded.join(", ")}`);
+  assert.deepEqual(excluded, ["exports-demo.ets", "generated-module-exports/index.ets", "generated-module-exports/main.ets", "generated-module-exports/producer.ets", "imports-as/main.ets", "module-exports/counter.ets", "module-exports/index.ets", "module-exports/main.ets"], "a new stage 0 rejection must not silently remove an example from the audit");
+  assert.ok(accepted >= 120); assert.deepEqual(failures, []);
+});
 test("bootstrap parser: graph contains only parser and its driver", () => {
   assert.equal(graph.modules.length, 2); assert.deepEqual(graph.modules[0].dependencies, []);
   assert.ok(graph.modules.every(module => module.file.includes("bootstrap/parser/")));
@@ -927,10 +967,12 @@ test("bootstrap parser templates accept hand-prepared tokens without lexer depen
   assert.deepEqual(result.diagnostics, []); assert.ok(result.nodes.some(node => node.kind === "TemplateLiteralExpression"));
   // Bound the native parser independently of the host adapter's lexical limit.
   const deep: ParserInputToken[] = [];
-  for (let i = 0; i < 140; i++) deep.push(token("template-start", "`", 0, 1), token("template-text", "", 1, 1), token("interpolation-start", "${", 1, 3));
-  deep.push(token("number", "1", 3, 4));
-  for (let i = 0; i < 140; i++) deep.push(token("interpolation-end", "}", 4, 5), token("template-text", "", 5, 5), token("template-end", "`", 5, 6));
-  deep.push(token("eof", "", 6, 6));
+  let offset = 0;
+  const append = (kind: string, lexeme: string) => { deep.push(token(kind, lexeme, offset, offset + lexeme.length)); offset += lexeme.length; };
+  for (let i = 0; i < 140; i++) { append("template-start", "`"); append("template-text", ""); append("interpolation-start", "${"); }
+  append("number", "1");
+  for (let i = 0; i < 140; i++) { append("interpolation-end", "}"); append("template-text", ""); append("template-end", "`"); }
+  append("eof", "");
   const limited = nativeTokens(deep); assert.ok(limited.diagnostics.some(d => d.message.includes("Límite de anidamiento")));
   assert.ok(limited.diagnostics.length <= 100);
 });
@@ -985,3 +1027,73 @@ for (const record of ["", "x:bad", "999:a", "6:number1:10:1:11:11:11:11:1", tran
   test(`bootstrap parser: malformed token frame is rejected ${record}`, () => {
     assert.throws(() => execFileSync(binary, ["--tokens", record], { encoding: "utf8", timeout: 5000 }), (error: any) => error.status === 2 && error.stdout.includes("Invalid token transport"));
   });
+
+test("bootstrap parser headers and declaration decorators remain distinct and ordered", () => {
+  const source = '\n@include("<vector>")\n@link("m")\n@first export @second function @third f():void{}';
+  const result = native(source); assert.deepEqual(result.diagnostics, []);
+  const statements = result.nodes[result.root].edges.map(e => result.nodes[e.node]);
+  assert.deepEqual(statements.map(n => n.kind), ["ModuleHeaderDeclaration", "FunctionDeclaration"]);
+  const names = (owner: NativeNode) => owner.edges.filter(e => e.role === "decorators").map(e => result.nodes[e.node].attributes.find(a => a.name === "name")!.value);
+  assert.deepEqual(names(statements[0]), ["include", "link"]);
+  assert.deepEqual(names(statements[1]), ["first", "second", "third"]);
+  assert.equal(source.slice(statements[0].span.start.offset, statements[0].span.end.offset), '@include("<vector>")\n@link("m")');
+});
+test("bootstrap parser decorator spans preserve UTF-16, multiline arguments and empty calls", () => {
+  const source = 'const s="🙂";\nclass C{\n @label(`España\n${name}`)\n @empty()\n value:string;\n}';
+  const result = native(source); assert.deepEqual(result.diagnostics, []);
+  const decorators = result.nodes.filter(n => n.kind === "Decorator");
+  assert.deepEqual(decorators.map(n => source.slice(n.span.start.offset, n.span.end.offset)), ['@label(`España\n${name}`)', '@empty()']);
+  assert.deepEqual(decorators.map(n => n.span.start), [{offset:source.indexOf("@label"),line:3,column:2},{offset:source.indexOf("@empty"),line:5,column:2}]);
+  const label = decorators[0]; assert.equal(label.edges.filter(e => e.role === "args").length, 1);
+});
+for (const source of [
+  "@", "@trace", "@trace(", "@trace(1", "@trace(1,) function f():void{}",
+  "class C{@trace}", "interface I{@trace}", "class C{@}", "interface I{@}",
+  "@trace if(true){}", "@trace type X=number;", "@trace enum E{A}", "@trace union U{A}",
+  "@trace using value=resource;", "@trace import './x';", "@trace export {value};",
+]) test(`bootstrap parser malformed or incompatible decorator: ${source}`, () => {
+  const result = native(source); assert.ok(result.diagnostics.length > 0 && result.diagnostics.length <= 100);
+});
+test("bootstrap parser dangling member decorators preserve the class close and next statement", () => {
+  for (const source of ['class C{@trace}', 'interface I{@trace}']) {
+    const result = native(source+' const after=42;'); assert.ok(result.diagnostics.length);
+    assert.ok(result.nodes.some(n => n.kind === "VariableDeclaration" && n.attributes.some(a => a.name === "name" && a.value === "after")));
+    assert.ok(!result.nodes.some(n => n.kind === "ClassField" || n.kind === "InterfaceField"));
+  }
+});
+test("bootstrap parser default anonymous declarations retain inline decorators without inventing names", () => {
+  for (const source of ['export default function @native() ():void{}','export default class @native {}','export default async function @native() ():Promise<void>{}']) {
+    const result = native(source); assert.deepEqual(result.diagnostics, []);
+    const wrapper = result.nodes.find(n => n.kind === "ExportDefaultDeclaration")!;
+    const declaration = result.nodes[wrapper.edges[0].node];
+    assert.ok(declaration.attributes.some(a => a.name === "anonymous" && a.value === "true"));
+    assert.ok(!declaration.attributes.some(a => a.name === "name"));
+    assert.equal(declaration.edges.filter(e => e.role === "decorators").length, 1);
+  }
+});
+test("bootstrap parser truncation at every token boundary of decorated modules is bounded", () => {
+  const tokens = prepareParserTokens(new Lexer('@include("x.hpp") @link("m") @first export @second class @third C{@field value:number=1; @method run(x:number):void{print(x);}} const after=2;').tokenize());
+  for (let end = 0; end < tokens.length; end++) {
+    const result = nativeTokens(tokens.slice(0,end)); assert.ok(result.diagnostics.length > 0 && result.diagnostics.length <= 100, `prefix ${end}`);
+  }
+});
+test("bootstrap parser malformed decorator corpus makes progress", () => {
+  const pieces = ['@','mark','(',')','{','}',',',';','export','function','class','interface','1']; let seed = 5801;
+  for (let run = 0; run < 40; run++) {
+    const tokens:string[] = [];
+    for(let i=0;i<24;i++){ seed=seed*16807%2147483647; tokens.push(pieces[seed%pieces.length]); }
+    const result = native(tokens.join(' ')); assert.ok(result.diagnostics.length <= 100);
+  }
+});
+for (const [name, change] of [
+  ["zero line", (t:any[]) => { t[0].span.start.line=0; }],
+  ["zero column", (t:any[]) => { t[0].span.start.column=0; }],
+  ["reversed offset", (t:any[]) => { t[0].span.start.offset=1; t[0].span.end.offset=0; }],
+  ["inconsistent column", (t:any[]) => { t[0].span.end.column=9; }],
+  ["overlapping tokens", (t:any[]) => { t[1].span.start={...t[0].span.start}; }],
+  ["backward line", (t:any[]) => { t[1].span.start.line=2; t[1].span.end.line=1; }],
+  ["nonempty eof", (t:any[]) => { t.at(-1).span.end.offset++; t.at(-1).span.end.column++; }],
+] as const) test(`bootstrap parser validates supplied token positions: ${name}`, () => {
+  const tokens = new Lexer('1;').tokenize(); change(tokens); const result = nativeTokens(tokens);
+  assert.ok(result.diagnostics.some(d => /coordenadas|span|ordenados/.test(d.message)));
+});

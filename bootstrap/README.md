@@ -88,7 +88,7 @@ generado desde Estatic, no como una copia JavaScript del lexer.
 - Este paso demuestra el lexer escrito y ejecutado mediante el dialecto.
   El compilador completo aún no se autoaloja.
 
-## Paso 2: parser (en curso)
+## Paso 2: parser aislado (etapa cerrada en v58)
 
 El [parser](./parser/README.md) tiene su propio AST local, tokens de entrada,
 driver y pruebas nativas. No importa el lexer. `npm run bootstrap:parser`
@@ -96,9 +96,15 @@ ejecuta el ejemplo con tokens preparados; `npm run test:bootstrap:parser`
 valida este módulo por separado. Analiza expresiones, declaraciones enum/union,
 funciones con packs genéricos, clases con propiedades de parámetros de constructor, destructuring
 plano de variables, imports/exports con alias, templates mediante tokens
-preparados y control de flujo con switch,
-incluidos los fuentes ETS
-del lexer y del propio parser. Quedan construcciones pendientes documentadas;
-todavía no se integra una cadena nativa entre fases ni se añade el checker.
+preparados, cabeceras include/link, decoradores de declaraciones/miembros y
+control de flujo con switch. Sus 542 pruebas incluyen los fuentes ETS del lexer,
+del propio parser y ambos drivers, y una auditoría de 120 ejemplos que acepta
+el parser TS directo. La cobertura y las formas excluidas están documentadas;
+el cierre de esta etapa no certifica equivalencia formal con todo stage 0.
+Todavía no se integra una cadena nativa entre fases ni se añade el checker.
 Los nodos de import/export conservan metadatos; este parser no busca archivos
 ni vincula los símbolos de otros módulos.
+
+El siguiente bloque será un adaptador explícito de tokens lexer ETS → parser ETS,
+con una demostración de extremo a extremo y conservando las pruebas de cada
+módulo por separado. No se ha iniciado todavía ese bloque.
