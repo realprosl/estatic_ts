@@ -129,3 +129,17 @@ mtime y otros metadatos, hash, dependencias y referencias a AST/C++/`.o`. Se
 consultará antes del trabajo costoso para reutilizar desde frontend hasta objeto
 nativo, propagando cambios de interfaz y respetando cabeceras/flags del backend.
 Editar un archivo no deberá invalidar indiscriminadamente el módulo completo.
+
+## Paso 4: cargador y registro por archivo (v60)
+
+[`modules/README.md`](./modules/README.md) documenta el grafo nativo, resolución
+de rutas y reutilización sintáctica persistente antes de lexer/parser.
+
+```bash
+npm run bootstrap:modules -- examples/todo-project/main.ets --cache build/project-cache
+npm run test:bootstrap:modules
+```
+
+Node construye el binario. Ese binario abre los fuentes del proyecto, ejecuta
+el frontend ETS, resuelve sus dependencias y publica registros por archivo.
+El checker ETS sigue siendo el siguiente bloque funcional.

@@ -6,6 +6,26 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v60 (`estatic 1.22.0`): cargador nativo ETS con identidad realpath, imports y
+  reexports desde AST, aliases de rutas por prefijo más largo, raíces ordenadas,
+  precedencia `.ts`/`.ets`, deduplicación y DFS iterativo con ciclos/ausencias.
+- `SyntaxCache.getOrParseModule`: registros persistentes por archivo con tamaño,
+  fechas nanosegundo, identidad filesystem, SHA-256, dependencias y tokens/AST.
+  Verificación por contenido incluso con metadatos iguales, hidratación validada,
+  checksum y publicación atómica; resultados erróneos no se persisten. Los hits
+  idénticos no reescriben registros. Rutas se comprueban en cada carga.
+- 42 pruebas nativas del cargador: cold/warm entre procesos, granularidad por
+  archivo, metadatos engañosos, Unicode/templates, cambios de rutas y corrupción
+  incluso con checksums recalculados. Conjunto estable: 1941/1941 (1236 stage 0,
+  64 lexer, 542 parser, 57 puente y 42 cargador), sin skips dentro de esos bloques.
+  Demo todo-project: seis misses en frío; seis hits/cero parseos/cero escrituras
+  desde otro proceso. CLI --version/-v y git diff --check correctos.
+  Se excluyen test/runner.ts y E2E/libuv.
+- Demo `bootstrap:modules`: Node construye; el binario abre y analiza el proyecto.
+  Plataforma C++ limitada a I/O, metadatos, realpath, hash e identidad del build.
+  No incluye checker ETS, huellas semánticas de interfaz, C++/objetos reutilizables
+  de esta cadena, resolución cacheada ni scheduler paralelo.
+
 - v59 (`estatic 1.21.0`): puente nativo por archivo lexer ETS → parser ETS.
   `parseSource` conserva tokens, AST y diagnósticos con archivo/fase/posición;
   evita el parser ante errores léxicos. Demo `bootstrap:frontend`, con texto o

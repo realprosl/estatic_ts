@@ -65,9 +65,14 @@ lexer, parser, puente y driver. La auditoría de ejemplos comprueba también los
 120 aceptados directamente por el parser TS, manteniendo explícita la lista de
 ocho excluidos de esa comparación. Las suites aisladas siguen ejecutándose.
 
-## Siguiente prioridad: resolución de módulos
+## Resolución de módulos: implementada en v60
 
-Antes de portar el checker, el siguiente bloque construirá el grafo de archivos.
+El nuevo [`../modules/`](../modules/README.md) construye el grafo de archivos
+y persiste tokens/AST por archivo. Esta API puntual continúa independiente.
+El diseño siguiente conserva la separación de capas: interfaces semánticas,
+C++/objetos y scheduler concurrente siguen pendientes.
+
+Antes de portar el checker, el cargador construye el grafo de archivos.
 La integración actual conserva los nodos import/export; no resuelve rutas, no
 busca archivos, no vincula nombres y no usa cachés globales.
 
@@ -90,7 +95,7 @@ Queda anotado como requisito del cargador un helper, provisionalmente
 `getOrParseModule`: decidir si reutiliza una entrada válida o llama a
 `parseSource`. Debe evitar volver a tokenizar y parsear contenido que no ha
 cambiado, tanto dentro de una ejecución como entre ejecuciones cuando exista
-almacenamiento persistente. No se implementa la caché en este puente.
+almacenamiento persistente. La caché se implementa en el cargador v60, no en este puente.
 
 La unidad mínima será **el archivo**, incluso si varios archivos forman un
 módulo lógico. Se consultará un manifiesto persistente antes de lexer/parser y
@@ -162,5 +167,5 @@ reales de templates/inline formarán parte de la invalidación del backend.
 Para descubrir los imports hace falta leer/analizar el archivo que los declara;
 no hace falta comprobar sus tipos ni haber analizado sus dependencias. El grafo
 debe estar resuelto antes de vincular símbolos y comenzar el análisis semántico
-global. La planificación concurrente y el resolver se validarán en ese bloque,
-por separado de este puente.
+global. El resolver secuencial y la caché sintáctica se validan en `../modules/`;
+la planificación concurrente y las capas posteriores siguen pendientes.
