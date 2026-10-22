@@ -4,6 +4,19 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ## Sin publicar (2026-10-22)
 
+### En desarrollo: cierre del frontend nativo antes del IR
+
+- Registro de pendientes y criterios de cierre en `bootstrap/PENDING.md`.
+  El IR queda bloqueado; no se anuncia soporte completo del lenguaje.
+- `audit:bootstrap`: 80 obligaciones iniciales de aceptación/rechazo sobre
+  proyectos comprobados por el ejecutable nativo. Sigue habiendo pendientes;
+  una falta de cobertura no cuenta como diagnóstico negativo válido.
+- Validación de literales numéricos en bases 2/8/16, separadores, fracciones,
+  rangos y finitud; promociones numéricas y rechazo de bitwise f32/f64.
+  Los enteros exactos de 64 bits continúan abiertos.
+- `satisfies` conserva el tipo de la expresión, incluido al comprobarla contra
+  un union o un tipo numérico más amplio.
+
 ### Added
 
 - v64 (`estatic 1.26.0`): resúmenes nativos ETS de efectos por función y

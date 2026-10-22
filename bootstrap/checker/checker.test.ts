@@ -378,3 +378,56 @@ test('native effects composes summaries beyond the precise-call expansion limit'
 test('native effects resolves imported callback aliases',()=>check('import {reader as f} from "./barrel";print(f());',{'barrel.ets':'export {reader} from "./lib";','lib.ets':'export const reader=():number=>1;'}));
 test('native effects joins alternative ownership effects conservatively',()=>error(box+'let p:ptr<Box> = new Box();const a=():number=>1;const b=():number=>{const q=move(p);return q.value;};const f=true?a:b;print(f());print(p.value);',/E4103|E4102/));
 test('native effects preserves opaque interface callback retention',()=>error('interface I{keep(cb:()=>number):void;}function use(i:I):void{let n=0;i.keep(():number=>{n+=1;return n;});}',/E4210/));
+
+// Native numeric coverage: values must be checked in the C++ frontend, not
+// accepted merely because the lexer retained an opaque raw token.
+for(const [name,source] of Object.entries({
+ hex:'const a:u8=0xff;const b:i16=-0x8000;',
+ binary:'const a:u8=0b11111111;',
+ octal:'const a:u16=0o177777;',
+ separators:'const a:u32=4_294_967_295;',
+ fractions:'const a:f32=1.5;const b:f64=2.25;const c:i16=2.0;',
+}))test(`native numeric accepts ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ hexOverflow:'const a:u8=0x100;',
+ negativeUnsigned:'const a:u16=-0o1;',
+ fractionalInteger:'const a:i32=1.5;',
+ badSeparator:'const a=1__0;',
+ trailingSeparator:'const a=1_;',
+ prefixSeparator:'const a=0x_ff;',
+ missingDigits:'const a=0x;',
+ nonfinite:`const a:f64=${'9'.repeat(400)};`,
+ untypedNonfinite:`const a=${'9'.repeat(400)};`,
+ f32Overflow:`const a:f32=${'9'.repeat(40)};`,
+ floatBits:'let a:f32=1.5;print(a&1);',
+ floatComplement:'let a:f64=1.5;print(~a);',
+}))test(`native numeric rejects ${name}`,()=>error(source,/numérico|rango|enteros/));
+for(const [left,right,expected] of [
+ ['i8','i16','i32'],['i16','u32','u32'],['u32','i8','u32'],
+ ['f32','i32','f32'],['i32','f64','f64'],['f32','number','number'],
+] as const)test(`native numeric promotes ${left} plus ${right}`,()=>{
+ const g=check(`let a:${left}=1;let b:${right}=2;const c=a+b;`);
+ assert.deepEqual(types(g,'BinaryExpression'),[expected]);
+});
+test('native numeric promotes shift from left operand',()=>{
+ const g=check('let a:i8=1;let b:u32=2;const c=a<<b;');
+ assert.deepEqual(types(g,'BinaryExpression'),['i32']);
+});
+test('native numeric promotes unary narrow integer',()=>{
+ const g=check('let a:u8=1;const b=-a;');
+ assert.deepEqual(types(g,'UnaryExpression'),['i32']);
+});
+
+test('native satisfies preserves the expression type instead of the checked union',()=>{
+ const g=check('const n=1;const x=n satisfies number|string;print(x+1);');
+ assert.deepEqual(types(g,'SatisfiesExpression'),['number']);
+});
+test('native satisfies preserves concrete numeric type',()=>{
+ const g=check('const n:i8=1;const x=n satisfies number;');
+ assert.deepEqual(types(g,'SatisfiesExpression'),['i8']);
+});
+test('native satisfies still rejects incompatible operands',()=>error('const x=1 satisfies string;',/incompatible/));
+test('native numeric preserves legacy number shift result',()=>{
+ const g=check('let a:i8=1;const c=a<<2;');
+ assert.deepEqual(types(g,'BinaryExpression'),['number']);
+});
