@@ -49,9 +49,9 @@ function native(source: string): NativeResult { return nativeTokens(new Lexer(so
 // Compare every supported semantic field/edge, independently of arena order.
 // Spans have dedicated tests: stage 0 has historical differences for classes
 // and synthetic nodes. This projection never evaluates or parses expressions.
-const scalarKeys = new Set(["name", "mutable", "declaredType", "async", "returnType", "type", "constraint", "default", "literalType", "raw", "operator", "callee", "member", "method", "optional", "className", "targetType", "isAsync", "await", "out", "passing", "variadic", "readonly", "access", "isStatic", "exported", "key", "value", "underlying", "payload", "field"]);
+const scalarKeys = new Set(["name", "mutable", "declaredType", "async", "returnType", "type", "constraint", "default", "literalType", "raw", "operator", "callee", "member", "method", "optional", "className", "targetType", "isAsync", "await", "out", "passing", "variadic", "readonly", "access", "isStatic", "exported", "key", "value", "underlying", "payload", "field", "property"]);
 const roleKinds: Record<string, string> = { params: "Parameter", typeParameters: "TypeParameter", fields: "ClassField", methods: "ClassMethod", properties: "ObjectProperty", decorators: "Decorator", members: "EnumMember", variants: "UnionVariant", discriminator: "Discriminator" };
-const excludedRoles = new Set(["span", "typeArguments", "variadicTypeParameters", "arrayBindings", "objectBindings", "generatedSources"]);
+const excludedRoles = new Set(["span", "typeArguments", "variadicTypeParameters", "generatedSources"]);
 function hostShape(node: any, forcedKind?: string): any {
   const kind = node.kind ?? forcedKind;
   const attributes: Record<string, string[]> = {}, edges: Record<string, any[]> = {};
@@ -63,7 +63,7 @@ function hostShape(node: any, forcedKind?: string): any {
       if (key === "value" && node.literalType === "number" && node.raw !== undefined) continue;
       attributes[key] = [String(value)];
     } else if (Array.isArray(value)) {
-      if (value.length) edges[key] = value.map(item => hostShape(item, kind === "InterfaceDeclaration" && (key === "fields" || key === "methods") ? (key === "fields" ? "InterfaceField" : "InterfaceMethod") : roleKinds[key]));
+      if (value.length) edges[key] = value.map(item => hostShape(item, key === "arrayBindings" ? "ArrayBinding" : key === "objectBindings" ? "ObjectBinding" : kind === "InterfaceDeclaration" && (key === "fields" || key === "methods") ? (key === "fields" ? "InterfaceField" : "InterfaceMethod") : roleKinds[key]));
     } else if (value && typeof value === "object") {
       // The for-of/in binding initializer is synthetic in stage 0.
       if ((kind === "ForOfStatement" || kind === "ForInStatement") && key === "binding") {
@@ -73,6 +73,8 @@ function hostShape(node: any, forcedKind?: string): any {
   }
   if (node.mutable === false) attributes.mutable = ["false"];
   if (node.typeArguments?.length) attributes.typeArgument = node.typeArguments;
+  if (node.arrayBindings !== undefined) attributes.pattern = ["array"];
+  if (node.objectBindings !== undefined) attributes.pattern = ["object"];
   if (kind === "Discriminator") attributes.literalType = [typeof node.value];
   return { kind, attributes, edges };
 }
@@ -99,6 +101,34 @@ function parity(source: string): NativeResult {
 }
 
 const fixtures: [string, string][] = [
+  ["array bindings", "const [a,b]=values;"],
+  ["mutable array bindings", "let [a,b]=values; a=2;"],
+  ["typed array bindings", "const [a:number,b:string]=values;"],
+  ["default array bindings", "const [a=1,b=a+2]=values;"],
+  ["typed default array bindings", "const [a:number=1,b:string='x']=values;"],
+  ["array pattern type", "const [a,b]:[number,string]=values;"],
+  ["array trailing comma", "const [a,b,]=values;"],
+  ["array empty pattern", "const []=values;"],
+  ["array complex defaults", "const [a=f(1,2),b=[1,2],c={value:3}]=values;"],
+  ["array multiline", "const [\n a:number=1,\n b=2,\n]=values;"],
+  ["object shorthand bindings", "const {x,y}=source;"],
+  ["object alias bindings", "let {x:left,y:right}=source;"],
+  ["object default bindings", "const {x=1,y=x+2}=source;"],
+  ["object renamed defaults", "const {name:alias='guest',age:years=18}=source;"],
+  ["object primitive binding types", "const {x:number,y:string}=source;"],
+  ["object typed aliases", "const {x:alias:number=1,y:other:Box<number> =make()}=source;"],
+  ["object pattern type", "const {x,y}:Point=source;"],
+  ["object empty pattern", "const {}=source;"],
+  ["object trailing comma", "const {x,y,}=source;"],
+  ["object multiline bindings", "const {\n name:\n alias:string=\n 'guest',\n age=18,\n}=source;"],
+  ["object function type", "const {handler:(x:number)=>string=convert}=source;"],
+  ["object tuple binding type", "const {pair:[number,string]=make()}=source;"],
+  ["object same property distinct aliases", "const {x:a,x:b}=source;"],
+  ["binding declaration in function", "function f():void{const [x]=values;const {name:n}=source;}"],
+  ["binding declaration in classic for", "for(let [i]=[0];i<3;i=i+1){print(i);}"],
+  ["export array bindings", "export const [a,b]=values;"],
+  ["decorated object bindings", "@mark const {name:alias}=source;"],
+  ["binding defaults with templates", "const {name:alias=`hello ${user}`}=source;"],
   ...templateCases.map(([name, source]): [string, string] => ["complete template " + name, source + ";"]),
   ["empty template", "``;"],
   ["plain template", "`hello world`;"],
@@ -186,6 +216,69 @@ for (const [name, source] of fixtures) test(`bootstrap parser native parity: ${n
 test("bootstrap parser: demo executes fixed tokens without a lexer", () => {
   const result = nativeTokens(); assert.deepEqual(result.diagnostics, []);
   assert.deepEqual(nativeShape(result), hostShape(new Parser(new Lexer("1 + 2 * 3;").tokenize()).parseProgram()));
+});
+for (const source of [
+  "const [a,a]=values;", "const {x:a,y:a}=source;", "const {x,x}=source;",
+  "const [a,,b]=values;", "const [,a]=values;", "const [...rest]=values;", "const {x,...rest}=source;",
+  "const [[a]]=values;", "const [a,{b}]=values;", "const {x:{y}}=source;",
+  "const {[key]:value}=source;", "const {'x':value}=source;", "const {1:value}=source;",
+  "const [a b]=values;", "const {x y}=source;", "const [a=]=values;", "const {x:alias=}=source;",
+  "const [a;", "const {x;", "const [a];", "const {x};", "const [a]=;", "const {x}=;",
+  "using [a]=values;", "for(const [a] of rows)print(a);", "const [a,[b=values;",
+] as const) test(`bootstrap parser destructuring diagnostics: ${source}`, () => {
+  const result = native(source + " print(999);");
+  assert.ok(result.diagnostics.length > 0 && result.diagnostics.length <= 100);
+});
+test("bootstrap parser destructuring recovery preserves the next statement", () => {
+  for (const source of ["const [a];", "const {x}=;", "const [a,[b=values;"]) {
+    const result = native(source + " print(999);");
+    assert.ok(result.diagnostics.length > 0);
+    assert.ok(result.nodes[result.root].edges.some(edge => {
+      const node = result.nodes[edge.node];
+      return node.kind === "ExpressionStatement" && node.edges.some(child => result.nodes[child.node].kind === "CallExpression" && result.nodes[child.node].attributes.some(a => a.name === "callee" && a.value === "print"));
+    }));
+  }
+});
+test("bootstrap parser destructuring preserves binding order, names, types and defaults", () => {
+  const result = native("const {source:local:number=first(),other=local+1}=data;");
+  assert.deepEqual(result.diagnostics, []);
+  const declaration = result.nodes[result.nodes[result.root].edges[0].node];
+  const bindings = declaration.edges.filter(edge => edge.role === "objectBindings").map(edge => result.nodes[edge.node]);
+  const attr = (node: NativeNode, name: string) => node.attributes.find(field => field.name === name)?.value;
+  assert.equal(attr(declaration, "pattern"), "object"); assert.equal(attr(declaration, "name"), "");
+  assert.deepEqual(bindings.map(b => [attr(b,"property"),attr(b,"name"),attr(b,"declaredType")]), [["source","local","number"],["other","other",undefined]]);
+  assert.deepEqual(bindings.map(b => result.nodes[b.edges.find(e => e.role === "defaultValue")!.node].kind), ["CallExpression","BinaryExpression"]);
+  assert.equal(declaration.edges.filter(e => e.role === "initializer").length, 1);
+});
+test("bootstrap parser destructuring binding spans preserve Unicode and omit separators", () => {
+  const source = "const marker='🙂';\nconst {\n title: label = `España ${name}`,\n count:number=2\n}=data;";
+  const result = native(source); assert.deepEqual(result.diagnostics, []);
+  const bindings = result.nodes.filter(node => node.kind === "ObjectBinding");
+  assert.deepEqual(bindings.map(b => source.slice(b.span.start.offset,b.span.end.offset)), ["title: label = `España ${name}`","count:number=2"]);
+  assert.deepEqual(bindings.map(b => [b.span.start.line,b.span.start.column]), [[3,2],[4,2]]);
+  const name = result.nodes.find(n => n.kind === "IdentifierExpression" && n.attributes.some(a => a.name === "name" && a.value === "name"))!;
+  assert.equal(name.span.start.offset, source.indexOf("name"));
+});
+test("bootstrap parser destructuring array binding spans include complete default expressions", () => {
+  const source = "const [a:number=(1+2),b='🙂',]=values;";
+  const result = native(source); assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.nodes.filter(n => n.kind === "ArrayBinding").map(n => source.slice(n.span.start.offset,n.span.end.offset)), ["a:number=(1+2)","b='🙂'"]);
+});
+test("bootstrap parser destructuring tuple annotation never introduces nested bindings", () => {
+  const result = native("const {x:[Y]}=source;"); assert.deepEqual(result.diagnostics, []);
+  const bindings = result.nodes.filter(n => n.kind === "ObjectBinding"); assert.equal(bindings.length, 1);
+  assert.ok(bindings[0].attributes.some(a => a.name === "name" && a.value === "x"));
+  assert.ok(bindings[0].attributes.some(a => a.name === "declaredType" && a.value === "[Y]"));
+});
+test("bootstrap parser destructuring malformed token corpus terminates", () => {
+  const pieces = ["a", "b", "=", ",", ":", "[", "]", "{", "}", "(", ")", "...", "number", "1", ";"];
+  let seed = 5531;
+  for (let run = 0; run < 30; run++) {
+    const parts: string[] = [];
+    for (let i = 0; i < 25; i++) { seed = seed * 16807 % 2147483647; parts.push(pieces[seed % pieces.length]); }
+    const result = native("const [" + parts.join(" ") + "]=values; print(999);");
+    assert.ok(result.diagnostics.length <= 100);
+  }
 });
 test("bootstrap parser: every expression span matches stage 0", () => {
   const source = "const text='🙂';\nprint((1+2)*3, text.length);";

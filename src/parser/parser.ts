@@ -175,30 +175,35 @@ export class Parser {
     if (this.check("{")) {
       this.advance();
       const bindings: ObjectBinding[] = [];
-      while (!this.check("}")) {
+      this.skipNewlines();
+      while (!this.check("}") && !this.check("eof")) {
         const keyTok = this.consume("identifier", "Se esperaba un nombre de propiedad en el patrón de destructuring");
-        let property = keyTok.lexeme;
+        const property = keyTok.lexeme;
+        let name = property;
         let declaredType: TypeName | undefined;
+        this.skipNewlines();
         if (this.match(":")) {
+          this.skipNewlines();
           // Renombrado: `{ x: a }` significa "toma p.x y guardalo en a".
           // Tambien aceptamos tipo: `{ x: number }` (shorthand para
           // `{ x: x }` con type).
           if (this.check("identifier")) {
-            const valueName = this.advance().lexeme;
+            name = this.advance().lexeme; this.skipNewlines();
             if (this.match(":")) {
+              this.skipNewlines();
               declaredType = this.typeName();
             }
-            bindings.push({ name: valueName, property, declaredType });
           } else {
             declaredType = this.typeName();
-            bindings.push({ name: property, property, declaredType });
           }
-        } else {
-          let defaultValue: Expression | undefined;
-          if (this.match("=")) defaultValue = this.expression();
-          bindings.push({ name: property, property, declaredType, defaultValue });
         }
+        this.skipNewlines();
+        let defaultValue: Expression | undefined;
+        if (this.match("=")) { this.skipNewlines(); defaultValue = this.expression(); }
+        bindings.push({ name, property, declaredType, defaultValue });
+        this.skipNewlines();
         if (!this.match(",")) break;
+        this.skipNewlines();
       }
       this.consume("}", "Se esperaba '}' después del patrón de destructuring de objeto");
       let declaredType: TypeName | undefined;

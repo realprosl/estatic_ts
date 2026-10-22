@@ -2,9 +2,19 @@
 
 Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
-## Sin publicar (2026-10-21)
+## Sin publicar (2026-10-22)
 
 ### Added
+
+- v55 (`estatic 1.17.0`): destructuring plano de variables en el parser ETS
+  aislado. Patrones de arrays/objetos, aliases, tipos, defaults, coma final y
+  patrones vacíos. AST en arena con bindings ordenados y spans UTF-16 propios.
+  Diagnósticos de duplicados, formas no soportadas y partes ausentes;
+  recuperación en `;` y corpus de tokens malformados.
+- La comparación con stage 0 incluye los bindings y sus defaults. El parser
+  TS conserva defaults tras aliases/propiedades tipadas y admite objetos
+  multilínea. No se modifica el checker ni la semántica de defaults del backend.
+  El parser/adaptador pasa de 322 a 382 pruebas. CLI actualizado a v55.
 
 - v54 (`estatic 1.16.0`): cierre sintáctico de templates ordinarios del dialecto.
   Los lexers TS y ETS usan una pila explícita de contextos, respetan objetos,
