@@ -76,6 +76,7 @@ function hostShape(node: any, forcedKind?: string): any {
   if (node.arrayBindings !== undefined) attributes.pattern = ["array"];
   if (node.objectBindings !== undefined) attributes.pattern = ["object"];
   if (kind === "Discriminator") attributes.literalType = [typeof node.value];
+  if (kind === "Parameter" && (node.access !== undefined || node.readonly === true)) attributes.parameterProperty = ["true"];
   return { kind, attributes, edges };
 }
 function nativeShape(result: NativeResult, id = result.root, visiting = new Set<number>()): any {
@@ -101,6 +102,31 @@ function parity(source: string): NativeResult {
 }
 
 const fixtures: [string, string][] = [
+  ["public constructor property", "class User{constructor(public name:string){}}"],
+  ["private constructor property", "class User{constructor(private age:number){}}"],
+  ["protected constructor property", "class User{constructor(protected score:number){}}"],
+  ["readonly constructor property", "class User{constructor(readonly id:number){}}"],
+  ["public readonly constructor property", "class User{constructor(public readonly id:number){}}"],
+  ["private readonly constructor property", "class User{constructor(private readonly id:number){}}"],
+  ["protected readonly constructor property", "class User{constructor(protected readonly id:number){}}"],
+  ["constructor properties mixed with ordinary parameter", "class User{constructor(public name:string,age:number,readonly id:number){print(age);}}"],
+  ["constructor property default", "class User{constructor(public name:string='guest',private age:number=18){}}"],
+  ["constructor property optional", "class User{constructor(public name?:string,readonly id?:number){}}"],
+  ["constructor optional property default", "class User{constructor(public name?:string='guest'){}}"],
+  ["generic constructor property", "class Box<T>{constructor(public value:T){}}"],
+  ["array constructor property", "class Box{constructor(public values:number[]=[1,2]){}}"],
+  ["fixed array constructor property", "class Box{constructor(readonly values:u8[4]){}}"],
+  ["tuple constructor property", "class Box{constructor(public value:[number,string]){}}"],
+  ["callable constructor property", "class Box{constructor(readonly make:(x:number)=>string=convert){}}"],
+  ["constructor property out passing", "class Box{constructor(out public value:number){}}"],
+  ["readonly type ordinary constructor parameter", "class Box{constructor(values:readonly number[]){}}"],
+  ["readonly type public constructor property", "class Box{constructor(public values:readonly number[]){}}"],
+  ["readonly property and readonly type", "class Box{constructor(readonly values:readonly number[]){}}"],
+  ["constructor property matches explicit field", "class Box{value:number;constructor(public value:number){}}"],
+  ["private constructor with property", "class Box{private constructor(public value:number){}}"],
+  ["constructor property nested default", "class Box{constructor(public name:string=make('a',nested(2))){}}"],
+  ["constructor property template default", "class Box{constructor(readonly name:string=`hello ${user}`){}}"],
+  ["multiline constructor properties", "class Box{constructor(\npublic name:string='🙂',\nprivate readonly id:number=7\n){}}"],
   ["array bindings", "const [a,b]=values;"],
   ["mutable array bindings", "let [a,b]=values; a=2;"],
   ["typed array bindings", "const [a:number,b:string]=values;"],
@@ -279,6 +305,60 @@ test("bootstrap parser destructuring malformed token corpus terminates", () => {
     const result = native("const [" + parts.join(" ") + "]=values; print(999);");
     assert.ok(result.diagnostics.length <= 100);
   }
+});
+for (const source of [
+  "class C{method(public value:number):void{}}", "class C{method(readonly value:number):void{}}",
+  "class C{static method(private value:number):void{}}", "class C{static constructor(public value:number){}}",
+  "function f(public value:number):void{}", "function f(readonly value:number):void{}",
+  "interface C{method(public value:number):void;}", "interface C{method(readonly value:number):void;}",
+  "const f=(public value:number):number=>value;", "const f=(readonly value:number):number=>value;",
+  "class C{constructor(public private value:number){}}", "class C{constructor(public public value:number){}}",
+  "class C{constructor(readonly readonly value:number){}}", "class C{constructor(readonly public value:number){}}",
+  "class C{constructor(...public values:number[]){}}", "class C{constructor(public){}}",
+  "class C{constructor(readonly){}}", "class C{constructor(public value){}}",
+  "class C{constructor(public value:){}}", "class C{constructor(public value:number=){}}",
+  "class C{constructor(public value:number=,readonly next:number=2){}}",
+  "class C{constructor(public value:number private other:number){}}",
+  "class C{constructor(static value:number){}}", "class C{constructor(public out value:number){}}",
+  "class C{constructor(public value:number{}}",
+] as const) test(`bootstrap parser parameter property diagnostics: ${source}`, () => {
+  const result = native(source); assert.ok(result.diagnostics.length > 0 && result.diagnostics.length <= 100);
+});
+test("bootstrap parser parameter properties preserve modifiers without synthesizing fields", () => {
+  const result = native("class User{constructor(public name:string='guest',private readonly id:number=7,age:number=18){}}");
+  assert.deepEqual(result.diagnostics, []);
+  const cls = result.nodes[result.nodes[result.root].edges[0].node];
+  assert.equal(cls.edges.filter(e => e.role === "fields").length, 0);
+  const ctor = result.nodes[cls.edges.find(e => e.role === "methods")!.node];
+  const params = ctor.edges.filter(e => e.role === "params").map(e => result.nodes[e.node]);
+  const attr = (node: NativeNode, name: string) => node.attributes.find(a => a.name === name)?.value;
+  assert.deepEqual(params.map(p => [attr(p,"name"),attr(p,"type"),attr(p,"access"),attr(p,"readonly"),attr(p,"parameterProperty")]), [["name","string","public",undefined,"true"],["id","number","private","true","true"],["age","number",undefined,undefined,undefined]]);
+  assert.deepEqual(params.map(p => result.nodes[p.edges.find(e => e.role === "defaultValue")!.node].attributes.find(a => a.name === "value" || a.name === "raw")!.value), ["guest","7","18"]);
+});
+test("bootstrap parser parameter property spans cover modifiers, types and defaults", () => {
+  const source = "const marker='🙂';\nclass C{constructor(\n public readonly name:string=`España ${user}`,\n private id:number=(1+2),\n raw:readonly number[]\n){}}";
+  const result = native(source); assert.deepEqual(result.diagnostics, []);
+  const params = result.nodes.filter(n => n.kind === "Parameter");
+  assert.deepEqual(params.map(p => source.slice(p.span.start.offset,p.span.end.offset)), ["public readonly name:string=`España ${user}`","private id:number=(1+2)","raw:readonly number[]"]);
+  assert.deepEqual(params.map(p => [p.span.start.line,p.span.start.column]), [[3,2],[4,2],[5,2]]);
+  assert.ok(!params[2].attributes.some(a => a.name === "parameterProperty" || a.name === "readonly"));
+  assert.ok(result.nodes.some(n => n.kind === "IdentifierExpression" && n.attributes.some(a => a.name === "name" && a.value === "user") && n.span.start.offset === source.indexOf("user")));
+});
+test("bootstrap parser parameter property recovery keeps following parameters and methods", () => {
+  const result = native("class C{constructor(public bad:number=,private good:number=2){} ok():number{return 3;}}");
+  assert.ok(result.diagnostics.some(d => d.message.includes("valor por defecto")));
+  assert.ok(result.nodes.some(n => n.kind === "Parameter" && n.attributes.some(a => a.name === "name" && a.value === "good") && n.attributes.some(a => a.name === "parameterProperty" && a.value === "true")));
+  assert.ok(result.nodes.some(n => n.kind === "ClassMethod" && n.attributes.some(a => a.name === "name" && a.value === "ok")));
+});
+test("bootstrap parser anonymous default class keeps constructor properties", () => {
+  const result = native("export default class{constructor(public value:number=7){}}"); assert.deepEqual(result.diagnostics, []);
+  assert.ok(result.nodes.some(n => n.kind === "ClassDeclaration" && n.attributes.some(a => a.name === "anonymous" && a.value === "true")));
+  assert.equal(result.nodes.filter(n => n.kind === "Parameter" && n.attributes.some(a => a.name === "parameterProperty")).length, 1);
+});
+test("bootstrap parser ordinary parameter spans cover out, rest, defaults and arrows", () => {
+  const source = "function f(out value:number,...rest:string[]):void{} const g=(x:number=1):number=>x;";
+  const result = native(source); assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.nodes.filter(n => n.kind === "Parameter").map(p => source.slice(p.span.start.offset,p.span.end.offset)), ["out value:number","...rest:string[]","x:number=1"]);
 });
 test("bootstrap parser: every expression span matches stage 0", () => {
   const source = "const text='🙂';\nprint((1+2)*3, text.length);";

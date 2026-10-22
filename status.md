@@ -29,7 +29,7 @@ Las declaraciones del editor tienen una única fuente canónica en
 `types/estatic.d.ts`. `etsc init` la copia y `etsc update-types` actualiza
 proyectos existentes con respaldo `.bak`. El registro semántico y el archivo
 se comprueban mediante una regresión automática. La versión visible por CLI es
-`estatic 1.17.0 (v55)` mediante `--version` o `-v`; verbose usa `--verbose`.
+`estatic 1.18.0 (v56)` mediante `--version` o `-v`; verbose usa `--verbose`.
 
 El incremental informa tiempos reales por fase y registra interfaces/dependencias
 por módulo para planificar invalidaciones. v48 restaura cuerpos de funciones
@@ -42,13 +42,19 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 ## Verificación conocida
 
 - La verificación del conjunto unitario estable realizada durante esta revisión
-  pasó **1639/1639 pruebas**, por bloques de tests unitarios y bootstrap.
+  pasó **1701/1701 pruebas**, por bloques de tests unitarios y bootstrap.
 - El lexer de `bootstrap/lexer/` pasa **64/64** pruebas nativas, incluidas
   comparaciones con stage 0, su propio código ETS y aislamiento del módulo.
   Ver [`bootstrap/README.md`](./bootstrap/README.md) para ejecutarlo por separado.
-- El parser aislado pasa **382/382** pruebas (incluido el adaptador léxico),
+- El parser aislado pasa **437/437** pruebas (incluido el adaptador léxico),
   incluido el análisis de su propio fuente y del lexer, sin importar otros
   módulos ETS. La gramática pendiente está en `bootstrap/parser/README.md`.
+- Parámetros-propiedad en constructores de instancia: access/readonly, tipos,
+  defaults, optional/out y spans completos. AST conserva metadatos y no
+  sintetiza campos. TS y ETS rechazan modificadores de propiedad en métodos
+  ordinarios/estáticos; se ejecuta una regresión C++ de inicialización.
+  Auditoría pendiente en el checker de stage 0: los campos implícitos de estos
+  parámetros aún permiten acceso externo a private y escritura a readonly.
 - Destructuring plano de variables en arrays/objetos, aliases, tipos y defaults
   preservados como AST. Spans por binding, patrones vacíos diferenciados y
   diagnósticos de duplicados, formas no soportadas e inicializadores ausentes.

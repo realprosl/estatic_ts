@@ -6,6 +6,18 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v56 (`estatic 1.18.0`): propiedades de parámetros de constructor en el
+  parser ETS aislado. Access/readonly, tipos, defaults y flags optional/out;
+  atributo parameterProperty y spans completos de todos los parámetros.
+  No se sintetizan campos ni asignaciones en el parser.
+- Diagnósticos de contextos/modificadores inválidos y defaults vacíos, con
+  recuperación del siguiente parámetro. El parser TS también rechaza estas
+  propiedades en métodos ordinarios/estáticos y constructores estáticos.
+- Comparación con TS, ASTs y spans independientes, Unicode y ejecución C++
+  que verifica inicialización con argumentos/defaults. Parser/adaptador: de
+  382 a 437 pruebas. Se documentan deudas de private/readonly en el checker
+  de campos implícitos de stage 0; no se certifica esa semántica. CLI v56.
+
 - v55 (`estatic 1.17.0`): destructuring plano de variables en el parser ETS
   aislado. Patrones de arrays/objetos, aliases, tipos, defaults, coma final y
   patrones vacíos. AST en arena con bindings ordenados y spans UTF-16 propios.

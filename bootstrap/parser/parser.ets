@@ -607,18 +607,43 @@ export class Parser {
     }
     this.setEnd(result, this.expect("}")); return result;
   }
-  parametersInto(owner: number, arrow: boolean): void {
+  parametersInto(owner: number, arrow: boolean, properties: boolean): void {
     this.expect("(");
     while (!this.check(")") && !this.check("eof")) {
       const before: number = this.current;
+      const start: ParserToken = this.peek(0);
       const variadic: boolean = this.accept("..."); const isOut: boolean = this.accept("out");
+      let access: string = ""; let isReadonly: boolean = false;
+      while (this.check("public") || this.check("private") || this.check("protected") || this.check("readonly")) {
+        const modifier: ParserToken = this.take();
+        if (modifier.kind == "readonly") {
+          if (isReadonly) this.reportAt(modifier, "Modificador readonly duplicado");
+          isReadonly = true;
+        } else {
+          if (access != "") this.reportAt(modifier, "Modificador de acceso duplicado o incompatible");
+          else access = modifier.lexeme;
+          if (isReadonly) this.reportAt(modifier, "El modificador de acceso debe preceder a readonly");
+        }
+      }
+      const property: boolean = access != "" || isReadonly;
+      if (property && !properties) this.reportAt(start, "Las propiedades de parámetro solo se permiten en constructores de instancia");
+      if (property && variadic) this.reportAt(start, "Una propiedad de parámetro no puede ser variádica");
       const name: ParserToken = this.expect("identifier"); const optional: boolean = this.accept("?");
       this.expect(":"); const annotation: string = this.typeName();
-      const param: number = this.add("Parameter", name, name);
+      const param: number = this.add("Parameter", start, this.previous());
       this.attr(param, "name", name.lexeme); this.attr(param, "type", annotation);
       this.attr(param, "out", isOut ? "true" : "false"); this.attr(param, "passing", isOut ? "out" : "value");
+      if (access != "") this.attr(param, "access", access);
+      if (isReadonly) this.attr(param, "readonly", "true");
+      if (property && properties) this.attr(param, "parameterProperty", "true");
       if (!arrow) { this.attr(param, "variadic", variadic ? "true" : "false"); this.attr(param, "optional", optional ? "true" : "false"); }
-      if (this.accept("=")) this.edge(param, "defaultValue", this.expression());
+      if (this.accept("=")) {
+        if (this.check(",") || this.check(")") || this.check("eof")) {
+          this.report("Se esperaba un valor por defecto del parámetro");
+          const missing: number = this.add("ErrorNode", this.peek(0), this.peek(0)); this.edge(param, "defaultValue", missing);
+        } else this.edge(param, "defaultValue", this.expression());
+      }
+      this.setEnd(param, this.previous());
       this.edge(owner, "params", param);
       if (this.current == before || !this.accept(",")) break;
     }
@@ -644,7 +669,7 @@ export class Parser {
     const result: number = this.add("FunctionDeclaration", keyword, name);
     if (anonymous) this.attr(result, "anonymous", "true"); else this.attr(result, "name", name.lexeme);
     this.attr(result, "async", isAsync ? "true" : "false");
-    this.typeParameters(result); this.parametersInto(result, false); this.expect(":");
+    this.typeParameters(result); this.parametersInto(result, false, false); this.expect(":");
     this.attr(result, "returnType", this.typeName());
     let body: number = -1;
     if (this.accept(";")) body = this.add("BlockStatement", this.previous(), this.previous());
@@ -670,7 +695,7 @@ export class Parser {
         if (isStatic) this.attr(item, "isStatic", "true");
         if (isReadonly) this.attr(item, "readonly", "true");
         if (this.check("(") || this.check("<")) {
-          this.setKind(item, "ClassMethod"); this.typeParameters(item); this.parametersInto(item, false);
+          this.setKind(item, "ClassMethod"); this.typeParameters(item); this.parametersInto(item, false, member.lexeme == "constructor" && !isStatic);
           let returnType: string = "void";
           if (this.accept(":")) returnType = this.typeName();
           else if (member.lexeme != "constructor") this.report("El método necesita un tipo de retorno");
@@ -696,7 +721,7 @@ export class Parser {
       const before: number = this.current; const member: ParserToken = this.expect("identifier");
       const item: number = this.add("InterfaceField", member, member); this.attr(item, "name", member.lexeme);
       if (this.check("(") || this.check("<")) {
-        this.setKind(item, "InterfaceMethod"); this.typeParameters(item); this.parametersInto(item, false);
+        this.setKind(item, "InterfaceMethod"); this.typeParameters(item); this.parametersInto(item, false, false);
         this.expect(":"); this.attr(item, "returnType", this.typeName()); this.edge(result, "methods", item);
       } else {
         const optional: boolean = this.accept("?"); this.expect(":"); this.attr(item, "type", this.typeName());
@@ -821,7 +846,7 @@ export class Parser {
   arrow(): number {
     const isAsync: boolean = this.accept("async"); const open: ParserToken = this.peek(0);
     const result: number = this.add("ArrowFunctionExpression", open, open);
-    this.attr(result, "isAsync", isAsync ? "true" : "false"); this.parametersInto(result, true);
+    this.attr(result, "isAsync", isAsync ? "true" : "false"); this.parametersInto(result, true, false);
     if (this.accept(":")) this.attr(result, "returnType", this.typeName());
     this.expect("=>"); let body: number = -1;
     if (this.accept("{")) body = this.block(this.previous()); else body = this.expression();

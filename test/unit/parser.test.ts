@@ -82,6 +82,21 @@ test("parser: multiline object destructuring retains aliases and defaults", () =
   const statement = firstStatement("const {\n name:\n alias:string=\n 'guest',\n count=2,\n}=source;") as any;
   assert.deepEqual(statement.objectBindings.map((b:any) => [b.property,b.name,b.defaultValue.value]), [["name","alias","guest"],["count","count",2]]);
 });
+test("parser: constructor parameter properties preserve access, readonly and defaults", () => {
+  const cls = firstStatement("class User{constructor(public name:string='guest',private readonly id:number=7,readonly tag:string='x',age:number=18){}}") as any;
+  assert.equal(cls.fields.length, 0);
+  assert.deepEqual(cls.methods[0].params.map((p:any) => [p.name,p.type,p.access,p.readonly,p.defaultValue.value]), [["name","string","public",false,"guest"],["id","number","private",true,7],["tag","string",undefined,true,"x"],["age","number",undefined,false,18]]);
+});
+test("parser: readonly parameter type alone does not declare a property", () => {
+  const cls = firstStatement("class Box{constructor(values:readonly number[]){}}") as any;
+  assert.equal(cls.methods[0].params[0].readonly, false); assert.equal(cls.methods[0].params[0].access, undefined);
+  assert.equal(cls.methods[0].params[0].type, "readonly<number[]>");
+});
+for (const source of ["class C{method(public value:number):void{}}", "class C{method(readonly value:number):void{}}", "class C{static method(private value:number):void{}}", "class C{static constructor(public value:number){}}"])
+  test(`parser rejects parameter properties outside instance constructors: ${source}`, () => {
+    assert.throws(() => parse(source), (error:any) => error instanceof DiagnosticError && error.diagnostics.some(d => d.phase === "parser" && d.message.includes("constructores de instancia")));
+  });
+
 test("parser: array destructuring", () => {
   // Usamos un initializer literal para que el parser no necesite saber el
   // tipo de `arr` (eso es responsabilidad del type-checker, no del parser).

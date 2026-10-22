@@ -13,6 +13,7 @@ npm run bootstrap:parser -- 'enum Color{Red,Green} switch(color){case Color.Red:
 npm run bootstrap:parser -- 'import {value as local} from "./values"; export {local as publicValue};'
 npm run bootstrap:parser -- 'const greeting=`Hola ${name}, total=${1+2*3}`;'
 npm run bootstrap:parser -- 'const [first:number=1,second]=values; const {name:alias="guest"}=user;'
+npm run bootstrap:parser -- 'class User{constructor(public name:string="guest",private age:number=18,readonly id:number=1){}}'
 npm run test:bootstrap:parser
 ```
 
@@ -83,6 +84,8 @@ tamaño de entrada.
   binding o patrón completo, defaults, patrones vacíos y coma final.
 - Clases con campos, valores iniciales, constructor, métodos y acceso/static;
   interfaces con campos y firmas. Genéricos básicos con constraint y default.
+- Propiedades de parámetros de constructores de instancia, con acceso y/o
+  readonly, tipos, defaults, optional/out y spans completos de parámetros.
 - Tipos primitivos y nominales, namespace, genéricos, arrays dinámicos y fijos,
   tuplas, funciones, readonly, typeof, unions e intersecciones de tipos.
 - Bloques, `if/else`, `while`, `for` clásico, `for of/in/await of`, `return`,
@@ -99,7 +102,7 @@ tamaño de entrada.
 - Exports de listas locales, reexports de listas/estrella/namespace y default
   de expresiones, funciones/clases con nombre o anónimas, incluidas async.
 
-Las 382 pruebas compilan dos unidades C++, enlazan y ejecutan el binario; también
+Las 437 pruebas compilan dos unidades C++, enlazan y ejecutan el binario; también
 comprueban el adaptador léxico host. Incluyen
 comparaciones estructurales con stage 0, precedencia fijada independientemente,
 spans con Unicode, errores y límites de profundidad/diagnósticos, y 30 entradas
@@ -280,10 +283,53 @@ lowering de defaults de objetos de stage 0 sigue usando el campo presente,
 sin aplicar una semántica de campo ausente/undefined como JavaScript. Esa
 semántica y la validación de los defaults requieren una auditoría aparte.
 
+## Propiedades de parámetros del constructor
+
+Un parámetro con `public`, `private`, `protected` o `readonly` en el constructor
+de instancia conserva esos modificadores en `Parameter`. Se añade el atributo
+`parameterProperty: "true"`, además de `name`, `type`, `out`, `passing`,
+`optional`, `variadic` y la arista `defaultValue` cuando procede. El acceso
+puede preceder a readonly: `private readonly id:number=7`. En `readonly id`
+se conserva `access` ausente, como stage 0; no se inventa un modificador public.
+
+El parser no duplica el parámetro como `ClassField` ni inserta asignaciones
+sintéticas. Ese trabajo pertenece a una fase posterior, como en el compilador
+TS actual. Un campo explícito y un parámetro con el mismo nombre conservan
+sus nodos originales; resolver tipos, colisiones y reglas de almacenamiento
+corresponde al checker.
+
+Los spans de **todos** los nodos Parameter abarcan ahora la declaración
+completa: out/rest/modificadores, nombre, `?`, tipo y default, excluyendo
+separadores. Stage 0 conserva en Parameter.span sólo el token del nombre;
+las pruebas comparan metadatos con TS y verifican los spans nuevos por separado,
+con Unicode, defaults anidados y funciones flecha.
+
+`values:readonly number[]` es un parámetro ordinario con un tipo readonly.
+No se convierte en propiedad por tener readonly después de los dos puntos.
+`public values:readonly number[]` sí declara propiedad por el public inicial.
+Optional y out se preservan según el dialecto; no se reescribe aquí su tipo
+ni se introduce una representación especial para el campo.
+
+Se diagnostican modificadores de propiedad en funciones, interfaces, flechas,
+métodos ordinarios o constructores estáticos; también modificadores repetidos,
+accesos incompatibles, acceso después de readonly y propiedades variádicas.
+Stage 0 ahora rechaza explícitamente los casos de métodos/constructores estáticos
+que antes aceptaba y cuyos modificadores acababan ignorados. Un default vacío
+se diagnostica sin consumir la coma o `)`, conservando los parámetros siguientes.
+
+La regresión C++ de stage 0 comprueba inicialización de campos implícitos con
+argumentos y defaults, lectura desde métodos y modificación de un campo public.
+No demuestra encapsulación ni inmutabilidad. Se ha comprobado una deuda previa
+del checker TS: permite leer desde fuera `constructor(private value:number)`
+y asignar a `this.id` fuera del constructor si sólo se declaró con
+`constructor(readonly id:number)`. Queda registrada para corregir los checks de
+campos implícitos durante la auditoría semántica; este bloque porta la sintaxis
+y no modifica ese checker.
+
 ## Pendiente antes de completar el módulo
 
 - Cabeceras `@include`/`@link` y las formas de módulo excluidas arriba.
-- Parameter properties, genéricos variádicos y decoradores sobre
+- Genéricos variádicos y decoradores sobre
   miembros o colocados después de `export`/`function`.
 - Paridad de todas las posiciones y mensajes de diagnóstico con stage 0, y
   validación completa de streams de tokens suministrados por callers externos.
