@@ -63,7 +63,7 @@ Para consultar la versión instalada:
 ```bash
 etsc --version
 etsc -v
-# estatic 1.21.0 (v59)
+# estatic 1.22.0 (v60)
 ```
 
 El `estatic.config.ts` generado NO requiere que listes `-luv`, `-lssl`,
@@ -1025,9 +1025,13 @@ v59 añade el [puente nativo por archivo](./bootstrap/frontend/README.md):
 texto al binario, que ejecuta lexer, expansión de templates y parser ETS y muestra
 tokens, AST y diagnósticos con archivo/posición. Sus 57 pruebas conservan las suites
 aisladas y comparan tokens y arenas completas. Node hace I/O/build, sin preparar
-tokens para este recorrido. El próximo módulo será resolución de imports/reexports
-y grafo de dependencias, antes del checker; aún no hay planificación concurrente
-ni autoalojamiento del compilador completo.
+tokens para este recorrido.
+v60 añade el [cargador nativo y su caché por archivo](./bootstrap/modules/README.md):
+`npm run bootstrap:modules -- examples/todo-project/main.ets --cache build/project-cache`.
+El binario abre los fuentes, resuelve imports/reexports y construye el grafo sin
+analizar el proyecto en TypeScript. Reutiliza tokens/AST entre ejecuciones, verifica
+contenido y registra metadatos/dependencias por archivo. Checker, interfaces
+semánticas, artefactos C++/`.o` de esta cadena y scheduler concurrente siguen pendientes.
 
 ## Licencia
 

@@ -15,7 +15,7 @@ producción concurrente.
 | Área | Estado | Observación |
 |---|---|---|
 | Lexer, parser y diagnósticos | Estable para el dialecto documentado | No pretende aceptar TypeScript completo |
-| Autoalojamiento | Lexer y parser conectados por archivo | Módulos aislados y puente compilados/ejecutados como C++; resolver de módulos antes del checker, todavía pendientes |
+| Autoalojamiento | Grafo y caché sintáctica por archivo | Lexer/parser/resolver ejecutados como C++; checker ETS y scheduler pendientes |
 | Tipos, genéricos, unions y clases | Funcional | Checker y codegen siguen muy acoplados |
 | Módulos | Funcional con límites | Default, reexports y multilínea; análisis mediante AST combinado |
 | Ownership y borrow checking | Funcional, conservador | Hay moves, conflictos y NLL; no hay lifetime parameters |
@@ -29,7 +29,7 @@ Las declaraciones del editor tienen una única fuente canónica en
 `types/estatic.d.ts`. `etsc init` la copia y `etsc update-types` actualiza
 proyectos existentes con respaldo `.bak`. El registro semántico y el archivo
 se comprueban mediante una regresión automática. La versión visible por CLI es
-`estatic 1.21.0 (v59)` mediante `--version` o `-v`; verbose usa `--verbose`.
+`estatic 1.22.0 (v60)` mediante `--version` o `-v`; verbose usa `--verbose`.
 
 El incremental informa tiempos reales por fase y registra interfaces/dependencias
 por módulo para planificar invalidaciones. v48 restaura cuerpos de funciones
@@ -41,8 +41,17 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
 ## Verificación conocida
 
+- v60 incorpora [`bootstrap/modules/`](./bootstrap/modules/README.md): resolución
+  de imports/reexports con aliases/raíces, identidad canónica, ciclos y ausencias.
+  Registro atómico por archivo con tamaño, mtime/ctime nanosegundo, identidad
+  filesystem, SHA-256, dependencias y tokens/AST hidratados sin nuevo parseo.
+  La resolución de rutas se repite para comprobar cambios del filesystem.
+  Las 42 pruebas nativas pasan, además de las 663 regresiones de bootstrap.
+  La validez semántica, interfaces públicas, C++/`.o` y paralelismo quedan pendientes.
+
+
 - La verificación del conjunto unitario estable realizada durante esta revisión
-  pasó **1899/1899 pruebas**: 1236 unitarias de stage 0 y 663 de bootstrap,
+  pasó **1941/1941 pruebas**: 1236 unitarias de stage 0 y 705 de bootstrap,
   ejecutadas por bloques. No incluye `test/runner.ts` ni la suite E2E/libuv.
 - El lexer de `bootstrap/lexer/` pasa **64/64** pruebas nativas, incluidas
   comparaciones con stage 0, su propio código ETS y aislamiento del módulo.
@@ -57,9 +66,8 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
   cadena nativa. Cada resultado conserva archivo, errores y estado de parseo;
   un error léxico evita ejecutar el parser. Serialización de AST existente sin
   segundo parseo y JSON por fragmentos, sin reconstruir el acumulador en cada nodo.
-  Las llamadas entre archivos se prueban en un proceso, secuencialmente. No hay
-  todavía resolver, scheduler concurrente ni checker ETS. La siguiente prioridad
-  es el grafo de imports/reexports y resolución de módulos, antes del checker.
+  Las llamadas entre archivos se prueban en un proceso, secuencialmente. El resolver y la caché se añaden en v60; siguen pendientes
+  scheduler concurrente y checker ETS.
   Se documenta el helper de reutilización por archivo: manifiesto de metadatos y
   contenido, AST/imports y artefactos C++/`.o`, invalidación por capa/interfaz y
   deduplicación de trabajos. No equivale a implementar esa caché en el puente.

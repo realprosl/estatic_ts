@@ -40,7 +40,7 @@ export function parseSource(source: string, file: string = "<input>"): SourceRes
 }
 
 // Observable demo output; callers can use parseSource without JSON serialization.
-function quoteSource(text: string): string {
+export function quoteSource(text: string): string {
   let result: string = "\""; const hex: string = "0123456789abcdef";
   for (let i: number = 0; i < text.length; i = i + 1) {
     const c: string = text.charAt(i); const code: number = text.charCodeAt(i);
@@ -58,7 +58,7 @@ function spanSource(token: ParserToken): string {
   return "{\"start\":" + positionSource(token.offset, token.line, token.column)
     + ",\"end\":" + positionSource(token.endOffset, token.endLine, token.endColumn) + "}";
 }
-function formatSource(result: SourceResult): string {
+export function formatSource(result: SourceResult): string {
   let output: string[] = ["{\"file\":" + quoteSource(result.file) + ",\"parsed\":" + (result.parsed ? "true" : "false")
     + ",\"success\":" + (result.success ? "true" : "false") + ",\"tokens\":["];
   let separator: string = "";
