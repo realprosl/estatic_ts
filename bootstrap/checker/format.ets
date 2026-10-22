@@ -1,0 +1,20 @@
+import { CheckResult } from "./checker";
+import { BindingResult } from "../binder/binder";
+import { ModuleGraph } from "../modules/loader";
+import { formatBinding, bindingBoolean, bindingNumbers } from "../binder/format";
+import { quoteSource } from "../frontend/frontend";
+import { formatAst } from "../parser/parser";
+export function formatChecked(result: CheckResult, binding: BindingResult, graph: ModuleGraph): string {
+  let output: string[] = ["{\"success\":" + bindingBoolean(result.success) + ",\"binding\":" + formatBinding(binding,graph) + ",\"files\":["]; let comma: string = "";
+  for (let m: number = 0; m < result.files.length; m = m + 1) {
+    const file = result.files[m]; let types: string[] = []; for (const valueType of file.types) types.push(quoteSource(valueType));
+    let signatures: string[] = []; for (const signature of file.signatures) signatures.push(quoteSource(signature));
+    output.push(comma + "{\"file\":" + quoteSource(graph.modules[m].file) + ",\"ast\":" + formatAst(graph.modules[m].cached.result.ast) + ",\"types\":[" + types.join(",") + "],\"members\":" + bindingNumbers(file.members) + ",\"selected\":" + bindingNumbers(file.selected) + ",\"selectedModules\":" + bindingNumbers(file.selectedModules) + ",\"signatures\":[" + signatures.join(",") + "]}"); comma = ",";
+  }
+  let symbols: string[] = []; for (const valueType of result.symbolTypes) symbols.push(quoteSource(valueType));
+  output.push("],\"symbolTypes\":[" + symbols.join(",") + "],\"diagnostics\":["); comma = "";
+  for (const d of result.diagnostics) {
+    output.push(comma + "{\"file\":" + quoteSource(d.file) + ",\"phase\":" + quoteSource(d.phase) + ",\"message\":" + quoteSource(d.message) + ",\"offset\":" + numberToString(d.token.offset) + ",\"line\":" + numberToString(d.token.line) + ",\"column\":" + numberToString(d.token.column) + "}"); comma = ",";
+  }
+  output.push("]}"); return output.join("");
+}

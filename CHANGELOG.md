@@ -6,6 +6,28 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v62 (`estatic 1.24.0`): checker nativo inicial en `bootstrap/checker/checker.ets`,
+  separado del binder. Infiere y comprueba tipos de expresiones, funciones,
+  clases/interfaces y relaciones entre módulos. Conserva AST y binding intactos
+  y entrega tipos, miembros y firmas seleccionadas/instanciadas en tablas.
+- Selección de sobrecargas no ambigua, genéricos simples, aliases/typeof,
+  arrays/tuplas, objetos con contexto, retornos/rutas, aridad, miembros,
+  mutabilidad básica y rangos decimales de numéricos hasta 32 bits. Identidades
+  nominales por símbolo para evitar colisiones de nombres entre módulos.
+- `bootstrap:checker` construye un binario C++20 que carga, vincula y comprueba
+  el proyecto sin ejecutar el checker TypeScript sobre los fuentes solicitados.
+  Repite la comprobación y verifica la invariancia de sintaxis/binding.
+- 163 pruebas nuevas, incluidas comparaciones con stage 0, cuatro diferencias
+  documentadas, caché entre procesos, cambios de dependencias y diagnósticos
+  UTF-16. Conjunto estable: 2167/2167 (1236 stage 0 + 64 lexer + 542 parser +
+  57 puente + 42 cargador + 63 binder + 163 checker), por bloques y sin skips;
+  excluye test/runner.ts y E2E/libuv.
+- Cobertura inicial explícita: siguen pendientes paridad con stage 0, reglas
+  completas de memoria/flujo/escapes/publicación, otros tipos/builtins y
+  expansiones. Las construcciones no cubiertas producen diagnósticos. El CLI
+  principal mantiene su cadena; no hay codegen desde estas tablas, caché
+  semántica ni scheduler paralelo. Contrato en bootstrap/checker/README.md.
+
 - v61 (`estatic 1.23.0`): binding nativo ETS por proyecto en `binder.ets`,
   separado del futuro checker. Ámbitos, símbolos y referencias en tablas
   asociadas a nodos, preservando el AST sintáctico cacheado.

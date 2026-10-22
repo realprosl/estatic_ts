@@ -63,7 +63,7 @@ Para consultar la versión instalada:
 ```bash
 etsc --version
 etsc -v
-# estatic 1.23.0 (v61)
+# estatic 1.24.0 (v62)
 ```
 
 El `estatic.config.ts` generado NO requiere que listes `-luv`, `-lssl`,
@@ -1032,8 +1032,12 @@ El binario abre los fuentes, resuelve imports/reexports y construye el grafo sin
 analizar el proyecto en TypeScript. Reutiliza tokens/AST entre ejecuciones, verifica
 contenido y registra metadatos/dependencias por archivo. El [binder nativo v61](./bootstrap/binder/README.md) añade ámbitos, símbolos y
 referencias entre esos archivos mediante `npm run bootstrap:binder -- archivo.ets`.
-Conserva el AST de caché intacto; checker, interfaces semánticas, artefactos C++/`.o`
-de esta cadena y scheduler concurrente siguen pendientes.
+Conserva el AST de caché intacto. v62 incorpora el [checker nativo inicial](./bootstrap/checker/README.md):
+`npm run bootstrap:checker -- examples/hello.ets` entrega los AST con tablas de tipos,
+miembros y firmas seleccionadas/instanciadas. Comprueba el núcleo de expresiones,
+funciones y relaciones de tipos entre módulos. La paridad semántica con stage 0,
+reglas completas de memoria/flujo, interfaces semánticas, codegen desde estas
+tablas y scheduler concurrente siguen pendientes.
 
 ## Licencia
 

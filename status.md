@@ -29,7 +29,7 @@ Las declaraciones del editor tienen una única fuente canónica en
 `types/estatic.d.ts`. `etsc init` la copia y `etsc update-types` actualiza
 proyectos existentes con respaldo `.bak`. El registro semántico y el archivo
 se comprueban mediante una regresión automática. La versión visible por CLI es
-`estatic 1.23.0 (v61)` mediante `--version` o `-v`; verbose usa `--verbose`.
+`estatic 1.24.0 (v62)` mediante `--version` o `-v`; verbose usa `--verbose`.
 
 El incremental informa tiempos reales por fase y registra interfaces/dependencias
 por módulo para planificar invalidaciones. v48 restaura cuerpos de funciones
@@ -40,6 +40,13 @@ Retirado el PCH no utilizado y preservados los artefactos idénticos, incluida
 la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
 ## Verificación conocida
+
+- v62 añade [`bootstrap/checker/`](./bootstrap/checker/README.md): núcleo nativo
+  inicial de inferencia y compatibilidad, llamadas/sobrecargas, genéricos simples,
+  clases/interfaces y tipos entre módulos. Tipos y firmas seleccionadas en tablas
+  separadas. Sus 163 pruebas pasan, incluidas comparaciones con stage 0 y cuatro
+  diferencias explícitas. No certifica aún memoria/flujo/escapes ni API públicas;
+  la paridad completa y el codegen desde esas tablas siguen pendientes.
 
 - v61 añade [`bootstrap/binder/`](./bootstrap/binder/README.md): ámbitos, símbolos,
   referencias léxicas y de tipos, imports/exports y namespaces. Tablas separadas
@@ -59,7 +66,7 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
 
 - La verificación del conjunto unitario estable realizada durante esta revisión
-  pasó **2004/2004 pruebas**: 1236 unitarias de stage 0 y 768 de bootstrap,
+  pasó **2167/2167 pruebas**: 1236 unitarias de stage 0 y 931 de bootstrap,
   ejecutadas por bloques. No incluye `test/runner.ts` ni la suite E2E/libuv.
 - El lexer de `bootstrap/lexer/` pasa **64/64** pruebas nativas, incluidas
   comparaciones con stage 0, su propio código ETS y aislamiento del módulo.
@@ -75,7 +82,7 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
   un error léxico evita ejecutar el parser. Serialización de AST existente sin
   segundo parseo y JSON por fragmentos, sin reconstruir el acumulador en cada nodo.
   Las llamadas entre archivos se prueban en un proceso, secuencialmente. El resolver y la caché se añaden en v60; siguen pendientes
-  scheduler concurrente y checker ETS.
+  scheduler concurrente y la paridad completa del checker ETS.
   Se documenta el helper de reutilización por archivo: manifiesto de metadatos y
   contenido, AST/imports y artefactos C++/`.o`, invalidación por capa/interfaz y
   deduplicación de trabajos. No equivale a implementar esa caché en el puente.
