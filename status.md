@@ -15,7 +15,7 @@ producción concurrente.
 | Área | Estado | Observación |
 |---|---|---|
 | Lexer, parser y diagnósticos | Estable para el dialecto documentado | No pretende aceptar TypeScript completo |
-| Autoalojamiento | Binding con ámbitos/símbolos entre archivos | Lexer/parser/cargador/binder ejecutados como C++; checker ETS y scheduler pendientes |
+| Autoalojamiento | Checker nativo parcial con flujo/memoria | Lexer/parser/cargador/binder/checker ejecutados como C++; paridad completa, codegen desde estas tablas y scheduler pendientes |
 | Tipos, genéricos, unions y clases | Funcional | Checker y codegen siguen muy acoplados |
 | Módulos | Funcional con límites | Default, reexports y multilínea; análisis mediante AST combinado |
 | Ownership y borrow checking | Funcional, conservador | Hay moves, conflictos y NLL; no hay lifetime parameters |
@@ -29,7 +29,7 @@ Las declaraciones del editor tienen una única fuente canónica en
 `types/estatic.d.ts`. `etsc init` la copia y `etsc update-types` actualiza
 proyectos existentes con respaldo `.bak`. El registro semántico y el archivo
 se comprueban mediante una regresión automática. La versión visible por CLI es
-`estatic 1.24.0 (v62)` mediante `--version` o `-v`; verbose usa `--verbose`.
+`estatic 1.25.0 (v63)` mediante `--version` o `-v`; verbose usa `--verbose`.
 
 El incremental informa tiempos reales por fase y registra interfaces/dependencias
 por módulo para planificar invalidaciones. v48 restaura cuerpos de funciones
@@ -40,6 +40,13 @@ Retirado el PCH no utilizado y preservados los artefactos idénticos, incluida
 la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
 ## Verificación conocida
+
+- v63 añade [seguridad semántica nativa](./bootstrap/checker/SAFETY.md): flujo de
+  inicialización/ownership con ramas y bucles, préstamos/readonly, capturas y
+  procedencia de escapes, y tipos privados en superficies públicas. Añade tablas
+  de capturas/préstamos sin modificar AST/binding. 300 pruebas del checker,
+  incluidas 137 regresiones adicionales; las reglas conservadoras y los límites
+  de efectos/lifetimes generales están documentados. No conecta aún codegen.
 
 - v62 añade [`bootstrap/checker/`](./bootstrap/checker/README.md): núcleo nativo
   inicial de inferencia y compatibilidad, llamadas/sobrecargas, genéricos simples,
@@ -66,7 +73,7 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
 
 - La verificación del conjunto unitario estable realizada durante esta revisión
-  pasó **2167/2167 pruebas**: 1236 unitarias de stage 0 y 931 de bootstrap,
+  pasó **2304/2304 pruebas**: 1236 unitarias de stage 0 y 1068 de bootstrap,
   ejecutadas por bloques. No incluye `test/runner.ts` ni la suite E2E/libuv.
 - El lexer de `bootstrap/lexer/` pasa **64/64** pruebas nativas, incluidas
   comparaciones con stage 0, su propio código ETS y aislamiento del módulo.

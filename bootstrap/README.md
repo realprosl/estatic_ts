@@ -167,3 +167,11 @@ construye el ejecutable con stage 0; el análisis solicitado se ejecuta en C++.
 
 Es una cobertura inicial con límites explícitos, no paridad con stage 0 ni
 codegen nativo desde esas tablas. Ver el [contrato y cobertura](./checker/README.md).
+
+## Paso 7: flujo, memoria y superficies públicas (v63)
+
+[`checker/safety.ets`](./checker/safety.ets) comprueba estados de inicialización y
+ownership por ruta, préstamos/readonly, capturas por identidad y procedencia de
+escapes. Valida la superficie exportada usando los símbolos de origen, también
+a través de aliases y barrels. Añade tablas de capturas y duraciones de préstamos,
+sin anotar AST/binding ni persistir semántica. Ver [contrato y límites](./checker/SAFETY.md).

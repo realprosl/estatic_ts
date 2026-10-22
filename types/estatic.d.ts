@@ -58,6 +58,9 @@ declare global {
   // con isPtr<T>(x) o usa los E4xxx del type-checker.
   type ptr<T> = T;
   type ref<T> = T;
+  /** Préstamos explícitos; el checker exige un lvalue y comprueba su duración. */
+  function ref<T>(value: T): ref<T>;
+  function constRef<T>(value: T): constRef<T>;
   /** Marcar el tipo de un valor con un fantasma (phantom) para distinguir
    *  ptr<Foo> de un Foo crudo en APIs que lo necesitan. NO cambia el
    *  codegen. Usar solo si sabes lo que haces. */

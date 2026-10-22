@@ -1,7 +1,8 @@
-# Checker nativo inicial (v62)
+# Checker nativo con flujo y memoria (v63)
 
 ```bash
 npm run bootstrap:checker -- examples/hello.ets --cache build/project-cache
+npm run bootstrap:checker -- examples/native-semantics/main.ets --cache build/project-cache
 npm run test:bootstrap:checker
 ```
 
@@ -10,7 +11,7 @@ cargador, el binder y `checkProject(graph, binding)` en ETS compilado a C++20.
 No consulta el checker TypeScript para analizar el proyecto solicitado. Los tests
 sí lo usan como referencia diferencial para un conjunto acotado de casos.
 
-Esta entrega es el **núcleo inicial de comprobación**, no la paridad con stage 0
+Este frontend sigue siendo una **migración parcial de comprobación**, no la paridad con stage 0
 ni una autorización para generar código nativo de cualquier proyecto. El CLI
 principal conserva su cadena actual. El nuevo driver entrega sintaxis, binding
 y tablas tipadas; no conecta todavía esos datos al codegen.
@@ -19,7 +20,10 @@ y tablas tipadas; no conecta todavía esos datos al codegen.
 
 `checker.ets` consume `ModuleGraph` y su `BindingResult` de la misma carga.
 `types.ets` contiene operaciones sobre tipos canónicos; no hace binding.
-`CheckResult` devuelve:
+v63 añade la pasada independiente [`safety.ets`](./safety.ets). Su
+[contrato de flujo, memoria, escapes y API pública](./SAFETY.md) describe las
+reglas, tablas y restricciones conservadoras. `model.ets` contiene las estructuras
+compartidas, evitando dependencias circulares. `CheckResult` devuelve:
 
 - `files[m].types[node]`: tipo de expresiones y declaraciones comprobadas.
   Una entrada vacía corresponde a un nodo sin tipo de valor (o no recorrido
@@ -30,12 +34,14 @@ y tablas tipadas; no conecta todavía esos datos al codegen.
 - `files[m].signatures[node]`: firma instanciada de la llamada; conserva las
   sustituciones genéricas, además del tipo de retorno en `types`.
 - `symbolTypes`: tipos resueltos por identidad de símbolo original. Se calculan
-  bajo demanda; las entradas no consultadas permanecen vacías. Los imports
+  bajo demanda y para declaraciones requeridas por seguridad; otras entradas permanecen vacías. Los imports
   consultan el destino del binder, sin crear una copia de la identidad nominal.
+- `captures`: símbolos capturados por arrow y modo `value`/`reference`.
+- `borrows`: raíz e intervalo por offsets de cada préstamo local.
 - `diagnostics`: fase `checker`, archivo canónico y posición UTF-16 original.
   Los errores previos se conservan e impiden crear las tablas tipadas.
 - `success`: no hubo errores en las comprobaciones de este núcleo. **No acredita
-  las reglas de memoria/flujo/publicación aún pendientes** descritas abajo.
+  una prueba completa de memoria/flujo más allá de las reglas** descritas abajo.
 
 El formato de demostración incluye los AST completos y las tablas. Los tipos
 nominales usan `#<symbolId>`, los parámetros genéricos `@<symbolId>` y los
@@ -89,18 +95,17 @@ semántica ni ejecución concurrente del checker.
 ## Límites y diferencias conocidas
 
 Se emite `Comprobación nativa pendiente: ...` para construcciones aún no
-trasladadas: enteros exactos i64/u64, arrays fijos, readonly/ref/ptr como tipos,
+trasladadas: enteros exactos i64/u64, arrays fijos,
 clases/aliases genéricos, constraints/defaults/packs genéricos, parámetros out o
 variádicos, argumentos nombrados/spread, destructuring, enums/unions declaradas,
 switch/for-of/for-in, async/await, acceso opcional, pipelines y builtins no
 registrados, decoradores y expansión comptime/cppgen/etsgen. Tampoco se permite
-usar un grupo de sobrecargas como valor sin seleccionar una firma. La captura de
-una variable local exterior se marca pendiente de validar sus escapes.
+usar un grupo de sobrecargas como valor sin seleccionar una firma. Las capturas locales pasan por la nueva comprobación de procedencia y escapes.
 
-No hay todavía análisis completo de efectos, ownership/borrowing, movimientos,
-escapes, flujo/TDZ entre llamadas, narrowing/exhaustividad, ni validación de
-filtración de tipos privados en API públicas. Una captura de globals puede
-pasar el núcleo de tipos sin acreditar esas reglas. Los campos readonly se
+Se comprueban ahora movimientos por ruta, préstamos y readonly, TDZ en llamadas
+directas, escapes de closures y tipos privados en API públicas. No hay todavía
+análisis completo de efectos/lifetimes interprocedurales ni narrowing/exhaustividad.
+Los límites conservadores y las construcciones bloqueadas están en [SAFETY.md](./SAFETY.md). Los campos readonly se
 tratan conservadoramente como no escribibles, incluso dentro de un constructor;
 los literales por defecto sí se comprueban. La inferencia contextual compleja
 entre sobrecargas y de tipos desde el retorno queda pendiente.
@@ -125,11 +130,16 @@ de las formas descritas, identidades entre módulos, reexports/default/namespace
 selección de firmas, tipos inferidos, Unicode/CRLF y límites explícitos. Compara
 procesos con caché fría/caliente y vuelve a inferir tras editar una dependencia.
 Incluye comparaciones de aceptación/rechazo y tipos inferidos con stage 0, además
-de las cuatro diferencias documentadas. Cada invocación repite el checker y
+de las diferencias documentadas de v62/v63. Cada invocación repite el checker y
 verifica que sintaxis y binding permanezcan intactos.
 
-Validación de esta entrega: **163/163** tests del checker, incluidos 48
-contrastes/diferencias con stage 0 y cinco comprobaciones de tipos inferidos
-(dentro de esos contrastes). Conjunto estable: **2167/2167** por bloques,
-1236 stage 0 + 64 lexer + 542 parser + 57 puente + 42 cargador + 63 binder +
-163 checker; cero fallos y cero skips. Se excluyen `test/runner.ts` y E2E/libuv.
+Validación de v63: **300/300** tests del checker (137 regresiones adicionales).
+Conjunto estable: **2304/2304** por bloques: 1236 stage 0 + 64 lexer +
+542 parser + 57 puente + 42 cargador + 63 binder + 300 checker; cero fallos y
+cero skips. Se excluyen `test/runner.ts` y E2E/libuv.
+
+La demo de `examples/native-semantics/` comprueba tres módulos: fábrica que devuelve
+ownership, préstamo local mutable y lector devuelto por valor. Devuelve cero
+diagnósticos, una captura por valor y un intervalo de préstamo. Otro proceso
+produce la misma salida completa y conserva los tres registros de sintaxis
+sin reescribirlos. Es una demostración del frontend; no ejecuta el programa.
