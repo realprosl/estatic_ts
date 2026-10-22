@@ -134,3 +134,10 @@ Conjunto estable completo: **1941/1941**, por bloques (1236 stage 0 + 64 lexer +
 542 parser + 57 puente + 42 cargador), sin skips. No incluye `test/runner.ts`
 ni E2E/libuv. `--version` y `-v` muestran `estatic 1.22.0 (v60)`;
 `git diff --check` correcto.
+
+## Binding separado en v61
+
+[`../binder/`](../binder/README.md) consume este grafo para construir ámbitos,
+símbolos, exports y referencias. Conserva intactos los tokens/AST de los registros.
+Las tablas de binding no se persisten como entradas sintácticas; el checker ETS
+y la invalidación semántica continúan pendientes.

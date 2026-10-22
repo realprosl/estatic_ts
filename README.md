@@ -63,7 +63,7 @@ Para consultar la versión instalada:
 ```bash
 etsc --version
 etsc -v
-# estatic 1.22.0 (v60)
+# estatic 1.23.0 (v61)
 ```
 
 El `estatic.config.ts` generado NO requiere que listes `-luv`, `-lssl`,
@@ -1030,8 +1030,10 @@ v60 añade el [cargador nativo y su caché por archivo](./bootstrap/modules/READ
 `npm run bootstrap:modules -- examples/todo-project/main.ets --cache build/project-cache`.
 El binario abre los fuentes, resuelve imports/reexports y construye el grafo sin
 analizar el proyecto en TypeScript. Reutiliza tokens/AST entre ejecuciones, verifica
-contenido y registra metadatos/dependencias por archivo. Checker, interfaces
-semánticas, artefactos C++/`.o` de esta cadena y scheduler concurrente siguen pendientes.
+contenido y registra metadatos/dependencias por archivo. El [binder nativo v61](./bootstrap/binder/README.md) añade ámbitos, símbolos y
+referencias entre esos archivos mediante `npm run bootstrap:binder -- archivo.ets`.
+Conserva el AST de caché intacto; checker, interfaces semánticas, artefactos C++/`.o`
+de esta cadena y scheduler concurrente siguen pendientes.
 
 ## Licencia
 
