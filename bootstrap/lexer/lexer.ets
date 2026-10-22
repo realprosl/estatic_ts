@@ -50,10 +50,12 @@ export class Lexer {
   depth: number;
   tokens: LexerToken[];
   diagnostics: LexerDiagnostic[];
+  expandedTemplates: boolean;
   constructor(source: string) {
     this.source = source; this.byteOffset = 0; this.offset = 0;
     this.line = 1; this.column = 1; this.depth = 0;
     this.tokens = []; this.diagnostics = [];
+    this.expandedTemplates = false;
   }
   peek(ahead: number): string {
     if (this.byteOffset + ahead >= this.source.length) return "";
@@ -189,8 +191,26 @@ export class Lexer {
     if (this.peek(0) != quote) return false;
     this.advance(); return true;
   }
+  interpolation(byteStart: number, offset: number, line: number, column: number): void {
+    let child: Lexer = new Lexer(this.source.slice(byteStart, this.byteOffset));
+    child.expandedTemplates = true;
+    const result: LexerResult = child.tokenize();
+    for (const token of result.tokens) {
+      if (token.kind != "eof") this.tokens.push(new LexerToken(token.kind, token.lexeme,
+        offset + token.offset, line + token.line - 1, token.line == 1 ? column + token.column - 1 : token.column,
+        offset + token.endOffset, line + token.endLine - 1, token.endLine == 1 ? column + token.endColumn - 1 : token.endColumn));
+    }
+    for (const diagnostic of result.diagnostics) this.diagnostics.push(new LexerDiagnostic(diagnostic.message,
+      offset + diagnostic.offset, line + diagnostic.line - 1, diagnostic.line == 1 ? column + diagnostic.column - 1 : diagnostic.column,
+      offset + diagnostic.endOffset, line + diagnostic.endLine - 1, diagnostic.endLine == 1 ? column + diagnostic.endColumn - 1 : diagnostic.endColumn));
+  }
   scanTemplate(offset: number, line: number, column: number): void {
     this.advance(); const begin: number = this.byteOffset;
+    if (this.expandedTemplates) this.emit("template-start", "`", offset, line, column);
+    let partByte: number = this.byteOffset; let partOffset: number = this.offset;
+    let partLine: number = this.line; let partColumn: number = this.column;
+    let expressionByte: number = 0; let expressionOffset: number = 0;
+    let expressionLine: number = 1; let expressionColumn: number = 1;
     // 0 = template text; positive values = interpolation brace depth.
     // An explicit stack avoids recursion and shields strings and comments.
     let frames: number[] = [0];
@@ -200,11 +220,24 @@ export class Lexer {
       if (depth == 0) {
         if (c == "\\") { this.advance(); if (!this.atEnd()) this.advance(); }
         else if (c == "`") {
-          const end: number = this.byteOffset; this.advance(); frames.pop();
-          if (frames.length == 0) { this.emit("template", this.source.slice(begin, end), offset, line, column); return; }
+          const end: number = this.byteOffset;
+          const closeOffset: number = this.offset; const closeLine: number = this.line; const closeColumn: number = this.column;
+          if (this.expandedTemplates && frames.length == 1) this.emit("template-text", this.source.slice(partByte, end), partOffset, partLine, partColumn);
+          this.advance(); frames.pop();
+          if (frames.length == 0) {
+            if (this.expandedTemplates) this.emit("template-end", "`", closeOffset, closeLine, closeColumn);
+            else this.emit("template", this.source.slice(begin, end), offset, line, column);
+            return;
+          }
         } else if (c == "$" && next == "{") {
           if (frames.length >= 128) { this.templateFailure("Límite de anidamiento de templates (128)", offset, line, column); return; }
+          const openOffset: number = this.offset; const openLine: number = this.line; const openColumn: number = this.column;
+          if (this.expandedTemplates && frames.length == 1) this.emit("template-text", this.source.slice(partByte, this.byteOffset), partOffset, partLine, partColumn);
           frames.push(1); this.advance(); this.advance();
+          if (this.expandedTemplates && frames.length == 2) {
+            this.emit("interpolation-start", "${", openOffset, openLine, openColumn);
+            expressionByte = this.byteOffset; expressionOffset = this.offset; expressionLine = this.line; expressionColumn = this.column;
+          }
         } else this.advance();
       } else if (c == "\"" || c == "'") {
         if (!this.templateString()) { this.templateFailure("Cadena sin cerrar en interpolación", offset, line, column); return; }
@@ -220,7 +253,19 @@ export class Lexer {
         frames.push(0); this.advance();
       } else {
         if (c == "{") frames[top] = depth + 1;
-        if (c == "}") { frames[top] = depth - 1; if (frames[top] == 0) frames.pop(); }
+        if (c == "}") {
+          frames[top] = depth - 1;
+          if (frames[top] == 0) {
+            frames.pop();
+            if (this.expandedTemplates && frames.length == 1) {
+              this.interpolation(expressionByte, expressionOffset, expressionLine, expressionColumn);
+              const closeOffset: number = this.offset; const closeLine: number = this.line; const closeColumn: number = this.column;
+              this.advance(); this.emit("interpolation-end", "}", closeOffset, closeLine, closeColumn);
+              partByte = this.byteOffset; partOffset = this.offset; partLine = this.line; partColumn = this.column;
+              continue;
+            }
+          }
+        }
         this.advance();
       }
     }
@@ -263,6 +308,13 @@ export class Lexer {
 
 export function tokenize(source: string): LexerResult {
   let lexer: Lexer = new Lexer(source);
+  return lexer.tokenize();
+}
+
+// Alternative lexical representation; raw tokenize()/inspectTokens() stay stable.
+// The lexer still owns delimiters, escapes and nested interpolation scanning.
+export function tokenizeExpanded(source: string): LexerResult {
+  let lexer: Lexer = new Lexer(source); lexer.expandedTemplates = true;
   return lexer.tokenize();
 }
 
