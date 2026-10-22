@@ -6,6 +6,17 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v57 (`estatic 1.19.0`): packs genéricos en el parser ETS aislado. Marcas
+  variadic por TypeParameter y lista ordenada por función/clase, sin ocultarlas
+  en la comparación con TS. Spans completos de parámetros de tipo, multilínea,
+  coma final, diagnósticos de listas inválidas y recuperación de declaraciones.
+- El parser TS rechaza packs de métodos/unions cuya marca antes se perdía;
+  los lectores ampliados detectan listas vacías, duplicados y separadores ausentes.
+  Las clases conservan metadatos pero su checker sigue rechazando packs.
+- Regresión C++ de packs de funciones inferidos, explícitos, vacíos y forwarding;
+  pruebas de las reglas semánticas existentes de rest. No se amplía checker ni
+  backend. Parser/adaptador: de 437 a 486 pruebas; CLI v57.
+
 - v56 (`estatic 1.18.0`): propiedades de parámetros de constructor en el
   parser ETS aislado. Access/readonly, tipos, defaults y flags optional/out;
   atributo parameterProperty y spans completos de todos los parámetros.

@@ -94,7 +94,7 @@ El [parser](./parser/README.md) tiene su propio AST local, tokens de entrada,
 driver y pruebas nativas. No importa el lexer. `npm run bootstrap:parser`
 ejecuta el ejemplo con tokens preparados; `npm run test:bootstrap:parser`
 valida este módulo por separado. Analiza expresiones, declaraciones enum/union,
-funciones, clases con propiedades de parámetros de constructor, destructuring
+funciones con packs genéricos, clases con propiedades de parámetros de constructor, destructuring
 plano de variables, imports/exports con alias, templates mediante tokens
 preparados y control de flujo con switch,
 incluidos los fuentes ETS

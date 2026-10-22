@@ -51,19 +51,25 @@ function native(source: string): NativeResult { return nativeTokens(new Lexer(so
 // and synthetic nodes. This projection never evaluates or parses expressions.
 const scalarKeys = new Set(["name", "mutable", "declaredType", "async", "returnType", "type", "constraint", "default", "literalType", "raw", "operator", "callee", "member", "method", "optional", "className", "targetType", "isAsync", "await", "out", "passing", "variadic", "readonly", "access", "isStatic", "exported", "key", "value", "underlying", "payload", "field", "property"]);
 const roleKinds: Record<string, string> = { params: "Parameter", typeParameters: "TypeParameter", fields: "ClassField", methods: "ClassMethod", properties: "ObjectProperty", decorators: "Decorator", members: "EnumMember", variants: "UnionVariant", discriminator: "Discriminator" };
-const excludedRoles = new Set(["span", "typeArguments", "variadicTypeParameters", "generatedSources"]);
+const excludedRoles = new Set(["span", "typeArguments", "generatedSources"]);
 function hostShape(node: any, forcedKind?: string): any {
   const kind = node.kind ?? forcedKind;
   const attributes: Record<string, string[]> = {}, edges: Record<string, any[]> = {};
   for (const [key, value] of Object.entries(node)) {
     if (key === "kind" || excludedRoles.has(key) || value === undefined || (value === false && key !== "value")) continue;
-    if (key === "parts" && kind === "TemplateLiteralExpression") {
+    if (key === "variadicTypeParameters") {
+      if ((value as string[]).length) attributes.variadicTypeParameter = [...(value as string[])];
+    } else if (key === "parts" && kind === "TemplateLiteralExpression") {
       edges.parts = (value as string[]).map(value => ({ kind: "TemplatePart", attributes: { value: [value] }, edges: {} }));
     } else if (scalarKeys.has(key) && (typeof value === "string" || typeof value === "number" || typeof value === "boolean")) {
       if (key === "value" && node.literalType === "number" && node.raw !== undefined) continue;
       attributes[key] = [String(value)];
     } else if (Array.isArray(value)) {
-      if (value.length) edges[key] = value.map(item => hostShape(item, key === "arrayBindings" ? "ArrayBinding" : key === "objectBindings" ? "ObjectBinding" : kind === "InterfaceDeclaration" && (key === "fields" || key === "methods") ? (key === "fields" ? "InterfaceField" : "InterfaceMethod") : roleKinds[key]));
+      if (value.length) edges[key] = value.map(item => {
+        const projected = hostShape(item, key === "arrayBindings" ? "ArrayBinding" : key === "objectBindings" ? "ObjectBinding" : kind === "InterfaceDeclaration" && (key === "fields" || key === "methods") ? (key === "fields" ? "InterfaceField" : "InterfaceMethod") : roleKinds[key]);
+        if (key === "typeParameters" && node.variadicTypeParameters?.includes((item as any).name)) projected.attributes.variadic = ["true"];
+        return projected;
+      });
     } else if (value && typeof value === "object") {
       // The for-of/in binding initializer is synthetic in stage 0.
       if ((kind === "ForOfStatement" || kind === "ForInStatement") && key === "binding") {
@@ -102,6 +108,30 @@ function parity(source: string): NativeResult {
 }
 
 const fixtures: [string, string][] = [
+  ["variadic generic function", "function log<...T>(...values:T):void{print(values);}"],
+  ["fixed generic and pack", "function log<Head,...Tail>(head:Head,...tail:Tail):void{print(head,tail);}"],
+  ["multiple type packs metadata", "function f<...A,...B>(...a:A):void{}"],
+  ["ordinary type after pack metadata", "function f<...A,B>(b:B,...a:A):void{}"],
+  ["unused type pack metadata", "function f<...T>():void{}"],
+  ["pack constraint metadata", "function f<...T extends HasLength>(...values:T):void{}"],
+  ["pack default metadata", "function f<...T=number>(...values:T):void{}"],
+  ["pack constraint and default metadata", "function f<...T extends Box<number> =Box<number>>(...values:T):void{}"],
+  ["pack and ordinary generic default", "function f<T=number,...Args>(head:T,...args:Args):void{}"],
+  ["async variadic function", "async function f<...T>(...values:T):Promise<number>{return 1;}"],
+  ["variadic function forward declaration", "function f<...T>(...values:T):void;"],
+  ["export variadic function", "export function f<...T>(...values:T):void{}"],
+  ["default named variadic function", "export default function f<...T>(...values:T):void{}"],
+  ["decorated variadic function", "@mark function f<...T>(...values:T):void{}"],
+  ["pack forwarding", "function f<...T>(...values:T):void{target<T>(values);}"],
+  ["explicit pack call", "f<number,string>(7,'x');"],
+  ["pack in class syntax", "class Box<...T>{}"],
+  ["pack and fixed class type metadata", "class Box<T,...Rest>{value:T;}"],
+  ["multiline generic packs", "function f<\nHead,\n...Tail\n>(head:Head,...tail:Tail):void{}"],
+  ["trailing comma in pack list", "function f<T,...Tail,>(head:T,...tail:Tail):void{}"],
+  ["trailing comma ordinary generics", "function f<T,>(value:T):T{return value;}"],
+  ["trailing comma class generics", "class Box<T,>{value:T;}"],
+  ["trailing comma method generics", "class Box{f<T,>(value:T):T{return value;}}"],
+  ["nested variadic functions", "function outer<T>(value:T):void{function inner<...Args>(...args:Args):void{print(args);}}"],
   ["public constructor property", "class User{constructor(public name:string){}}"],
   ["private constructor property", "class User{constructor(private age:number){}}"],
   ["protected constructor property", "class User{constructor(protected score:number){}}"],
@@ -359,6 +389,56 @@ test("bootstrap parser ordinary parameter spans cover out, rest, defaults and ar
   const source = "function f(out value:number,...rest:string[]):void{} const g=(x:number=1):number=>x;";
   const result = native(source); assert.deepEqual(result.diagnostics, []);
   assert.deepEqual(result.nodes.filter(n => n.kind === "Parameter").map(p => source.slice(p.span.start.offset,p.span.end.offset)), ["out value:number","...rest:string[]","x:number=1"]);
+});
+for (const source of [
+  "function f<>():void{}", "function f<...>():void{}", "function f<...number>():void{}",
+  "function f<,T>():void{}", "function f<T,,U>():void{}", "function f<T T>():void{}",
+  "function f<T,T>():void{}", "function f<T,...T>(...x:T):void{}", "function f<...T,...T>(...x:T):void{}",
+  "function f<T ...U>(...x:U):void{}", "function f<...T(...x:T):void{}", "function f<...",
+  "function f<T extends>():void{}", "function f<...T=>():void{}",
+  "class Box{f<...T>():void{}}", "class Box{static f<...T>():void{}}", "class Box{constructor<...T>(){}}",
+  "interface Box{f<...T>():void;}", "type Values<...T> = T[];", "union Value<...T> = Some(T);",
+] as const) test(`bootstrap parser variadic generic diagnostics: ${source}`, () => {
+  const result = native(source); assert.ok(result.diagnostics.length > 0 && result.diagnostics.length <= 100);
+});
+test("bootstrap parser packs preserve ordered owner metadata and type parameter flags", () => {
+  const result = native("function f<Head,...Left,...Right>(head:Head,...values:Left):void{}"); assert.deepEqual(result.diagnostics, []);
+  const fn = result.nodes[result.nodes[result.root].edges[0].node];
+  assert.deepEqual(fn.attributes.filter(a => a.name === "variadicTypeParameter").map(a => a.value), ["Left","Right"]);
+  const params = fn.edges.filter(e => e.role === "typeParameters").map(e => result.nodes[e.node]);
+  assert.deepEqual(params.map(p => [p.attributes.find(a => a.name === "name")!.value,p.attributes.some(a => a.name === "variadic" && a.value === "true")]), [["Head",false],["Left",true],["Right",true]]);
+  const rest = fn.edges.filter(e => e.role === "params").map(e => result.nodes[e.node])[1];
+  assert.ok(rest.attributes.some(a => a.name === "variadic" && a.value === "true"));
+  assert.ok(rest.attributes.some(a => a.name === "type" && a.value === "Left"));
+});
+test("bootstrap parser type parameter spans include ellipsis, constraints and defaults", () => {
+  const source = "const s='🙂';\nfunction f<\n Head extends Box<number> =Box<number>,\n ...Tail\n>(head:Head,...tail:Tail):void{}";
+  const result = native(source); assert.deepEqual(result.diagnostics, []);
+  const params = result.nodes.filter(n => n.kind === "TypeParameter");
+  assert.deepEqual(params.map(p => source.slice(p.span.start.offset,p.span.end.offset)), ["Head extends Box<number> =Box<number>","...Tail"]);
+  assert.deepEqual(params.map(p => [p.span.start.line,p.span.start.column]), [[3,2],[4,2]]);
+});
+test("bootstrap parser generic recovery preserves parameters and following declarations", () => {
+  for (const source of ["function f<...>(x:number):void{}", "function f<...T(x:T):void{}"]){
+    const result = native(source+" function after():void{}"); assert.ok(result.diagnostics.length > 0);
+    assert.ok(result.nodes.some(n => n.kind === "Parameter" && n.attributes.some(a => a.name === "name" && a.value === "x")));
+    assert.ok(result.nodes.some(n => n.kind === "FunctionDeclaration" && n.attributes.some(a => a.name === "name" && a.value === "after")));
+  }
+});
+test("bootstrap parser default anonymous function preserves generic packs", () => {
+  const result = native("export default function<...T>(...values:T):void{}"); assert.deepEqual(result.diagnostics, []);
+  const fn = result.nodes.find(n => n.kind === "FunctionDeclaration")!;
+  assert.ok(fn.attributes.some(a => a.name === "anonymous" && a.value === "true"));
+  assert.deepEqual(fn.attributes.filter(a => a.name === "variadicTypeParameter").map(a => a.value), ["T"]);
+});
+test("bootstrap parser malformed generic token corpus terminates", () => {
+  const pieces = ["T","U","...","extends","=","<",">",",","(",")","{","}",";","number"];
+  let seed = 5701;
+  for(let run=0;run<30;run++){
+    const tokens:string[]=[];
+    for(let i=0;i<20;i++){seed=seed*16807%2147483647;tokens.push(pieces[seed%pieces.length]);}
+    const result = native("function f<"+tokens.join(" ")+">():void{} function after():void{}"); assert.ok(result.diagnostics.length<=100);
+  }
 });
 test("bootstrap parser: every expression span matches stage 0", () => {
   const source = "const text='🙂';\nprint((1+2)*3, text.length);";

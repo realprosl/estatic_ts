@@ -9,6 +9,20 @@ import { Parser } from "../../src/parser/parser.ts";
 import { TypeChecker } from "../../src/semantic/type-checker.ts";
 import { DiagnosticError } from "../../src/core/diagnostic.ts";
 
+test("checker: generic packs need corresponding rest parameters", () => {
+  expectError("function f<...T>():void{}", "necesita un parámetro rest correspondiente");
+});
+test("checker: rest parameters must use a declared pack", () => {
+  expectError("function f<T>(...values:T):void{}", "El parámetro rest debe usar un pack genérico variádico");
+});
+test("checker: rest must be last and unique", () => {
+  expectError("function f<...T>(...values:T,last:number):void{}", "El parámetro variádico debe ser el último");
+  expectError("function f<...T,...U>(...left:T,...right:U):void{}", "Solo se permite un parámetro variádico");
+});
+test("checker: parsed class packs are not supported semantically", () => {
+  expectError("class Box<...T>{}", "Los packs genéricos en clases todavía no están soportados");
+});
+
 function check(source: string) {
   const ast = new Parser(new Lexer(source).tokenize()).parseProgram();
   const checker = new TypeChecker();
