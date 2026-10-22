@@ -74,6 +74,14 @@ test("parser: array literal", () => {
   assert.equal(stmt.initializer.elements.length, 3);
 });
 
+test("parser: object destructuring aliases and typed bindings preserve defaults", () => {
+  const statement = firstStatement("const {name:alias='guest',count:number=2,total:sum:number=3}=source;") as any;
+  assert.deepEqual(statement.objectBindings.map((b:any) => [b.property,b.name,b.declaredType,b.defaultValue.value]), [["name","alias",undefined,"guest"],["count","count","number",2],["total","sum","number",3]]);
+});
+test("parser: multiline object destructuring retains aliases and defaults", () => {
+  const statement = firstStatement("const {\n name:\n alias:string=\n 'guest',\n count=2,\n}=source;") as any;
+  assert.deepEqual(statement.objectBindings.map((b:any) => [b.property,b.name,b.defaultValue.value]), [["name","alias","guest"],["count","count",2]]);
+});
 test("parser: array destructuring", () => {
   // Usamos un initializer literal para que el parser no necesite saber el
   // tipo de `arr` (eso es responsabilidad del type-checker, no del parser).

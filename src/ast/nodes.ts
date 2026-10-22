@@ -24,9 +24,8 @@ export interface ExportSpecifier { kind: "ExportSpecifier"; name: string; alias?
 export interface ExportNamedDeclaration { kind: "ExportNamedDeclaration"; specifiers: ExportSpecifier[]; source?: string; span: Span }
 // `ArrayBinding` representa un binding de destructuring de arrays del estilo
 // `const [a, b, c] = arr;`. Cada elemento es el nombre de una variable local
-// (y opcionalmente su tipo declarado). No hay default values ni rest
-// patterns por ahora; el dialecto favorece el acceso explícito por índice
-// (`arr[0]`, `arr[1]`) cuando hace falta más azúcar.
+// con tipo y valor por defecto opcionales. Los patrones son planos;
+// no se admiten rest, huecos ni bindings anidados.
 export interface ArrayBinding { name: string; declaredType?: TypeName; defaultValue?: Expression }
 // V30.20: object destructuring `{ x, y } = p` y `{ x: a, y: b } = p`.
 // `name` es el binding local; `property` es el nombre del field en

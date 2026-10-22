@@ -12,6 +12,7 @@ npm run bootstrap:parser -- 'function add(a:number,b:number):number{return a+b;}
 npm run bootstrap:parser -- 'enum Color{Red,Green} switch(color){case Color.Red:break;default:break;}'
 npm run bootstrap:parser -- 'import {value as local} from "./values"; export {local as publicValue};'
 npm run bootstrap:parser -- 'const greeting=`Hola ${name}, total=${1+2*3}`;'
+npm run bootstrap:parser -- 'const [first:number=1,second]=values; const {name:alias="guest"}=user;'
 npm run test:bootstrap:parser
 ```
 
@@ -78,6 +79,8 @@ tamaño de entrada.
 - Variables simples, `using`, aliases de tipo, funciones, firmas sin cuerpo,
   flechas tipadas y funciones/flechas async. Parámetros con tipo y valor por
   defecto; funciones con `out`, opcionales y rest.
+- Destructuring plano de variables en arrays/objetos, aliases, tipos por
+  binding o patrón completo, defaults, patrones vacíos y coma final.
 - Clases con campos, valores iniciales, constructor, métodos y acceso/static;
   interfaces con campos y firmas. Genéricos básicos con constraint y default.
 - Tipos primitivos y nominales, namespace, genéricos, arrays dinámicos y fijos,
@@ -96,7 +99,7 @@ tamaño de entrada.
 - Exports de listas locales, reexports de listas/estrella/namespace y default
   de expresiones, funciones/clases con nombre o anónimas, incluidas async.
 
-Las 322 pruebas compilan dos unidades C++, enlazan y ejecutan el binario; también
+Las 382 pruebas compilan dos unidades C++, enlazan y ejecutan el binario; también
 comprueban el adaptador léxico host. Incluyen
 comparaciones estructurales con stage 0, precedencia fijada independientemente,
 spans con Unicode, errores y límites de profundidad/diagnósticos, y 30 entradas
@@ -232,10 +235,55 @@ semántica de escapes de JavaScript. Tagged templates y regex literals no son
 construcciones soportadas del dialecto. Los módulos ETS siguen aislados;
 su futura conexión nativa no forma parte del análisis de templates de este paso.
 
+## Destructuring: AST y alcance sintáctico
+
+Se reconocen declaraciones `let`/`const` con patrones planos, también dentro
+de funciones, bloques y el inicializador de un `for` clásico. Los exports y
+decoradores se conservan como en las variables simples. Ejemplos:
+
+```ts
+const [first:number=1, second]:number[] = values;
+const {name:alias="guest", count:number=0, total:sum:number=1}:Source = source;
+```
+
+La declaración sigue siendo `VariableDeclaration`, con `name: ""`, `mutable`,
+atributo `pattern` (`array`/`object`) y una arista `initializer`. Las aristas
+ordenadas `arrayBindings`/`objectBindings` apuntan a nodos `ArrayBinding` o
+`ObjectBinding`. Guardan `name`, `declaredType` opcional, `property` en objetos
+y arista `defaultValue` opcional. Un patrón vacío conserva su forma mediante
+`pattern`, aunque no tenga aristas de bindings. El initializer aparece una
+sola vez en el AST; este módulo no determina cómo se evalúa ni copia.
+
+Cada binding conserva un span desde su nombre/propiedad de origen hasta el
+final de su tipo/default, excluyendo comas y saltos de línea posteriores.
+Los spans de expresiones por defecto son absolutos UTF-16. Se diagnostican
+bindings locales repetidos, separadores/identificadores ausentes, patrones
+incompletos e inicializadores ausentes; la recuperación conserva la sentencia
+siguiente cuando encuentra un `;`. Repetir la propiedad con aliases distintos
+es válido: `{x:a,x:b}` introduce dos bindings distintos.
+
+La sintaxis de tipos mantiene la desambiguación del dialecto: `{x:number}`
+declara el tipo de `x`, `{x:alias}` renombra y `{x:alias:Box<T>}` permite un
+tipo nominal en el alias. `{x:[Y]}` declara el tipo tupla `[Y]` de `x`; no
+introduce un binding anidado `Y`. El futuro checker resolverá ese tipo.
+Los genéricos necesitan separar `>` y `=` para no formar el token `>=`.
+
+Se rechazan rest, huecos de arrays, bindings anidados y claves de objeto
+calculadas/entre comillas/numéricas. No se añaden patrones de parámetros,
+asignaciones destructuradas, `using` destructurado ni patrones de `for of/in`.
+
+Stage 0 ahora conserva defaults tras aliases y propiedades tipadas, y admite
+patrones de objeto multilínea. La comparación contra su AST incluye todos
+los bindings y defaults; no los omite. Esta verificación es sintáctica:
+el checker y el backend no se migran en este bloque. En particular, el
+lowering de defaults de objetos de stage 0 sigue usando el campo presente,
+sin aplicar una semántica de campo ausente/undefined como JavaScript. Esa
+semántica y la validación de los defaults requieren una auditoría aparte.
+
 ## Pendiente antes de completar el módulo
 
 - Cabeceras `@include`/`@link` y las formas de módulo excluidas arriba.
-- Destructuring, parameter properties, genéricos variádicos y decoradores sobre
+- Parameter properties, genéricos variádicos y decoradores sobre
   miembros o colocados después de `export`/`function`.
 - Paridad de todas las posiciones y mensajes de diagnóstico con stage 0, y
   validación completa de streams de tokens suministrados por callers externos.

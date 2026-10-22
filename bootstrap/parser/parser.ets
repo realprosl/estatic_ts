@@ -526,7 +526,67 @@ export class Parser {
     }
     this.setEnd(result, this.expect("}")); return result;
   }
+  recoverBinding(close: string): void {
+    let nested: string[] = [];
+    while (!this.check("eof")) {
+      const kind: string = this.peek(0).kind;
+      if (kind == ";") return;
+      if (nested.length == 0 && (kind == close || kind == "," || kind == "=" || kind == "newline")) return;
+      if (kind == "[") nested.push("]");
+      else if (kind == "{") nested.push("}");
+      else if (kind == "(") nested.push(")");
+      else if (kind == "]" || kind == "}" || kind == ")") { if (nested.length == 0) return; nested.pop(); }
+      this.take();
+    }
+  }
+  bindingPattern(owner: number, array: boolean): void {
+    this.take(); const close: string = array ? "]" : "}";
+    this.attr(owner, "pattern", array ? "array" : "object"); this.attr(owner, "name", "");
+    let names: string[] = [];
+    while (!this.check("eof")) {
+      this.skipNewlines(); if (this.check(close)) break;
+      if (!this.check("identifier")) {
+        this.report("Se esperaba un identificador: patrones anidados, rest y huecos no están soportados");
+        this.recoverBinding(close); if (this.accept(",")) continue; break;
+      }
+      const key: ParserToken = this.take(); let local: ParserToken = key; let end: ParserToken = key;
+      const binding: number = this.add(array ? "ArrayBinding" : "ObjectBinding", key, key);
+      if (!array) this.attr(binding, "property", key.lexeme);
+      this.skipNewlines();
+      if (this.accept(":")) {
+        this.skipNewlines();
+        if (!array && this.check("identifier")) {
+          local = this.take(); end = local; this.skipNewlines();
+          if (this.accept(":")) { this.skipNewlines(); this.attr(binding, "declaredType", this.typeName()); end = this.previous(); }
+        } else { this.attr(binding, "declaredType", this.typeName()); end = this.previous(); }
+      }
+      this.attr(binding, "name", local.lexeme);
+      if (names.includes(local.lexeme)) this.reportAt(local, "Binding duplicado '" + local.lexeme + "'");
+      names.push(local.lexeme); this.skipNewlines();
+      if (this.accept("=")) { this.skipNewlines(); this.edge(binding, "defaultValue", this.expression()); end = this.previous(); }
+      this.setEnd(binding, end); this.edge(owner, array ? "arrayBindings" : "objectBindings", binding);
+      this.skipNewlines(); if (this.accept(",")) continue;
+      if (!this.check(close)) {
+        this.report("Se esperaba ',' o '" + close + "' en el patrón"); this.recoverBinding(close);
+        if (this.accept(",")) continue;
+      }
+      break;
+    }
+    this.expect(close);
+  }
   variable(terminated: boolean): number {
+    if (!this.check("using") && (this.peek(1).kind == "[" || this.peek(1).kind == "{")) {
+      const keyword: ParserToken = this.take(); const result: number = this.add("VariableDeclaration", keyword, keyword);
+      this.attr(result, "mutable", keyword.kind == "let" ? "true" : "false");
+      this.bindingPattern(result, this.check("["));
+      if (this.accept(":")) this.attr(result, "declaredType", this.typeName());
+      this.expect("=");
+      if (this.check(";") || this.check("newline") || this.check("}") || this.check("eof")) {
+        this.report("El destructuring necesita un inicializador");
+        const missing: number = this.add("ErrorNode", this.peek(0), this.peek(0)); this.edge(result, "initializer", missing);
+      } else this.edge(result, "initializer", this.expression());
+      this.setEnd(result, terminated ? this.terminator() : this.previous()); return result;
+    }
     const keyword: ParserToken = this.take(); const name: ParserToken = this.expect("identifier");
     const kind: string = keyword.kind == "using" ? "UsingDeclaration" : "VariableDeclaration";
     const result: number = this.add(kind, keyword, name); this.attr(result, "name", name.lexeme);
