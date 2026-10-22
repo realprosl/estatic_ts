@@ -29,7 +29,7 @@ Las declaraciones del editor tienen una única fuente canónica en
 `types/estatic.d.ts`. `etsc init` la copia y `etsc update-types` actualiza
 proyectos existentes con respaldo `.bak`. El registro semántico y el archivo
 se comprueban mediante una regresión automática. La versión visible por CLI es
-`estatic 1.25.0 (v63)` mediante `--version` o `-v`; verbose usa `--verbose`.
+`estatic 1.26.0 (v64)` mediante `--version` o `-v`; verbose usa `--verbose`.
 
 El incremental informa tiempos reales por fase y registra interfaces/dependencias
 por módulo para planificar invalidaciones. v48 restaura cuerpos de funciones
@@ -40,6 +40,14 @@ Retirado el PCH no utilizado y preservados los artefactos idénticos, incluida
 la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
 ## Verificación conocida
+
+- v64 incorpora [resúmenes de efectos nativos](./bootstrap/checker/EFFECTS.md):
+  lecturas/escrituras/moves transitivos, destinos conservadores de callables,
+  callbacks invocados/retenidos y obligaciones de préstamos por función.
+  Permite consumidores locales demostrados y recursión con efectos conocidos;
+  conserva rechazos de llamadas opacas. 348 pruebas del checker. El
+  [IR común para los backends](./bootstrap/checker/IR.md) está diseñado, pendiente
+  de implementación; el codegen principal conserva su cadena.
 
 - v63 añade [seguridad semántica nativa](./bootstrap/checker/SAFETY.md): flujo de
   inicialización/ownership con ramas y bucles, préstamos/readonly, capturas y
@@ -73,7 +81,7 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
 
 - La verificación del conjunto unitario estable realizada durante esta revisión
-  pasó **2304/2304 pruebas**: 1236 unitarias de stage 0 y 1068 de bootstrap,
+  pasó **2352/2352 pruebas**: 1236 unitarias de stage 0 y 1116 de bootstrap,
   ejecutadas por bloques. No incluye `test/runner.ts` ni la suite E2E/libuv.
 - El lexer de `bootstrap/lexer/` pasa **64/64** pruebas nativas, incluidas
   comparaciones con stage 0, su propio código ETS y aislamiento del módulo.

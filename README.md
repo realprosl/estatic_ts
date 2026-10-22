@@ -63,7 +63,7 @@ Para consultar la versión instalada:
 ```bash
 etsc --version
 etsc -v
-# estatic 1.25.0 (v63)
+# estatic 1.26.0 (v64)
 ```
 
 El `estatic.config.ts` generado NO requiere que listes `-luv`, `-lssl`,
@@ -1036,7 +1036,10 @@ Conserva el AST de caché intacto. v62 incorpora el [checker nativo inicial](./b
 `npm run bootstrap:checker -- examples/hello.ets` entrega los AST con tablas de tipos,
 miembros y firmas seleccionadas/instanciadas. Comprueba el núcleo de expresiones,
 funciones y relaciones de tipos entre módulos. v63 añade [flujo, movimientos, préstamos, capturas/escapes y tipos públicos](./bootstrap/checker/SAFETY.md)
-en una pasada ETS independiente, conservando intactos AST y binding. La paridad
+en una pasada ETS independiente, conservando intactos AST y binding. v64 incorpora
+[resúmenes de efectos y obligaciones de préstamos](./bootstrap/checker/EFFECTS.md)
+para resolver callbacks y llamadas recursivas. El [contrato propuesto del IR](./bootstrap/checker/IR.md)
+define la siguiente etapa común para los codegens de cada backend. La paridad
 completa con stage 0, lifetimes/efectos generales, caché semántica, codegen desde
 estas tablas y scheduler concurrente siguen pendientes.
 

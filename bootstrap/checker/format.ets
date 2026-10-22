@@ -24,5 +24,12 @@ export function formatChecked(result: CheckResult, binding: BindingResult, graph
   for (const b of result.borrows) {
     output.push(comma + "{\"module\":" + numberToString(b.module) + ",\"symbol\":" + numberToString(b.symbol) + ",\"root\":" + numberToString(b.root) + ",\"begin\":" + numberToString(b.begin) + ",\"end\":" + numberToString(b.end) + ",\"mode\":" + quoteSource(b.mode) + "}"); comma = ",";
   }
+  output.push("],\"effects\":["); comma = "";
+  for (const s of result.effects) {
+    output.push(comma + "{\"module\":" + numberToString(s.module) + ",\"node\":" + numberToString(s.node) + ",\"parameters\":" + bindingNumbers(s.parameters) + ",\"reads\":" + bindingNumbers(s.reads) + ",\"writes\":" + bindingNumbers(s.writes) + ",\"moves\":" + bindingNumbers(s.moves) + ",\"invokes\":" + bindingNumbers(s.invokes) + ",\"retains\":" + bindingNumbers(s.retains) + ",\"returned\":" + bindingNumbers(s.returned) + ",\"callees\":" + bindingNumbers(s.callees) + ",\"unknown\":" + bindingBoolean(s.unknown) + ",\"recursive\":" + bindingBoolean(s.recursive) + ",\"borrows\":[");
+    let separator: string = "";
+    for (const b of s.borrows) { output.push(separator + "{\"call\":" + numberToString(b.call) + ",\"callback\":" + numberToString(b.callback) + ",\"root\":" + numberToString(b.root) + ",\"mode\":" + quoteSource(b.mode) + "}"); separator = ","; }
+    output.push("]}"); comma = ",";
+  }
   output.push("]}"); return output.join("");
 }

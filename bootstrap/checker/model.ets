@@ -17,7 +17,23 @@ export class BorrowLease {
     this.module = module; this.symbol = symbol; this.root = root; this.owner = owner; this.begin = begin; this.end = begin; this.mode = mode;
   }
 }
+export class EffectPoint {
+  targets: number[]; origins: number[];
+  constructor() { this.targets = []; this.origins = []; }
+}
+export class EffectBorrow {
+  call: number; callback: number; root: number; mode: string;
+  constructor(call: number, callback: number, root: number, mode: string) { this.call = call; this.callback = callback; this.root = root; this.mode = mode; }
+}
+export class EffectSummary {
+  module: number; node: number; parameters: number[]; reads: number[]; writes: number[]; moves: number[];
+  invokes: number[]; retains: number[]; returned: number[]; callees: number[]; borrows: EffectBorrow[]; unknown: boolean; recursive: boolean;
+  constructor(module: number, node: number) {
+    this.module = module; this.node = node; this.parameters = []; this.reads = []; this.writes = []; this.moves = [];
+    this.invokes = []; this.retains = []; this.returned = []; this.callees = []; this.borrows = []; this.unknown = false; this.recursive = false;
+  }
+}
 export class CheckResult {
-  files: TypedFile[]; symbolTypes: string[]; captures: NativeCapture[]; borrows: BorrowLease[]; diagnostics: SourceDiagnostic[]; success: boolean;
-  constructor() { this.files = []; this.symbolTypes = []; this.captures = []; this.borrows = []; this.diagnostics = []; this.success = false; }
+  files: TypedFile[]; symbolTypes: string[]; captures: NativeCapture[]; borrows: BorrowLease[]; effects: EffectSummary[]; diagnostics: SourceDiagnostic[]; success: boolean;
+  constructor() { this.files = []; this.symbolTypes = []; this.captures = []; this.borrows = []; this.effects = []; this.diagnostics = []; this.success = false; }
 }
