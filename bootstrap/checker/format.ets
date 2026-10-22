@@ -16,5 +16,13 @@ export function formatChecked(result: CheckResult, binding: BindingResult, graph
   for (const d of result.diagnostics) {
     output.push(comma + "{\"file\":" + quoteSource(d.file) + ",\"phase\":" + quoteSource(d.phase) + ",\"message\":" + quoteSource(d.message) + ",\"offset\":" + numberToString(d.token.offset) + ",\"line\":" + numberToString(d.token.line) + ",\"column\":" + numberToString(d.token.column) + "}"); comma = ",";
   }
+  output.push("],\"captures\":["); comma = "";
+  for (const c of result.captures) {
+    output.push(comma + "{\"module\":" + numberToString(c.module) + ",\"closure\":" + numberToString(c.closure) + ",\"symbol\":" + numberToString(c.symbol) + ",\"mode\":" + quoteSource(c.mode) + "}"); comma = ",";
+  }
+  output.push("],\"borrows\":["); comma = "";
+  for (const b of result.borrows) {
+    output.push(comma + "{\"module\":" + numberToString(b.module) + ",\"symbol\":" + numberToString(b.symbol) + ",\"root\":" + numberToString(b.root) + ",\"begin\":" + numberToString(b.begin) + ",\"end\":" + numberToString(b.end) + ",\"mode\":" + quoteSource(b.mode) + "}"); comma = ",";
+  }
   output.push("]}"); return output.join("");
 }

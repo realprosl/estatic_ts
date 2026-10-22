@@ -6,6 +6,29 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v63 (`estatic 1.25.0`): pasada nativa ETS de flujo, memoria, capturas/escapes y
+  API pública en `bootstrap/checker/safety.ets`, con modelo compartido separado.
+  Estados por símbolo/ruta para inicialización, move y posibles movimientos;
+  joins de ramas, retornos/break/continue y bucles. Llamadas directas conservan
+  efectos sobre globals y comprueban defaults omitidos e inicializadores de campos.
+- Tipos ref/constRef/ptr/constPtr y readonly; transferencias explícitas,
+  conflictos de préstamos por raíz e intervalos de último uso por offsets.
+  `ref`/`constRef` reciben identidades de valor canónicas en el binder y d.ts.
+  Capturas por identidad, distinción por valor/referencia y worklist de
+  procedencia con aliases/ciclos, arrays/tuplas/objetos, push, índices y campos.
+- Se validan firmas y miembros públicos contra identidades nominales/aliases
+  privados, incluidos defaults, reexports, retornos inferidos y sobrecargas
+  no usadas. Se preservan AST/binding y se entregan tablas de capturas/préstamos.
+- 137 regresiones adicionales: 300/300 del checker y conjunto estable
+  2304/2304 por bloques (1236 stage 0 + 64 lexer + 542 parser + 57 puente +
+  42 cargador + 63 binder + 300 checker), cero skips. Excluye test/runner.ts y
+  E2E/libuv. Contrastes con stage 0 y diferencias explícitas por granularidad NLL.
+- Reglas conservadoras documentadas en bootstrap/checker/SAFETY.md: no equivale
+  a lifetimes/efectos generales ni paridad completa. Callables reasignados,
+  recursión con ownership, callbacks con retención desconocida y ownership en
+  agregados pueden requerir resúmenes todavía pendientes. No añade codegen
+  desde estas tablas, caché semántica ni scheduler paralelo.
+
 - v62 (`estatic 1.24.0`): checker nativo inicial en `bootstrap/checker/checker.ets`,
   separado del binder. Infiere y comprueba tipos de expresiones, funciones,
   clases/interfaces y relaciones entre módulos. Conserva AST y binding intactos

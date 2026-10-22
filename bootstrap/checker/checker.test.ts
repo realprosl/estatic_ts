@@ -138,8 +138,8 @@ test('checker: no string index writes',()=>error('let s="abc"; s[0]="x";',/strin
 test('checker: class name is not a runtime value',()=>error('class C{} const c=C;',/requiere new/));
 test('checker: overload context does not impose the first array element type',()=>{const g=check('function f(x:number[]):number{return 1;} function f(x:string[]):string{return "x";} const s=f(["x"]);');assert.deepEqual(types(g,'CallExpression'),['string']);});
 test('checker: dotted typeof remains a parser limitation',()=>{const g=run(fixture('import * as ns from "./lib"; type F=typeof ns.f;',{'lib.ets':'export function f():number{return 1;}'}),1);assert.equal(g.diagnostics[0].phase,'parser');assert.equal(g.files.length,0);});
-test('checker: unsupported ownership annotation is explicit',()=>error('class C{} const c:ptr<C>=new C();'.replace('>=','> ='),/pendiente/));
-test('checker: captured local escape checking is explicitly pending',()=>error('function f():()=>number{const x=1; return ():number=>x;}',/captura/));
+test('checker: standalone ownership allocation is supported',()=>check('class C{} const c:ptr<C> = new C();'));
+test('checker: reader captures now pass by value',()=>{const g=check('function f():()=>number{const x=1; return ():number=>x;}');assert.equal(g.captures[0].mode,'value');});
 
 for(const name of ['primitives','arithmetic','strings','function','forward','recursive','returns','void','arrays','inferredArray','tuple','alias','satisfies','cast','template','interface','class','constructor','static','generic','numeric'])test(`checker differential stage zero accepts ${name}`,()=>{
  const ast=new Parser(new Lexer(valid[name]).tokenize()).parseProgram(); const reference=new TypeChecker(); reference.check(ast); check(valid[name]);
@@ -165,3 +165,138 @@ for(const name of ['readonly','callRange'])test(`checker stricter native validat
 test('checker: qualified homonyms remain distinct in one annotation',()=>{const g=check('import * as a from "./a"; import * as b from "./b"; const c:a.C|b.C=new a.C();',{'a.ets':'export class C{x:number=1;}','b.ets':'export class C{x:number=1;}'});const sid=g.binding.symbols.findIndex((s:any)=>s.name==='c');const union=g.symbolTypes[sid].split('|');assert.equal(union.length,2);assert.notEqual(union[0],union[1]);});
 
 test('checker: instantiated generic signature is preserved for future codegen',()=>{const g=check('function id<T>(x:T):T{return x;} const n=id(1);');const file=g.files[0];const call=file.ast.nodes.findIndex((n:any)=>n.kind==='CallExpression');assert.equal(file.signatures[call],'(number)=>number');assert.equal(file.selectedModules[call],0);});
+
+const box='class Box{value:number=1;} ';
+const safetyValid:Record<string,string>={
+ move:box+'let p:ptr<Box> = new Box(); const q:ptr<Box> = move(p); print(q.value);',
+ reinitialize:box+'let p:ptr<Box> = new Box(); const q=move(p); p=new Box(); print(p.value);',
+ branchReturn:box+'function f(p:ptr<Box>,b:boolean):number{if(b){const q=move(p); return q.value;} return p.value;}',
+ branchReinit:box+'function f(p:ptr<Box>,b:boolean):number{if(b){const q=move(p); p=new Box();}return p.value;}',
+ trueBranch:box+'let p:ptr<Box> = new Box(); if(false){const q=move(p);} print(p.value);',
+ loopReinit:box+'let p:ptr<Box> = new Box(); let i=0; while(i<2){const q=move(p);p=new Box();i+=1;}print(p.value);',
+ breakOnce:box+'let p:ptr<Box> = new Box(); while(true){const q=move(p);break;}',
+ borrowedParameter:box+'function f(b:ref<Box>):void{b.value=2;} let b=new Box();f(b);',
+ sharedParameter:box+'function f(b:constRef<Box>):number{return b.value;} const b=new Box();print(f(b));',
+ localBorrow:box+'function f():void{let b=new Box(); const r:ref<Box> = ref(b); r.value=2;print(r.value);}',
+ nll:box+'function f():void{let b=new Box();const a=ref(b);print(a.value);const c=ref(b);print(c.value);}',
+ unusedBorrows:box+'function f():void{let b=new Box();const a=ref(b);const c=ref(b);}',
+ sharedBorrows:box+'function f():void{let b=new Box();const a=constRef(b);const c=constRef(b);print(a.value+c.value);}',
+ separateBorrowRoots:box+'function f():void{let b=new Box();let c=new Box();const a=ref(b);const d=ref(c);print(a.value+d.value);}',
+ readonly:'let a:readonly number[]=[1];print(a[0]);',
+ constOwner:box+'const p:constPtr<Box> = new Box();print(p.value);',
+ localClosure:'function f():number{let x=0;const g=():number=>{x+=1;return x;};return g();}',
+ returnedReader:'function f(x:number):()=>number{return ():number=>x;}',
+ returnedReaderArray:'type Reader=()=>number;function f(x:number):Reader[]{const a:Reader[]=[():number=>x];return a;}',
+ globalClosure:'let x=0;function f():()=>number{return ():number=>{x+=1;return x;};}',
+ shadowClosure:'function f():()=>number{let x=0;const bad=():number=>{x+=1;return x;};{const bad=():number=>7;return bad;}}',
+ fullRoutes:'function f(b:boolean):number{if(b)return 1;return 2;}',
+ endless:'function f():number{while(true){}}',
+ loopReturn:'function f():number{while(true){return 1;}}',
+ unreachable:'function f():number{return 1;print(2);}',
+};
+for(const[name,source]of Object.entries(safetyValid))test(`native safety accepts ${name}`,()=>check(source));
+const safetyInvalid:[string,string,RegExp][]=[
+ ['useMoved',box+'let p:ptr<Box> = new Box(); const q=move(p);print(p.value);',/E4102/],
+ ['doubleMove',box+'let p:ptr<Box> = new Box(); const q=move(p);const r=move(p);',/E4102/],
+ ['copyOwner',box+'let p:ptr<Box> = new Box(); const q=p;',/E4101/],
+ ['movePlain','let n=1;move(n);',/E4100/],
+ ['maybeMove',box+'function f(p:ptr<Box>,b:boolean):number{if(b){const q=move(p);}return p.value;}',/E4103/],
+ ['bothMove',box+'function f(p:ptr<Box>,b:boolean):number{if(b){const q=move(p);}else{const r=move(p);}return p.value;}',/E4102/],
+ ['loopMove',box+'function f(p:ptr<Box>,b:boolean):number{while(b){const q=move(p);}return p.value;}',/E4103/],
+ ['loopContinue',box+'function f(p:ptr<Box>,b:boolean):void{while(b){const q=move(p);continue;}}',/E4103/],
+ ['zeroIteration',box+'function f(p:ptr<Box>,b:boolean):number{while(b){const q=move(p);break;}return p.value;}',/E4103/],
+ ['argumentOrder',box+'function f(a:ptr<Box>,b:number):void{} let p:ptr<Box> = new Box(); f(move(p),p.value);',/E4102/],
+ ['copyArgument',box+'function f(a:ptr<Box>):void{} let p:ptr<Box> = new Box(); f(p);',/E4101/],
+ ['borrowField',box+'class C{b:ref<Box>;} ',/E4203/],
+ ['borrowReturn',box+'function f(b:ref<Box>):ref<Box>{return b;}',/E4203/],
+ ['borrowArray',box+'function f():void{const a:ref<Box>[]=[];}',/E4203/],
+ ['borrowGlobal',box+'let b=new Box();const r=ref(b);',/E4203/],
+ ['borrowTemporary',box+'function f():void{const r=ref(new Box());}',/E4208/],
+ ['mutableConst',box+'function f(b:ref<Box>):void{} const b=new Box();f(b);',/E4208/],
+ ['aliasArguments',box+'function f(a:ref<Box>,b:constRef<Box>):void{} let b=new Box();f(b,b);',/E4206/],
+ ['overlap',box+'function f():void{let b=new Box();const a=ref(b);const c=ref(b);print(a.value+c.value);}',/E4206/],
+ ['moveBorrowed',box+'function f():void{let p:ptr<Box> = new Box();const a=constRef(p);const q=move(p);print(a.value);}',/E4207/],
+ ['writeBorrowed',box+'function f():void{let b=new Box();const a=constRef(b);b.value=2;print(a.value);}',/E4207/],
+ ['readonlyWrite','let a:readonly number[]=[1];a[0]=2;',/E4300/],
+ ['constOwnerWrite',box+'let p:constPtr<Box> = new Box();p.value=2;',/E4300/],
+ ['memoryCast',box+'let b=new Box();const p=b as ptr<Box>;',/E4301/],
+ ['closureBorrow',box+'function f(b:constRef<Box>):()=>number{return ():number=>b.value;}',/E4209/],
+ ['closureOwner',box+'function f(p:ptr<Box>):()=>number{return ():number=>p.value;}',/E4209/],
+ ['directEscape','function f():()=>number{let x=0;return ():number=>{x+=1;return x;};}',/E4210/],
+ ['aliasEscape','function f():()=>number{let x=0;const g=():number=>{x+=1;return x;};const h=g;return h;}',/E4210/],
+ ['arrayEscape','type Reader=()=>number;function f():Reader[]{let x=0;const g=():number=>{x+=1;return x;};return [g];}',/E4210/],
+ ['pushEscape','type Reader=()=>number;function f():Reader[]{let x=0;const g=():number=>{x+=1;return x;};let a:Reader[]=[];a.push(g);return a;}',/E4210/],
+ ['transitiveEscape','function f():()=>number{let x=0;const g=():number=>{x+=1;return x;};return ():number=>g();}',/E4210/],
+ ['globalEscape','let global:()=>number=():number=>1;function f():void{let x=0;const g=():number=>{x+=1;return x;};global=g;}',/E4210/],
+ ['callbackEscape','function consume(f:()=>number):void{print(f());}function f():void{let x=0;consume(():number=>{x+=1;return x;});}',/E4210/],
+ ['indirectTdz','const n=f();let x=1;function f():number{return x;}',/E4001/],
+ ['defaultTdz','function f(x:number=y,y:number=1):number{return x;}',/E4001/],
+ ['creationTdz','function f():void{const g=():number=>x;let x=1;print(g());}',/E4001/],
+ ['missingRoute','function f(b:boolean):number{while(b){return 1;}}',/rutas/],
+];
+for(const[name,source,pattern]of safetyInvalid)test(`native safety rejects ${name}`,()=>error(source,pattern));
+
+for(const[name,source]of Object.entries({
+ function:'class Hidden{} export function f(x:Hidden):void{}',
+ field:'class Hidden{} export interface Public{value:Hidden;}',
+ method:'class Hidden{} export interface Public{get():Hidden;}',
+ alias:'type Hidden=number;export type Public=Hidden;',
+ inferred:'class Hidden{} export const value=new Hidden();',
+ array:'class Hidden{} export function f():Hidden[]{return [];}',
+ aliasReturn:'type Hidden=number;export function f():Hidden{return 1;}',
+}))test(`native public surface rejects private ${name}`,()=>error(source,/E4401/));
+test('native public surface permits an explicitly exported alias identity',()=>check('class Hidden{} export {Hidden as Public};export function f():Hidden{return new Hidden();}'));
+test('native public surface excludes private implementation fields',()=>check('class Hidden{} export class Public{private hidden:Hidden=new Hidden();get():number{return 1;}}'));
+test('native public surface checks unused overload returns',()=>error('class Hidden{} export function f(x:number):number{return x;}export function f(x:string):Hidden{return new Hidden();}',/E4401/));
+test('native public surface validates imported public types',()=>check('import {Box} from "./lib";export function f():Box{return new Box();}',{'lib.ets':'export class Box{value:number=1;}'}));
+
+test('native safety: mutable scalar references write their referent',()=>check('function inc(x:ref<number>):void{x+=1;}function f():void{let n=1;const r=ref(n);r=2;inc(r);print(r);}'));
+test('native safety: borrow of temporary call argument is rejected',()=>error(box+'function f(x:ref<Box>):void{}f(new Box());',/E4208/));
+test('native safety: const borrow cannot become mutable',()=>error(box+'function f(x:constRef<Box>):void{const r=ref(x);}',/E4300|incompatible/));
+test('native safety: readonly array cannot be mutated by a method',()=>error('let a:readonly number[]=[1];a.push(2);',/E4300/));
+test('native safety: borrowed array element mutation remains allowed',()=>check('function f(a:ref<number[]>):void{a[0]=2;a.push(3);}let a=[1];f(a);'));
+test('native safety: explicit transfer to an owning parameter',()=>check(box+'function f(p:ptr<Box>):number{return p.value;}let p:ptr<Box> = new Box();print(f(move(p)));'));
+test('native safety: fresh allocation can initialize owning parameter',()=>check(box+'function f(p:ptr<Box>):number{return p.value;}print(f(new Box()));'));
+test('native safety: factory returns ownership explicitly',()=>check(box+'function make():ptr<Box>{let p:ptr<Box> = new Box();return move(p);}let p=make();print(p.value);'));
+test('native safety: shadowed move is an ordinary function',()=>check('function move(n:number):number{return n;}const n=move(1);print(n);'));
+test('native safety: shadowed ref is an ordinary function',()=>check('function ref(n:number):number{return n;}const n=ref(1);print(n);'));
+test('native safety: owner in aggregate is rejected explicitly',()=>error(box+'const a:ptr<Box>[]=[];',/Ownership en agregados/));
+test('native safety: borrowed return inside a stored callable is rejected',()=>error(box+'type F=(x:ref<Box>)=>ref<Box>;function use(f:F):void{}',/E4203/));
+test('native safety: field initializer participates in TDZ',()=>error('class C{x:number=late;}const c=new C();let late=1;',/E4001/));
+test('native safety: direct calls propagate global ownership state',()=>error(box+'let p:ptr<Box> = new Box();function take():void{const q=move(p);}take();print(p.value);',/E4102/));
+test('native safety: hidden callee reads retain the original file',()=>{const g=error('const n=f();let late=1;function f():number{return late;}',/E4001/);assert.equal(g.diagnostics[0].file.endsWith('/main.ets'),true);});
+test('native safety: branch with transfer and return does not poison continuation',()=>check(box+'function f(p:ptr<Box>,b:boolean):number{if(b){const q=move(p);return 1;}return p.value;}'));
+test('native safety: short circuit may transfer ownership',()=>error(box+'function consume(p:ptr<Box>):boolean{return true;}function f(p:ptr<Box>,b:boolean):number{const ok=b&&consume(move(p));return p.value;}',/E4103/));
+test('native safety: constant short circuit skips ownership transfer',()=>check(box+'function consume(p:ptr<Box>):boolean{return true;}let p:ptr<Box> = new Box();const ok=false&&consume(move(p));print(p.value);'));
+test('native safety: aliases do not erase closure risk through cycles',()=>error('function f():()=>number{let x=0;const risky=():number=>{x+=1;return x;};let a:()=>number=():number=>1;let b=a;a=b;b=risky;return a;}',/E4210/));
+test('native safety: unsafe array extraction retains provenance',()=>error('type Reader=()=>number;function f():Reader{let x=0;const a:Reader[]=[():number=>{x+=1;return x;}];return a[0];}',/E4210/));
+test('native safety: callback field of a returned interface retains provenance',()=>error('interface I{run:()=>number;}function f():I{let x=0;const g=():number=>{x+=1;return x;};const i:I={run:g};return i;}',/E4210/));
+test('native safety: local closure captures callee aliases by identity',()=>{const g=check('function f(x:number):()=>number{const a=():number=>x;return ():number=>a();}');assert.equal(g.captures.length,2);assert.ok(g.captures.every((c:any)=>c.mode==='value'));});
+test('native safety: nested mutation marks all transported captures as references',()=>error('function f():()=>number{let x=0;let y=0;return ():number=>{const inc=():number=>{x+=1;y+=1;return x+y;};return inc();};}',/E4210/));
+test('native safety: local mutation still records reference capture without escape',()=>{const g=check('function f():number{let x=0;const inc=():number=>{x+=1;return x;};return inc();}');assert.equal(g.captures[0].mode,'reference');});
+test('native safety: NLL ranges distinguish uses on the same line',()=>{const g=check(safetyValid.nll);assert.equal(g.borrows.length,2);assert.ok(g.borrows[0].end<g.borrows[1].begin);});
+test('native safety: a shared lease blocks a later mutable call',()=>error(box+'function consume(x:ref<Box>):void{}function f():void{let b=new Box();const r=constRef(b);consume(b);print(r.value);}',/E4207/));
+test('native public surface: nominal type inside callback return is validated',()=>error('class Hidden{}export function f():()=>Hidden{return ():Hidden=>new Hidden();}',/E4401/));
+test('native public surface: type-only reexport provides public identity',()=>check('class Hidden{}export type {Hidden as Public};export function f():Hidden{return new Hidden();}'));
+test('native public surface: barrel cannot hide a private type leak',()=>error('import {make} from "./barrel";print(make().value);',/E4401/,{'barrel.ets':'export {make} from "./lib";','lib.ets':'class Hidden{value:number=1;}export function make():Hidden{return new Hidden();}'}));
+test('native public surface: identical type names in another module do not publish a private origin',()=>error('import {Public} from "./a";export class Hidden{}',/E4401/,{'a.ets':'class Hidden{}export interface Public{value:Hidden;}'}));
+test('native safety: field initializer may read a global initialized before construction',()=>check('class C{x:number=late;}let late=1;const c=new C();print(c.x);'));
+test('native safety: reassigned callables fail explicitly without an effect summary',()=>error('let f:()=>number=():number=>1;const g=():number=>2;f=g;print(f());',/E4104/));
+test('native safety: interface method calls do not dereference a missing body',()=>check('interface I{get():number;}function f(i:I):number{return i.get();}'));
+for(const name of ['move','borrowedParameter','sharedParameter','sharedBorrows','localClosure','returnedReader','globalClosure','fullRoutes'])test(`native safety differential accepts ${name}`,()=>{const source=safetyValid[name];const ast=new Parser(new Lexer(source).tokenize()).parseProgram();new TypeChecker().check(ast);check(source);});
+for(const name of ['useMoved','doubleMove','movePlain','maybeMove','borrowField','borrowReturn','overlap','closureBorrow','directEscape','aliasEscape'])test(`native safety differential rejects ${name}`,()=>{const [,source]=safetyInvalid.find(([key])=>key===name)!;assert.throws(()=>{const ast=new Parser(new Lexer(source).tokenize()).parseProgram();new TypeChecker().check(ast);},DiagnosticError);run(fixture(source),1);});
+test('native safety: unions cannot hide a borrowed lifetime',()=>error(box+'function f():void{let b=new Box();const r:ref<Box>|number=ref(b);}',/E4203/));
+test('native safety: generic substitution cannot hide owner copying',()=>error(box+'function id<T>(x:T):T{return x;}let p:ptr<Box> = new Box();const q=id(move(p));',/genérica con contrato/));
+
+for(const name of ['nll','unusedBorrows'])test(`native safety known stage-zero line-granularity limitation: ${name}`,()=>{assert.throws(()=>{const ast=new Parser(new Lexer(safetyValid[name]).tokenize()).parseProgram();new TypeChecker().check(ast);},DiagnosticError);check(safetyValid[name]);});
+test('native safety: default arguments are evaluated at the actual call site',()=>error('const n=f();let late=1;function f(x:number=late):number{return x;}',/E4001/));
+test('native safety: omitted defaults may read an already initialized global',()=>check('let late=1;const n=f();function f(x:number=late):number{return x;}'));
+test('native safety: write before let initialization remains TDZ',()=>error('x=1;let x=2;',/E4001/));
+test('native safety: callee return paths participate in caller ownership join',()=>error(box+'let p:ptr<Box> = new Box();function consume(b:boolean):void{if(b){const q=move(p);return;}}consume(true);print(p.value);',/E4103|E4102/));
+test('native safety: a direct callee cannot mutate a borrowed global',()=>error(box+'let b=new Box();function write():void{b.value=2;}function f():void{const r=constRef(b);write();print(r.value);}',/E4207/));
+test('native safety: a read-only closure snapshot is independent of a later loan',()=>check('function f():number{let x=1;const g=():number=>x;const r=ref(x);print(g());return r;}'));
+test('native safety: generic function arrays preserve callable element identity',()=>check('type Reader=()=>number;function first<T>(xs:T[]):T{return xs[0];}const xs:Reader[]=[():number=>1];const f=first(xs);print(f());'));
+
+test('native safety: known push may retain a reference closure within its own local scope',()=>check('type Reader=()=>number;function f():number{let x=0;const g=():number=>{x+=1;return x;};let a:Reader[]=[];a.push(g);const h=a[0];return h();}'));
+
+test('native safety: opaque callback effects cannot bypass an active loan',()=>error(box+'let b=new Box();const write=():number=>{b.value=2;return 2;};function consume(cb:()=>number):void{print(cb());}function f():void{const r=constRef(b);consume(write);print(r.value);}',/E4104/));
