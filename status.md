@@ -1,6 +1,6 @@
 # Ts2cpp — Estado actual
 
-Última revisión documental: **2026-10-21**. Este archivo es una fotografía
+Última revisión documental: **2026-10-22**. Este archivo es una fotografía
 del repositorio, no un historial de sesiones. El historial vive en
 [`CHANGELOG.md`](./CHANGELOG.md) y en [`docs/historical/`](./docs/historical/).
 
@@ -15,7 +15,7 @@ producción concurrente.
 | Área | Estado | Observación |
 |---|---|---|
 | Lexer, parser y diagnósticos | Estable para el dialecto documentado | No pretende aceptar TypeScript completo |
-| Autoalojamiento | Lexer validado; parser en curso | Dos módulos ETS independientes compilados y ejecutados como C++; parser con cobertura parcial, checker aún no migrado |
+| Autoalojamiento | Lexer y etapa de parser aislado validados | Dos módulos ETS independientes compilados y ejecutados como C++; integración nativa entre fases y checker aún pendientes |
 | Tipos, genéricos, unions y clases | Funcional | Checker y codegen siguen muy acoplados |
 | Módulos | Funcional con límites | Default, reexports y multilínea; análisis mediante AST combinado |
 | Ownership y borrow checking | Funcional, conservador | Hay moves, conflictos y NLL; no hay lifetime parameters |
@@ -29,7 +29,7 @@ Las declaraciones del editor tienen una única fuente canónica en
 `types/estatic.d.ts`. `etsc init` la copia y `etsc update-types` actualiza
 proyectos existentes con respaldo `.bak`. El registro semántico y el archivo
 se comprueban mediante una regresión automática. La versión visible por CLI es
-`estatic 1.19.0 (v57)` mediante `--version` o `-v`; verbose usa `--verbose`.
+`estatic 1.20.0 (v58)` mediante `--version` o `-v`; verbose usa `--verbose`.
 
 El incremental informa tiempos reales por fase y registra interfaces/dependencias
 por módulo para planificar invalidaciones. v48 restaura cuerpos de funciones
@@ -42,13 +42,23 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 ## Verificación conocida
 
 - La verificación del conjunto unitario estable realizada durante esta revisión
-  pasó **1766/1766 pruebas**, por bloques de tests unitarios y bootstrap.
+  pasó **1842/1842 pruebas**: 1236 unitarias de stage 0 y 606 de bootstrap,
+  ejecutadas por bloques. No incluye `test/runner.ts` ni la suite E2E/libuv.
 - El lexer de `bootstrap/lexer/` pasa **64/64** pruebas nativas, incluidas
   comparaciones con stage 0, su propio código ETS y aislamiento del módulo.
   Ver [`bootstrap/README.md`](./bootstrap/README.md) para ejecutarlo por separado.
-- El parser aislado pasa **486/486** pruebas (incluido el adaptador léxico),
+- El parser aislado pasa **542/542** pruebas (incluido el adaptador léxico),
   incluido el análisis de su propio fuente y del lexer, sin importar otros
-  módulos ETS. La gramática pendiente está en `bootstrap/parser/README.md`.
+  módulos ETS. La cobertura y las formas excluidas están en `bootstrap/parser/README.md`.
+- v58 cierra la etapa del parser aislado con cabeceras include/link y decoradores
+  de declaraciones/miembros, posiciones inline y orden de origen. Stage 0 conserva
+  decoradores de campos de interfaces, acepta decoradores tras export y corrige
+  default exports decorados; rechaza anotaciones que descartaría. Regresión C++
+  de comptime tras export/function. La auditoría recorre 128 ejemplos y acepta
+  en el parser ETS los 120 que admite el parser TS directo; los ocho restantes
+  requieren la ruta de módulos y no se cuentan como paridad directa. Validación
+  estructural de coordenadas/EOF, truncamientos y recuperación de miembros.
+  Esto no certifica paridad formal de toda entrada ni conecta todavía las fases.
 - Packs genéricos en el AST, marcas variadic por TypeParameter y lista ordenada
   por declaración; parámetros rest conservados sin expansión sintética. Spans
   completos de parámetros de tipo, diagnósticos y recuperación. Stage 0 y ETS

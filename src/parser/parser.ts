@@ -76,6 +76,10 @@ export class Parser {
     const leadingDecorators = this.parseDecorators();
     const exported = this.match("export");
     if (exported && !topLevel) this.error(this.previous(), "'export' solo es válido en el nivel superior de un módulo");
+    if (exported) { this.skipNewlines(); leadingDecorators.push(...this.parseDecorators()); }
+    if (leadingDecorators.length && !["let", "const", "async", "function", "interface", "class", ...(exported ? ["default"] : [])].includes(this.peek().kind)) {
+      this.error(this.peek(), "Los decoradores requieren una variable, función, clase o interfaz");
+    }
     if (this.match("let", "const")) return this.variable(this.previous(), exported, leadingDecorators);
     if (this.match("using")) return this.usingDeclaration(this.previous(), exported);
     if (this.match("async")) {
@@ -347,7 +351,7 @@ export class Parser {
         this.consume(":", "Se esperaba ':' después del nombre del campo");
         const type = this.typeName();
         const end = this.consumeStatementTerminator("Se esperaba ';' o newline después del campo");
-        fields.push({ name: memberName.lexeme, type, optional, span: span(memberName.span.start, end.span.end) });
+        fields.push({ name: memberName.lexeme, type, optional, decorators: memberDecorators, span: span(memberName.span.start, end.span.end) });
       }
     }
     const close = this.consume("}", "Se esperaba '}' después de la interfaz");
@@ -460,14 +464,7 @@ export class Parser {
   private parseDecorators(): Decorator[] {
     const decorators: Decorator[] = [];
     while (this.check("@")) {
-      this.advance();
-      const name = this.consume("identifier", "Se esperaba el nombre del decorador tras '@'");
-      const args: Expression[] = [];
-      if (this.match("(")) {
-        if (!this.check(")")) do { args.push(this.expression()); } while (this.match(","));
-        this.consume(")", "Se esperaba ')' después de los argumentos del decorador");
-      }
-      decorators.push({ name: name.lexeme, args });
+      decorators.push(this.parseSingleDecorator());
       // Saltamos los newlines que pueda haber entre decorators
       // consecutivos. Sin esto, el parser trata cada decorator como
       // un statement independiente y falla con "Se esperaba una
@@ -515,18 +512,23 @@ export class Parser {
       this.tokens.splice(this.current,0,{kind:"identifier",lexeme:name,span:span(position,position)});
     };
     if (this.match("class")) {
+      leadingDecorators = [...leadingDecorators, ...this.parseDecorators()];
       if(!this.check("identifier")) anonymousName();
       declaration = this.classDeclaration(false, false,leadingDecorators);
     } else if (this.match("function")) {
-      const keyword=this.previous();if(!this.check("identifier")) anonymousName();
+      const keyword=this.previous();
+      leadingDecorators = [...leadingDecorators, ...this.parseDecorators()];
+      if(!this.check("identifier")) anonymousName();
       declaration = this.functionDeclaration(keyword, false, false,leadingDecorators);
     } else if (this.match("async")) {
       const keyword=this.consume("function","Se esperaba 'function' después de 'export default async'");
+      leadingDecorators = [...leadingDecorators, ...this.parseDecorators()];
       if(!this.check("identifier")) anonymousName();
       declaration = this.functionDeclaration(keyword, true, false,leadingDecorators);
     } else if (this.match("let", "const")) {
-      declaration = this.variable(this.previous(), false);
+      declaration = this.variable(this.previous(), false, leadingDecorators);
     } else {
+      if (leadingDecorators.length) this.error(this.peek(), "Los decoradores requieren una declaración compatible");
       declaration = this.expression();
       this.consumeStatementTerminator("Se esperaba ';' después de la expresión de 'export default'");
     }

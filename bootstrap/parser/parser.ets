@@ -62,6 +62,32 @@ export class Parser {
         this.current = i; this.report("eof solo puede aparecer al final de los tokens"); this.current = 0; break;
       }
     }
+    for (let i: number = 0; i < this.tokens.length; i = i + 1) {
+      const token: ParserToken = this.tokens[i];
+      if (!this.coordinate(token.offset, 0) || !this.coordinate(token.endOffset, 0)
+          || !this.coordinate(token.line, 1) || !this.coordinate(token.endLine, 1)
+          || !this.coordinate(token.column, 1) || !this.coordinate(token.endColumn, 1)) {
+        this.reportAt(token, "Las coordenadas de tokens deben ser enteros válidos de 32 bits");
+      } else if (!this.ordered(token.offset, token.line, token.column, token.endOffset, token.endLine, token.endColumn)) {
+        this.reportAt(token, "El span del token tiene posiciones inconsistentes");
+      }
+      if (token.kind == "eof" && (token.offset != token.endOffset || token.line != token.endLine || token.column != token.endColumn))
+        this.reportAt(token, "El token eof debe tener un span vacío");
+      if (i > 0) {
+        const previous: ParserToken = this.tokens[i - 1];
+        if (!this.ordered(previous.endOffset, previous.endLine, previous.endColumn, token.offset, token.line, token.column))
+          this.reportAt(token, "Los tokens deben estar ordenados y no solaparse");
+      }
+    }
+  }
+  coordinate(value: number, minimum: number): boolean {
+    return value >= minimum && value <= 2147483647 && value % 1 == 0;
+  }
+  ordered(offset: number, line: number, column: number, endOffset: number, endLine: number, endColumn: number): boolean {
+    if (endOffset < offset || endLine < line) return false;
+    if (endOffset == offset) return line == endLine && column == endColumn;
+    if (endLine == line) return endColumn - column == endOffset - offset;
+    return endOffset - offset >= endLine - line;
   }
   peek(ahead: number): ParserToken { return this.tokens[Math.min(this.current + ahead, this.tokens.length - 1)]; }
   previous(): ParserToken { return this.tokens[Math.max(0, this.current - 1)]; }
@@ -109,6 +135,16 @@ export class Parser {
   parseProgram(): ParseResult {
     const start: ParserToken = this.peek(0);
     const program: number = this.add("Program", start, start);
+    this.skipNewlines();
+    if (this.headerAhead()) {
+      const header: number = this.add("ModuleHeaderDeclaration", this.peek(0), this.peek(0));
+      while (this.headerAhead()) {
+        const decorator: number = this.singleDecorator();
+        this.edge(header, "decorators", decorator); this.setEnd(header, this.node(decorator).end);
+        this.skipNewlines();
+      }
+      this.edge(program, "statements", header);
+    }
     while (!this.check("eof")) {
       this.skipNewlines();
       if (this.check("eof")) break;
@@ -122,6 +158,28 @@ export class Parser {
     this.setEnd(program, this.peek(0));
     return new ParseResult(program, this.nodes, this.diagnostics);
   }
+  headerAhead(): boolean {
+    return this.check("@") && this.peek(1).kind == "identifier" && (this.peek(1).lexeme == "include" || this.peek(1).lexeme == "link");
+  }
+  singleDecorator(): number {
+    const at: ParserToken = this.expect("@");
+    const name: ParserToken = this.expect("identifier");
+    const result: number = this.add("Decorator", at, name); this.attr(result, "name", name.lexeme);
+    if (this.accept("(")) { this.argumentsInto(result, "args", ")"); this.setEnd(result, this.previous()); }
+    return result;
+  }
+  decorators(): number[] {
+    let result: number[] = [];
+    while (this.check("@")) { result.push(this.singleDecorator()); this.skipNewlines(); }
+    return result;
+  }
+  prependDecorators(owner: number, decorators: number[]): void {
+    if (decorators.length == 0) return;
+    let edges: AstEdge[] = [];
+    for (const decorator of decorators) edges.push(new AstEdge("decorators", decorator));
+    for (const edge of this.nodes[owner].edges) edges.push(edge);
+    this.nodes[owner].edges = edges;
+  }
   statement(topLevel: boolean): number {
     const start: ParserToken = this.peek(0);
     if (!this.enter()) return this.add("ErrorNode", start, start);
@@ -131,17 +189,9 @@ export class Parser {
   statementInner(topLevel: boolean): number {
     this.skipNewlines();
     const start: ParserToken = this.peek(0);
-    let decorators: number[] = [];
-    while (this.accept("@")) {
-      const at: ParserToken = this.previous();
-      const name: ParserToken = this.expect("identifier");
-      const decorator: number = this.add("Decorator", at, name);
-      this.attr(decorator, "name", name.lexeme);
-      if (this.accept("(")) { this.argumentsInto(decorator, "args", ")"); this.setEnd(decorator, this.previous()); }
-      decorators.push(decorator); this.skipNewlines();
-    }
+    let decorators: number[] = this.decorators();
     const exported: boolean = this.accept("export");
-    if (exported) this.skipNewlines();
+    if (exported) { this.skipNewlines(); for (const decorator of this.decorators()) decorators.push(decorator); }
     if (exported && !topLevel) this.report("'export' solo es válido en el nivel superior");
     let result: number = -1;
     if (this.check("let") || this.check("const") || this.check("using")) result = this.variable(true);
@@ -213,10 +263,10 @@ export class Parser {
     }
     let decorated: number = result;
     if (declarationKind == "ExportDefaultDeclaration") decorated = this.nodes[result].edges[0].node;
-    if (decorators.length > 0 && (declarationKind == "ImportDeclaration" || declarationKind == "ExportNamedDeclaration" || declarationKind == "ExportAllDeclaration"
-        || (declarationKind == "ExportDefaultDeclaration" && this.node(decorated).kind != "FunctionDeclaration" && this.node(decorated).kind != "ClassDeclaration" && this.node(decorated).kind != "VariableDeclaration"))) {
+    const decoratedKind: string = this.node(decorated).kind;
+    if (decorators.length > 0 && decoratedKind != "VariableDeclaration" && decoratedKind != "FunctionDeclaration" && decoratedKind != "ClassDeclaration" && decoratedKind != "InterfaceDeclaration") {
       this.reportAt(start, "Los decoradores requieren una declaración compatible");
-    } else for (const decorator of decorators) this.edge(decorated, "decorators", decorator);
+    } else this.prependDecorators(decorated, decorators);
     return result;
   }
   word(value: string): boolean {
@@ -681,9 +731,11 @@ export class Parser {
   functionDeclaration(allowAnonymous: boolean): number {
     const keyword: ParserToken = this.take(); const isAsync: boolean = keyword.kind == "async";
     if (isAsync) this.expect("function");
+    const decorators: number[] = this.decorators();
     const anonymous: boolean = allowAnonymous && (this.check("(") || this.check("<"));
     const name: ParserToken = anonymous ? this.peek(0) : this.expect("identifier");
     const result: number = this.add("FunctionDeclaration", keyword, name);
+    this.prependDecorators(result, decorators);
     if (anonymous) this.attr(result, "anonymous", "true"); else this.attr(result, "name", name.lexeme);
     this.attr(result, "async", isAsync ? "true" : "false");
     this.typeParameters(result, true); this.parametersInto(result, false, false); this.expect(":");
@@ -694,20 +746,25 @@ export class Parser {
     this.edge(result, "body", body); this.setEnd(result, this.node(body).end); return result;
   }
   classDeclaration(keyword: ParserToken, allowAnonymous: boolean): number {
+    const decorators: number[] = this.decorators();
     const anonymous: boolean = allowAnonymous && (this.check("{") || this.check("<"));
     const name: ParserToken = anonymous ? this.peek(0) : this.expect("identifier"); const result: number = this.add("ClassDeclaration", keyword, name);
+    this.prependDecorators(result, decorators);
     if (anonymous) this.attr(result, "anonymous", "true"); else this.attr(result, "name", name.lexeme);
     this.typeParameters(result, true); this.expect("{");
     while (!this.check("}") && !this.check("eof")) {
       this.skipNewlines(); if (this.check("}") || this.check("eof")) break;
       if (!this.accept(";")) {
         const before: number = this.current;
+        const memberDecorators: number[] = this.decorators();
+        if (this.check("}") || this.check("eof")) { this.report("El decorador necesita un miembro de clase"); break; }
         let access: string = "";
         if (this.check("public") || this.check("private") || this.check("protected")) access = this.take().lexeme;
         let isReadonly: boolean = this.accept("readonly"); const isStatic: boolean = this.accept("static");
         if (!isReadonly) isReadonly = this.accept("readonly");
         const member: ParserToken = this.expect("identifier");
         const item: number = this.add("ClassField", member, member); this.attr(item, "name", member.lexeme);
+        this.prependDecorators(item, memberDecorators);
         if (access != "") this.attr(item, "access", access);
         if (isStatic) this.attr(item, "isStatic", "true");
         if (isReadonly) this.attr(item, "readonly", "true");
@@ -731,12 +788,17 @@ export class Parser {
     this.setEnd(result, this.expect("}")); return result;
   }
   interfaceDeclaration(keyword: ParserToken): number {
+    const decorators: number[] = this.decorators();
     const name: ParserToken = this.expect("identifier"); const result: number = this.add("InterfaceDeclaration", keyword, name);
+    this.prependDecorators(result, decorators);
     this.attr(result, "name", name.lexeme); this.expect("{");
     while (!this.check("}") && !this.check("eof")) {
       this.skipNewlines(); if (this.check("}") || this.check("eof")) break;
-      const before: number = this.current; const member: ParserToken = this.expect("identifier");
+      const before: number = this.current; const memberDecorators: number[] = this.decorators();
+      if (this.check("}") || this.check("eof")) { this.report("El decorador necesita un miembro de interface"); break; }
+      const member: ParserToken = this.expect("identifier");
       const item: number = this.add("InterfaceField", member, member); this.attr(item, "name", member.lexeme);
+      this.prependDecorators(item, memberDecorators);
       if (this.check("(") || this.check("<")) {
         this.setKind(item, "InterfaceMethod"); this.typeParameters(item, false); this.parametersInto(item, false, false);
         this.expect(":"); this.attr(item, "returnType", this.typeName()); this.edge(result, "methods", item);

@@ -6,6 +6,21 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v58 (`estatic 1.20.0`): cierre de la etapa del parser ETS aislado para su
+  contrato documentado. Cabeceras include/link como ModuleHeaderDeclaration,
+  decoradores de campos/métodos/constructores, posiciones inline y orden de
+  origen. Validación estructural de posiciones/EOF y recuperación sin miembros
+  ficticios; truncamientos y corpus malformado determinista.
+- Stage 0 conserva decoradores de campos de interfaces, admite decoradores tras
+  export, corrige default exports decorados y rechaza anotaciones que antes
+  descartaba. Regresión C++ ejecutada de comptime tras export/function.
+- Parser/adaptador: de 486 a 542 pruebas. Auditoría de 128 ejemplos: los 120 que
+  acepta el parser TS directo pasan también en C++ con ETS; ocho requieren la
+  ruta de módulos y quedan fuera de esa comparación directa. Conjunto estable:
+  1842/1842 pruebas (1236 unitarias + 64 lexer + 542 parser). CLI v58. Documentados
+  límites de gramática, spans y diagnósticos; integración lexer/parser y checker
+  siguen pendientes, sin afirmar autoalojamiento completo.
+
 - v57 (`estatic 1.19.0`): packs genéricos en el parser ETS aislado. Marcas
   variadic por TypeParameter y lista ordenada por función/clase, sin ocultarlas
   en la comparación con TS. Spans completos de parámetros de tipo, multilínea,

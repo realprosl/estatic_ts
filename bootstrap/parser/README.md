@@ -1,8 +1,9 @@
 # Parser aislado: expresiones, declaraciones, módulos y control de flujo
 
 Este módulo está escrito en Estatic y se ejecuta como C++20 generado. No importa
-el lexer, el checker, el sistema de tipos ni otros módulos ETS. Todavía no cubre
-toda la gramática del parser TypeScript de stage 0.
+el lexer, el checker, el sistema de tipos ni otros módulos ETS. Con v58 se cierra
+la primera etapa del parser aislado para el contrato documentado aquí. No es
+un parser de TypeScript completo ni certifica todavía una cadena autoalojada.
 
 ## Ejecutarlo
 
@@ -15,6 +16,7 @@ npm run bootstrap:parser -- 'const greeting=`Hola ${name}, total=${1+2*3}`;'
 npm run bootstrap:parser -- 'const [first:number=1,second]=values; const {name:alias="guest"}=user;'
 npm run bootstrap:parser -- 'class User{constructor(public name:string="guest",private age:number=18,readonly id:number=1){}}'
 npm run bootstrap:parser -- 'function logAll<...T>(...values:T):void{print(values);} logAll("value=",7);'
+npm run bootstrap:parser -- '@include("<vector>") @link("m") @first export @second function @third f():void;'
 npm run test:bootstrap:parser
 ```
 
@@ -39,6 +41,12 @@ recibe directamente un array y no depende de ese transporte ni de esos límites.
 (offset, línea y columna). Offsets y columnas son unidades UTF-16; el parser
 preserva las posiciones recibidas. El caller debe proporcionar un único `eof`
 al final. Un array vacío, un EOF intermedio o un EOF ausente produce diagnóstico.
+Las seis coordenadas deben ser enteros entre 0 y 2^31-1 para offsets y entre 1
+y 2^31-1 para líneas/columnas. Se diagnostican spans invertidos o inconsistentes,
+tokens desordenados/solapados y un EOF con span no vacío. Los segmentos vacíos
+de templates sí son válidos. Es validación estructural: sin el texto original
+el parser no puede comprobar que los lexemas y coordenadas describan realmente
+ese texto. El reconocimiento léxico sigue siendo responsabilidad del caller.
 
 `parseTokens(tokens)` devuelve `ParseResult`: índice `root`, array `nodes` y
 `diagnostics`. `inspectAst(tokens)` devuelve esos datos en JSON. Cada llamada
@@ -104,8 +112,10 @@ tamaño de entrada.
   combinadas; marcas type-only completas o por specifier.
 - Exports de listas locales, reexports de listas/estrella/namespace y default
   de expresiones, funciones/clases con nombre o anónimas, incluidas async.
+- Cabeceras de módulo `@include`/`@link`; decoradores de declaraciones y miembros,
+  incluidas posiciones después de export y después de function/class/interface.
 
-Las 486 pruebas compilan dos unidades C++, enlazan y ejecutan el binario; también
+Las 542 pruebas compilan dos unidades C++, enlazan y ejecutan el binario; también
 comprueban el adaptador léxico host. Incluyen
 comparaciones estructurales con stage 0, precedencia fijada independientemente,
 spans con Unicode, errores y límites de profundidad/diagnósticos, y 30 entradas
@@ -113,6 +123,12 @@ malformadas deterministas. El parser analiza el fuente completo del lexer y su
 propio fuente ETS y ambos drivers, incluidos sus imports; los tokens los prepara
 el host, no el lexer ETS. No es aún una
 cadena nativa lexer-parser ni demuestra autoalojamiento del compilador completo.
+La auditoría recorre los 128 ejemplos ETS del repositorio: los 120 aceptados por
+el parser TS directo también se aceptan sin diagnósticos en el parser ETS nativo.
+Los ocho restantes requieren la ruta de módulos de stage 0; se registran por
+nombre en la salida de la prueba y no se cuentan como paridad directa comprobada.
+La sintaxis de módulos tiene pruebas propias mediante el scanner de módulos y
+ASTs esperados, separadamente de esta auditoría del parser TS directo.
 
 ## Enum, union y switch: contrato de este bloque
 
@@ -370,16 +386,60 @@ comprueban los rechazos de stage 0. La regresión C++ ejecuta packs de funciones
 simples, sin constraints/defaults de pack, con inferencia, tipos explícitos,
 cero argumentos y forwarding. No se amplía el checker ni el backend.
 
-## Pendiente antes de completar el módulo
+## Cabeceras y decoradores
 
-- Cabeceras `@include`/`@link` y las formas de módulo excluidas arriba.
-- Decoradores sobre
-  miembros o colocados después de `export`/`function`.
-- Paridad de todas las posiciones y mensajes de diagnóstico con stage 0, y
-  validación completa de streams de tokens suministrados por callers externos.
+Un prefijo de `@include`/`@link`, tras líneas en blanco/comentarios iniciales,
+forma un único `ModuleHeaderDeclaration` con aristas `decorators` ordenadas.
+Su span empieza en el primer `@` y termina con el último decorador, sin incluir
+líneas en blanco posteriores. El prefijo termina al encontrar otro decorador
+o sentencia. El parser guarda expresiones como argumentos; validar librerías,
+includes y los valores permitidos pertenece al checker/backend. Fuera de ese
+prefijo no se reordena ni se extrae una cabecera implícita: los decoradores
+pertenecen a la declaración siguiente y su validez semántica queda pendiente.
 
-Esas construcciones producen diagnósticos; no se aceptan como implementaciones
-completas. Hay casos históricos que se preservan como límites de stage 0: por
-ejemplo, tras un tipo genérico hace falta separar `>` y `=` para evitar `>=`.
-La integración con el lexer ETS y el checker se pospone hasta completar y validar
-este módulo.
+Los decoradores de variables, funciones, clases e interfaces conservan el orden
+de origen, incluso combinando `@first export @second function @third f...`.
+Clases admiten decoradores antes de los modificadores de campos, métodos y
+constructor; interfaces los conservan en campos opcionales/obligatorios y métodos.
+Stage 0 ahora preserva los decoradores de campos de interfaces que antes perdía,
+acepta la posición después de export y corrige los default exports decorados.
+Un decorador en una sentencia incompatible produce diagnóstico en ambos parsers.
+
+Cada nodo `Decorator` tiene `name`, aristas `args` y span propio desde `@` hasta
+el nombre o `)` final. Los spans de declaraciones y miembros mantienen su
+convención previa, empezando en keyword/nombre; no necesariamente incluyen el
+span de sus decoradores. Para una función anónima con decorador inline sin
+argumentos se escribe `function @native() ():void{}`: los primeros paréntesis
+son del decorador y los segundos de la función. El parser ETS no inventa nombres
+para esos default exports; stage 0 mantiene su nombre interno para el backend.
+No se evalúan decoradores ni se introducen dependencias C++ durante este parseo.
+
+Se comprueban spans UTF-16 independientes, orden de AST, decoradores incompletos,
+truncamiento en cada frontera de tokens y un corpus malformado determinista.
+Un decorador pendiente al final de una clase/interface se diagnostica sin crear
+un campo ficticio y conserva la sentencia posterior. La regresión C++ de stage 0
+ejecuta `@comptime` después de export/function y obtiene `42` sin emitir esas
+funciones de compile time.
+
+## Cierre de la etapa y límites
+
+| Grupo auditado | Comprobación |
+|---|---|
+| Declaraciones, bloques y control de flujo | Comparación con stage 0; switch tiene ASTs esperados independientes |
+| Expresiones, llamadas, tipos y templates | Estructura, precedencias, spans y tokens de interpolación |
+| Módulos y decoradores | Scanner de módulos, ASTs esperados, orden y posiciones |
+| Contrato de entrada y errores | EOF, coordenadas, recuperación, truncamientos, profundidad y límite de diagnósticos |
+| Fuentes reales | Parser y lexer ETS completos, ambos drivers y 120 ejemplos admitidos directamente por stage 0 |
+
+El cierre corresponde a esta cobertura, no a equivalencia formal para cualquier
+entrada. Los mensajes y la recuperación de errores de TS y ETS no son idénticos;
+los spans nuevos de parámetros, bindings y decoradores siguen el contrato local.
+Las formas excluidas en las secciones anteriores continúan fuera de alcance:
+TypeScript completo, import dinámico/import=, atributos de importación, tagged
+templates, regex, destructuring anidado/rest y la forma histórica de union.
+Tras un tipo genérico hace falta separar `>` y `=` para evitar `>=`, como en
+stage 0. No se validan aquí tipos, acceso, ownership ni resolución de módulos.
+
+El siguiente bloque puede conectar el lexer y parser ETS mediante un adaptador
+explícito, manteniendo sus pruebas aisladas. Después corresponde portar el
+checker; ni esa conexión ni el checker forman parte de v58.
