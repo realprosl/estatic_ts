@@ -14,6 +14,7 @@ npm run bootstrap:parser -- 'import {value as local} from "./values"; export {lo
 npm run bootstrap:parser -- 'const greeting=`Hola ${name}, total=${1+2*3}`;'
 npm run bootstrap:parser -- 'const [first:number=1,second]=values; const {name:alias="guest"}=user;'
 npm run bootstrap:parser -- 'class User{constructor(public name:string="guest",private age:number=18,readonly id:number=1){}}'
+npm run bootstrap:parser -- 'function logAll<...T>(...values:T):void{print(values);} logAll("value=",7);'
 npm run test:bootstrap:parser
 ```
 
@@ -86,6 +87,8 @@ tamaño de entrada.
   interfaces con campos y firmas. Genéricos básicos con constraint y default.
 - Propiedades de parámetros de constructores de instancia, con acceso y/o
   readonly, tipos, defaults, optional/out y spans completos de parámetros.
+- Packs genéricos en funciones y metadatos sintácticos de packs en clases;
+  listas de tipos multilínea/con coma final y spans completos por parámetro.
 - Tipos primitivos y nominales, namespace, genéricos, arrays dinámicos y fijos,
   tuplas, funciones, readonly, typeof, unions e intersecciones de tipos.
 - Bloques, `if/else`, `while`, `for` clásico, `for of/in/await of`, `return`,
@@ -102,7 +105,7 @@ tamaño de entrada.
 - Exports de listas locales, reexports de listas/estrella/namespace y default
   de expresiones, funciones/clases con nombre o anónimas, incluidas async.
 
-Las 437 pruebas compilan dos unidades C++, enlazan y ejecutan el binario; también
+Las 486 pruebas compilan dos unidades C++, enlazan y ejecutan el binario; también
 comprueban el adaptador léxico host. Incluyen
 comparaciones estructurales con stage 0, precedencia fijada independientemente,
 spans con Unicode, errores y límites de profundidad/diagnósticos, y 30 entradas
@@ -326,10 +329,51 @@ y asignar a `this.id` fuera del constructor si sólo se declaró con
 campos implícitos durante la auditoría semántica; este bloque porta la sintaxis
 y no modifica ese checker.
 
+## Packs genéricos y parámetros rest
+
+```ts
+function logAll<...T>(...values:T):void { print(values); }
+function withHead<Head,...Tail>(head:Head,...tail:Tail):void { print(head,tail); }
+```
+
+Un pack continúa siendo un nodo `TypeParameter` dentro de las aristas ordenadas
+`typeParameters`. Lleva atributo `variadic: "true"`; cada nombre de pack se
+conserva además como atributo repetible `variadicTypeParameter` en la función
+o clase, en orden de declaración. Esto representa la lista
+`variadicTypeParameters` de stage 0. Las pruebas de comparación ya no omiten
+esa lista: verifican tanto los nombres del owner como las marcas de sus nodos.
+
+`...T` declara tipos; `...values:T` es un nodo `Parameter` independiente con
+`variadic: "true"` y `type: "T"`. El parser conserva ambas declaraciones y
+no inventa parámetros por cada argumento ni convierte `values` en spread en
+el cuerpo. Inferencia y expansión pertenecen a las fases posteriores.
+
+Los spans de TypeParameter incluyen ahora `...`, nombre, constraint y default
+cuando existen, excluyendo comas y saltos posteriores. Stage 0 mantiene el span
+del nombre; los spans nuevos se verifican por separado con fuentes Unicode.
+Las listas gestionadas por este lector aceptan multilínea y coma final;
+se diagnostican listas vacías, nombres duplicados, marcadores sin nombre y
+separadores ausentes. Ante un `(` después de un `>` ausente, el parser ETS
+conserva los parámetros de valor y puede recuperar la siguiente declaración.
+
+Los packs en métodos/constructores de clases, métodos de interfaces, aliases
+y unions quedan fuera del soporte actual y producen diagnósticos. Stage 0
+también rechaza explícitamente los packs de métodos/unions que antes aceptaba
+perdiendo la marca variádica. Las clases sí conservan esa marca en su AST,
+como el parser TS, aunque el checker actual rechaza compilar packs de clase.
+
+Se preservan constraints, defaults y múltiples packs como metadatos sintácticos.
+Eso no certifica su ejecución. El checker mantiene sus reglas: el rest debe ser
+último y único, usar el nombre de un pack declarado y cada pack necesita su
+rest correspondiente. Las pruebas separan AST válido de validez semántica y
+comprueban los rechazos de stage 0. La regresión C++ ejecuta packs de funciones
+simples, sin constraints/defaults de pack, con inferencia, tipos explícitos,
+cero argumentos y forwarding. No se amplía el checker ni el backend.
+
 ## Pendiente antes de completar el módulo
 
 - Cabeceras `@include`/`@link` y las formas de módulo excluidas arriba.
-- Genéricos variádicos y decoradores sobre
+- Decoradores sobre
   miembros o colocados después de `export`/`function`.
 - Paridad de todas las posiciones y mensajes de diagnóstico con stage 0, y
   validación completa de streams de tokens suministrados por callers externos.

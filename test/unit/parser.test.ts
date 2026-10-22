@@ -97,6 +97,25 @@ for (const source of ["class C{method(public value:number):void{}}", "class C{me
     assert.throws(() => parse(source), (error:any) => error instanceof DiagnosticError && error.diagnostics.some(d => d.phase === "parser" && d.message.includes("constructores de instancia")));
   });
 
+test("parser: variadic type parameters preserve ordered pack names and rest parameters", () => {
+  const fn = firstStatement("function f<Head,...Left,...Right>(head:Head,...values:Left):void{}") as any;
+  assert.deepEqual(fn.typeParameters.map((p:any)=>p.name), ["Head","Left","Right"]);
+  assert.deepEqual(fn.variadicTypeParameters, ["Left","Right"]);
+  assert.equal(fn.params[1].variadic,true); assert.equal(fn.params[1].type,"Left");
+});
+test("parser: multiline generic packs accept trailing comma and retain constraints and defaults", () => {
+  const fn = firstStatement("function f<\nHead=number,\n...Tail extends Box<number> =Box<number>,\n>(head:Head,...tail:Tail):void{}") as any;
+  assert.deepEqual(fn.variadicTypeParameters,["Tail"]);
+  assert.equal(fn.typeParameters[0].default,"number");
+  assert.equal(fn.typeParameters[1].constraint,"Box<number>"); assert.equal(fn.typeParameters[1].default,"Box<number>");
+});
+test("parser: class packs remain visible for semantic rejection", () => {
+  const cls=firstStatement("class Box<Head,...Tail>{}") as any; assert.deepEqual(cls.variadicTypeParameters,["Tail"]);
+});
+for(const source of ["function f<>():void{}","function f<...>():void{}","function f<T,T>():void{}","function f<T,...T>(...values:T):void{}","function f<T U>():void{}","class C{f<...T>():void{}}","class C{static f<...T>():void{}}","union U<...T> = Value(T);"])
+  test(`parser: invalid generic list or unsupported pack is diagnosed ${source}`,()=>{
+    assert.throws(()=>parse(source),(error:any)=>error instanceof DiagnosticError && error.diagnostics.some(d=>d.phase==="parser"));
+  });
 test("parser: array destructuring", () => {
   // Usamos un initializer literal para que el parser no necesite saber el
   // tipo de `arr` (eso es responsabilidad del type-checker, no del parser).

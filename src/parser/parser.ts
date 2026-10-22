@@ -390,7 +390,7 @@ export class Parser {
         const end = this.consumeStatementTerminator("Se esperaba ';' después del campo");
         fields.push({ name: member.lexeme, type, readonly, access, isStatic, defaultValue, decorators: memberDecorators, span: span(member.span.start, end.span.end) });
       } else {
-        const generics = this.typeParameterNames();
+        const generics = this.typeParameterNames(false);
         this.consume("(", "Se esperaba '(' en el método");
         const isConstructor = member.lexeme === "constructor";
         const params: Parameter[] = [];
@@ -643,7 +643,7 @@ export class Parser {
   // y actúa como discriminador. Los campos restantes son bindings (su tipo
   // forma el payload de la variante).
   private unionDeclaration(keyword: Token, exported = false): Statement {
-    const generics = this.typeParameterNames();
+    const generics = this.typeParameterNames(false);
     // Si no hay `<` inmediato, el orden es: nombre primero, después `<T, E>`.
     // Si hay `<` inmediato, el usuario escribió `union <T, E> = ...` que es
     // sintaxis vieja. Aceptamos ambas formas: si el primer token tras `union`
@@ -652,7 +652,7 @@ export class Parser {
     let typeParameters = generics.parameters;
     if (this.check("identifier")) {
       name = this.consume("identifier", "Se esperaba el nombre de la unión");
-      const after = this.typeParameterNames();
+      const after = this.typeParameterNames(false);
       typeParameters = after.parameters;
     } else {
       this.error(this.peek(), "Se esperaba el nombre de la unión");
@@ -1337,19 +1337,36 @@ export class Parser {
     while (this.match("&")) result = `${result} & ${this.typeName()}`;
     return result;
   }
-  private typeParameterNames(): { parameters: TypeParameter[]; variadic: string[] } {
+  private typeParameterNames(packs = true): { parameters: TypeParameter[]; variadic: string[] } {
     const parameters: TypeParameter[] = [];
     const variadic: string[] = [];
     if (!this.match("<")) return { parameters, variadic };
-    do {
+    this.skipNewlines(); const names = new Set<string>();
+    if (this.check(">")) this.error(this.peek(), "La lista de parámetros de tipo no puede estar vacía");
+    while (!this.check(">") && !this.check("eof")) {
+      const start = this.peek();
       const isVariadic = this.match("...");
-      const nameTok = this.consume("identifier", "Se esperaba un parámetro de tipo");
+      if (isVariadic && !packs) this.error(start, "Los packs de tipos no están soportados en esta declaración");
+      if (!this.check("identifier")) {
+        this.error(this.peek(), "Se esperaba un nombre de parámetro de tipo");
+        while (!this.check("eof") && !this.check(">") && !this.check(",") && !this.check("(") && !this.check("{") && !this.check(";") && !this.check("=")) this.advance();
+        if (this.match(",")) { this.skipNewlines(); continue; } break;
+      }
+      const nameTok = this.advance();
       const param: TypeParameter = { name: nameTok.lexeme, span: nameTok.span };
+      if (names.has(nameTok.lexeme)) this.error(nameTok, `Parámetro de tipo duplicado '${nameTok.lexeme}'`);
+      names.add(nameTok.lexeme);
       if (isVariadic) variadic.push(nameTok.lexeme);
-      if (this.match("extends")) param.constraint = this.typeName();
-      if (this.match("=")) param.default = this.typeName();
-      parameters.push(param);
-    } while (this.match(","));
+      this.skipNewlines();
+      if (this.match("extends")) { this.skipNewlines(); param.constraint = this.typeName(); }
+      this.skipNewlines();
+      if (this.match("=")) { this.skipNewlines(); param.default = this.typeName(); }
+      parameters.push(param); this.skipNewlines();
+      if (this.match(",")) { this.skipNewlines(); continue; }
+      if (this.check(">")) break;
+      this.error(this.peek(), "Se esperaba ',' o '>' después del parámetro de tipo");
+      if (!this.check("identifier") && !this.check("...")) break;
+    }
     this.consume(">", "Se esperaba '>' después de los parámetros de tipo");
     return { parameters, variadic };
   }

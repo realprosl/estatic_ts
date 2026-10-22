@@ -166,7 +166,7 @@ export class Parser {
       const keyword: ParserToken = this.take();
       const name: ParserToken = this.expect("identifier");
       result = this.add("TypeAliasDeclaration", keyword, name); this.attr(result, "name", name.lexeme);
-      this.typeParameters(result); this.expect("=");
+      this.typeParameters(result, false); this.expect("=");
       this.attr(result, "type", this.typeName()); this.setEnd(result, this.terminator());
     } else if (this.accept("if")) {
       const keyword: ParserToken = this.previous();
@@ -448,7 +448,7 @@ export class Parser {
   }
   unionDeclaration(keyword: ParserToken): number {
     const name: ParserToken = this.expect("identifier"); const result: number = this.add("UnionDeclaration", keyword, name);
-    this.attr(result, "name", name.lexeme); this.typeParameters(result); this.expect("="); this.skipNewlines();
+    this.attr(result, "name", name.lexeme); this.typeParameters(result, false); this.expect("="); this.skipNewlines();
     let names: string[] = []; let reading: boolean = true;
     while (reading && !this.check("eof")) {
       let variant: number = -1;
@@ -649,15 +649,32 @@ export class Parser {
     }
     this.expect(")");
   }
-  typeParameters(owner: number): void {
+  typeParameters(owner: number, packs: boolean): void {
     if (!this.accept("<")) return;
+    this.skipNewlines(); let names: string[] = [];
+    if (this.check(">")) this.report("La lista de parámetros de tipo no puede estar vacía");
     while (!this.check(">") && !this.check("eof")) {
-      const name: ParserToken = this.expect("identifier"); const param: number = this.add("TypeParameter", name, name);
+      const start: ParserToken = this.peek(0); const variadic: boolean = this.accept("...");
+      if (variadic && !packs) this.reportAt(start, "Los packs de tipos no están soportados en esta declaración");
+      if (!this.check("identifier")) {
+        this.report("Se esperaba un nombre de parámetro de tipo");
+        while (!this.check("eof") && !this.check(">") && !this.check(",") && !this.check("(") && !this.check("{") && !this.check(";") && !this.check("=")) this.take();
+        if (this.accept(",")) { this.skipNewlines(); continue; } break;
+      }
+      const name: ParserToken = this.take(); const param: number = this.add("TypeParameter", start, name); let end: ParserToken = name;
       this.attr(param, "name", name.lexeme);
-      if (this.accept("extends")) this.attr(param, "constraint", this.typeName());
-      if (this.accept("=")) this.attr(param, "default", this.typeName());
-      this.edge(owner, "typeParameters", param);
-      if (!this.accept(",")) break;
+      if (names.includes(name.lexeme)) this.reportAt(name, "Parámetro de tipo duplicado '" + name.lexeme + "'");
+      names.push(name.lexeme);
+      if (variadic) { this.attr(param, "variadic", "true"); this.attr(owner, "variadicTypeParameter", name.lexeme); }
+      this.skipNewlines();
+      if (this.accept("extends")) { this.skipNewlines(); this.attr(param, "constraint", this.typeName()); end = this.previous(); }
+      this.skipNewlines();
+      if (this.accept("=")) { this.skipNewlines(); this.attr(param, "default", this.typeName()); end = this.previous(); }
+      this.setEnd(param, end); this.edge(owner, "typeParameters", param); this.skipNewlines();
+      if (this.accept(",")) { this.skipNewlines(); continue; }
+      if (this.check(">")) break;
+      this.report("Se esperaba ',' o '>' después del parámetro de tipo");
+      if (!this.check("identifier") && !this.check("...")) break;
     }
     this.expect(">");
   }
@@ -669,7 +686,7 @@ export class Parser {
     const result: number = this.add("FunctionDeclaration", keyword, name);
     if (anonymous) this.attr(result, "anonymous", "true"); else this.attr(result, "name", name.lexeme);
     this.attr(result, "async", isAsync ? "true" : "false");
-    this.typeParameters(result); this.parametersInto(result, false, false); this.expect(":");
+    this.typeParameters(result, true); this.parametersInto(result, false, false); this.expect(":");
     this.attr(result, "returnType", this.typeName());
     let body: number = -1;
     if (this.accept(";")) body = this.add("BlockStatement", this.previous(), this.previous());
@@ -680,7 +697,7 @@ export class Parser {
     const anonymous: boolean = allowAnonymous && (this.check("{") || this.check("<"));
     const name: ParserToken = anonymous ? this.peek(0) : this.expect("identifier"); const result: number = this.add("ClassDeclaration", keyword, name);
     if (anonymous) this.attr(result, "anonymous", "true"); else this.attr(result, "name", name.lexeme);
-    this.typeParameters(result); this.expect("{");
+    this.typeParameters(result, true); this.expect("{");
     while (!this.check("}") && !this.check("eof")) {
       this.skipNewlines(); if (this.check("}") || this.check("eof")) break;
       if (!this.accept(";")) {
@@ -695,7 +712,7 @@ export class Parser {
         if (isStatic) this.attr(item, "isStatic", "true");
         if (isReadonly) this.attr(item, "readonly", "true");
         if (this.check("(") || this.check("<")) {
-          this.setKind(item, "ClassMethod"); this.typeParameters(item); this.parametersInto(item, false, member.lexeme == "constructor" && !isStatic);
+          this.setKind(item, "ClassMethod"); this.typeParameters(item, false); this.parametersInto(item, false, member.lexeme == "constructor" && !isStatic);
           let returnType: string = "void";
           if (this.accept(":")) returnType = this.typeName();
           else if (member.lexeme != "constructor") this.report("El método necesita un tipo de retorno");
@@ -721,7 +738,7 @@ export class Parser {
       const before: number = this.current; const member: ParserToken = this.expect("identifier");
       const item: number = this.add("InterfaceField", member, member); this.attr(item, "name", member.lexeme);
       if (this.check("(") || this.check("<")) {
-        this.setKind(item, "InterfaceMethod"); this.typeParameters(item); this.parametersInto(item, false, false);
+        this.setKind(item, "InterfaceMethod"); this.typeParameters(item, false); this.parametersInto(item, false, false);
         this.expect(":"); this.attr(item, "returnType", this.typeName()); this.edge(result, "methods", item);
       } else {
         const optional: boolean = this.accept("?"); this.expect(":"); this.attr(item, "type", this.typeName());
