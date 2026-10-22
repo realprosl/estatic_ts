@@ -1125,40 +1125,41 @@ export class Parser {
     else this.report("Se esperaba una expresión");
     return this.add("ErrorNode", token, token);
   }
-  quote(text: string): string {
-    let result: string = "\""; const hex: string = "0123456789abcdef";
-    for (let i: number = 0; i < text.length; i = i + 1) {
-      const c: string = text.charAt(i); const code: number = text.charCodeAt(i);
-      if (c == "\"") result = result + "\\\""; else if (c == "\\") result = result + "\\\\";
-      else if (code < 32) result = result + "\\u00" + hex.charAt(Math.floor(code / 16)) + hex.charAt(code % 16);
-      else result = result + c;
-    }
-    return result + "\"";
-  }
-  position(offset: number, line: number, column: number): string {
-    return "{\"offset\":" + numberToString(offset) + ",\"line\":" + numberToString(line) + ",\"column\":" + numberToString(column) + "}";
-  }
-  spanJson(start: ParserToken, end: ParserToken): string {
-    return "{\"start\":" + this.position(start.offset, start.line, start.column) + ",\"end\":" + this.position(end.endOffset, end.endLine, end.endColumn) + "}";
-  }
-  inspect(): string {
-    const result: ParseResult = this.parseProgram();
-    let output: string = "{\"root\":" + numberToString(result.root) + ",\"nodes\":["; let separator: string = "";
-    for (const item of result.nodes) {
-      output = output + separator + "{\"kind\":" + this.quote(item.kind) + ",\"span\":" + this.spanJson(item.start, item.end) + ",\"attributes\":[";
-      let comma: string = "";
-      for (const field of item.attributes) { output = output + comma + "{\"name\":" + this.quote(field.name) + ",\"value\":" + this.quote(field.value) + "}"; comma = ","; }
-      output = output + "],\"edges\":["; comma = "";
-      for (const edge of item.edges) { output = output + comma + "{\"role\":" + this.quote(edge.role) + ",\"node\":" + numberToString(edge.node) + "}"; comma = ","; }
-      output = output + "]}"; separator = ",";
-    }
-    output = output + "],\"diagnostics\":["; separator = "";
-    for (const diagnostic of result.diagnostics) {
-      output = output + separator + "{\"phase\":\"parser\",\"message\":" + this.quote(diagnostic.message) + ",\"span\":" + this.spanJson(diagnostic.token, diagnostic.token) + "}"; separator = ",";
-    }
-    return output + "]}";
-  }
+  inspect(): string { return formatAst(this.parseProgram()); }
 }
 
+// Formatting an already parsed arena must not run the parser a second time.
+function quoteAst(text: string): string {
+  let result: string = "\""; const hex: string = "0123456789abcdef";
+  for (let i: number = 0; i < text.length; i = i + 1) {
+    const c: string = text.charAt(i); const code: number = text.charCodeAt(i);
+    if (c == "\"") result = result + "\\\""; else if (c == "\\") result = result + "\\\\";
+    else if (code < 32) result = result + "\\u00" + hex.charAt(Math.floor(code / 16)) + hex.charAt(code % 16);
+    else result = result + c;
+  }
+  return result + "\"";
+}
+function positionAst(offset: number, line: number, column: number): string {
+  return "{\"offset\":" + numberToString(offset) + ",\"line\":" + numberToString(line) + ",\"column\":" + numberToString(column) + "}";
+}
+function spanAst(start: ParserToken, end: ParserToken): string {
+  return "{\"start\":" + positionAst(start.offset, start.line, start.column) + ",\"end\":" + positionAst(end.endOffset, end.endLine, end.endColumn) + "}";
+}
+export function formatAst(result: ParseResult): string {
+  let output: string[] = ["{\"root\":" + numberToString(result.root) + ",\"nodes\":["]; let separator: string = "";
+  for (const item of result.nodes) {
+    output.push(separator + "{\"kind\":" + quoteAst(item.kind) + ",\"span\":" + spanAst(item.start, item.end) + ",\"attributes\":[");
+    let comma: string = "";
+    for (const field of item.attributes) { output.push(comma + "{\"name\":" + quoteAst(field.name) + ",\"value\":" + quoteAst(field.value) + "}"); comma = ","; }
+    output.push("],\"edges\":["); comma = "";
+    for (const edge of item.edges) { output.push(comma + "{\"role\":" + quoteAst(edge.role) + ",\"node\":" + numberToString(edge.node) + "}"); comma = ","; }
+    output.push("]}"); separator = ",";
+  }
+  output.push("],\"diagnostics\":["); separator = "";
+  for (const diagnostic of result.diagnostics) {
+    output.push(separator + "{\"phase\":\"parser\",\"message\":" + quoteAst(diagnostic.message) + ",\"span\":" + spanAst(diagnostic.token, diagnostic.token) + "}"); separator = ",";
+  }
+  output.push("]}"); return output.join("");
+}
 export function parseTokens(tokens: ParserToken[]): ParseResult { let parser: Parser = new Parser(tokens); return parser.parseProgram(); }
 export function inspectAst(tokens: ParserToken[]): string { let parser: Parser = new Parser(tokens); return parser.inspect(); }

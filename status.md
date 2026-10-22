@@ -15,7 +15,7 @@ producción concurrente.
 | Área | Estado | Observación |
 |---|---|---|
 | Lexer, parser y diagnósticos | Estable para el dialecto documentado | No pretende aceptar TypeScript completo |
-| Autoalojamiento | Lexer y etapa de parser aislado validados | Dos módulos ETS independientes compilados y ejecutados como C++; integración nativa entre fases y checker aún pendientes |
+| Autoalojamiento | Lexer y parser conectados por archivo | Módulos aislados y puente compilados/ejecutados como C++; resolver de módulos antes del checker, todavía pendientes |
 | Tipos, genéricos, unions y clases | Funcional | Checker y codegen siguen muy acoplados |
 | Módulos | Funcional con límites | Default, reexports y multilínea; análisis mediante AST combinado |
 | Ownership y borrow checking | Funcional, conservador | Hay moves, conflictos y NLL; no hay lifetime parameters |
@@ -29,7 +29,7 @@ Las declaraciones del editor tienen una única fuente canónica en
 `types/estatic.d.ts`. `etsc init` la copia y `etsc update-types` actualiza
 proyectos existentes con respaldo `.bak`. El registro semántico y el archivo
 se comprueban mediante una regresión automática. La versión visible por CLI es
-`estatic 1.20.0 (v58)` mediante `--version` o `-v`; verbose usa `--verbose`.
+`estatic 1.21.0 (v59)` mediante `--version` o `-v`; verbose usa `--verbose`.
 
 El incremental informa tiempos reales por fase y registra interfaces/dependencias
 por módulo para planificar invalidaciones. v48 restaura cuerpos de funciones
@@ -42,7 +42,7 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 ## Verificación conocida
 
 - La verificación del conjunto unitario estable realizada durante esta revisión
-  pasó **1842/1842 pruebas**: 1236 unitarias de stage 0 y 606 de bootstrap,
+  pasó **1899/1899 pruebas**: 1236 unitarias de stage 0 y 663 de bootstrap,
   ejecutadas por bloques. No incluye `test/runner.ts` ni la suite E2E/libuv.
 - El lexer de `bootstrap/lexer/` pasa **64/64** pruebas nativas, incluidas
   comparaciones con stage 0, su propio código ETS y aislamiento del módulo.
@@ -50,6 +50,19 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 - El parser aislado pasa **542/542** pruebas (incluido el adaptador léxico),
   incluido el análisis de su propio fuente y del lexer, sin importar otros
   módulos ETS. La cobertura y las formas excluidas están en `bootstrap/parser/README.md`.
+- v59 añade el puente nativo por archivo con **57/57** pruebas: lexer ETS,
+  expansión léxica de templates, conversión de tokens y parser ETS, sin preparar
+  tokens en Node. Se comparan tokens/spans y arenas completas con las referencias
+  aisladas; 120 ejemplos aceptados por el parser TS directo también pasan en la
+  cadena nativa. Cada resultado conserva archivo, errores y estado de parseo;
+  un error léxico evita ejecutar el parser. Serialización de AST existente sin
+  segundo parseo y JSON por fragmentos, sin reconstruir el acumulador en cada nodo.
+  Las llamadas entre archivos se prueban en un proceso, secuencialmente. No hay
+  todavía resolver, scheduler concurrente ni checker ETS. La siguiente prioridad
+  es el grafo de imports/reexports y resolución de módulos, antes del checker.
+  Se documenta el helper de reutilización por archivo: manifiesto de metadatos y
+  contenido, AST/imports y artefactos C++/`.o`, invalidación por capa/interfaz y
+  deduplicación de trabajos. No equivale a implementar esa caché en el puente.
 - v58 cierra la etapa del parser aislado con cabeceras include/link y decoradores
   de declaraciones/miembros, posiciones inline y orden de origen. Stage 0 conserva
   decoradores de campos de interfaces, acepta decoradores tras export y corrige
@@ -58,7 +71,8 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
   en el parser ETS los 120 que admite el parser TS directo; los ocho restantes
   requieren la ruta de módulos y no se cuentan como paridad directa. Validación
   estructural de coordenadas/EOF, truncamientos y recuperación de miembros.
-  Esto no certifica paridad formal de toda entrada ni conecta todavía las fases.
+  Esto no certifica paridad formal de toda entrada. La conexión por archivo
+  se añade posteriormente en v59.
 - Packs genéricos en el AST, marcas variadic por TypeParameter y lista ordenada
   por declaración; parámetros rest conservados sin expansión sintética. Spans
   completos de parámetros de tipo, diagnósticos y recuperación. Stage 0 y ETS
@@ -82,7 +96,7 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
   Ambos lexers usan una pila explícita de contextos y reconocen objetos,
   strings, comentarios y templates anidados sin truncarlos. El parser de
   stage 0 rechaza expresiones parciales y rebasa spans y errores al origen.
-  Se conservan escapes crudos; la conexión nativa entre fases sigue pendiente.
+  Se conservan escapes crudos; v59 añade la conexión nativa por archivo.
 - Imports y exports preservan aliases, origen y marcas type en el AST;
   default anónimos no reciben nombres globales sintéticos. La resolución
   de módulos/símbolos y el type checker siguen fuera de este módulo.

@@ -101,10 +101,31 @@ control de flujo con switch. Sus 542 pruebas incluyen los fuentes ETS del lexer,
 del propio parser y ambos drivers, y una auditoría de 120 ejemplos que acepta
 el parser TS directo. La cobertura y las formas excluidas están documentadas;
 el cierre de esta etapa no certifica equivalencia formal con todo stage 0.
-Todavía no se integra una cadena nativa entre fases ni se añade el checker.
+La integración se mantiene en el puente siguiente; este módulo no añade el checker.
 Los nodos de import/export conservan metadatos; este parser no busca archivos
 ni vincula los símbolos de otros módulos.
 
-El siguiente bloque será un adaptador explícito de tokens lexer ETS → parser ETS,
-con una demostración de extremo a extremo y conservando las pruebas de cada
-módulo por separado. No se ha iniciado todavía ese bloque.
+## Paso 3: puente nativo por archivo (v59)
+
+El [puente](./frontend/README.md) conecta lexer ETS y parser ETS mediante una
+conversión explícita de tokens. También expande templates dentro del lexer ETS.
+`npm run bootstrap:frontend -- --file examples/todo-project/main.ets` lee el
+archivo en el host y entrega el texto al binario, que produce tokens, AST y
+diagnósticos con archivo/posición. No resuelve sus imports ni ejecuta ese código.
+Lexer y parser continúan sin importarse entre sí y conservan sus suites aisladas.
+
+Por prioridad del proyecto, el próximo módulo será **resolución de módulos**, antes
+del checker: descubrir imports/reexports, resolver rutas e identidad, construir
+el grafo y detectar dependencias ausentes/ciclos. Ese grafo permitirá organizar
+trabajos independientes por archivo y añadir paralelismo acotado. El puente ya
+devuelve resultados por archivo, pero no implementa todavía esa planificación.
+El cargador deberá incorporar un helper `getOrParseModule` que consulte una caché
+por hash de contenido y versión/opciones del frontend antes de ejecutar lexer y
+parser. Reutilizará AST/imports sin cambios y compartirá trabajos en curso entre
+solicitantes concurrentes. La invalidación de rutas/símbolos será independiente
+de la caché sintáctica; el [plan detallado](./frontend/README.md) registra ese requisito.
+La unidad mínima de ese registro será cada archivo de un módulo lógico: tamaño,
+mtime y otros metadatos, hash, dependencias y referencias a AST/C++/`.o`. Se
+consultará antes del trabajo costoso para reutilizar desde frontend hasta objeto
+nativo, propagando cambios de interfaz y respetando cabeceras/flags del backend.
+Editar un archivo no deberá invalidar indiscriminadamente el módulo completo.

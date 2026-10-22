@@ -440,6 +440,7 @@ templates, regex, destructuring anidado/rest y la forma histórica de union.
 Tras un tipo genérico hace falta separar `>` y `=` para evitar `>=`, como en
 stage 0. No se validan aquí tipos, acceso, ownership ni resolución de módulos.
 
-El siguiente bloque puede conectar el lexer y parser ETS mediante un adaptador
-explícito, manteniendo sus pruebas aisladas. Después corresponde portar el
-checker; ni esa conexión ni el checker forman parte de v58.
+v59 añade el [puente por archivo](../frontend/README.md) y la expansión léxica de
+templates en ETS, manteniendo las pruebas aisladas. El próximo módulo será el
+resolver de dependencias/imports, antes del checker. Este parser sigue sin hacer
+I/O, resolver rutas o vincular símbolos.

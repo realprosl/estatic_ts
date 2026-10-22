@@ -63,7 +63,7 @@ Para consultar la versión instalada:
 ```bash
 etsc --version
 etsc -v
-# estatic 1.20.0 (v58)
+# estatic 1.21.0 (v59)
 ```
 
 El `estatic.config.ts` generado NO requiere que listes `-luv`, `-lssl`,
@@ -996,7 +996,7 @@ npm run test:http-routing
 npm run test:e2e
 ```
 
-La última verificación del conjunto estable registrada en `status.md` pasó 1842 pruebas
+La última verificación del conjunto estable registrada en `status.md` pasó 1899 pruebas
 unitarias. El número puede cambiar al añadir casos; no se mantiene como una
 constante manual en este README.
 
@@ -1019,8 +1019,15 @@ Ambos lexers preservan los templates completos incluso con objetos, strings y
 comentarios internos. El parser de stage 0 también valida sus expresiones y
 conserva las posiciones originales. Esto valida el análisis sintáctico
 del bootstrap; todavía no añade switch al frontend ni al backend de stage 0.
-La [cobertura y los límites](./bootstrap/parser/README.md) están documentados;
-todavía no se integra la cadena nativa entre fases ni autoaloja el compilador.
+La [cobertura y los límites](./bootstrap/parser/README.md) están documentados.
+v59 añade el [puente nativo por archivo](./bootstrap/frontend/README.md):
+`npm run bootstrap:frontend -- --file examples/todo-project/main.ets` entrega el
+texto al binario, que ejecuta lexer, expansión de templates y parser ETS y muestra
+tokens, AST y diagnósticos con archivo/posición. Sus 57 pruebas conservan las suites
+aisladas y comparan tokens y arenas completas. Node hace I/O/build, sin preparar
+tokens para este recorrido. El próximo módulo será resolución de imports/reexports
+y grafo de dependencias, antes del checker; aún no hay planificación concurrente
+ni autoalojamiento del compilador completo.
 
 ## Licencia
 

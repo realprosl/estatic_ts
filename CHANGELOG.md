@@ -6,6 +6,27 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- v59 (`estatic 1.21.0`): puente nativo por archivo lexer ETS → parser ETS.
+  `parseSource` conserva tokens, AST y diagnósticos con archivo/fase/posición;
+  evita el parser ante errores léxicos. Demo `bootstrap:frontend`, con texto o
+  `--file` leído por el host, sin lexer/parser TS durante el análisis nativo.
+- `tokenizeExpanded` en el lexer ETS prepara segmentos/interpolaciones de
+  templates reutilizando el scanner léxico y rebasa tokens/errores al origen.
+  `tokenize`/`inspectTokens` crudos se conservan. `formatAst` serializa una arena
+  ya existente sin segundo parseo; los JSON de AST/puente se unen por fragmentos
+  para evitar reconstruir el acumulador por cada nodo/token.
+- 57 pruebas de integración C++ obligatoria, tokens/spans y arenas exactos frente
+  a las referencias aisladas, fuentes reales, 120 ejemplos, errores, aislamiento
+  entre archivos y límites de anidamiento. Conjunto estable: 1899/1899 pruebas
+  (1236 unitarias + 64 lexer + 542 parser + 57 puente). CLI v59.
+- La siguiente prioridad documentada es resolución de imports/reexports y grafo
+  de dependencias antes del checker. Este bloque no resuelve archivos, no vincula
+  símbolos ni incorpora un scheduler concurrente. Se registra el helper futuro
+  getOrParseModule: caché sintáctica por contenido/versión/opciones, AST/imports
+  reutilizables y deduplicación de trabajos concurrentes. Manifiesto por archivo
+  con tamaño/fechas/hash y artefactos frontend/C++/`.o`, con invalidación separada
+  por capa e interfaz pública; no se implementa todavía.
+
 - v58 (`estatic 1.20.0`): cierre de la etapa del parser ETS aislado para su
   contrato documentado. Cabeceras include/link como ModuleHeaderDeclaration,
   decoradores de campos/métodos/constructores, posiciones inline y orden de
