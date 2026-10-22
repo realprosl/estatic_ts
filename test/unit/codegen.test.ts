@@ -14,6 +14,23 @@ import { compile, analyze, parse } from "../../src/compiler.ts";
 
 const compilerRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+test("codegen native: constructor parameter properties initialize access and readonly fields", () => {
+  const source = [
+    'class Person{',
+    'constructor(public name:string="Ada",private age:number=7,protected score:number=9,readonly id:number=42){}',
+    'describe():string{return `${this.name}:${this.age}:${this.score}:${this.id}`;}',
+    '}',
+    'let p:Person=new Person(); print(p.describe()); p.name="Grace"; print(p.describe());',
+    'const q:Person=new Person("Bob",21,30,99); print(q.describe());',
+  ].join("\n");
+  const output = compile(source).cpp, dir = mkdtempSync(join(tmpdir(), "ets-param-properties-"));
+  try {
+    const file = join(dir, "main.cpp"), binary = join(dir, "main"); writeFileSync(file, output);
+    execFileSync(process.env.CXX ?? "g++", ["-std=c++20", "-O0", "-pthread", "-fno-exceptions", `-I${compilerRoot}`, file, "-o", binary], { encoding: "utf8", timeout: 120000, env: { ...process.env, TMPDIR: dir } });
+    assert.equal(execFileSync(binary, [], { encoding: "utf8", timeout: 5000 }), "Ada:7:9:42\nGrace:7:9:42\nBob:21:30:99\n");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("codegen native: nested templates shield strings, comments and escaped interpolation", () => {
   const source = [
     'let value:number=7;',

@@ -392,6 +392,7 @@ export class Parser {
       } else {
         const generics = this.typeParameterNames();
         this.consume("(", "Se esperaba '(' en el método");
+        const isConstructor = member.lexeme === "constructor";
         const params: Parameter[] = [];
         if (!this.check(")")) do {
           const out = this.match("out");
@@ -406,6 +407,7 @@ export class Parser {
             : undefined;
           const paramReadonly = this.match("readonly");
           const parameter = this.consume("identifier", "Se esperaba el nombre del parámetro");
+          if ((paramAccess !== undefined || paramReadonly) && (!isConstructor || isStatic)) this.error(parameter, "Las propiedades de parámetro solo se permiten en constructores de instancia");
           const optional = this.match("?");
           this.consume(":", "El parámetro necesita un tipo");
           const type = this.typeName();
@@ -424,7 +426,6 @@ export class Parser {
           });
         } while (this.match(","));
         this.consume(")", "Se esperaba ')' después de los parámetros");
-        const isConstructor = member.lexeme === "constructor";
         const returnType: TypeName = isConstructor ? "void" : (this.match(":") ? this.typeName() : (this.error(this.peek(), "El método necesita un tipo de retorno"), "void"));
         const open = this.consume("{", "Se esperaba el cuerpo del método");
         const body = this.block(open);
