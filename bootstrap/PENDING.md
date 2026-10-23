@@ -26,6 +26,9 @@ whenType, otherwise y discriminadores.
 También se corrige el almacenamiento global diferido de Result en C++: se
 inicializa con un estado de error válido antes de ejecutar la inicialización del
 módulo. Las pruebas compilan y ejecutan los caminos de éxito y error.
+Las tareas globales diferidas usan un handle vacío y reconstrucción por movimiento,
+sin exigir asignación de Task ni adelantar la ejecución de la corutina. Se corrige
+además el namespace de los wrappers globales readFile/writeFile.
 
 Los nueve casos del audit abiertos son packs genéricos, async/await,
 for-await-of, préstamos durante suspensión, expresión comptime, función
@@ -113,7 +116,7 @@ con las capas que consume. «Abierto» incluye cobertura parcial en v64.
 | P02 | Parcial; sigue abierto | Tablas completas y coherentes entre archivos: tipos, firmas elegidas/instanciadas, correspondencia argumentos, conversiones, capturas, efectos y origen. Un nodo aceptado que necesite semántica no puede quedar sin resolver. | `model.ets`, `format.ets`, `expression` |
 | V01 | Parcial; sigue abierto | Pruebas cruzadas del lenguaje completo, corpus de ejemplos y fuentes ETS del bootstrap, errores combinados y metamórficos. Corregir diferencias de stage 0 sin copiarlas ni ocultarlas. | `checker.test.ts`, nuevo `audit/` |
 | V02 | Parcial; sigue abierto | Cerrar contradicciones documentales y dejar evidencia reproducible de cada fila. Verificar que el CLI nuevo analiza nativamente y no recurre a stage 0 para el proyecto solicitado. | `README.md`, `LIMITATIONS.md`, documentos de cada etapa |
-| V03 | Parcial; sigue abierto | Restablecer validación completa de ejemplos. La revisión anterior tenía fallos por falta de libuv y almacenamiento C++ de destructuring/Result. Se corrige el almacenamiento y se ejecuta con libuv disponible; la validación completa debe terminar antes de declarar esta fila cerrada. | `test/runner.ts`, `examples/destructuring-demo.ets` |
+| V03 | Parcial; sigue abierto | Restablecer validación completa de ejemplos. La ejecución completa con libuv registra 2783/2831: 45 fallos por timeout (loader y pruebas numéricas/aliases), dos ejemplos con errores C++ y su subtest padre. Loader pasa 42/42 aislado; numéricos/aliases pasan 62/62 aislados. Se corrigen y ejecutan fs-demo y result-files; aún se exige repetir la suite completa antes del cierre. | `test/runner.ts`, `examples/destructuring-demo.ets` |
 
 ## Diferencias que no se pueden llamar «resueltas» sólo por aceptar el fuente
 
@@ -200,3 +203,10 @@ aceptada durante este trabajo.
 
 **IR bloqueado:** no iniciar su implementación ni anunciar el bootstrap completo
 hasta que no queden filas abiertas y la evidencia de cierre esté revisada.
+
+## Validación de esta tanda
+
+El checker actualizado pasa 748/748 pruebas; el binder pasó 63/63 en la
+validación conjunta anterior. Los callbacks y uniones públicas tienen pruebas
+positivas, negativas y de efectos/procedencia. El audit sigue en 71/80 y sale
+con código 1 deliberadamente. Esto no certifica paridad ni cierre del inventario.

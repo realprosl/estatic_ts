@@ -171,7 +171,7 @@ export class CppGenerator {
   // inicializacion real va al bloque `ets_init_*()` (despues de los
   // globals). Asi evitamos problemas de orden de inicializacion con
   // `make_X` y el std::variant del auto-union.
-  private _deferredInitVars: { variable: VariableDeclaration; cppName: string; initializer: string }[] | undefined = undefined;
+  private _deferredInitVars: { variable: VariableDeclaration; cppName: string; initializer: string; cppType: string }[] | undefined = undefined;
   private readonly identifierTypes = new Map<string, TypeName>();
   private destructuringCounter = 0;
   private spreadCounter = 0;
@@ -205,7 +205,15 @@ export class CppGenerator {
   }
   private resolveAlias(name: string): string { return this.exportAliases.get(name) ?? name; }
   private deferredStorageInitializer(type: string): string {
-    return type.startsWith("ets::Result<") ? ` = ${type}::failure("uninitialized module binding")` : "";
+    if (type.startsWith("ets::Result<")) return ` = ${type}::failure("uninitialized module binding")`;
+    if (type.startsWith("ets::Task<")) return ` = ${type}{${type}::handle_type{}}`;
+    return "";
+  }
+  private deferredInitialization(name: string, initializer: string, type: string): string {
+    // Task is move-constructible, but deliberately has no assignment operator.
+    // Module initialization replaces only its empty, unstarted storage handle.
+    if (type.startsWith("ets::Task<")) return `std::destroy_at(std::addressof(${name})); std::construct_at(std::addressof(${name}), ${initializer});`;
+    return `${name} = ${initializer};`;
   }
   private cppName(name: string): string {
     // V18: si el nombre tiene un alias CPP externo (decorador
@@ -1376,7 +1384,7 @@ export class CppGenerator {
         && variable.initializer.kind !== "ArrayLiteralExpression";
       if (this.isAutoUnionTarget(type) || isCallInit || isNonLiteralInit) {
         if (!this._deferredInitVars) this._deferredInitVars = [];
-        this._deferredInitVars.push({ variable, cppName, initializer });
+        this._deferredInitVars.push({ variable, cppName, initializer, cppType: cppTypeText });
         // Runtime Result has no default constructor. Deferred module bindings
         // still need valid storage before their initializer runs in main.
         const storageInit = this.deferredStorageInitializer(cppTypeText);
@@ -1413,8 +1421,8 @@ export class CppGenerator {
     // struct. El static-init ya se hizo (declaracion `static T name;`) y
     // aqui asignamos el valor real (que envuelve con `make_X(...)`).
     if (this._deferredInitVars && this._deferredInitVars.length > 0) {
-      for (const { cppName, initializer } of this._deferredInitVars) {
-        lines.push(this.pad() + `${cppName} = ${initializer};`);
+      for (const { cppName, initializer, cppType } of this._deferredInitVars) {
+        lines.push(this.pad() + this.deferredInitialization(cppName,initializer,cppType));
       }
     }
     for (const statement of destructuringTopLevel) lines.push(this.emitStatement(statement));
@@ -1562,7 +1570,7 @@ export class CppGenerator {
     const isDestructuring = (v: VariableDeclaration): boolean =>
       (!!v.arrayBindings && v.arrayBindings.length > 0) || (!!v.objectBindings && v.objectBindings.length > 0);
     const variables = unwrappedProgram.statements.filter((statement): statement is VariableDeclaration => statement.kind === "VariableDeclaration" && !isDestructuring(statement));
-    const defaultInitializers=new Map<Statement,{name:string;initializer:string}>();
+    const defaultInitializers=new Map<Statement,{name:string;initializer:string;cppType:string}>();
     const isDefaultExpression=(node:Statement)=>node.kind === "VariableDeclaration" && node.span.moduleDefault && node.initializer.kind !== "LiteralExpression";
     const topLevel = unwrappedProgram.statements.filter(statement => isDefaultExpression(statement) || (statement.kind !== "FunctionDeclaration" && statement.kind !== "InterfaceDeclaration" && statement.kind !== "ClassDeclaration" && statement.kind !== "VariableDeclaration" && statement.kind !== "ExportNamedDeclaration"));
     const destructuringTopLevel = unwrappedProgram.statements.filter((statement): statement is VariableDeclaration => statement.kind === "VariableDeclaration" && isDestructuring(statement));
@@ -1650,7 +1658,7 @@ export class CppGenerator {
       const cppTypeText = this.cppT(type);
       if(isDefaultExpression(variable)) {
         lines.push(markCppOrigin(variable.span,`${exportLinkage}${cppTypeText} ${cppName}${this.deferredStorageInitializer(cppTypeText)};`));
-        defaultInitializers.set(variable,{name:cppName,initializer:initializerText});
+        defaultInitializers.set(variable,{name:cppName,initializer:initializerText,cppType:cppTypeText});
         continue;
       }
       // V30.14.2: deferir la inicializacion al init() si es auto-union.
@@ -1665,7 +1673,7 @@ export class CppGenerator {
         && variable.initializer.kind !== "ArrayLiteralExpression";
       if (this.isAutoUnionTarget(type) || isCallInit2 || isNonLiteralInit2) {
         if (!this._deferredInitVars) this._deferredInitVars = [];
-        this._deferredInitVars.push({ variable, cppName, initializer: initializerText });
+        this._deferredInitVars.push({ variable, cppName, initializer: initializerText, cppType:cppTypeText });
         lines.push(markCppOrigin(variable.span,`${exportLinkage}${cppTypeText} ${cppName}${this.deferredStorageInitializer(cppTypeText)};`));
         continue;
       }
@@ -1716,8 +1724,8 @@ export class CppGenerator {
     // que NO se pudieron inicializar en static-init). Despues las
     // reasignaciones normales de las variables mutables.
     if (this._deferredInitVars && this._deferredInitVars.length > 0) {
-      for (const { variable, cppName, initializer: deferredInit } of this._deferredInitVars) {
-        lines.push(markCppOrigin(variable.span,this.pad() + `${cppName} = ${deferredInit};`));
+      for (const { variable, cppName, initializer: deferredInit, cppType } of this._deferredInitVars) {
+        lines.push(markCppOrigin(variable.span,this.pad() + this.deferredInitialization(cppName,deferredInit,cppType)));
       }
     }
     for (const variable of variables) {
@@ -1741,7 +1749,7 @@ export class CppGenerator {
     const programIsAsync = this.currentProgram !== undefined && this.mainIsAsync(this.currentProgram);
     for (const statement of topLevel) {
       const defaultInitializer=defaultInitializers.get(statement);
-      if(defaultInitializer) lines.push(markCppOrigin(statement.span,this.pad()+`${defaultInitializer.name} = ${defaultInitializer.initializer};`));
+      if(defaultInitializer) lines.push(markCppOrigin(statement.span,this.pad()+this.deferredInitialization(defaultInitializer.name,defaultInitializer.initializer,defaultInitializer.cppType)));
       else if (programIsAsync && this.isMainCallExpression(statement)) {
         const expr = (statement as unknown as { expression?: unknown }).expression;
         const call = expr as { callee?: unknown };
@@ -3872,10 +3880,10 @@ export class CppGenerator {
         // de runtime/ets_file.hpp se anade via usesFilesystem (que
         // detecta `readFile`/`writeFile` en V30.55).
         if (node.callee === "writeFile" && node.args.length === 2) {
-          return `::ets::writeFile(${this.emitExpression(node.args[0])}, ${this.emitExpression(node.args[1])})`;
+          return `::writeFile(${this.emitExpression(node.args[0])}, ${this.emitExpression(node.args[1])})`;
         }
         if (node.callee === "readFile" && node.args.length === 1) {
-          return `::ets::readFile(${this.emitExpression(node.args[0])})`;
+          return `::readFile(${this.emitExpression(node.args[0])})`;
         }
         // V30.22.6: named arguments (`name: value`) en la llamada. Si
         // alguno de los args es un `NamedArgumentExpression`, los
