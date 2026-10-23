@@ -11,9 +11,11 @@ export function formatChecked(result: CheckResult, binding: BindingResult, graph
     let signatures: string[] = []; for (const signature of file.signatures) signatures.push(quoteSource(signature));
     let exactIntegers: string[] = []; for (const value of file.exactIntegers) exactIntegers.push(quoteSource(value));
     let conversions: string[] = []; for (const value of file.conversions) conversions.push(quoteSource(value));
+    let codes: string[] = []; for (const code of file.constantCodes) codes.push(quoteSource(code));
+    let constants: string[] = []; let constantStates: string[] = []; for (const value of file.constantValues) constants.push(quoteSource(value)); for (const value of file.constantStates) constantStates.push(quoteSource(value));
     let tasks: string[] = []; for (const sources of file.taskSources) tasks.push(bindingNumbers(sources));
     let caseValues: string[] = []; for (const value of file.caseValues) caseValues.push(quoteSource(value));
-    output.push(comma + "{\"file\":" + quoteSource(graph.modules[m].file) + ",\"ast\":" + formatAst(graph.modules[m].cached.result.ast) + ",\"taskSources\":[" + tasks.join(",") + "],\"types\":[" + types.join(",") + "],\"members\":" + bindingNumbers(file.members) + ",\"selected\":" + bindingNumbers(file.selected) + ",\"selectedModules\":" + bindingNumbers(file.selectedModules) + ",\"argumentParameters\":" + bindingNumbers(file.argumentParameters) + ",\"signatures\":[" + signatures.join(",") + "],\"exactIntegers\":[" + exactIntegers.join(",") + "],\"conversions\":[" + conversions.join(",") + "],\"caseValues\":[" + caseValues.join(",") + "]}"); comma = ",";
+    output.push(comma + "{\"file\":" + quoteSource(graph.modules[m].file) + ",\"ast\":" + formatAst(graph.modules[m].cached.result.ast) + ",\"constantCodes\":[" + codes.join(",") + "],\"constantValues\":[" + constants.join(",") + "],\"constantStates\":[" + constantStates.join(",") + "],\"taskSources\":[" + tasks.join(",") + "],\"types\":[" + types.join(",") + "],\"members\":" + bindingNumbers(file.members) + ",\"selected\":" + bindingNumbers(file.selected) + ",\"selectedModules\":" + bindingNumbers(file.selectedModules) + ",\"argumentParameters\":" + bindingNumbers(file.argumentParameters) + ",\"signatures\":[" + signatures.join(",") + "],\"exactIntegers\":[" + exactIntegers.join(",") + "],\"conversions\":[" + conversions.join(",") + "],\"caseValues\":[" + caseValues.join(",") + "]}"); comma = ",";
   }
   let symbols: string[] = []; for (const valueType of result.symbolTypes) symbols.push(quoteSource(valueType));
   output.push("],\"symbolTypes\":[" + symbols.join(",") + "],\"diagnostics\":["); comma = "";
@@ -28,6 +30,8 @@ export function formatChecked(result: CheckResult, binding: BindingResult, graph
   for (const b of result.borrows) {
     output.push(comma + "{\"module\":" + numberToString(b.module) + ",\"symbol\":" + numberToString(b.symbol) + ",\"root\":" + numberToString(b.root) + ",\"begin\":" + numberToString(b.begin) + ",\"end\":" + numberToString(b.end) + ",\"mode\":" + quoteSource(b.mode) + "}"); comma = ",";
   }
+  output.push("],\"decorators\":["); comma = "";
+  for (const d of result.decorators) { let args: string[] = []; for (const arg of d.arguments) args.push(quoteSource(arg)); output.push(comma + "{\"module\":" + numberToString(d.module) + ",\"node\":" + numberToString(d.node) + ",\"target\":" + numberToString(d.target) + ",\"name\":" + quoteSource(d.name) + ",\"arguments\":[" + args.join(",") + "]}"); comma = ","; }
   output.push("],\"effects\":["); comma = "";
   for (const s of result.effects) {
     output.push(comma + "{\"module\":" + numberToString(s.module) + ",\"node\":" + numberToString(s.node) + ",\"phase\":" + quoteSource(s.phase) + ",\"creation\":" + numberToString(s.creation) + ",\"parameters\":" + bindingNumbers(s.parameters) + ",\"reads\":" + bindingNumbers(s.reads) + ",\"writes\":" + bindingNumbers(s.writes) + ",\"moves\":" + bindingNumbers(s.moves) + ",\"invokes\":" + bindingNumbers(s.invokes) + ",\"retains\":" + bindingNumbers(s.retains) + ",\"returned\":" + bindingNumbers(s.returned) + ",\"callees\":" + bindingNumbers(s.callees) + ",\"unknown\":" + bindingBoolean(s.unknown) + ",\"recursive\":" + bindingBoolean(s.recursive) + ",\"external\":" + bindingBoolean(s.external) + ",\"borrows\":[");

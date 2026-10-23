@@ -4,8 +4,9 @@ import { AstNode } from "../parser/parser";
 import { SourceDiagnostic } from "../frontend/frontend";
 import { splitTypes, functionClose, functionParams, functionReturn, restPosition, argumentType, numericType, primitiveType, typeCompatible, replaceType, memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticArray, semanticTuple, semanticElement, containsMemory, fixedArraySize, fixedArrayElement, semanticFixedArray, genericBase, genericArguments } from "./types";
 
-import { TypedFile, CheckResult } from "./model";
+import { TypedFile, CheckResult, NativeDecorator } from "./model";
 export { TypedFile, CheckResult } from "./model";
+import { evaluateNativeComptime } from "./comptime";
 import { validateSafety } from "./safety";
 import { resourceType, resourceSubstitution } from "./ownership";
 import { nativeNumericLiteral, nativeUnaryPromotion, nativeBinaryPromotion, nativeIntegerText, nativeInteger64 } from "./numeric";
@@ -538,6 +539,8 @@ export class NativeChecker {
     this.result.symbolTypes[target] = valueType; this.symbolStates[target] = 2; return valueType;
   }
   builtin(name: string): string {
+    if (numericType(name)) return "!cast:" + name;
+    if (name == "comptime") return "!comptime";
     if (name == "match") return "!match";
     if (["when","whenType","otherwise"].includes(name)) return "!matchCase";
     if (name == "print" || name == "printError" || name == "write" || name == "writeError") return "!print";
@@ -804,7 +807,9 @@ export class NativeChecker {
       this.result.files[module].signatures[id] = "(" + callbackType + ")=>void"; return "void";
     }
     if (!array.endsWith("[]")) { this.report(module,id,"El método de array requiere un receptor"); return "!error"; }
-    const element: string = semanticElement(array); let args: number[] = [];
+    const element: string = semanticElement(array); let args: number[] = []; let explicitTypes: string[] = [];
+    for (const attr of n.attributes) if (attr.name == "typeArgument") explicitTypes.push(this.annotation(module,id,attr.value));
+    if (explicitTypes.length > 1 || (explicitTypes.length > 0 && !["map","flatMap","reduce"].includes(method))) this.report(module,id,"Argumentos de tipo no admitidos para este método de array");
     for (const edge of n.edges) if (edge.role == "args") args.push(edge.node);
     if (method == "concat") {
       let parameters: string[] = [];
@@ -816,7 +821,10 @@ export class NativeChecker {
     if (args.length != (reduce ? 2 : 1)) {
       for (const arg of args) this.expression(module,arg,""); this.report(module,id,"Aridad incorrecta del método de array"); return "!error";
     }
-    let accumulator: string = ""; if (reduce) accumulator = this.expression(module,args[0],"");
+    let accumulator: string = ""; if (reduce) {
+      accumulator = this.expression(module,args[0],explicitTypes.length == 0 ? "" : explicitTypes[0]);
+      if (explicitTypes.length > 0) { this.requireType(module,args[0],accumulator,explicitTypes[0]); accumulator = explicitTypes[0]; }
+    }
     const callback: number = reduce ? args[1] : args[0];
     const signature: string = this.expression(module,callback,"");
     if (functionClose(signature) < 0) { this.report(module,callback,"El método de array requiere un callback"); return "!error"; }
@@ -824,28 +832,31 @@ export class NativeChecker {
     if (reduce) { parameters = [accumulator,element]; }
     if (sort) parameters = [element,element];
     let expectedReturn: string = returns; if (reduce) expectedReturn = accumulator;
+    if (explicitTypes.length > 0 && (method == "map" || method == "flatMap")) expectedReturn = (method == "map" ? explicitTypes[0] : semanticArray(explicitTypes[0]));
     if (["filter","find","some","every"].includes(method)) expectedReturn = "boolean";
     if (method == "forEach") expectedReturn = "void";
     if (sort) expectedReturn = "number";
     const inputs: string[] = functionParams(signature);
     if (inputs.length != parameters.length) this.report(module,callback,"Aridad incorrecta del callback de array");
     for (let at: number = 0; at < inputs.length && at < parameters.length; at = at+1) {
-      this.requireType(module,callback,parameters[at],inputs[at]);
+      if (!this.compatible(parameters[at],inputs[at])) this.report(module,callback,"Parámetro de callback incompatible con el elemento de array");
       if (this.transferType(parameters[at]) && !borrowedType(inputs[at]) && !(reduce && at == 0)) this.report(module,callback,"E4101: el callback debe prestar el elemento con ownership");
     }
-    this.requireType(module,callback,returns,expectedReturn);
+    if (!this.compatible(returns,expectedReturn)) this.report(module,callback,"Retorno del callback incompatible con el método de array");
+    const adapted: string = "(" + parameters.join(",") + ")=>" + expectedReturn;
+    if (signature != adapted) this.result.files[module].conversions[callback] = adapted;
     if (["filter","find","sort"].includes(method) && this.transferType(array)) {
       const object: number = bindingChild(n,"object"); const call: AstNode = this.node(module,object); const target: number = this.reference(module,object);
       if (call.kind != "CallExpression" || target < 0 || this.binding.symbols[target].name != "move" || this.binding.symbols[target].module >= 0) this.report(module,id,"E4101: una operación que copia owners requiere consumir el array con move");
     }
     let result: string = array;
-    if (method == "map") { if (returns == "void") this.report(module,callback,"map no admite un resultado void"); result = semanticArray(returns); }
-    if (method == "flatMap") { if (!returns.endsWith("[]") || functionClose(returns) >= 0) this.report(module,callback,"flatMap requiere un callback que devuelva un array"); result = returns; }
+    if (method == "map") { if (returns == "void") this.report(module,callback,"map no admite un resultado void"); result = semanticArray(expectedReturn); }
+    if (method == "flatMap") { if (!returns.endsWith("[]") || functionClose(returns) >= 0) this.report(module,callback,"flatMap requiere un callback que devuelva un array"); result = expectedReturn; }
     if (method == "find") result = "Optional<" + element + ">";
     if (method == "some" || method == "every") result = "boolean";
     if (method == "forEach") result = "void";
     if (reduce) result = accumulator;
-    this.result.files[module].signatures[id] = "(" + (reduce ? accumulator + "," : "") + signature + ")=>" + result;
+    this.result.files[module].signatures[id] = "(" + (reduce ? accumulator + "," : "") + adapted + ")=>" + result;
     return result;
   }
   matchCall(module: number, id: number): string {
@@ -948,6 +959,29 @@ export class NativeChecker {
     this.result.files[module].signatures[id] = "(" + input + ")=>" + result; this.result.files[module].argumentParameters[args[0]] = 0; return result;
   }
   call(module: number, id: number, callable: string, sid: number, receiver: string = "", expected: string = ""): string {
+    if (callable.startsWith("!cast:")) {
+      const target: string = callable.slice(6,callable.length); const n: AstNode = this.node(module,id); let args: number[] = [];
+      for (const edge of n.edges) if (edge.role == "args") args.push(edge.node);
+      if (args.length != 1) { this.report(module,id,"Un cast numérico requiere un argumento"); return "!error"; }
+      const operand: AstNode = this.node(module,args[0]); let context: string = "";
+      if (operand.kind == "NamedArgumentExpression" || operand.kind == "SpreadElement") this.report(module,args[0],"Un cast numérico requiere un argumento posicional simple");
+      for (const attr of n.attributes) if (attr.name == "typeArgument") this.report(module,id,"Un cast numérico no admite argumentos de tipo");
+      if (target == "i64" || target == "u64") {
+        const literal: AstNode = operand.kind == "UnaryExpression" ? this.node(module,bindingChild(operand,"operand")) : operand;
+        if (literal.kind == "LiteralExpression" && nativeIntegerText(literal.get("raw")) != "") context = target;
+      }
+      const actual: string = this.expression(module,args[0],context);
+      if (!numericType(memoryValue(actual))) this.report(module,args[0],"Un cast numérico requiere un valor numérico");
+      this.result.files[module].argumentParameters[args[0]] = 0; this.result.files[module].signatures[id] = "(" + actual + ")=>" + target; this.result.files[module].conversions[id] = target; return target;
+    }
+    if (callable == "!comptime") {
+      const n: AstNode = this.node(module,id); let args: number[] = []; for (const edge of n.edges) if (edge.role == "args") args.push(edge.node);
+      if (args.length != 1) { this.report(module,id,"comptime requiere un único callback sin parámetros"); return "!error"; }
+      const callback: string = this.expression(module,args[0],"");
+      if (functionClose(callback) < 0 || functionParams(callback).length != 0) { this.report(module,args[0],"comptime requiere un callback invocable sin parámetros"); return "!error"; }
+      const result: string = functionReturn(callback); if (result == "void" || this.transferType(result) || containsMemory(result)) this.report(module,id,"COMPTIME_NON_LITERAL: resultado void o contrato de memoria no materializable");
+      this.result.files[module].argumentParameters[args[0]] = 0; this.result.files[module].signatures[id] = "(" + callback + ")=>" + result; return result;
+    }
     if (callable.startsWith("!tasks:")) return this.taskCollectionCall(module,id,callable.slice(7,callable.length));
     if (callable == "!match") return this.matchCall(module,id);
     if (callable == "!matchCase") { this.report(module,id,"Un caso sólo puede aparecer en el array literal de match"); return "!error"; }
@@ -1145,6 +1179,7 @@ export class NativeChecker {
       const sid: number = this.reference(module,id);
       if (sid >= 0) {
         const s: BindingSymbol = this.binding.symbols[sid];
+        if ((s.module) < 0 && numericType(s.name)) { this.report(module,id,"Un cast numérico requiere una llamada directa"); return "!error"; }
         if (s.declarations.length > 1) {
           if (functionClose(expected) < 0) return this.unsupported(module,id,"sobrecarga como valor sin firma contextual");
           let selected: number = -1; let score: number = 0; let valueType: string = "!error"; let ambiguous: boolean = false;
@@ -1268,7 +1303,13 @@ export class NativeChecker {
       const right: string = memoryValue(this.expression(module,rightId,(left == "i64" || left == "u64") && this.integerLiteral(module,rightId) ? left : "")); const op: string = n.get("operator");
       if ((right == "i64" || right == "u64") && this.integerLiteral(module,leftId)) left = this.expression(module,leftId,right);
       if (op == "+" && (left == "string" || right == "string")) return "string";
-      if (["==","!=","===","!==","<",">","<=",">="].includes(op)) { this.requireType(module,id,left,right); return "boolean"; }
+      if (["==","!=","===","!==","<",">","<=",">="].includes(op)) {
+        if (numericType(left) && numericType(right)) {
+          const promoted: string = nativeBinaryPromotion(left,right,op);
+          this.requireType(module,leftId,left,promoted); this.requireType(module,rightId,right,promoted);
+        } else if (!this.compatible(left,right)) this.report(module,id,"Tipos incompatibles en la comparación");
+        return "boolean";
+      }
       if (op == "&&" || op == "||") { this.requireType(module,id,left,"boolean"); this.requireType(module,id,right,"boolean"); return "boolean"; }
       if (!numericType(left) && left != "!error") this.report(module,id,"Operador numérico sobre '" + left + "'");
       if (!numericType(right) && right != "!error") this.report(module,id,"Operador numérico sobre '" + right + "'");
@@ -1467,6 +1508,7 @@ export class NativeChecker {
   }
   statement(module: number, id: number, returns: string, loop: number): void {
     const n: AstNode = this.node(module,id); const kind: string = n.kind;
+    if (kind == "ModuleHeaderDeclaration") return;
     if (kind == "Program" || kind == "BlockStatement") {
       for (const e of n.edges) if (e.role == "statements") this.statement(module,e.node,returns,loop);
       return;
@@ -1629,6 +1671,24 @@ export class NativeChecker {
     if (["ImportDeclaration","ExportAllDeclaration","ExportNamedDeclaration"].includes(kind)) return;
     this.unsupported(module,id,kind);
   }
+  decorator(module: number, id: number): void {
+    const n: AstNode = this.node(module,id); const name: string = n.get("name"); const target: number = this.binding.files[module].parents[id]; const owner: AstNode = this.node(module,target);
+    if (["cppgen","etsgen"].includes(name)) { this.unsupported(module,id,"expansión nativa @" + name); return; }
+    if (!["comptime","deprecated","sealed","include","link"].includes(name)) { this.report(module,id,"Decorador desconocido o sin contrato nativo: @" + name); return; }
+    let item: NativeDecorator = new NativeDecorator(module,id,target,name); let valid: boolean = true;
+    for (const edge of n.edges) if (edge.role == "args") {
+      const argument: AstNode = this.node(module,edge.node); this.expression(module,edge.node,"");
+      if (argument.kind != "LiteralExpression" || argument.get("literalType") != "string") { this.report(module,edge.node,"Un argumento de decorador debe ser un literal string"); valid = false; }
+      else item.arguments.push(argument.get("value"));
+    }
+    if (name == "comptime") {
+      if (owner.kind != "FunctionDeclaration" || this.asynchronous(module,target) || item.arguments.length != 0) { this.report(module,id,"@comptime requiere una función síncrona sin argumentos de decorador"); valid = false; }
+    } else if (name == "sealed") { if (owner.kind != "ClassDeclaration" || item.arguments.length != 0) { this.report(module,id,"@sealed requiere una clase y no admite argumentos"); valid = false; } }
+    else if (name == "include" || name == "link") { if (owner.kind != "ModuleHeaderDeclaration" || item.arguments.length != 1) { this.report(module,id,"@" + name + " requiere un único string en la cabecera del módulo"); valid = false; } }
+    else if (item.arguments.length > 1) { this.report(module,id,"@deprecated admite a lo sumo un mensaje"); valid = false; }
+    for (const previous of this.result.decorators) if (previous.module == module && previous.target == target && previous.name == name && name != "include" && name != "link") { this.report(module,id,"Decorador duplicado @" + name); valid = false; }
+    if (valid) this.result.decorators.push(item);
+  }
   check(): CheckResult {
     for (const diagnostic of this.binding.diagnostics) this.result.diagnostics.push(diagnostic);
     if (!this.binding.success) return this.result;
@@ -1638,7 +1698,7 @@ export class NativeChecker {
     // Arrows may be reached only as values, not statements. Validate their bodies too.
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.result.files[m].types.length; id = id + 1) {
       if (this.binding.files[m].nodeScopes[id] >= 0 && this.node(m,id).kind == "ArrowFunctionExpression") this.statement(m,id,"",0);
-      if (this.binding.files[m].nodeScopes[id] >= 0 && this.node(m,id).kind == "Decorator") this.unsupported(m,id,"decorador/expansión");
+      if (this.binding.files[m].nodeScopes[id] >= 0 && this.node(m,id).kind == "Decorator") this.decorator(m,id);
     }
     // Safety checks also need the types of unused fields/parameters/receivers.
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
@@ -1651,6 +1711,7 @@ export class NativeChecker {
       if (symbol.module >= 0 && (symbol.namespaceModule) < 0) this.symbolType(sid,symbol.module,symbol.node);
     }
     if (this.result.diagnostics.length == 0) { let checked: CheckResult = this.result; validateSafety(this.graph,this.binding,checked); this.result = checked; }
+    if (this.result.diagnostics.length == 0) this.result = evaluateNativeComptime(this.graph,this.binding,this.result);
     this.result.success = this.result.diagnostics.length == 0; return this.result;
   }
 }

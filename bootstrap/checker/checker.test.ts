@@ -1158,3 +1158,171 @@ test('native async summaries preserve origins stored in a returned task frame',(
 test('native async rejects suspension in a field without a constructor lifetime contract',()=>error('async function make():Promise<number>{return 1;}class H{n:number = await make();}const h=new H();',/E4204/));
 test('native async rejects an implicit blocking suspension in a field initializer',()=>error('async function make():Promise<number>{return 1;}class H{n:number = race([make()]);}const h=new H();',/E4204/));
 test('native async permits task creation without suspension in a field initializer',()=>check('class H{t:Promise<void> = sleep(1);}let h=new H();await h.t;'));
+
+function nativeConstants(g:any){return g.files.flatMap((f:any)=>f.constantValues.filter((s:string)=>s!=="").map((s:string)=>JSON.parse(s)));}
+function constantNumberResult(body:string, expected:number, helpers=""){
+ const g=check(helpers+'const answer:number=comptime(():number=>{'+body+'});');
+ assert.equal(nativeConstants(g).at(-1).value,expected);return g;
+}
+for(const [name,body,expected] of [
+ ['arithmetic','return 1+2*3;',7],
+ ['block shadow','let x=10;{let x=99;x+=1;}return x;',10],
+ ['outer assignment','let sum=0;{sum+=3;{sum+=4;}}return sum;',7],
+ ['for scope','let i=100;let sum=0;for(let i=0;i<3;i+=1){sum+=i;}return i+sum;',103],
+ ['continue','let sum=0;for(let i=0;i<5;i+=1){if(i==2)continue;sum+=i;}return sum;',8],
+ ['break','let n=0;while(true){n+=1;if(n==3)break;}return n;',3],
+ ['nested return','for(let i=0;i<4;i+=1){if(i==2){{return 12;}}}return 0;',12],
+ ['array map','const xs=[1,2,3].map((x:number):number=>x*2);return xs[2];',6],
+ ['array reduce','return [1,2,3].reduce(0,(s:number,x:number):number=>s+x);',6],
+ ['callback capture','let sum=0;[1,2,3].forEach((x:number):void=>{sum+=x;});return sum;',6],
+ ['callback shadow','let x=10;const xs=[1,2].map((x:number):number=>x+1);return x+xs[0];',12],
+ ['array filter','const xs=[1,2,3].filter((x:number):boolean=>x>1);return xs.length;',2],
+ ['array mutation','let xs:number[]=[];xs.push(2);xs.push(4);xs.pop();return xs[0];',2],
+ ['array assignment','let xs=[1,2];xs[0]=7;return xs[0];',7],
+ ['for of','let n=0;for(const x of [1,2,3]){n+=x;}return n;',6],
+ ['destructure','const [x,y]=[2,3];return x+y;',5],
+ ['math','return Math.floor(2.9)+Math.sqrt(4);',4],
+ ['short circuit','let n=0;const ignored=true||((n+=1)>0);return n;',0],
+ ['short circuit error','const ignored=false&&(1/0>0);return 1;',1],
+ ['ternary','return true?7:1/0;',7],
+ ['local helper','function twice(x:number):number{return x*2;}return twice(3);',6],
+] as const)test(`native comptime evaluates ${name}`,()=>constantNumberResult(body,expected));
+test('native comptime invokes recursive helpers with lexical environments',()=>constantNumberResult('return fact(5);',120,'function fact(n:number):number{if(n<=1)return 1;return n*fact(n-1);}'));
+test('native comptime uses selected overload bodies',()=>constantNumberResult('return f(2);',3,'function f(x:number):number{return x+1;}function f(x:string):number{return x.length;}'));
+test('native comptime preserves strings and templates',()=>{
+ const g=check('const s:string=comptime(():string=>{const n=2;return `España ${n+1}`;});');assert.equal(nativeConstants(g).at(-1).value,'España 3');
+});
+test('native comptime preserves literal aggregate values',()=>{
+ const g=check('const xs:number[]=comptime(():number[]=>[1,2,3]);');assert.deepEqual(nativeConstants(g).at(-1).value.map((v:any)=>v.value),[1,2,3]);
+});
+for(const [name,source,expected] of [
+ ['u64','const n:u64=18446744073709551615;return n;','18446744073709551615'],
+ ['u64 wrap','const n:u64=18446744073709551615;return n+1;','0'],
+ ['i64 min','const n:i64=-9223372036854775808;return n;','-9223372036854775808'],
+ ['exact intermediate','const n:u64=9007199254740993;return n+2;','9007199254740995'],
+ ['integer cast','const n:u64=18446744073709551615;return i64(n);','-1'],
+] as const)test(`native comptime preserves ${name}`,()=>{
+ const resultType=name==='i64 min'||name==='integer cast'?'i64':'u64';
+ const g=check('const n:'+resultType+'=comptime(():'+resultType+'=>{'+source+'});');assert.equal(nativeConstants(g).at(-1).exactInteger,expected);
+});
+for(const [name,source,pattern] of [
+ ['division','const n=comptime(():number=>1/0);',/COMPTIME_(FLOAT|INTEGER)_DIVISION_ZERO/],
+ ['instructions','const n=comptime(():number=>{while(true){}return 1;});',/COMPTIME_INSTRUCTION_LIMIT/],
+ ['recursion','function f(n:number):number{return f(n+1);}const n=comptime(():number=>f(0));',/COMPTIME_RECURSION_LIMIT/],
+ ['values','const n=comptime(():string=>"xx".repeat(1048576));',/COMPTIME_VALUE_LIMIT/],
+ ['effect','const n=comptime(():number=>{print(1);return 2;});',/COMPTIME_FORBIDDEN_EFFECT/],
+ ['random','const n=comptime(():number=>Math.random());',/COMPTIME_FORBIDDEN_EFFECT/],
+ ['precision','const n=comptime(():number=>{const x:u64=9007199254740993;return Math.sqrt(x);});',/COMPTIME_INTEGER_PRECISION/],
+ ['overflow','const n=comptime(():i64=>{const x:i64=9223372036854775807;return x+1;});',/COMPTIME_INTEGER_OVERFLOW/],
+ ['semantic first','const n=comptime(():number=>{const x:number="s";return 1;});',/incompatible/],
+ ['no void','const n=comptime(():void=>{});',/COMPTIME_NON_LITERAL/],
+] as const)test(`native comptime rejects ${name}`,()=>error(source,pattern));
+test('native comptime evaluates decorated calls and publishes metadata',()=>{
+ const g=check('@comptime function f(n:number):number{return n+1;}const n=f(2);');assert.equal(nativeConstants(g).at(-1).value,3);assert.equal(g.decorators[0].name,'comptime');
+});
+test('native comptime defers only unavailable runtime arguments',()=>{
+ const g=check('@comptime function f(n:number):number{return n+1;}function runtime(n:number):number{return f(n);}');assert.ok(g.files[0].constantStates.includes('deferred'));
+});
+test('native comptime never defers a genuine decorated body error',()=>error('@comptime function f():number{return 1/0;}const n=f();',/COMPTIME_(FLOAT|INTEGER)_DIVISION_ZERO/));
+test('native comptime never defers an external effect in a decorated body',()=>error('@comptime function f():number{return argumentCount();}const n=f();',/COMPTIME_FORBIDDEN_EFFECT/));
+for(const [name,source] of Object.entries({
+ deprecated:'@deprecated("use g") function f():number{return 1;}',
+ sealed:'@sealed class C{x:number=1;}',
+ headers:'@include("local.hpp")\n@link("local")\nconst n=1;',
+}))test(`native decorators preserve ${name}`,()=>{const g=check(source);assert.ok(g.decorators.length>0);});
+for(const [name,source,pattern] of [
+ ['unknown','@mystery function f():number{return 1;}',/Decorador/],
+ ['argument','@deprecated(1) function f():number{return 1;}',/string/],
+ ['duplicate','@deprecated @deprecated function f():number{return 1;}',/duplicado/],
+ ['sealed target','@sealed function f():number{return 1;}',/clase/],
+ ['comptime async','@comptime async function f():Promise<number>{return 1;}',/síncrona/],
+] as const)test(`native decorators reject ${name}`,()=>error(source,pattern));
+
+test('native comptime applies aggregate destination conversions',()=>{
+ const g=check('const xs:i8[]=comptime(():i8[]=>[1,2]);');assert.deepEqual(nativeConstants(g).at(-1).value.map((v:any)=>[v.type,v.exactInteger]),[['i8','1'],['i8','2']]);
+});
+test('native comptime converts annotated object fields',()=>{
+ const g=check('interface I{x:i8;}const obj:I=comptime(():I=>({x:2}));');assert.equal(nativeConstants(g).at(-1).value.x.exactInteger,'2');
+});
+test('native comptime reads a preceding local capture',()=>{
+ const g=check('function run():number{const n=2;return comptime(():number=>n+1);}');assert.equal(nativeConstants(g).at(-1).value,3);
+});
+test('native comptime cannot reuse a stale mutable capture',()=>error('let n=1;n=2;const x=comptime(():number=>n);',/COMPTIME_VALUE_UNAVAILABLE/));
+test('native comptime defers a decorated call after a runtime mutation',()=>{
+ const g=check('let n=1;function set():void{n=2;}@comptime function f(x:number):number{return x;}set();const y=f(n);');assert.ok(g.files[0].constantCodes.includes('COMPTIME_VALUE_UNAVAILABLE'));
+});
+test('native comptime evaluates assignment lvalues before their right side',()=>constantNumberResult('let xs=[0,0];let n=0;xs[n+=1]=(n+=1);return xs[1]*10+n;',22));
+test('native comptime reads a compound lvalue only once',()=>constantNumberResult('let xs=[1,2];let n=0;xs[n+=1]+=(n+=1);return xs[1]*10+n;',42));
+test('native comptime treats arrays as values on assignment',()=>constantNumberResult('let xs=[1];let ys=xs;ys[0]=7;return xs[0]+ys[0];',8));
+test('native comptime evaluates defaults in parameter order',()=>constantNumberResult('function f(x:number=2,y:number=x+1):number{return y;}return f();',3));
+test('native comptime preserves named argument evaluation order',()=>constantNumberResult('let n=0;function f(x:number,y:number):number{return x*10+y;}return f(y:n+=1,x:n+=1);',21));
+test('native comptime expands rest arguments',()=>constantNumberResult('function f(...xs:number[]):number{return xs.length+xs[1];}return f(1,3);',5));
+test('native comptime evaluates switch fallthrough',()=>constantNumberResult('let n=0;switch(2){case 1:n+=1;break;case 2:n+=2;default:n+=3;}return n;',5));
+test('native comptime isolates shadowed destructuring bindings',()=>constantNumberResult('let n=1;{const [n]=[7];}return n;',1));
+test('native comptime indexes strings with narrow integers',()=>{
+ const g=check('const s=comptime(():string=>{const n:i8=1;return "abc".charAt(n);});');assert.equal(nativeConstants(g).at(-1).value,'b');
+});
+test('native comptime preserves implicit f32 rounding',()=>constantNumberResult('const n:f32=16777217;return n;',16777216));
+test('native comptime handles mixed exact comparisons',()=>{
+ const g=check('const n=comptime(():boolean=>{const x:i64=-1;const y:u64=18446744073709551615;return x==y;});');assert.equal(nativeConstants(g).at(-1).value,true);
+});
+test('native comptime preserves a structured deferred reason',()=>{
+ const g=check('@comptime function f(n:number):number{return n;}function run(n:number):number{return f(n);}');assert.ok(g.files[0].constantCodes.includes('COMPTIME_VALUE_UNAVAILABLE'));
+});
+test('native comptime imports constants and functions by original symbol identity',()=>{
+ const g=check('import {f,n} from "./lib";const v=comptime(():number=>f(n));',{'lib.ets':'export const n=3;export function f(n:number):number{return n+2;}'});assert.equal(nativeConstants(g).at(-1).value,5);
+});
+test('native comptime evaluates decorated namespace calls',()=>{
+ const g=check('import * as lib from "./lib";const v=lib.f(3);',{'lib.ets':'@comptime export function f(n:number):number{return n+2;}'});assert.equal(nativeConstants(g).at(-1).value,5);
+});
+test('native comptime evaluates namespace constants inside callbacks',()=>{
+ const g=check('import * as lib from "./lib";const v=comptime(():number=>lib.n+1);',{'lib.ets':'export const n=3;'});assert.equal(nativeConstants(g).at(-1).value,4);
+});
+
+test('native comptime never converts the boolean result of a comparison to an operand type',()=>{
+ const g=check('const a:i64=1;const b:u64=2;const n=a<b;');const f=g.files[0];const id=f.ast.nodes.findIndex((n:any)=>n.kind==='BinaryExpression');assert.equal(f.types[id],'boolean');assert.equal(f.conversions[id],'');
+});
+test('native comptime detects signed i32 overflow',()=>error('const n=comptime(():i32=>{const x:i32=2147483647;const y:i32=1;return x+y;});',/COMPTIME_INTEGER_OVERFLOW/));
+test('native comptime detects signed minimum remainder overflow',()=>error('const n=comptime(():i64=>{const x:i64=-9223372036854775808;const y:i64=-1;return x%y;});',/COMPTIME_INTEGER_OVERFLOW/));
+test('native comptime checks shift counts against the promoted left width',()=>error('const n=comptime(():i32=>{const x:i32=1;const y:u64=32;return x<<y;});',/COMPTIME_INTEGER_SHIFT/));
+test('native comptime preserves signed right shift with an unsigned count',()=>{
+ const g=check('const n=comptime(():i32=>{const x:i32=-4;const y:u64=1;return x>>y;});');assert.equal(nativeConstants(g).at(-1).exactInteger,'-2');
+});
+test('native comptime converts u64 directly to f32 without double rounding',()=>{
+ const value=(1n<<63n)+(1n<<39n)+1n;
+ const g=check('const n=comptime(():f32=>{const x:u64='+value+';return x;});');assert.equal(nativeConstants(g).at(-1).value,2**63+2**40);
+});
+test('native comptime preserves negative zero in a float result',()=>{
+ const g=check('const n=comptime(():f64=>-0.0);');assert.ok(Object.is(nativeConstants(g).at(-1).value,-0));
+});
+test('native comptime materialization rejects nonfinite float results',()=>error('const n=comptime(():f64=>Math.sqrt(-1));',/COMPTIME_FLOAT_RANGE/));
+test('native comptime checks nonfinite integer casts before conversion',()=>error('const n=comptime(():i32=>i32(Math.sqrt(-1)));',/COMPTIME_INTEGER_CAST/));
+test('native comptime allows an explicitly rounded Math argument',()=>{
+ const g=check('const n=comptime(():number=>{const x:u64=9007199254740993;return Math.sqrt(f64(x));});');assert.ok(Number.isFinite(nativeConstants(g).at(-1).value));
+});
+test('native comptime rounds map results before indexing the temporary',()=>constantNumberResult('const xs:f64[]=[16777217];return xs.map<f32>((x:f64):f64=>x)[0];',16777216));
+test('native comptime supports typed object destructuring defaults',()=>constantNumberResult('interface I{x:number;}const a:I={x:3};const {x:n}=a;return n;',3));
+test('native comptime uses fresh cells in each loop iteration',()=>constantNumberResult('let sum=0;for(let i=0;i<3;i+=1){let n=i;sum+=n;}return sum;',3));
+test('native comptime evaluates array predicates only until their answer is known',()=>constantNumberResult('let count=0;const yes=[1,2,3].some((x:number):boolean=>{count+=1;return x==1;});return count;',1));
+test('native comptime computes nested calls in one root environment',()=>{
+ const g=check('@comptime function twice(n:number):number{return n*2;}@comptime function outer(n:number):number{return twice(n+1);}const n=outer(3);');assert.equal(nativeConstants(g).at(-1).value,8);
+});
+test('native comptime does not reset a budget through helper calls',()=>error('function spin():number{let n=0;while(n<10000){n+=1;}return n;}const n=comptime(():number=>spin());',/COMPTIME_INSTRUCTION_LIMIT/));
+test('native comptime resets its budget for independent roots',()=>{
+ const source=Array.from({length:4},(_,i)=>'const n'+i+'=comptime(():number=>{let sum=0;for(let n=0;n<150;n+=1){sum+=1;}return sum;});').join('');
+ const g=check(source);assert.deepEqual(nativeConstants(g).map((v:any)=>v.value),[150,150,150,150]);
+});
+test('native comptime records an error code independent of message text',()=>{
+ const g=error('const n=comptime(():number=>1/0);',/COMPTIME_FLOAT_DIVISION_ZERO/);assert.ok(g.files[0].constantCodes.includes('COMPTIME_FLOAT_DIVISION_ZERO'));
+});
+test('native comptime rejects unknown runtime captures instead of inventing a constant',()=>error('const input=argument(0);const n=comptime(():string=>input);',/COMPTIME_VALUE_UNAVAILABLE/));
+test('native comptime rejects forward global reads with a TDZ diagnostic',()=>error('const n=comptime(():number=>later);const later=2;',/COMPTIME_TDZ|E4001/));
+test('native comptime does not discard source errors in an unused result',()=>error('const n=comptime(():number=>{const xs:number[]=["s"];return 1;});',/incompatible/));
+for(const [name,source] of Object.entries({
+ arity:'i8();',
+ extra:'i8(1,2);',
+ value:'const cast=i64;',
+ typeArgument:'class C{}i8<C>(1);',
+ named:'i8(value:1);',
+ string:'i8("s");',
+}))test(`native numeric casts reject ${name}`,()=>run(fixture(source),1));

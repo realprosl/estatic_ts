@@ -9,6 +9,8 @@ export interface AuditCase {
   rejectionPhase?: string;
   diagnostic?: string;
   symbols?: Record<string, string>;
+  constants?: unknown[];
+  decorators?: string[];
 }
 const rejectionPatterns: Record<string,string> = {
   'integer64-overflow':'rango|no cabe',
@@ -100,9 +102,9 @@ export const cases: AuditCase[] = [
   yes('builtin-console', 'builtins', 'console.log("hello");'),
   yes('builtin-json', 'builtins', 'const j=JSON.parse("{}");'),
   yes('builtin-filesystem', 'builtins', 'const r=readFile("input.txt");'),
-  yes('comptime-expression', 'expansions', 'const n=comptime(():number=>1+2);'),
-  yes('comptime-function', 'expansions', '@comptime function f(x:number):number{return x+1;}const n=f(1);'),
-  yes('decorator', 'expansions', '@deprecated function f():number{return 1;}'),
+  {...yes('comptime-expression', 'expansions', 'const n=comptime(():number=>1+2);'),constants:[{type:'number',value:3}]},
+  {...yes('comptime-function', 'expansions', '@comptime function f(x:number):number{return x+1;}const n=f(1);'),constants:[{type:'number',value:2}],decorators:['comptime']},
+  {...yes('decorator', 'expansions', '@deprecated function f():number{return 1;}'),decorators:['deprecated']},
   yes('owner-transfer', 'memory', box+'let p:ptr<Box> = new Box();const q=move(p);print(q.value);'),
   no('owner-use-after-move', 'memory', box+'let p:ptr<Box> = new Box();const q=move(p);print(p.value);'),
   yes('owner-field', 'memory', box+'class Holder{p:ptr<Box> = new Box();}let h=new Holder();'),
