@@ -99,6 +99,9 @@ tamaño de entrada.
   listas de tipos multilínea/con coma final y spans completos por parámetro.
 - Tipos primitivos y nominales, namespace, genéricos, arrays dinámicos y fijos,
   tuplas, funciones, readonly, typeof, unions e intersecciones de tipos.
+  Las consultas typeof admiten rutas cualificadas y sufijos; las tuplas también
+  admiten sufijos de arrays/unions. Esto amplía el parser nativo; stage 0 mantiene
+  sus límites de consultas y composición.
 - Bloques, `if/else`, `while`, `for` clásico, `for of/in/await of`, `return`,
   `break`, `continue` y `delete` por índice. Terminadores significativos y `;`.
 - Export de declaraciones y decoradores previos a declaraciones compatibles.

@@ -30,6 +30,8 @@ export function formatChecked(result: CheckResult, binding: BindingResult, graph
   for (const b of result.borrows) {
     output.push(comma + "{\"module\":" + numberToString(b.module) + ",\"symbol\":" + numberToString(b.symbol) + ",\"root\":" + numberToString(b.root) + ",\"begin\":" + numberToString(b.begin) + ",\"end\":" + numberToString(b.end) + ",\"mode\":" + quoteSource(b.mode) + "}"); comma = ",";
   }
+  output.push("],\"queries\":["); comma = "";
+  for (const q of result.queries) { output.push(comma + "{\"module\":" + numberToString(q.module) + ",\"node\":" + numberToString(q.node) + ",\"text\":" + quoteSource(q.text) + ",\"type\":" + quoteSource(q.typeName) + ",\"symbols\":" + bindingNumbers(q.symbols) + "}"); comma = ","; }
   output.push("],\"decorators\":["); comma = "";
   for (const d of result.decorators) { let args: string[] = []; for (const arg of d.arguments) args.push(quoteSource(arg)); output.push(comma + "{\"module\":" + numberToString(d.module) + ",\"node\":" + numberToString(d.node) + ",\"target\":" + numberToString(d.target) + ",\"name\":" + quoteSource(d.name) + ",\"arguments\":[" + args.join(",") + "]}"); comma = ","; }
   output.push("],\"effects\":["); comma = "";

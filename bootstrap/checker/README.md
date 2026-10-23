@@ -75,7 +75,7 @@ semántica ni ejecución concurrente del checker.
   arrays homogéneos y tuplas heterogéneas; arrays/objetos con contexto en una
   anotación o firma. Los arrays vacíos requieren contexto.
 - Anotaciones primitivas, numéricos concretos hasta 64 bits, f32/f64, aliases
-  simples, `typeof` de identificadores, tipos callable y uniones sin narrowing.
+  simples, consultas `typeof` de valores y rutas cualificadas, tipos callable y uniones sin narrowing.
   Los nombres de clases/interfaces conservan su identidad entre archivos y
   namespaces; dos nombres iguales no colapsan en el mismo tipo.
 - Funciones, métodos y arrows, recursión con firma, parámetros opcionales y
@@ -137,6 +137,26 @@ las arenas del proyecto; uno negativo representa un origen opaco (parámetro o
 llamada sin implementación). Son IDs de esta carga, no un formato persistente.
 Ver [EFFECTS.md](./EFFECTS.md) y [SAFETY.md](./SAFETY.md).
 
+## Consultas y composición de tipos
+
+El parser nativo admite sufijos de arrays, unions e intersecciones tras una
+consulta `typeof`, además de arrays/unions de tuplas. Las consultas no leen el
+valor runtime ni usan su narrowing: resuelven el tipo estático desde el símbolo
+original. Se permiten imports de valor usados sólo como tipo y namespaces
+importados sólo de tipo, sin autorizar acceso runtime a esos imports.
+
+`queries` publica una entrada por `(module,node,text)` con el tipo resuelto y
+los símbolos de cada segmento de la ruta. Las identidades son originales, tras
+aliases/reexports. Un segmento builtin o compuesto sin símbolo único usa `-1`.
+El nodo conserva su AST/binding y las tablas de selección y miembros de sus
+expresiones; dos consultas de la misma anotación no se pisan. Las posiciones
+siguen ancladas al nodo propietario de la anotación.
+
+Los arrays dinámicos y fijos conservan la precedencia del elemento union,
+intersección o callable en su representación canónica. Las unions que contienen
+callables se rechazan explícitamente mientras no exista una representación sin
+ambigüedad con la union del retorno; no se reinterpretan silenciosamente.
+
 ## Evaluación nativa de constantes
 
 `comptime(callback)` y las llamadas `@comptime` publican valores tipados después
@@ -174,8 +194,11 @@ La suite registra cuatro diferencias observadas con el checker TS directo:
 en el nuevo núcleo pero fallan en ese recorrido directo de stage 0; éste acepta
 la escritura externa de cierto campo readonly y el literal 128 pasado a i8,
 que el núcleo nativo rechaza. No se anuncia paridad general ni se modifica
-stage 0 para ocultar esas diferencias. `typeof ns.miembro` sigue siendo un
-límite del parser actual y se conserva como error previo al checker.
+stage 0 para ocultar esas diferencias. El parser nativo admite ahora
+`typeof ns.miembro`, namespaces anidados, imports sólo de tipo y campos/métodos
+con sus comprobaciones de acceso y receptor. El parser de stage 0 conserva su
+límite de identificador simple; no se anuncia soporte de estas consultas en su
+CLI ni en su codegen.
 
 Las posiciones en anotaciones se anclan al nodo propietario: el parser conserva
 el texto canónico, no spans internos para cada fragmento. La resolución tiene
@@ -186,7 +209,7 @@ mejora de rendimiento.
 
 La revisión de async pasa **904/904** pruebas del checker. La revisión de comptime añade **99** regresiones; npm test pasa
 **3101/3101**, sin fallos ni skips. El audit alcanza
-**80/80**, sin interpretar ese muestreo como paridad completa del lenguaje.
+**83/83**, sin interpretar ese muestreo como paridad completa del lenguaje.
 Las pruebas comprueban creación diferida, defaults, transferencias, joins,
 retornos, préstamos, callbacks, efectos por fase, escapes de frames y builtins.
 

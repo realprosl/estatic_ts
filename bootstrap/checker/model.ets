@@ -42,7 +42,11 @@ export class NativeDecorator {
   module: number; node: number; target: number; name: string; arguments: string[];
   constructor(module: number, node: number, target: number, name: string) { this.module = module; this.node = node; this.target = target; this.name = name; this.arguments = []; }
 }
+export class NativeTypeQuery {
+  module: number; node: number; text: string; typeName: string; symbols: number[];
+  constructor(module: number, node: number, text: string, typeName: string, symbols: number[]) { this.module = module; this.node = node; this.text = text; this.typeName = typeName; this.symbols = symbols; }
+}
 export class CheckResult {
-  decorators: NativeDecorator[]; files: TypedFile[]; symbolTypes: string[]; captures: NativeCapture[]; borrows: BorrowLease[]; effects: EffectSummary[]; diagnostics: SourceDiagnostic[]; success: boolean;
-  constructor() { this.decorators = []; this.files = []; this.symbolTypes = []; this.captures = []; this.borrows = []; this.effects = []; this.diagnostics = []; this.success = false; }
+  queries: NativeTypeQuery[]; decorators: NativeDecorator[]; files: TypedFile[]; symbolTypes: string[]; captures: NativeCapture[]; borrows: BorrowLease[]; effects: EffectSummary[]; diagnostics: SourceDiagnostic[]; success: boolean;
+  constructor() { this.queries = []; this.decorators = []; this.files = []; this.symbolTypes = []; this.captures = []; this.borrows = []; this.effects = []; this.diagnostics = []; this.success = false; }
 }
