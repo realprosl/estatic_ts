@@ -98,17 +98,9 @@ const invalid:[string,string,RegExp][]=[
 ];
 for(const[name,source,pattern]of invalid)test(`checker rejects ${name}`,()=>error(source,pattern));
 for(const[name,source]of Object.entries({
- fixed:'const a:number[2]=[1,2];',
- int64:'const n:i64=1;',
  object:'const x={a:1};',
- builtin:'print(Math.abs(-1));',
- destructuring:'const [x]=[1];',
  async:'async function f():number{return 1;}',
- constraints:'function f<T extends number>(x:T):T{return x;}',
- genericClass:'class C<T>{x:T;} ',
- genericAlias:'type A<T> = T;',
  spread:'const a=[1]; const b=[...a];',
- enum:'enum E{A,B}',
  out:'function f(out x:number):void{x=1;}',
  named:'function f(x:number):void{} f(x:1);',
 }))test(`checker fails explicitly for pending ${name}`,()=>error(source,/pendiente/));
@@ -431,3 +423,297 @@ test('native numeric preserves legacy number shift result',()=>{
  const g=check('let a:i8=1;const c=a<<2;');
  assert.deepEqual(types(g,'BinaryExpression'),['number']);
 });
+
+for(const [target,raw,expected] of [
+ ['u64','18446744073709551615','18446744073709551615'],
+ ['i64','9223372036854775807','9223372036854775807'],
+ ['i64','-9223372036854775808','-9223372036854775808'],
+ ['u64','0xffff_ffff_ffff_ffff','18446744073709551615'],
+ ['i64','-0x8000000000000000','-9223372036854775808'],
+ ['u64','0o1777777777777777777777','18446744073709551615'],
+ ['u64','0b'+'1'.repeat(64),'18446744073709551615'],
+ ['u64','9_007_199_254_740_993','9007199254740993'],
+ ['u64','-0','0'],
+] as const)test(`native exact64 ${target} ${raw}`,()=>{
+ const g=check(`const x:${target}=${raw};print(x);`);
+ assert.ok(g.files[0].exactIntegers.includes(expected));
+});
+for(const [target,raw] of [
+ ['u64','18446744073709551616'],['i64','9223372036854775808'],
+ ['i64','-9223372036854775809'],['u64','-1'],['i64','0xffffffffffffffff'],
+ ['u64','0x10000000000000000'],['u64','1.5'],
+] as const)test(`native exact64 rejects ${target} ${raw}`,()=>error(`const x:${target}=${raw};`,/rango/));
+test('native exact64 arithmetic and mixed comparisons preserve types',()=>{
+ const g=check('let a:i64=9007199254740993;let b:u64=2;const x=a+b;const y=1+a;const z=a<9007199254740994;');
+ assert.deepEqual(types(g,'BinaryExpression'),['u64','i64','boolean']);
+ assert.ok(g.files[0].exactIntegers.includes('9007199254740994'));
+});
+test('native exact64 checks literal returns and defaults',()=>{
+ const g=check('function f(x:u64=18446744073709551615):i64{return -9223372036854775808;}f();');
+ assert.ok(g.files[0].exactIntegers.includes('-9223372036854775808'));
+});
+test('native exact64 rejects overflowing return literal',()=>error('function f():u64{return 18446744073709551616;}',/rango/));
+test('native exact64 publishes instantiated call conversions',()=>{
+ const g=check('function id<T>(x:T):T{return x;}const x=id<u64>(9007199254740993);');
+ assert.ok(g.files[0].exactIntegers.includes('9007199254740993'));
+ assert.ok(g.files[0].conversions.includes('u64'));
+});
+test('native numeric rejects narrow integer overflow in returns',()=>error('function f():i8{return 128;}',/rango/));
+
+for(const [name,source] of Object.entries({
+ primitive:'const a:u8[2]=[1,255];print(a.length);print(a[0]);',
+ constant:'const N=2;const a:number[N]=[1,2];',
+ aliasConstant:'const N=2;const M=N;const a:number[M]=[1,2];',
+ aliasType:'type Pair=number[2];const a:Pair=[1,2];',
+ nested:'const a:number[2][2]=[[1,2],[3,4]];print(a[0][1]);',
+ genericElement:'function first<T>(x:T[2]):T{return x[0];}',
+ exact64:'const a:u64[2]=[9007199254740993,18446744073709551615];',
+ function:'function f(a:number[2]):number[2]{return a;}const b=f([1,2]);',
+}))test(`native fixed arrays accepts ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ length:'const a:number[2]=[1];',
+ fractional:'const a:number[1.5]=[1];',
+ zero:'const a:number[0]=[];',
+ mutableSize:'let N=2;const a:number[N]=[1,2];',
+ tooLarge:'const a:number[4294967296]=[1];',
+ upperBound:'const a:number[2]=[1,2];print(a[0x2]);',
+ lowerBound:'const a:number[2]=[1,2];print(a[-1]);',
+ fractionalIndex:'const a:number[2]=[1,2];print(a[0.5]);',
+ elementRange:'const a:u8[2]=[1,256];',
+ borrowedElement:'class C{}function f(c:ref<C>):void{const a:ref<C>[1]=[c];}',
+ ownersRemainChecked:'class C{}let p:ptr<C> = new C();const a:ptr<C>[1]=[move(p)];',
+ readonly:'const a:number[2]=[1,2];a[0]=2;',
+}))test(`native fixed arrays rejects ${name}`,()=>run(fixture(source),1));
+test('native fixed arrays preserve exact integer element metadata',()=>{
+ const g=check('const a:u64[1]=[18446744073709551615];');
+ assert.ok(g.files[0].exactIntegers.includes('18446744073709551615'));
+});
+
+for(const [name,source] of Object.entries({
+ array:'const a=[1,2];for(const x of a){print(x);}',
+ index:'const a=[1,2];for(const i in a){print(a[i]);}',
+ string:'for(const c of "hello"){print(c);}',
+ fixed:'const a:i16[2]=[1,2];for(const x of a){const y:i16=x;}',
+ nested:'const a=[1,2];for(const x of a){for(const i in a){if(i==0)continue;break;}}',
+ copy:'class C{n:number=1;}const a=[new C()];for(let c of a){c.n=2;}',
+}))test(`native iteration accepts ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ nonIterable:'for(const x of 1){}',
+ mismatchedBinding:'for(const x:string of [1,2]){}',
+ outsideScope:'for(const x of [1]){}print(x);',
+ mutation:'let a=[1,2];for(const x of a){a.push(x);}',
+ indirectMutation:'let a=[1,2];function f():void{a.push(3);}for(const x of a){f();}',
+ maybeMoved:box+'let p:ptr<Box> = new Box();for(const x of [1]){const q=move(p);}print(p.value);',
+ repeatedMove:box+'let p:ptr<Box> = new Box();for(const x of [1,2]){const q=move(p);}',
+ closureEscape:'function f():()=>number{let n=0;const a=[():number=>{n+=1;return n;}];for(const cb of a){return cb;}return ():number=>0;}',
+}))test(`native iteration rejects ${name}`,()=>run(fixture(source),1));
+test('native iteration binding has resolved element type',()=>{
+ const g=check('for(const x of ["a","b"]){print(x);}');
+ const sid=g.binding.symbols.findIndex((s:any)=>s.name==='x');assert.equal(g.symbolTypes[sid],'string');
+});
+
+for(const [name,source] of Object.entries({
+ array:'const [a,b]=[1,2];print(a+b);',
+ object:'interface I{x:number;}const i:I={x:1};const {x:y}=i;print(y);',
+ tuple:'const [a,b]=[1,"s"];print(a);print(b);',
+ mutable:'let [a,b]=[1,2];a=3;b=4;',
+ typed:'const [a:u8,b:u8]:u8[]=[1,255];',
+ defaults:'const [a:number=1]=[];print(a);',
+ inferredDefault:'const [a=1]=[];print(a);',
+ earlierDefault:'const [a:number=1,b:number=a]=[];print(b);',
+ class:'class C{x:number=1;}const c=new C();const {x:y}=c;print(y);',
+ localReader:'function f():()=>number{const [x]=[1];return ():number=>x;}',
+ empty:'const []:number[]=[1,2];',
+}))test(`native destructuring accepts ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ constBinding:'const [a]=[1];a=2;',
+ incompatibleBinding:'const [a:string]=[1];',
+ badDefault:'const [a:number="s"]=[];',
+ noMember:'class C{x:number=1;}const c=new C();const {y}=c;',
+ noArray:'const [a]=1;',
+ tdz:'print(a);const [a]=[1];',
+ laterDefault:'const [a:number=b,b:number=1]=[];',
+ readonlyCapture:'function f():()=>number{let [x]=[1];return ():number=>{x+=1;return x;};}',
+ closureCarrier:'function f():()=>number{let n=0;const [cb]=[():number=>{n+=1;return n;}];return cb;}',
+}))test(`native destructuring rejects ${name}`,()=>run(fixture(source),1));
+test('native destructuring publishes types for each binding',()=>{
+ const g=check('const [a,b]=[1,"s"];');
+ for(const [name,type] of [['a','number'],['b','string']]){const sid=g.binding.symbols.findIndex((s:any)=>s.name===name);assert.equal(g.symbolTypes[sid],type);}
+});
+
+for(const [name,source] of Object.entries({
+ basic:'enum Color{Red,Green}const c:Color=Color.Green;print(c);',
+ string:'enum Color{Red="red",Green="green"}const c:Color=Color.Red;const s:string=c;',
+ numericConversion:'enum E{A=1,B=2}const n:number=E.A;',
+ boundary:'enum E{A=2147483647}const c:E=E.A;',
+ usingScalar:'using x=1;print(x);',
+ usingOwner:box+'using p:ptr<Box> = new Box();print(p.value);',
+ usingTransfer:box+'let p:ptr<Box> = new Box();using q=move(p);print(q.value);',
+}))test(`native enums and using accept ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ enumOverflow:'enum E{A=2147483648}',
+ enumImplicitOverflow:'enum E{A=2147483647,B}',
+ enumFraction:'enum E{A=1.5}',
+ enumHomonyms:'enum A{X}enum B{X}const n:A=B.X;',
+ enumMissing:'enum E{A}const n=E.B;',
+ enumWrite:'enum E{A}E.A=2;',
+ usingImmutable:'using x=1;x=2;',
+ usingCopy:box+'let p:ptr<Box> = new Box();using q=p;',
+ usingMoved:box+'let p:ptr<Box> = new Box();using q=move(p);print(p.value);',
+}))test(`native enums and using reject ${name}`,()=>run(fixture(source),1));
+test('native enum identity survives import aliases',()=>check('import {E as F} from "./lib";const x:F=F.A;',{'lib.ets':'export enum E{A=2}'}));
+
+for(const [name,source] of Object.entries({
+ numeric:'function f(n:number):number{switch(n){case 0:return 1;default:return 2;}}',
+ string:'function f(s:string):number{switch(s){case "x":return 1;default:return 2;}}',
+ defaultFirst:'function f(n:number):number{switch(n){default:print(n);case 1:return 2;}}',
+ fallthrough:'function f(n:number):number{switch(n){case 0:case 1:return 2;default:return 3;}}',
+ loopContinue:'for(let i=0;i<3;i+=1){switch(i){case 0:continue;default:break;}print(i);}',
+ enum:'enum E{A,B}function f(e:E):number{switch(e){case E.A:return 1;default:return 0;}}',
+ nested:'switch(1){case 1:switch(2){case 2:break;default:break;}break;default:break;}',
+ namedCapture:'function f():number{const n=1;function g():number{return n;}return g();}',
+ namedMutable:'function f():number{let n=1;function g():number{n+=1;return n;}return g();}',
+ namedReaderReturn:'function f():()=>number{const n=1;function g():number{return n;}return g;}',
+}))test(`native switch and nested captures accept ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ missingReturn:'function f(n:number):number{switch(n){case 0:return 1;}}',
+ breakNoReturn:'function f(n:number):number{switch(n){case 0:break;default:return 2;}}',
+ duplicate:'switch(1){case 1:break;case 0x1:break;}',
+ duplicateAlias:'const n=1;switch(1){case n:break;case 1:break;}',
+ wrongLabel:'switch(1){case "x":break;}',
+ dynamicLabel:'let n=1;switch(1){case n:break;}',
+ continueOutside:'switch(1){case 1:continue;}',
+ functionBoundary:'switch(1){case 1:function f():void{break;}break;}',
+ maybeMove:box+'let p:ptr<Box> = new Box();switch(1){case 1:{const q=move(p);break;}default:break;}print(p.value);',
+ fallthroughMove:box+'let p:ptr<Box> = new Box();switch(1){case 1:{const q=move(p);}case 2:print(p.value);break;default:break;}',
+ namedEscape:'function f():()=>number{let n=0;function g():number{n+=1;return n;}return g;}',
+}))test(`native switch and nested captures reject ${name}`,()=>run(fixture(source),1));
+test('native switch exposes canonical labels for later consumers',()=>{
+ const g=check('switch(1){case 0x1:break;default:break;}');assert.ok(g.files[0].caseValues.includes('number:1'));
+});
+
+for(const [name,source] of Object.entries({
+ alias:'type List<T> = T[];const a:List<number> =[1,2];',
+ nestedAlias:'type A<T> = T[];type B<U> = A<U>;const a:B<string> =["a"];',
+ aliasDefault:'type A<T=number> = T[];const a:A=[1,2];',
+ class:'class Box<T>{constructor(public value:T){}}const b=new Box<number>(1);print(b.value);',
+ inferredClass:'class Box<T>{constructor(public value:T){}}const b=new Box(1);print(b.value);',
+ contextualClass:'class Box<T>{constructor(public value:T){}}const b:Box<u64> = new Box(9007199254740993);',
+ classMethod:'class Box<T>{constructor(public value:T){}get():T{return this.value;}}const b=new Box<string>("s");const s:string=b.get();',
+ classDefault:'class Box<T=number>{constructor(public value:T){}}const b=new Box(1);',
+ constraint:'function id<T extends number>(x:T):T{return x;}const a=id(1);',
+ functionDefault:'function f<T=number>():T[]{const a:T[]=[];return a;}const x=f();',
+ dependentDefault:'function f<T,U=T>(x:T,y:U):U{return y;}const x=f<number>(1,2);',
+}))test(`native generic instances accept ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ classMismatch:'class Box<T>{constructor(public value:T){}}const a:Box<number> = new Box<string>("s");',
+ constraint:'function id<T extends number>(x:T):T{return x;}id("s");',
+ aliasConstraint:'type A<T extends number> = T[];const x:A<string> =["s"];',
+ missingAliasArgument:'type A<T> = T[];const x:A=[];',
+ tooManyArguments:'type A<T> = T[];const x:A<number,string> =[1];',
+ wrongConstructor:'class Box<T>{constructor(public value:T){}}const b=new Box<number>("s");',
+ memberMismatch:'class Box<T>{constructor(public value:T){}}const b=new Box<number>(1);const s:string=b.value;',
+ ownershipRemainsChecked:box+'class Holder<T>{constructor(public value:T){}}let p:ptr<Box> = new Box();const h=new Holder<ptr<Box>>(move(p));',
+}))test(`native generic instances reject ${name}`,()=>run(fixture(source),1));
+test('native generic class field has concrete instantiated type',()=>{
+ const g=check('class Box<T>{constructor(public value:T){}}const b=new Box<number>(1);const n=b.value;');
+ const sid=g.binding.symbols.findIndex((s:any)=>s.name==='n');assert.equal(g.symbolTypes[sid],'number');
+});
+
+for(const [name,source] of Object.entries({
+ classShape:'interface I{x:number;}class C{x:number=1;}const i:I=new C();',
+ interfaceShape:'interface I{x:number;}interface J{x:number;y:string;}const j:J={x:1,y:"s"};const i:I=j;',
+ optionalShape:'interface I{x:number;y?:string;}class C{x:number=1;}const i:I=new C();',
+ intersection:'interface A{x:number;}interface B{y:string;}const a:A&B={x:1,y:"s"};print(a.x);print(a.y);',
+ intersectionClass:'interface A{x:number;}interface B{y:string;}class C{x:number=1;y:string="s";}const a:A&B=new C();',
+ methodShape:'interface I{get(x:number):number;}class C{get(x:number):number{return x;}}const i:I=new C();',
+ constrainedShape:'interface I{x:number;}function read<T extends I>(x:T):number{return x.x;}class C{x:number=1;}print(read(new C()));',
+ callableNumeric:'const f:(x:number)=>number=(x:i32):i32=>x;',
+}))test(`native structural types accept ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ missing:'interface I{x:number;}class C{y:number=1;}const i:I=new C();',
+ private:'interface I{x:number;}class C{private x:number=1;}const i:I=new C();',
+ incompatible:'interface I{x:number;}class C{x:string="s";}const i:I=new C();',
+ intersectionMissing:'interface A{x:number;}interface B{y:string;}const a:A&B={x:1};',
+ intersectionWrong:'interface A{x:number;}interface B{y:string;}const a:A&B={x:1,y:2};',
+ intersectionEscape:'interface A{cb:()=>number;}interface B{x:number;}function f():A&B{let n=0;const a:A&B={cb:():number=>{n+=1;return n;},x:1};return a;}',
+ callableWrong:'const f:(x:string)=>number=(x:number):number=>x;',
+}))test(`native structural types reject ${name}`,()=>run(fixture(source),1));
+
+for(const [name,source] of Object.entries({
+ optional:'const o:Optional<number> = optionalSome(1);print(optionalValueOr(o,0));',
+ none:'const o:Optional<number> = optionalNone();print(o.isPresent());',
+ nullish:'const o:Optional<number> = optionalSome(1);print(o??0);',
+ contextualNullish:'const n:number=optionalNone()??1;',
+ exact:'const o:Optional<u64> = optionalSome(18446744073709551615);',
+ result:'const r:Result<number> = ok(1);print(r.isOk());',
+ resultAlias:'const r:Result<number,string> = resultOk(1);print(resultValueOr(r,0));',
+ failure:'const r:Result<number> = err("bad");print(r.error());',
+ optionalChain:box+'const b:Optional<Box> = optionalSome(new Box());const n=b?.value??0;',
+ callbackLocal:'function f():number{let n=0;const o=optionalSome(():number=>{n+=1;return n;});const cb=o.value();return cb();}',
+}))test(`native optional/result accepts ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ wrongPayload:'const o:Optional<number> = optionalSome("s");',
+ noContext:'const o=optionalNone();',
+ wrongDefault:'const o=optionalSome(1);print(optionalValueOr(o,"s"));',
+ nullishType:'const o=optionalSome(1);print(o??"s");',
+ notOptional:'print(1??0);',
+ optionalArity:'const o:Optional<number,string> = optionalSome(1);',
+ chainNonOptional:box+'const b=new Box();print(b?.value);',
+ chainWrite:box+'let b:Optional<Box> = optionalSome(new Box());b?.value=optionalSome(2);',
+ void:'const o=optionalSome(print(1));',
+ exactOverflow:'const o:Optional<u64> = optionalSome(18446744073709551616);',
+ callbackEscape:'function f():()=>number{let n=0;const o=optionalSome(():number=>{n+=1;return n;});return o.value();}',
+}))test(`native optional/result rejects ${name}`,()=>run(fixture(source),1));
+test('native satisfies checks without adding a conversion to the expression',()=>{
+ const g=check('const n:i8=1;const x=n satisfies number;');const f=g.files[0];const id=f.ast.nodes.findIndex((n:any)=>n.kind==='SatisfiesExpression');assert.equal(f.types[id],'i8');assert.equal(f.conversions[id],'');
+});
+test('native satisfies checks numeric literal range',()=>error('const x=128 satisfies i8;',/rango/));
+
+test('native optional parameter body models absence explicitly',()=>{
+ const g=check('function f(x?:number):number{return optionalValueOr(x,0);}print(f());print(f(1));');
+ const sid=g.binding.symbols.findIndex((s:any)=>s.name==='x');assert.equal(g.symbolTypes[sid],'Optional<number>');assert.ok(g.files[0].conversions.includes('Optional<number>'));
+});
+test('native optional parameters reject unguarded scalar use',()=>run(fixture('function f(x?:number):number{return x+1;}'),1));
+test('native optional parameter keeps explicit Optional unwrapped once',()=>check('function f(x?:Optional<number>):number{return x.valueOr(0);}f(optionalSome(1));'));
+test('native optional generic parameter infers payload',()=>check('function f<T>(x?:T):Optional<T>{return x;}const x=f(1);'));
+
+for(const [name,source] of Object.entries({
+ globals:'print(length("s"));print(charAt("abc",1));print(lineCount("x"));',
+ arrayLength:'const a=[1,2];print(length(a));',
+ math:'print(Math.sqrt(4));print(Math.max(1,2));print(Math.PI);',
+ json:'const s=JSON.parse("{}");const j:JsonValue=JSON.parseValue("{}");print(jsonIsObject(j));',
+ console:'console.log("x",1,true);console.warn("warning");',
+ files:'const r:Result<string> = readFile("input.txt");',
+ date:'const n=Date.now();print(n);',
+}))test(`native builtin contracts accept ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ wrongLength:'print(length(1));',
+ wrongMath:'print(Math.sqrt("s"));',
+ wrongMathArity:'print(Math.min(1));',
+ unknownMath:'Math.notAMethod();',
+ wrongJson:'const j=JSON.parseValue(1);',
+ wrongFile:'const r=readFile(1);',
+ voidPrint:'function f():void{}print(f());',
+}))test(`native builtin contracts reject ${name}`,()=>run(fixture(source),1));
+test('native effects preserve external effects separately from symbol reads',()=>{
+ const g=check('function inner():void{console.log("x");}function outer():void{inner();}');assert.equal(effect(g,'inner').external,true);assert.equal(effect(g,'outer').external,true);
+});
+
+for(const [name,source] of Object.entries({
+ arrow:'const f=(x:number)=>{return x+1;};const n:number=f(1);',
+ branches:'const f=(b:boolean)=>{if(b)return 1;return 2;};print(f(true));',
+ nested:'const f=()=>{const inner=()=>{return "s";};return 1;};const n:number=f();',
+ empty:'const f=()=>{};f();',
+ bare:'const f=()=>{return;};f();',
+ capture:'function outer():number{const n=1;const f=()=>{return n;};return f();}',
+ owner:box+'const f=()=>{let p:ptr<Box> = new Box();return move(p);};const p:ptr<Box> = f();',
+}))test(`native block return inference accepts ${name}`,()=>check(source));
+test('native block return inference preserves the inferred signature',()=>{
+ const g=check('const f=(x:number)=>{return x+1;};');assert.deepEqual(types(g,'ArrowFunctionExpression'),['(number)=>number']);
+});
+test('native block return inference rejects incomplete return paths',()=>error('const f=(b:boolean)=>{if(b)return 1;};',/rutas/));
+test('native block return inference retains escape checking',()=>error('function f():()=>number{let n=0;return ()=>{n+=1;return n;};}',/E4210/));
+test('native fixed arrays distinguish tuple elements from tuple syntax',()=>check('type Pair=[number,string];const a:Pair[2]=[[1,"a"],[2,"b"]];const t:Pair=a[0];const s:string=t[1];'));
+test('native dynamic arrays preserve tuple element types',()=>check('type Pair=[number,string];const a:Pair[]=[[1,"a"]];const t:Pair=a[0];const s:string=t[1];'));
+test('native tuples preserve fixed array members',()=>check('const a:[number[2],string]=[[1,2],"s"];const n:number[2]=a[0];'));

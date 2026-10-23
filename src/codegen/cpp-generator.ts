@@ -1584,7 +1584,11 @@ export class CppGenerator {
     for(const node of destructuringTopLevel) {
       const temporary=`__ets_module_destructure_${++this.destructuringCounter}`;
       const initial=this.emitExpression(node.initializer);
-      lines.push(`using ${temporary}_type = decltype(${initial});`);
+      // Storage declarations precede ordinary globals. Refer to the resolved
+      // initializer type, so `const [x] = values` does not require `values`
+      // to have been declared in C++ already. Keep decltype for opaque types.
+      const initialType=this.expressionType(node.initializer);
+      lines.push(`using ${temporary}_type = ${initialType && initialType !== "any" ? cppType(initialType) : `decltype(${initial})`};`);
       destructuringInitializers.push(`auto ${temporary} = ${initial};`);
       const bindings=node.arrayBindings ?? node.objectBindings ?? [];
       bindings.forEach((binding,index)=>{

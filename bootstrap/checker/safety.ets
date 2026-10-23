@@ -4,7 +4,7 @@ import { BindingResult, BindingSymbol, bindingChild, callableBinding } from "../
 import { AstNode } from "../parser/parser";
 import { SourceDiagnostic } from "../frontend/frontend";
 import { CheckResult, NativeCapture, BorrowLease } from "./model";
-import { memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticElement, splitTypes, functionClose, functionParams, functionReturn } from "./types";
+import { memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticElement, semanticTuple, splitTypes, functionClose, functionParams, functionReturn, fixedArraySize, fixedArrayElement, localBinding } from "./types";
 
 export class SafetyState {
   slots: number[]; exit: string;
@@ -101,10 +101,14 @@ export class SafetyAnalyzer {
   carrier(text: string, seen: number[]): boolean {
     if (functionClose(text) >= 0) return true;
     if (memoryMode(text) != "") return this.carrier(memoryInner(text),seen);
+    const contracts: string[] = splitTypes(text,"&"); if (contracts.length > 1) { for (const part of contracts) if (this.carrier(part,seen)) return true; return false; }
+    if (fixedArraySize(text) >= 0) return this.carrier(fixedArrayElement(text),seen);
+    const generic: number = text.indexOf("<",0);
+    if (generic > 0 && text.endsWith(">")) for (const part of splitTypes(text.slice(generic+1,text.length-1),",")) if (this.carrier(part,seen)) return true;
     if (text.endsWith("[]")) return this.carrier(semanticElement(text),seen);
-    if (text.startsWith("[")) { for (const item of splitTypes(text.slice(1,text.length-1),",")) if (this.carrier(item,seen)) return true; return false; }
+    if (semanticTuple(text)) { for (const item of splitTypes(text.slice(1,text.length-1),",")) if (this.carrier(item,seen)) return true; return false; }
     const unions: string[] = splitTypes(text,"|"); if (unions.length > 1) { for (const item of unions) if (this.carrier(item,seen)) return true; return false; }
-    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (text == "#" + numberToString(sid)) {
+    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (text == "#" + numberToString(sid) || text.startsWith("#" + numberToString(sid) + "<")) {
       if (seen.includes(sid)) return false; let next: number[] = seen; next.push(sid);
       const s: BindingSymbol = this.binding.symbols[sid];
       for (let member: number = 0; member < this.binding.symbols.length; member = member + 1) {
@@ -125,8 +129,12 @@ export class SafetyAnalyzer {
       for (const p of functionParams(text)) this.memoryType(module,id,p,"parameter");
       this.memoryType(module,id,functionReturn(text),"retorno"); return;
     }
+    const contracts: string[] = splitTypes(text,"&"); if (contracts.length > 1) { for (const part of contracts) this.memoryType(module,id,part,position); return; }
+    if (fixedArraySize(text) >= 0) { this.memoryType(module,id,fixedArrayElement(text),"argument"); return; }
     if (text.endsWith("[]")) { this.memoryType(module,id,semanticElement(text),"argument"); return; }
-    if (text.startsWith("[")) { for (const p of splitTypes(text.slice(1,text.length-1),",")) this.memoryType(module,id,p,"argument"); return; }
+    if (semanticTuple(text)) { for (const p of splitTypes(text.slice(1,text.length-1),",")) this.memoryType(module,id,p,"argument"); return; }
+    const generic: number = text.indexOf("<",0);
+    if (generic > 0 && text.endsWith(">")) for (const part of splitTypes(text.slice(generic+1,text.length-1),",")) this.memoryType(module,id,part,"argument");
     const unions: string[] = splitTypes(text,"|"); if (unions.length > 1) for (const p of unions) this.memoryType(module,id,p,"argument");
   }
   memoryContracts(): void {
@@ -134,7 +142,7 @@ export class SafetyAnalyzer {
       const s: BindingSymbol = this.binding.symbols[sid]; if ((s.module) < 0 || (s.node) < 0 || s.target >= 0) continue;
       const text: string = this.result.symbolTypes[sid];
       if (s.kind == "Parameter") this.memoryType(s.module,s.node,text,"parameter");
-      else if (s.kind == "VariableDeclaration") this.memoryType(s.module,s.node,text,this.owner(s.scope) < 0 ? "global" : "local");
+      else if (localBinding(s.kind)) this.memoryType(s.module,s.node,text,this.owner(s.scope) < 0 ? "global" : "local");
       else if (s.kind == "ClassField" || s.kind == "InterfaceField") {
         this.memoryType(s.module,s.node,text,"campo");
         if (ownedType(text)) this.report(s.module,s.node,"Ownership en campos pendiente de copia/movimiento de agregados");
@@ -144,10 +152,18 @@ export class SafetyAnalyzer {
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.result.files[m].types.length; id = id + 1) {
       const n: AstNode = this.node(m,id); const sid: number = this.binding.files[m].declarations[id];
       if (this.binding.files[m].nodeScopes[id] < 0) continue;
-      if (n.kind == "VariableDeclaration" || n.kind == "AssignmentExpression" || n.kind == "ReturnStatement") {
-        const value: number = bindingChild(n,n.kind == "VariableDeclaration" ? "initializer" : "value");
+      if (n.kind == "ForOfStatement" || n.kind == "ForInStatement") {
+        const source: number = bindingChild(n,n.kind == "ForOfStatement" ? "iterable" : "target"); const root: number = this.root(m,source);
+        const binding: number = bindingChild(n,"binding"); const bindingSymbol: number = this.binding.files[m].declarations[binding];
+        if (root >= 0 && bindingSymbol >= 0) {
+          let lease: BorrowLease = new BorrowLease(m,bindingSymbol,root,this.owner(this.binding.files[m].nodeScopes[id]),this.node(m,bindingChild(n,"body")).start.offset,"constRef");
+          lease.end = this.node(m,bindingChild(n,"body")).end.endOffset; this.leases.push(lease);
+        }
+      }
+      if ((n.kind == "VariableDeclaration" || n.kind == "UsingDeclaration") || n.kind == "AssignmentExpression" || n.kind == "ReturnStatement") {
+        const value: number = bindingChild(n,(n.kind == "VariableDeclaration" || n.kind == "UsingDeclaration") ? "initializer" : "value");
         if (value >= 0 && ownedType(this.result.files[m].types[value]) && this.node(m,value).kind != "CallExpression" && this.node(m,value).kind != "NewExpression") this.report(m,value,"E4101: transferir ownership requiere move(identifier)");
-        if (n.kind == "VariableDeclaration" && sid >= 0 && borrowedType(this.result.symbolTypes[sid])) {
+        if ((n.kind == "VariableDeclaration" || n.kind == "UsingDeclaration") && sid >= 0 && borrowedType(this.result.symbolTypes[sid])) {
           const root: number = this.root(m,value);
           if (root < 0) this.report(m,id,"E4208: no se puede demostrar el origen del préstamo local");
           else {
@@ -179,13 +195,12 @@ export class SafetyAnalyzer {
     for (const r of this.binding.references) {
       if (r.deferred || r.space != "value" || (r.target) < 0) continue;
       const s: BindingSymbol = this.binding.symbols[r.target];
-      if ((s.module) < 0 || !["VariableDeclaration","Parameter","receiver"].includes(s.kind) || this.owner(s.scope) < 0) continue;
+      if ((s.module) < 0 || (!localBinding(s.kind) && !["Parameter","receiver"].includes(s.kind)) || this.owner(s.scope) < 0) continue;
       let scope: number = r.scope;
       while (scope >= 0 && scope != s.scope) {
         const owner = this.binding.scopes[scope];
         if ((owner.kind == "arrow" || owner.kind == "function") && this.owner(s.scope) != this.vertex(owner.module,owner.node)) {
-          if (owner.kind != "arrow") this.report(owner.module,owner.node,"Captura de función nombrada pendiente de lowering de closure");
-          else {
+          {
             let found: boolean = false; for (const c of this.result.captures) if (c.module == owner.module && c.closure == owner.node && c.symbol == r.target) found = true;
             if (!found) this.result.captures.push(new NativeCapture(owner.module,owner.node,r.target));
           }
@@ -236,12 +251,27 @@ export class SafetyAnalyzer {
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.result.files[m].types.length; id = id + 1) {
       if (this.binding.files[m].nodeScopes[id] < 0) continue;
       const n: AstNode = this.node(m,id); const vertex: number = this.vertex(m,id);
+      if (n.kind == "FunctionDeclaration") {
+        const sid: number = this.binding.files[m].declarations[id]; if (sid >= 0) this.edge(vertex,this.symbolVertex(sid));
+      }
+      if (n.kind == "ForOfStatement") {
+        const sid: number = this.binding.files[m].declarations[bindingChild(n,"binding")];
+        if (sid >= 0) this.edge(this.vertex(m,bindingChild(n,"iterable")),this.symbolVertex(sid));
+      }
       if (n.kind == "ObjectProperty") { const value: number = bindingChild(n,"value"); if (value >= 0) this.edge(this.vertex(m,value),vertex); }
       if (n.kind == "IdentifierExpression") { const sid: number = this.reference(m,id); if (sid >= 0) this.edge(this.symbolVertex(sid),vertex); }
-      if (n.kind == "VariableDeclaration") {
+      if (n.kind == "VariableDeclaration" || n.kind == "UsingDeclaration") {
         const sid: number = this.binding.files[m].declarations[id]; const value: number = bindingChild(n,"initializer");
         if (sid >= 0 && value >= 0) this.edge(this.vertex(m,value),this.symbolVertex(sid));
         if (sid >= 0 && this.owner(this.binding.symbols[sid].scope) < 0 && value >= 0) this.escapes.push(new EscapeSite(m,id,this.vertex(m,value),"almacenamiento global"));
+        for (const edge of n.edges) if (edge.role == "arrayBindings" || edge.role == "objectBindings") {
+          const target: number = this.binding.files[m].declarations[edge.node]; const fallback: number = bindingChild(this.node(m,edge.node),"defaultValue");
+          if (target >= 0) {
+            if (value >= 0) this.edge(this.vertex(m,value),this.symbolVertex(target));
+            if (fallback >= 0) this.edge(this.vertex(m,fallback),this.symbolVertex(target));
+            if (this.owner(this.binding.symbols[target].scope) < 0) { if (value >= 0) this.escapes.push(new EscapeSite(m,edge.node,this.vertex(m,value),"binding global")); if (fallback >= 0) this.escapes.push(new EscapeSite(m,edge.node,this.vertex(m,fallback),"default global")); }
+          }
+        }
       }
       if (n.kind == "AssignmentExpression") {
         const value: number = bindingChild(n,"value"); const target: number = this.root(m,bindingChild(n,"target"));
@@ -340,7 +370,7 @@ export class SafetyAnalyzer {
   }
   read(module: number, id: number, sid: number, state: SafetyState): void {
     if (sid < 0 || (this.binding.symbols[sid].module) < 0) return;
-    const s: BindingSymbol = this.binding.symbols[sid]; if (!["VariableDeclaration","Parameter","receiver"].includes(s.kind)) return;
+    const s: BindingSymbol = this.binding.symbols[sid]; if (!localBinding(s.kind) && !["Parameter","receiver"].includes(s.kind)) return;
     if (state.slots[sid] == 0) this.report(module,id,"E4001: uso antes de inicializar '" + s.name + "'");
     if (state.slots[sid] == 2 || state.slots[sid] == 3) this.report(module,id,state.slots[sid] == 2 ? "E4102: uso de owner movido '" + s.name + "'" : "E4103: uso de owner posiblemente movido '" + s.name + "'");
     if (this.borrowSources[sid] < 0) this.access(module,id,sid,"read");
@@ -356,7 +386,10 @@ export class SafetyAnalyzer {
       if (borrowedType(expected) && root >= 0) this.access(module,edge.node,root,mode == "ref" ? "write" : "read");
       if (mode == "ref" && root >= 0) {
         const s: BindingSymbol = this.binding.symbols[root];
-        if (s.module >= 0 && s.kind == "VariableDeclaration" && this.node(s.module,s.node).get("mutable") != "true") this.report(module,edge.node,"E4208: préstamo mutable de una constante");
+        if (s.module >= 0 && localBinding(s.kind)) {
+          const declaration: number = s.kind == "ArrayBinding" || s.kind == "ObjectBinding" ? this.binding.files[s.module].parents[s.node] : s.node;
+          if (this.node(s.module,declaration).get("mutable") != "true") this.report(module,edge.node,"E4208: préstamo mutable de una constante");
+        }
         if (readonlyType(actual)) this.report(module,edge.node,"E4300: préstamo mutable de readonly");
       }
       for (let i: number = 0; i < roots.length; i = i + 1) if (root >= 0 && root == roots[i] && (mode == "ref" || modes[i] == "ref" || (mode == "move" && borrowedType(modes[i] + "<x>")) || (modes[i] == "move" && borrowedType(mode + "<x>")))) this.report(module,edge.node,"E4206: argumentos con préstamos/ownership incompatibles sobre la misma fuente");
@@ -409,7 +442,7 @@ export class SafetyAnalyzer {
     }
     for (let global: number = 0; global < this.binding.symbols.length; global = global + 1) {
       const s = this.binding.symbols[global];
-      if (s.kind == "VariableDeclaration" && this.owner(s.scope) < 0 && (ownedType(this.result.symbolTypes[global]) || state.slots[global] != 1)) this.report(module,id,"E4104: efectos opacos sobre globals no demostrados");
+      if (localBinding(s.kind) && this.owner(s.scope) < 0 && (ownedType(this.result.symbolTypes[global]) || state.slots[global] != 1)) this.report(module,id,"E4104: efectos opacos sobre globals no demostrados");
     }
   }
   invoke(module: number, id: number, out state: SafetyState, active: number[]): void {
@@ -465,6 +498,12 @@ export class SafetyAnalyzer {
     if (id < 0) return "true"; const n: AstNode = this.node(module,id);
     return n.kind == "LiteralExpression" && n.get("literalType") == "boolean" ? n.get("value") : "";
   }
+  presence(module: number, id: number): string {
+    const helper: string = this.helper(module,id);
+    if (helper == "optionalSome") return "true";
+    if (helper == "optionalNone") return "false";
+    return "";
+  }
   expression(module: number, id: number, out state: SafetyState, active: number[]): void {
     if (id < 0) return; const n: AstNode = this.node(module,id);
     if (n.kind == "IdentifierExpression") { this.read(module,id,this.reference(module,id),state); return; }
@@ -486,6 +525,12 @@ export class SafetyAnalyzer {
       let right: SafetyState = state; this.expression(module,bindingChild(n,"right"),right,active);
       state = (known == "" ? this.join(state,right) : right); return;
     }
+    if (n.kind == "BinaryExpression" && n.get("operator") == "??") {
+      const left: number = bindingChild(n,"left"); this.expression(module,left,state,active);
+      const present: string = this.presence(module,left); if (present == "true") return;
+      let fallback: SafetyState = state; this.expression(module,bindingChild(n,"right"),fallback,active);
+      if (present == "false") state = fallback; else state = this.join(state,fallback); return;
+    }
     if (n.kind == "TernaryExpression") {
       const condition: number = bindingChild(n,"condition"); this.expression(module,condition,state,active);
       let yes: SafetyState = state; let no: SafetyState = state; const known: string = this.constant(module,condition);
@@ -498,7 +543,7 @@ export class SafetyAnalyzer {
       const object: number = bindingChild(n,"object"); if (object >= 0) this.expression(module,object,state,active);
       if (n.kind == "NewExpression") for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
         const s: BindingSymbol = this.binding.symbols[sid];
-        if (this.result.files[module].types[id] == "#" + numberToString(sid) && s.kind == "ClassDeclaration") for (const edge of this.node(s.module,s.node).edges) if (edge.role == "fields" && this.node(s.module,edge.node).get("isStatic") != "true") this.expression(s.module,bindingChild(this.node(s.module,edge.node),"defaultValue"),state,active);
+        if ((this.result.files[module].types[id] == "#" + numberToString(sid) || this.result.files[module].types[id].startsWith("#" + numberToString(sid) + "<")) && s.kind == "ClassDeclaration") for (const edge of this.node(s.module,s.node).edges) if (edge.role == "fields" && this.node(s.module,edge.node).get("isStatic") != "true") this.expression(s.module,bindingChild(this.node(s.module,edge.node),"defaultValue"),state,active);
       }
       for (const edge of n.edges) if (edge.role == "args") this.expression(module,edge.node,state,active);
       if (this.helper(module,id) == "move") {
@@ -513,13 +558,18 @@ export class SafetyAnalyzer {
   }
   loop(module: number, id: number, out state: SafetyState, active: number[]): void {
     const n: AstNode = this.node(module,id); const init: number = bindingChild(n,"initializer"); if (init >= 0) this.walk(module,init,state,active);
+    const iteration: boolean = n.kind == "ForOfStatement" || n.kind == "ForInStatement";
+    if (iteration) this.expression(module,bindingChild(n,n.kind == "ForOfStatement" ? "iterable" : "target"),state,active);
     const condition: number = bindingChild(n,"condition"); const known: string = this.constant(module,condition);
     const entry: SafetyState = state; let head: SafetyState = state; let exits: SafetyState = state; exits.exit = "unreachable";
     const breakStart: number = this.breaks.length; const continueStart: number = this.continues.length;
-    for (let pass: number = 0; pass < 4; pass = pass + 1) {
+    // Monotone join over the finite slot domain; stop at the fixed point,
+    // rather than assuming four traversals suffice for every dependency chain.
+    while (true) {
       let body: SafetyState = head; this.expression(module,condition,body,active);
       if (known != "true") exits = this.join(exits,body);
       if (known == "false") break;
+      if (iteration) { const sid: number = this.binding.files[module].declarations[bindingChild(n,"binding")]; if (sid >= 0) body.slots[sid] = 1; }
       this.walk(module,bindingChild(n,"body"),body,active);
       for (let at: number = breakStart; at < this.breaks.length; at = at + 1) exits = this.join(exits,this.breaks[at]);
       for (let at: number = continueStart; at < this.continues.length; at = at + 1) body = this.join(body,this.continues[at]);
@@ -537,8 +587,13 @@ export class SafetyAnalyzer {
     if (n.kind == "Program" || n.kind == "BlockStatement") {
       for (const edge of n.edges) if (edge.role == "statements") this.walk(module,edge.node,state,active); return;
     }
-    if (n.kind == "VariableDeclaration") {
+    if (n.kind == "VariableDeclaration" || n.kind == "UsingDeclaration") {
       this.expression(module,bindingChild(n,"initializer"),state,active);
+      for (const edge of n.edges) if (edge.role == "arrayBindings" || edge.role == "objectBindings") {
+        const fallback: number = bindingChild(this.node(module,edge.node),"defaultValue");
+        if (fallback >= 0) { let choice: SafetyState = state; this.expression(module,fallback,choice,active); state = this.join(state,choice); }
+        const target: number = this.binding.files[module].declarations[edge.node]; if (target >= 0) state.slots[target] = 1;
+      }
       const sid: number = this.binding.files[module].declarations[id]; if (sid >= 0) state.slots[sid] = 1; return;
     }
     if (n.kind == "ExpressionStatement") { this.expression(module,bindingChild(n,"expression"),state,active); return; }
@@ -552,7 +607,22 @@ export class SafetyAnalyzer {
       else if (yes.exit != "" && no.exit != "") { state = yes; state.exit = "return"; }
       else state = this.join(yes,no); return;
     }
-    if (n.kind == "WhileStatement" || n.kind == "ForStatement") { this.loop(module,id,state,active); return; }
+    if (n.kind == "SwitchStatement") {
+      this.expression(module,bindingChild(n,"discriminant"),state,active);
+      const entry: SafetyState = state; let falling: SafetyState = state; falling.exit = "unreachable";
+      let exits: SafetyState = falling; let hasDefault: boolean = false; const breakStart: number = this.breaks.length;
+      for (const edge of n.edges) if (edge.role == "clauses") {
+        const clause: AstNode = this.node(module,edge.node); if (clause.kind == "DefaultClause") hasDefault = true;
+        let body: SafetyState = this.join(entry,falling);
+        for (const item of clause.edges) if (item.role == "body") this.walk(module,item.node,body,active);
+        for (let at: number = breakStart; at < this.breaks.length; at = at + 1) exits = this.join(exits,this.breaks[at]);
+        while (this.breaks.length > breakStart) this.breaks.pop();
+        falling = body;
+      }
+      exits = this.join(exits,falling); if (!hasDefault) exits = this.join(exits,entry);
+      state = exits; return;
+    }
+    if (["WhileStatement","ForStatement","ForOfStatement","ForInStatement"].includes(n.kind)) { this.loop(module,id,state,active); return; }
     if (n.kind == "BreakStatement" || n.kind == "ContinueStatement") {
       if (n.kind == "BreakStatement") this.breaks.push(state); else this.continues.push(state);
       state.exit = (n.kind == "BreakStatement" ? "break" : "continue"); return;
@@ -564,12 +634,12 @@ export class SafetyAnalyzer {
   }
   flow(): void {
     let globals: SafetyState = new SafetyState(this.binding.symbols.length);
-    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (this.binding.symbols[sid].kind == "VariableDeclaration") globals.slots[sid] = 0;
+    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (localBinding(this.binding.symbols[sid].kind)) globals.slots[sid] = 0;
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) this.walk(m,this.graph.modules[m].cached.result.ast.root,globals,[]);
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.result.files[m].types.length; id = id + 1) {
       const n: AstNode = this.node(m,id); if (!callableBinding(n.kind) || this.binding.files[m].nodeScopes[id] < 0) continue;
       const owner: number = this.vertex(m,id); let state: SafetyState = new SafetyState(this.binding.symbols.length);
-      for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (this.owner(this.binding.symbols[sid].scope) == owner && ["VariableDeclaration","Parameter"].includes(this.binding.symbols[sid].kind)) state.slots[sid] = 0;
+      for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (this.owner(this.binding.symbols[sid].scope) == owner && (localBinding(this.binding.symbols[sid].kind) || this.binding.symbols[sid].kind == "Parameter")) state.slots[sid] = 0;
       for (const edge of n.edges) if (edge.role == "params") {
         this.expression(m,bindingChild(this.node(m,edge.node),"defaultValue"),state,[owner]);
         const sid: number = this.binding.files[m].declarations[edge.node]; if (sid >= 0) state.slots[sid] = 1;

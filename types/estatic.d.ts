@@ -388,6 +388,13 @@ declare global {
   // ─── Helpers de OptionalT ─────────────────────────────────────────
   function optionalSome<T>(value: T): Optional<T>;
   function optionalNone<T>(): Optional<T>;
+  function optionalIsPresent<T>(value: Optional<T>): boolean;
+  function optionalValueOr<T>(value: Optional<T>, fallback: T): T;
+  function optionalOrElse<T>(value: Optional<T>, fallback: Optional<T>): Optional<T>;
+  function resultOk<T, E = string>(value: T): Result<T, E>;
+  function resultErr<T, E = string>(error: E): Result<T, E>;
+  function resultIsOk<T, E = string>(value: Result<T, E>): boolean;
+  function resultValueOr<T, E = string>(value: Result<T, E>, fallback: T): T;
 
   // ─── Helpers de filesystem (runtime/ets_file.hpp) ──────────────────
   function fileRead(path: string): string;

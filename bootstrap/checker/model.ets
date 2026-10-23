@@ -2,9 +2,11 @@ import { SourceDiagnostic } from "../frontend/frontend";
 
 export class TypedFile {
   types: string[]; members: number[]; selected: number[]; selectedModules: number[]; signatures: string[]; states: number[];
+  exactIntegers: string[]; conversions: string[]; caseValues: string[];
   constructor(count: number) {
     this.types = []; this.members = []; this.selected = []; this.selectedModules = []; this.signatures = []; this.states = [];
-    for (let i: number = 0; i < count; i = i + 1) { this.types.push(""); this.members.push(-1); this.selected.push(-1); this.selectedModules.push(-1); this.signatures.push(""); this.states.push(0); }
+    this.exactIntegers = []; this.conversions = []; this.caseValues = [];
+    for (let i: number = 0; i < count; i = i + 1) { this.types.push(""); this.members.push(-1); this.selected.push(-1); this.selectedModules.push(-1); this.signatures.push(""); this.states.push(0); this.exactIntegers.push(""); this.conversions.push(""); this.caseValues.push(""); }
   }
 }
 export class NativeCapture {
@@ -27,10 +29,10 @@ export class EffectBorrow {
 }
 export class EffectSummary {
   module: number; node: number; parameters: number[]; reads: number[]; writes: number[]; moves: number[];
-  invokes: number[]; retains: number[]; returned: number[]; callees: number[]; borrows: EffectBorrow[]; unknown: boolean; recursive: boolean;
+  invokes: number[]; retains: number[]; returned: number[]; callees: number[]; borrows: EffectBorrow[]; unknown: boolean; recursive: boolean; external: boolean;
   constructor(module: number, node: number) {
     this.module = module; this.node = node; this.parameters = []; this.reads = []; this.writes = []; this.moves = [];
-    this.invokes = []; this.retains = []; this.returned = []; this.callees = []; this.borrows = []; this.unknown = false; this.recursive = false;
+    this.invokes = []; this.retains = []; this.returned = []; this.callees = []; this.borrows = []; this.unknown = false; this.recursive = false; this.external = false;
   }
 }
 export class CheckResult {

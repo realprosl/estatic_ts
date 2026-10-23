@@ -19,6 +19,7 @@ publican una entrada por función, arrow, método o constructor comprobado.
 | `callees` | Índices de resúmenes que pueden ser llamados |
 | `borrows` | Obligaciones `{call,callback,root,mode}` al invocar callbacks |
 | `unknown` | Algún efecto no tiene implementación/resumen suficiente |
+| `external` | Puede realizar I/O, consultar tiempo o aleatoriedad; también transitivo |
 | `recursive` | La función pertenece a un ciclo de llamadas |
 
 `reads/writes/moves` no son una secuencia de instrucciones ni una lista de

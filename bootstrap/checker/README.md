@@ -38,10 +38,15 @@ compartidas, evitando dependencias circulares. `CheckResult` devuelve:
   declaración elegida para una llamada de función/método/constructor.
 - `files[m].signatures[node]`: firma instanciada de la llamada; conserva las
   sustituciones genéricas, además del tipo de retorno en `types`.
+- `files[m].exactIntegers[node]`: decimal exacto de literales i64/u64, obtenido
+  del token sin pasar por double.
+- `files[m].conversions[node]`: destino de una conversión comprobada. `satisfies`
+  comprueba compatibilidad sin convertir el resultado.
+- `files[m].caseValues[node]`: clave canónica de una etiqueta constante de switch.
 - `symbolTypes`: tipos resueltos por identidad de símbolo original. Se calculan
   bajo demanda y para declaraciones requeridas por seguridad; otras entradas permanecen vacías. Los imports
   consultan el destino del binder, sin crear una copia de la identidad nominal.
-- `captures`: símbolos capturados por arrow y modo `value`/`reference`.
+- `captures`: símbolos capturados por arrow o función anidada y modo `value`/`reference`.
 - `borrows`: raíz e intervalo por offsets de cada préstamo local.
 - `effects`: efectos por función, destinos de llamadas, callbacks invocados/retenidos,
   procedencia del retorno y obligaciones de préstamos; ver [EFFECTS.md](./EFFECTS.md).
@@ -69,7 +74,7 @@ semántica ni ejecución concurrente del checker.
 - Inferencia de literales, variables, expresiones numéricas/lógicas, templates,
   arrays homogéneos y tuplas heterogéneas; arrays/objetos con contexto en una
   anotación o firma. Los arrays vacíos requieren contexto.
-- Anotaciones primitivas, numéricos concretos hasta 32 bits, f32/f64, aliases
+- Anotaciones primitivas, numéricos concretos hasta 64 bits, f32/f64, aliases
   simples, `typeof` de identificadores, tipos callable y uniones sin narrowing.
   Los nombres de clases/interfaces conservan su identidad entre archivos y
   namespaces; dos nombres iguales no colapsan en el mismo tipo.
@@ -80,14 +85,14 @@ semántica ni ejecución concurrente del checker.
   sobrecarga cuando hay varias candidatas.
 - Retornos y comprobación conservadora de rutas en bloques e if/else; condiciones
   booleanas, while/for (incluido incremento), break/continue y asignaciones.
-  Arrows con cuerpo expresión pueden inferir retorno; con bloque necesitan
-  anotación explícita en esta fase.
-- Clases sin genéricos, constructores/propiedades de parámetros, `this`, miembros
+  Se infieren retornos en cuerpos expresión y bloques, sin incluir retornos de
+  funciones anidadas. Las rutas incompletas siguen siendo un error.
+- Clases, constructores/propiedades de parámetros, `this`, miembros
   estáticos/de instancia, miembros privados/protegidos y campos readonly.
   Se rechazan escrituras sobre constantes y sus campos/índices. La comprobación
   de efectos de métodos es conservadora: una escritura o llamada sobre `this`
   requiere receptor mutable, incluso si una llamada transitiva resultara pura.
-- Interfaces nominales satisfechas por objetos con contexto: campos requeridos,
+- Interfaces estructurales e intersecciones satisfechas por clases u objetos con contexto: campos requeridos,
   opcionales, duplicados, desconocidos y tipos de valores. No se infiere una
   forma estructural arbitraria para objetos sin contexto.
 - Builtins de impresión, `numberToString`, `argument`, `argumentCount`,
@@ -98,15 +103,24 @@ semántica ni ejecución concurrente del checker.
   aliases circulares. Rangos de literales enteros decimales en contextos
   numéricos concretos, también al pasar argumentos. La rama de cierre añade
   bases 2/8/16, separadores y fracciones, validación de tokens/finitud y
-  promociones numéricas; i64/u64 exactos siguen pendientes.
+  promociones numéricas y literales i64/u64 exactos con rangos y conversiones.
+- Arrays fijos con tamaños literales/constantes, longitud e índices constantes;
+  destructuring plano con bindings tipados y defaults, y declaraciones `using`.
+- Enums nominales numéricos/string, switch con etiquetas constantes y fallthrough,
+  for-of/for-in sobre arrays y for-of sobre string. El flujo de bucles converge
+  por estabilización de estados, conservando break/continue y préstamos del iterable.
+- Aliases y clases genéricas con sustitución de miembros, constraints/defaults
+  básicos; Optional/Result con helpers, parámetros opcionales, `??` y acceso
+  opcional a campos. Las llamadas a métodos opcionales siguen pendientes.
+- Globals de string, Math, console, Date, JSON y un subconjunto de filesystem.
+  Los efectos externos se publican separados de las lecturas/escrituras de símbolos.
 
 ## Límites y diferencias conocidas
 
 Se emite `Comprobación nativa pendiente: ...` para construcciones aún no
-trasladadas: enteros exactos i64/u64, arrays fijos,
-clases/aliases genéricos, constraints/defaults/packs genéricos, parámetros out o
-variádicos, argumentos nombrados/spread, destructuring, enums/unions declaradas,
-switch/for-of/for-in, async/await, acceso opcional, pipelines y builtins no
+trasladadas: packs genéricos, parámetros out o
+variádicos, argumentos nombrados/spread, unions declaradas,
+async/await, llamadas opcionales, pipelines y builtins no
 registrados, decoradores y expansión comptime/cppgen/etsgen. Tampoco se permite
 usar un grupo de sobrecargas como valor sin seleccionar una firma. Las capturas locales pasan por la nueva comprobación de procedencia y escapes.
 
@@ -152,5 +166,6 @@ diagnósticos, una captura por valor y un intervalo de préstamo. Otro proceso
 produce la misma salida completa y conserva los tres registros de sintaxis
 sin reescribirlos. Es una demostración del frontend; no ejecuta el programa.
 
-El siguiente paso es el IR común descrito en [IR.md](./IR.md). Es un contrato de
+Antes del IR común descrito en [IR.md](./IR.md) se debe cerrar el
+[registro del lenguaje](../PENDING.md). El IR sigue siendo un contrato de
 diseño: esta entrega no implementa el IR ni sus codegens.
