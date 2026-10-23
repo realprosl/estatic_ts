@@ -100,9 +100,7 @@ for(const[name,source,pattern]of invalid)test(`checker rejects ${name}`,()=>erro
 for(const[name,source]of Object.entries({
  object:'const x={a:1};',
  async:'async function f():number{return 1;}',
- spread:'const a=[1]; const b=[...a];',
  out:'function f(out x:number):void{x=1;}',
- named:'function f(x:number):void{} f(x:1);',
 }))test(`checker fails explicitly for pending ${name}`,()=>error(source,/pendiente/));
 
 test('checker: inferred node and symbol types plus selected overload',()=>{const g=check(valid.overload);assert.deepEqual(types(g,'CallExpression'),['number','string']);assert.equal(g.files[0].selected.filter((n:number)=>n>=0).length,2);const symbols=g.binding.symbols;assert.equal(g.symbolTypes[symbols.findIndex((s:any)=>s.name==='n')],'number');});
@@ -717,3 +715,233 @@ test('native block return inference retains escape checking',()=>error('function
 test('native fixed arrays distinguish tuple elements from tuple syntax',()=>check('type Pair=[number,string];const a:Pair[2]=[[1,"a"],[2,"b"]];const t:Pair=a[0];const s:string=t[1];'));
 test('native dynamic arrays preserve tuple element types',()=>check('type Pair=[number,string];const a:Pair[]=[[1,"a"]];const t:Pair=a[0];const s:string=t[1];'));
 test('native tuples preserve fixed array members',()=>check('const a:[number[2],string]=[[1,2],"s"];const n:number[2]=a[0];'));
+
+for(const [name,source] of Object.entries({
+ reorder:'function f(x:number,y:string):string{return y+x;}print(f(y:"s",x:1));',
+ omitted:'function f(x:number=1,y:string="s"):string{return y+x;}print(f(y:"a"));',
+ optional:'function f(x?:number,y:string="s"):string{return y;}print(f(y:"a"));',
+ generic:'function f<T>(x:number,value:T):T{return value;}const n:string=f(value:"s",x:1);',
+ method:'class C{f(x:number,y:string):string{return y+x;}}const c=new C();print(c.f(y:"s",x:1));',
+ callback:'function apply(n:number,cb:()=>number):number{return cb()+n;}let n=1;print(apply(cb:():number=>{n+=1;return n;},n:2));',
+ owner:box+'function take(n:number,p:ptr<Box>):number{return p.value+n;}let p:ptr<Box> = new Box();print(take(p:move(p),n:1));',
+}))test(`native named arguments accept ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ unknown:'function f(x:number):void{}f(y:1);',
+ duplicate:'function f(x:number):void{}f(x:1,x:2);',
+ missing:'function f(x:number,y:number):void{}f(y:1);',
+ wrongType:'function f(x:number,y:string):void{}f(y:1,x:"s");',
+ positionalAfter:'function f(x:number,y:number):void{}f(y:1,2);',
+ positionalDuplicate:'function f(x:number,y:number):void{}f(1,x:2);',
+ overflow:'function f(x:i8,y:number):void{}f(y:1,x:128);',
+ callbackEscape:'let stored:()=>number=():number=>0;function f(n:number,cb:()=>number):void{stored=cb;}function g():void{let x=1;f(cb:():number=>{x+=1;return x;},n:0);}',
+ aliasBorrow:box+'function f(a:ref<Box>,b:constRef<Box>):void{}let p:ptr<Box> = new Box();f(b:constRef(p),a:ref(p));',
+ movedOrder:box+'function f(x:number,p:ptr<Box>):void{}let p:ptr<Box> = new Box();f(p:move(p),x:p.value);',
+}))test(`native named arguments reject ${name}`,()=>run(fixture(source),1));
+test('native named arguments publish correspondence without reordering AST',()=>{
+ const g=check('function f(x:number,y:string):void{}f(y:"s",x:1);');const f=g.files[0];const named=f.ast.nodes.map((n:any,i:number)=>({n,i})).filter(({n}:any)=>n.kind==='NamedArgumentExpression');assert.deepEqual(named.map(({i}:any)=>f.argumentParameters[i]),[1,0]);
+});
+test('native Result error payload keeps callable provenance',()=>{
+ const g=check('function f():number{let n=0;const r:Result<number,()=>number> = resultErr(():number=>{n+=1;return n;});const cb=r.error();cb();return n;}print(f());');const sid=g.binding.symbols.findIndex((s:any)=>s.name==='n');assert.ok(effect(g,'f').writes.includes(sid));
+});
+for(const [name,source] of Object.entries({
+ rest:'function first(...xs:number[]):number{return xs[0];}print(first(1,2));',
+ empty:'function count(...xs:number[]):number{return xs.length;}print(count());',
+ head:'function f(head:string,...xs:number[]):number{return xs.length;}print(f("s",1,2));',
+ spread:'function f(...xs:number[]):number{return xs.length;}const a=[1,2];print(f(...a));',
+ interleaved:'function f(...xs:number[]):number{return xs.length;}const a=[1,2];print(f(0,...a,3,...a));',
+ alias:'function f(...xs:number[]):number{return xs.length;}const g=f;print(g(1,2));',
+ generic:'function f<T>(...xs:T[]):T{return xs[0];}const n:string=f("s","a");',
+ genericSpread:'function f<T>(...xs:T[]):T{return xs[0];}const a=[1,2];const n:number=f(...a);',
+ arraySpread:'const a=[1,2];const b=[0,...a,3];const n:number=b[1];',
+ arrayMultiple:'const a=[1,2];const b=[...a,...a];',
+ fixedSpread:'const a:number[2]=[1,2];const b:number[3]=[0,...a];',
+}))test(`native rest/spread accepts ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ restType:'function f(...xs:number[]):void{}f(1,"s");',
+ restNotLast:'function f(...xs:number[],n:number):void{}',
+ restDefault:'function f(...xs:number[]=[1]):void{}',
+ restNonArray:'function f(...xs:number):void{}',
+ missingHead:'function f(head:string,...xs:number[]):void{}f();',
+ spreadScalar:'function f(...xs:number[]):void{}f(...1);',
+ spreadFixedParams:'function f(x:number,y:number):void{}const a=[1,2];f(...a);',
+ arraySpreadScalar:'const a=[...1];',
+ unknownFixedSize:'const a=[1,2];const b:number[2]=[...a];',
+ overflow:'function f(...xs:i8[]):void{}f(1,128);',
+ restCallableNotArray:'function f(...xs:(x:number)=>number[]):void{}',
+}))test(`native rest/spread rejects ${name}`,()=>run(fixture(source),1));
+test('native rest callbacks retain effects when invoked by iteration',()=>{
+ const g=check('type Fn=()=>number;function apply(...callbacks:Fn[]):number{let total=0;for(const cb of callbacks){total+=cb();}return total;}function run():number{let n=0;apply(():number=>{n+=1;return n;},():number=>{n+=2;return n;});return n;}print(run());');const sid=g.binding.symbols.findIndex((s:any)=>s.name==='n');assert.ok(effect(g,'run').writes.includes(sid));
+});
+test('native rest callbacks cannot escape through global aggregate storage',()=>error('type Fn=()=>number;let saved:Fn[]=[];function retain(...callbacks:Fn[]):void{saved=callbacks;}function run():void{let n=0;retain(():number=>{n+=1;return n;});}',/E4210/));
+for(const [name,source] of Object.entries({
+ map:'let m:Map<string,number> = new Map<string,number>();m.set("a",1);print(m.has("a"));print(m.size);m.delete("a");m.clear();',
+ contextual:'let m:Map<string,number> = new Map();m.set("a",1);',
+ set:'let s:Set<string> = new Set<string>();print(s.add("a"));print(s.has("a"));print(s.size);s.delete("a");s.clear();',
+ deleteMap:'let m=new Map<string,number>();m.set("a",1);delete m["a"];',
+ deleteSet:'let s=new Set<string>();s.add("a");delete s["a"];',
+ deleteArray:'let a=[1,2];delete a[0];',
+ forOf:'let m=new Map<string,number>();m.set("a",1);for(const entry of m){const key:string=entry[0];const value:number=entry[1];}',
+ forIn:'let m=new Map<string,number>();for(const key in m){const s:string=key;}',
+ forSet:'let s=new Set<string>();for(const value of s){const a:string=value;}',
+ readOnly:'const s=new Set<string>();print(s.has("a"));',
+}))test(`native Map/Set accepts ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ key:'let m=new Map<string,number>();m.set(1,2);',
+ value:'let m=new Map<string,number>();m.set("s","bad");',
+ immutable:'const m=new Map<string,number>();m.set("s",1);',
+ deleteConstant:'const m=new Map<string,number>();delete m["s"];',
+ wrongDelete:'let m=new Map<string,number>();delete m[1];',
+ size:'let m=new Map<string,number>();m.size=1;',
+ iteratorMutation:'let m=new Map<string,number>();for(const key in m){m.set(key,1);}',
+ constructor:'let m=new Map<string,number>(1);',
+ classKey:box+'let m=new Map<Box,number>();',
+ ownerValue:box+'let m=new Map<string,ptr<Box>>();',
+ capturedEscape:'type Fn=()=>number;let m=new Map<string,Fn>();function f():void{let n=0;m.set("s",():number=>{n+=1;return n;});}',
+}))test(`native Map/Set rejects ${name}`,()=>run(fixture(source),1));
+test('native array push cannot retain a reference closure in global storage',()=>error('type Fn=()=>number;let saved:Fn[]=[];function f():void{let n=0;saved.push(():number=>{n+=1;return n;});}',/E4210/));
+test('native readonly collection properties cannot be assigned',()=>error('let a=[1,2];a.length=1;',/readonly/));
+for(const [name,source] of Object.entries({
+ direct:'class C{readonly x:number;constructor(){this.x=1;}}const c=new C();print(c.x);',
+ branches:'class C{readonly x:number;constructor(b:boolean){if(b)this.x=1;else this.x=2;}}const c=new C(true);',
+ mutable:'class C{x:number;constructor(){this.x=1;this.x=2;}}const c=new C();',
+ parameter:'class C{constructor(public readonly x:number){}}const c=new C(1);',
+ earlyReturn:'class C{readonly x:number;constructor(b:boolean){if(b){this.x=1;return;}this.x=2;}}const c=new C(true);',
+ nestedNew:'class C{readonly x:number;constructor(){const s=new D();this.x=s.y;}}class D{readonly y:number;constructor(){this.y=1;}}const c=new C();',
+ default:'class C{readonly x:number=1;constructor(){print(this.x);}}const c=new C();',
+}))test(`native constructor field initialization accepts ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ missing:'class C{readonly x:number;constructor(){}}',
+ missingMutable:'class C{x:number;constructor(){}}',
+ branch:'class C{readonly x:number;constructor(b:boolean){if(b)this.x=1;}}',
+ duplicate:'class C{readonly x:number;constructor(){this.x=1;this.x=2;}}',
+ maybeDuplicate:'class C{readonly x:number;constructor(b:boolean){if(b)this.x=1;this.x=2;}}',
+ initializedDefault:'class C{readonly x:number=1;constructor(){this.x=2;}}',
+ readBeforeWrite:'class C{x:number;constructor(){print(this.x);this.x=1;}}',
+ compound:'class C{readonly x:number;constructor(){this.x+=1;}}',
+ earlyReturn:'class C{x:number;constructor(b:boolean){if(b)return;this.x=1;}}',
+ methodBeforeInit:'class C{x:number;constructor(){this.read();this.x=1;}read():number{return this.x;}}',
+ otherReceiver:'class C{readonly x:number=1;constructor(other:C){other.x=2;}}',
+ nestedFunction:'class C{readonly x:number;constructor(){const f=():void=>{this.x=1;};f();}}',
+ parameterAssigned:'class C{constructor(public readonly x:number){this.x=2;}}',
+}))test(`native constructor field initialization rejects ${name}`,()=>run(fixture(source),1));
+for(const [name,source] of Object.entries({
+ map:'const a=[1,2];const b:string[]=a.map((x:number):string=>numberToString(x));',
+ filter:'const a=[1,2];const b:number[]=a.filter((x:number):boolean=>x>1);',
+ reduce:'const a=[1,2];const n:number=a.reduce(0,(s:number,x:number):number=>s+x);',
+ forEach:'const a=[1,2];a.forEach((x:number):void=>{print(x);});',
+ find:'const a=[1,2];const o:Optional<number> = a.find((x:number):boolean=>x>1);',
+ some:'const a=[1,2];const b:boolean=a.some((x:number):boolean=>x>1);',
+ every:'const a=[1,2];const b:boolean=a.every((x:number):boolean=>x>0);',
+ flatMap:'const a=[1,2];const b:number[]=a.flatMap((x:number):number[]=>[x,x]);',
+ sort:'let a=[2,1];const b:number[]=a.sort((x:number,y:number):number=>x-y);',
+ defaultSort:'let a=[2,1];a.sort();',
+ concat:'const a=[1,2];const b:number[]=a.concat([3],[4,5]);',
+ inferred:'const a=[1,2];const b:number[]=a.map((x:number)=>{return x+1;});',
+ symbolic:'function apply(a:number[],cb:(x:number)=>number):number[]{return a.map(cb);}const a=apply([1,2],(x:number):number=>x+1);',
+ state:'function f():number{let n=0;const a=[1,2];a.forEach((x:number):void=>{n+=x;});return n;}print(f());',
+ returnedValueCapture:'type Fn=()=>number;function f():Fn[]{const a=[1,2];return a.map((x:number):Fn=>():number=>x);}',
+}))test(`native array callbacks accept ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ predicate:'const a=[1,2];a.filter((x:number):number=>x);',
+ result:'const a=[1,2];const b:string[]=a.map((x:number):number=>x);',
+ void:'const a=[1,2];a.map((x:number):void=>{});',
+ arity:'const a=[1,2];a.reduce(0);',
+ reduceReturn:'const a=[1,2];a.reduce(0,(s:number,x:number):string=>"s");',
+ flatMap:'const a=[1,2];a.flatMap((x:number):number=>x);',
+ sortConstant:'const a=[2,1];a.sort();',
+ sortReturn:'let a=[2,1];a.sort((x:number,y:number):boolean=>x>y);',
+ mutation:'let a=[1,2];a.forEach((x:number):void=>{a.push(x);});',
+ indirectMutation:'let a=[1,2];function mutate(x:number):void{a.push(x);}a.forEach(mutate);',
+ returnedReference:'type Fn=()=>number;function f():Fn[]{let n=0;const a=[1];return a.map((x:number):Fn=>():number=>{n+=x;return n;});}',
+}))test(`native array callbacks reject ${name}`,()=>run(fixture(source),1));
+test('native array callback effects propagate through consumers',()=>{
+ const g=check('function f():number{let n=0;const a=[1,2];a.forEach((x:number):void=>{n+=x;});return n;}print(f());');const sid=g.binding.symbols.findIndex((s:any)=>s.name==='n');assert.ok(effect(g,'f').writes.includes(sid));
+});
+test('native map identity cannot hide a reference callback escape',()=>error('type Fn=()=>number;function f():Fn[]{let n=0;const cb:Fn=():number=>{n+=1;return n;};const a:Fn[]=[cb];return a.map((fn:Fn):Fn=>fn);}',/E4210/));
+test('native overload values choose the contextual signature and its effects',()=>{
+ const g=check('let n=0;function f(x:number):number{return x;}function f(x:string):string{n+=1;return x;}function run():number{const cb:(x:number)=>number=f;return cb(1);}print(run());');const sid=g.binding.symbols.findIndex((s:any)=>s.name==='n');assert.ok(!effect(g,'run').writes.includes(sid));const f=g.files[0];const node=f.ast.nodes.findIndex((n:any,i:number)=>n.kind==='IdentifierExpression'&&f.signatures[i]==='(number)=>number');assert.ok(node>=0);assert.ok(f.selected[node]>=0);
+});
+test('native overload values reject incompatible context',()=>error('function f(x:number):number{return x;}function f(x:string):string{return x;}const g:(x:boolean)=>boolean=f;',/sobrecarga compatible/));
+test('native overload values can be passed to typed consumers',()=>check('function f(x:number):number{return x;}function f(x:string):string{return x;}function apply(cb:(x:number)=>number):number{return cb(1);}print(apply(f));'));
+test('native declared union constructors instantiate generic payloads',()=>check('union Outcome<T,E> = Ok(T)|Err(E);const r:Outcome<number,string> = Outcome<number,string>.Ok(1);'));
+test('native union constructors support contextual and unqualified forms',()=>check('union Maybe<T> = Some(T)|None;const a:Maybe<number> = Some(1);const b:Maybe<number> = None();'));
+test('native union payloads reject wrong types',()=>error('union Maybe<T> = Some(T)|None;const a:Maybe<number> = Some("s");',/incompatible/));
+test('native union payloads reject borrowed storage',()=>error('class Box{x:number=1;}union U=Borrowed(ref<Box>)|None;let p:ptr<Box> = new Box();const u=Borrowed(ref(p));',/E4203/));
+for(const [name,source] of Object.entries({
+ discriminate:'union R={ok:true;value:number}|{ok:false;error:string};function f(r:R):number{if(r.ok==true)return r.value;return 0;}',
+ guard:'union R={ok:true;value:number}|{ok:false;error:string};function f(r:R):string{if(r.ok==true)return "ok";return r.error;}',
+ both:'union R={ok:true;value:number}|{ok:false;error:string};function f(r:R):string{if(r.ok)return numberToString(r.value);else return r.error;}',
+ object:'union R={ok:true;value:number}|{ok:false;error:string};const r:R={ok:true,value:1};const n:number=r.value;',
+ instance:'class A{x:number=1;}class B{y:number=2;}function f(v:A|B):number{if(v instanceof A)return v.x;return v.y;}',
+ inferred:'union R={ok:true;value:number}|{ok:false;error:string};const f=(r:R)=>{if(r.ok)return r.value;return 0;};',
+}))test(`native narrowing accepts ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ unguarded:'union R={ok:true;value:number}|{ok:false;error:string};function f(r:R):number{return r.value;}',
+ wrongBranch:'union R={ok:true;value:number}|{ok:false;error:string};function f(r:R):number{if(r.ok==false)return r.value;return 0;}',
+ objectMissing:'union R={ok:true;value:number}|{ok:false;error:string};const r:R={ok:true};',
+ mutateTag:'union R={ok:true;value:number}|{ok:false;error:string};let r:R={ok:true,value:1};r.ok=false;',
+ instancePrimitive:'class A{x:number=1;}const b=1 instanceof A;',
+ instanceTarget:'class A{x:number=1;}const a=new A();const b=a instanceof number;',
+}))test(`native narrowing rejects ${name}`,()=>run(fixture(source),1));
+test('native narrowing invalidates facts after branch assignments',()=>error('union R={ok:true;value:number}|{ok:false;error:string};function f(r:R,b:boolean):number{if(r.ok){if(b)r={ok:false,error:"s"};return r.value;}return 0;}',/narrowing/));
+test('native inferred returns cannot reuse facts after calls',()=>error('union R={ok:true;value:number}|{ok:false;error:string};const f=(r:R)=>{if(r.ok){print(1);return r.value;}return 0;};',/narrowing/));
+
+test('native union payload callbacks preserve effects',()=>{
+ const g=check('union U=Action(()=>number)|None;let n=0;function run():number{const u:U=Action(():number=>{n+=1;return n;});return u.value();}print(run());');const sid=g.binding.symbols.findIndex((s:any)=>s.name==='n');assert.ok(effect(g,'run').writes.includes(sid));
+});
+test('native union record callbacks preserve effects',()=>{
+ const g=check('union U={kind:"Action";cb:()=>number}|{kind:"None"};let n=0;function run():number{const u:U={kind:"Action",cb:():number=>{n+=1;return n;}};const cb:()=>number=u.cb;return cb();}print(run());');const sid=g.binding.symbols.findIndex((s:any)=>s.name==='n');assert.ok(effect(g,'run').writes.includes(sid));
+});
+test('native union callbacks cannot hide a reference capture on return',()=>error('union U=Action(()=>number)|None;function f():U{let n=0;return Action(():number=>{n+=1;return n;});}',/E4210/));
+test('native union narrowing distributes across remaining variants',()=>check('union U={kind:"A";a:number}|{kind:"B";b:number}|{kind:"C";c:number};function f(u:U):number{if(u.kind=="A")return u.a;if(u.kind=="B")return u.b;return u.c;}'));
+
+for(const [name,source] of Object.entries({
+ value:'const n=match(1,[when(1,():number=>2),otherwise(():number=>0)]);const x:number=n;',
+ subject:'const n=match(1,[when(1,(x:number):number=>x+1),otherwise((x:number):number=>x)]);',
+ type:'function f(x:number|string):number{return match(x,[whenType<number>((n:number):number=>n),whenType<string>((s:string):number=>s.length)]);}',
+ discriminator:'union U=A(number)|B(string);function f(u:U):number{return match(u,"kind",[when("A",():number=>1),otherwise(():number=>0)]);}',
+ returns:'function f(x:number):number|string{return match(x,[when(1,():number=>2),otherwise(():string=>"s")]);}',
+}))test(`native match accepts ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ arity:'const n=match(1);',
+ cases:'const n=match(1,1);',
+ pattern:'const n=match(1,[when("s",():number=>2)]);',
+ duplicate:'const n=match(1,[when(1,():number=>2),when(1,():number=>3)]);',
+ fallbackOrder:'const n=match(1,[otherwise(():number=>2),when(1,():number=>3)]);',
+ callback:'const n=match(1,[when(1,(s:string):number=>2)]);',
+ empty:'const n=match(1,[]);',
+ standalone:'const c=when(1,():number=>2);',
+ wrongType:'const n=match(1,[whenType<string>(():number=>2)]);',
+}))test(`native match rejects ${name}`,()=>run(fixture(source),1));
+test('native match composes callback effects',()=>{const g=check('let n=0;function f():number{return match(1,[when(1,():number=>{n+=1;return n;}),otherwise(():number=>0)]);}print(f());');const sid=g.binding.symbols.findIndex((s:any)=>s.name==='n');assert.ok(effect(g,'f').writes.includes(sid));});
+test('native match preserves escaping callback return provenance',()=>error('type Fn=()=>number;function f():Fn{let n=0;return match(1,[otherwise(():Fn=>():number=>{n+=1;return n;})]);}',/E4210/));
+
+test('native tuple spread checks each contextual position',()=>check('const a:[number,string]=[1,"s"];const b:[boolean,number,string]=[true,...a];'));
+test('native tuple spread rejects an incompatible contextual position',()=>error('const a:[number,string]=[1,"s"];const b:[boolean,string,number]=[true,...a];',/incompatible/));
+test('native fixed spread preserves repeated positions in heterogeneous inference',()=>{const g=check('const a:number[2]=[1,2];const b=[true,...a];const n:number=b[2];');const s=g.binding.symbols.findIndex((s:any)=>s.name==='b');assert.equal(g.symbolTypes[s],'[boolean,number,number]');});
+
+test('native match callback writes respect an active loan',()=>error('let n=0;const loan=constRef(n);match(1,[otherwise(():number=>{n+=1;return n;})]);print(loan);',/E4207/));
+test('native match returned subject callbacks preserve capture provenance',()=>error('type Fn=()=>number;function f():Fn{let n=0;const cb:Fn=():number=>{n+=1;return n;};return match(cb,[otherwise((fn:Fn):Fn=>fn)]);}',/E4210/));
+
+for(const [name,source] of Object.entries({
+ and:'union U={ok:true;value:number}|{ok:false;error:string};function f(u:U):boolean{return u.ok&&u.value>0;}',
+ or:'union U={ok:true;value:number}|{ok:false;error:string};function f(u:U):boolean{return u.ok||u.error=="s";}',
+ ternary:'union U={ok:true;value:number}|{ok:false;error:string};function f(u:U):number{return u.ok?u.value:u.error.length;}',
+}))test(`native conditional narrowing accepts ${name}`,()=>check(source));
+test('native conditional narrowing cannot leak a branch fact',()=>error('union U={ok:true;value:number}|{ok:false;error:string};function f(u:U):number{const n=u.ok?u.value:0;return u.value;}',/narrowing/));
+
+for(const [name,source] of Object.entries({
+ map:'const m=new Map<string,number>();m.forEach((v:number,k:string):void=>{print(v);print(k);});',
+ set:'const s=new Set<number>();s.forEach((v:number):void=>{print(v);});',
+}))test(`native collection callbacks accept ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ parameter:'const m=new Map<string,number>();m.forEach((v:string,k:number):void=>{});',
+ result:'const s=new Set<number>();s.forEach((v:number):number=>v);',
+ mutation:'let m=new Map<string,number>();m.forEach((v:number,k:string):void=>{m.set(k,v);});',
+ indirect:'let s=new Set<number>();function mutate(v:number):void{s.add(v);}s.forEach(mutate);',
+}))test(`native collection callbacks reject ${name}`,()=>run(fixture(source),1));
+test('native collection callbacks compose effects',()=>{const g=check('let n=0;function f(m:Map<string,number>):void{m.forEach((v:number,k:string):void=>{n+=v;});}');const sid=g.binding.symbols.findIndex((s:any)=>s.name==='n');assert.ok(effect(g,'f').writes.includes(sid));});
+
+test('native public union payloads cannot expose private types',()=>error('class Hidden{x:number=1;}export union U=Value(Hidden)|Empty;',/E4401/));
+test('native public union record fields cannot expose private types',()=>error('class Hidden{x:number=1;}export union U={kind:"Value";data:Hidden}|{kind:"Empty"};',/E4401/));
+test('native public union payloads allow exported types',()=>check('export class Box{x:number=1;}export union U=Value(Box)|Empty;'));

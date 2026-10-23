@@ -117,20 +117,25 @@ semántica ni ejecución concurrente del checker.
 
 ## Límites y diferencias conocidas
 
-Se emite `Comprobación nativa pendiente: ...` para construcciones aún no
-trasladadas: packs genéricos, parámetros out o
-variádicos, argumentos nombrados/spread, unions declaradas,
-async/await, llamadas opcionales, pipelines y builtins no
-registrados, decoradores y expansión comptime/cppgen/etsgen. Tampoco se permite
-usar un grupo de sobrecargas como valor sin seleccionar una firma. Las capturas locales pasan por la nueva comprobación de procedencia y escapes.
+Se emite `Comprobación nativa pendiente: ...` para packs genéricos, parámetros
+out, async/await, llamadas opcionales, builtins no registrados, decoradores y
+expansión comptime/cppgen/etsgen. Las sobrecargas como valor requieren contexto
+callable y seleccionan también sus efectos; la instanciación genérica avanzada
+sigue abierta.
 
-Se comprueban ahora movimientos por ruta, préstamos y readonly, TDZ en llamadas
-directas, escapes de closures y tipos privados en API públicas. No hay todavía
-análisis completo de efectos/lifetimes interprocedurales ni narrowing/exhaustividad.
-Los límites conservadores y las construcciones bloqueadas están en [SAFETY.md](./SAFETY.md). Los campos readonly se
-tratan conservadoramente como no escribibles, incluso dentro de un constructor;
-los literales por defecto sí se comprueban. La inferencia contextual compleja
-entre sobrecargas y de tipos desde el retorno queda pendiente.
+Se comprueban argumentos nombrados/rest/spread, uniones declaradas y payloads,
+Map/Set/delete y callbacks de arrays. `argumentParameters` conserva la posición
+formal de cada argumento sin reordenar el AST ni su evaluación. El narrowing por
+discriminador e instanceof se aplica en ramas, guards, cortocircuitos y ternarios;
+una llamada o escritura invalida conservadoramente las garantías anteriores.
+Match comprueba casos, callbacks y resultados, conservando efectos y procedencia.
+La exhaustividad y la composición completa de tipos siguen pendientes.
+
+Los constructores comprueban inicialización por rutas, lectura anticipada y
+escritura única de readonly. Se mantienen movimientos por ruta, préstamos,
+TDZ en llamadas directas, escapes de closures y tipos privados en API públicas.
+Los límites conservadores están en [SAFETY.md](./SAFETY.md) y el inventario de
+cierre en [PENDING.md](../PENDING.md).
 
 La suite registra cuatro diferencias observadas con el checker TS directo:
 `typeof` de una variable local y la inferencia de `T[]` desde un literal pasan

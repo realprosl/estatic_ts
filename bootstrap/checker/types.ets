@@ -20,6 +20,16 @@ export function functionClose(text: string): number {
 }
 export function functionParams(text: string): string[] { const close: number = functionClose(text); if (close < 0) { let empty: string[] = []; return empty; } return splitTypes(text.slice(1, close), ","); }
 export function functionReturn(text: string): string { const close: number = functionClose(text); return close < 0 ? "!error" : text.slice(close + 3, text.length); }
+export function restPosition(text: string): number {
+  const params: string[] = functionParams(text);
+  for (let at: number = 0; at < params.length; at = at + 1) if (params[at].startsWith("...")) return at;
+  return -1;
+}
+export function argumentType(text: string, spread: boolean): string {
+  if (!text.startsWith("...")) return text;
+  const array: string = text.slice(3,text.length);
+  return spread ? array : semanticElement(array);
+}
 export function numericType(text: string): boolean { return ["number","i8","u8","i16","u16","i32","u32","i64","u64","f32","f64"].includes(text); }
 export function primitiveType(text: string): boolean { return numericType(text) || ["string","boolean","void"].includes(text); }
 export function typeCompatible(actual: string, expected: string): boolean {

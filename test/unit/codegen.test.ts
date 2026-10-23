@@ -2005,14 +2005,14 @@ test("V30.55: substring con 2 args (default end=infinito) emite call correcta", 
   const out = cpp(`let s = "hello world"; let sub = substring(s, 6, 11); print(sub);`);
   assert.match(out, /ets::string_substring\(s, 6\.0, 11\.0\)/);
 });
-test("V30.55: writeFile emite ets::writeFile con include de filesystem", () => {
+test("V30.55: writeFile emite el wrapper global con include de filesystem", () => {
   const out = cpp(`writeFile("/tmp/x", "data");`);
-  assert.match(out, /ets::writeFile\(/);
+  assert.match(out, /(?:^|\s)::writeFile\(/);
   assert.match(out, /#include\s*["<]runtime\/ets_file\.hpp[">]/);
 });
-test("V30.55: readFile emite ets::readFile con include de filesystem", () => {
+test("V30.55: readFile emite el wrapper global con include de filesystem", () => {
   const out = cpp(`let r = readFile("/tmp/x");`);
-  assert.match(out, /ets::readFile\(/);
+  assert.match(out, /(?:^|\s)::readFile\(/);
   assert.match(out, /#include\s*["<]runtime\/ets_file\.hpp[">]/);
 });
 

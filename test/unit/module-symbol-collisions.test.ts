@@ -147,11 +147,11 @@ test("module symbols: diagnostico de tipo conserva origen y nombre tras aislamie
   });
 });
 
-function native(result: Awaited<ReturnType<typeof compileFile>>,dir:string):string {
+function native(result: Awaited<ReturnType<typeof compileFile>>,dir:string,link:string[]=[]):string {
   writeFileSync(join(dir,"estatic_common.hpp"),result.header);
   const files=result.modules.map((module,index)=>{const file=join(dir,`module-${index}.cpp`);writeFileSync(file,module.cpp);return file;});
-  execFileSync("g++",["-std=c++20","-O0","-pthread","-fno-exceptions",`-I${resolve(".")}`,...files,"-o",join(dir,"app")],{encoding:"utf8"});
-  return execFileSync(join(dir,"app"),{encoding:"utf8"});
+  execFileSync("g++",["-std=c++20","-O0","-pthread","-fno-exceptions",`-I${resolve(".")}`,...files,...link,"-o",join(dir,"app")],{encoding:"utf8"});
+  return execFileSync(join(dir,"app"),{encoding:"utf8",cwd:dir});
 }
 
 test("module symbols native: overloads, closures, mutación y comptime aislados",async()=>{
@@ -213,5 +213,21 @@ test('module destructuring native: globals use resolved types before storage dec
 test('module destructuring native: object global referenced by a later pattern',async()=>{
  await project({'main.ets':'class Pair{x:number=7;}const source=new Pair();const {x:value}=source;print(value);'},async(entry,dir)=>{
   assert.equal(native(await compileFile(entry),dir),'7\n');
+ });
+});
+test('module Result storage: deferred success and failure compile and run',async()=>{
+ await project({'main.ets':'function success():Result<number>{return ok(7);}const a:Result<number> = success();const b:Result<number> = err<number>("failure");print(a.value());print(b.error());'},async(entry,dir)=>{
+  assert.equal(native(await compileFile(entry),dir,[resolve('runtime/runtime_ets_libuv.cpp'),resolve('runtime/runtime_ets_net_libuv.cpp'),'-luv']),'7\nfailure\n');
+ });
+});
+
+test('module Task storage: deferred initialization keeps the coroutine lazy',async()=>{
+ await project({'main.ets':'async function value():Promise<number>{print("started");return 7;}const task:Promise<number> = value();print("before await");print(await task);'},async(entry,dir)=>{
+  assert.equal(native(await compileFile(entry),dir,[resolve('runtime/runtime_ets_libuv.cpp'),resolve('runtime/runtime_ets_net_libuv.cpp'),'-luv']),'before await\nstarted\n7\n');
+ });
+});
+test('module file helpers: global readFile and writeFile use the runtime namespace',async()=>{
+ await project({'main.ets':'const name:string="module-result-files.txt";const written:Result<boolean> = writeFile(name,"text");const text:Result<string> = readFile(name);print(written.isOk());print(text.value());removeFile(name);'},async(entry,dir)=>{
+  assert.equal(native(await compileFile(entry),dir,[resolve('runtime/runtime_ets_libuv.cpp'),resolve('runtime/runtime_ets_net_libuv.cpp'),'-luv']),'1\ntext\n');
  });
 });

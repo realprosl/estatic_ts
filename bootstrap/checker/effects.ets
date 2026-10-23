@@ -1,8 +1,8 @@
 import { ModuleGraph } from "../modules/loader";
 import { BindingResult, bindingChild, callableBinding } from "../binder/binder";
 import { AstNode } from "../parser/parser";
-import { CheckResult, EffectSummary, EffectPoint, EffectBorrow } from "./model";
-import { borrowedType, memoryValue, genericBase } from "./types";
+import { CheckResult, EffectSummary, EffectPoint, EffectBorrow, argumentParameter } from "./model";
+import { borrowedType, memoryValue, genericBase, genericArguments, splitTypes } from "./types";
 
 export class EffectEdge {
   source: number; target: number; callable: boolean;
@@ -55,7 +55,9 @@ export class EffectAnalyzer {
         let sid: number = this.reference(module,at); let remaining: number = this.binding.symbols.length;
         while (sid >= 0 && remaining > 0) { let next: number = -1; for (const b of this.checked.borrows) if (b.symbol == sid && borrowedType(this.checked.symbolTypes[sid])) next = b.root; if (next < 0 || next == sid) break; sid = next; remaining = remaining - 1; } return sid;
       }
-      if (n.kind == "MemberExpression" || n.kind == "IndexExpression") at = bindingChild(n,"object");
+      if (n.kind == "NamedArgumentExpression") at = bindingChild(n,"value");
+      else if (n.kind == "SpreadElement") at = bindingChild(n,"expression");
+      else if (n.kind == "MemberExpression" || n.kind == "IndexExpression") at = bindingChild(n,"object");
       else if (["ref","constRef","move"].includes(this.helper(module,at))) at = bindingChild(n,"args"); else return -1;
     } return -1;
   }
@@ -75,17 +77,63 @@ export class EffectAnalyzer {
     const direct: number = this.reference(module,id); if (direct >= 0) return direct;
     return this.checked.files[module].members[id];
   }
-  builtin(module: number, id: number): boolean {
+  arrayCallback(module: number, id: number): number {
     const n: AstNode = this.node(module,id);
+    if (n.kind != "MemberCallExpression") return -1;
+    const receiver: string = memoryValue(this.checked.files[module].types[bindingChild(n,"object")]);
+    const collection: boolean = ["Map","Set"].includes(genericBase(receiver)) && n.get("method") == "forEach";
+    if (!collection && (!receiver.endsWith("[]") || !["map","filter","reduce","forEach","find","some","every","flatMap","sort"].includes(n.get("method")))) return -1;
+    let at: number = 0;
+    for (const edge of n.edges) if (edge.role == "args") { if (at == (n.get("method") == "reduce" ? 1 : 0)) return edge.node; at = at + 1; }
+    return -1;
+  }
+  matchCallbacks(module: number, id: number): number[] {
+    let callbacks: number[] = []; if (this.helper(module,id) != "match") return callbacks;
+    let list: number = -1; for (const edge of this.node(module,id).edges) if (edge.role == "args") list = edge.node;
+    if (list >= 0) for (const edge of this.node(module,list).edges) if (edge.role == "elements") {
+      let callback: number = -1; for (const value of this.node(module,edge.node).edges) if (value.role == "args") callback = value.node;
+      if (callback >= 0) callbacks.push(callback);
+    }
+    return callbacks;
+  }
+  synchronousCallbacks(module: number, id: number): number[] {
+    const array: number = this.arrayCallback(module,id); if (array >= 0) return [array]; return this.matchCallbacks(module,id);
+  }
+  callbackInputs(module: number, id: number): number[] {
+    const n: AstNode = this.node(module,id); let inputs: number[] = [];
+    if (this.helper(module,id) == "match") return [bindingChild(n,"args")];
+    if (n.get("method") == "reduce") inputs.push(bindingChild(n,"args"));
+    inputs.push(bindingChild(n,"object"));
+    if (n.get("method") == "sort" || genericBase(memoryValue(this.checked.files[module].types[bindingChild(n,"object")])) == "Map") inputs.push(bindingChild(n,"object"));
+    return inputs;
+  }
+  builtin(module: number, id: number): boolean {
+    if (this.synchronousCallbacks(module,id).length > 0) return false;
+    const n: AstNode = this.node(module,id);
+    const member: number = this.member(module,id); if (member >= 0 && this.binding.symbols[member].kind == "UnionVariant") return true;
     if (this.helper(module,id) != "") return true;
     if (n.kind == "NewExpression" && this.checked.files[module].selected[id] < 0) return true;
     if (n.kind == "MemberCallExpression") {
       const object: number = bindingChild(n,"object"); const receiver: string = memoryValue(this.checked.files[module].types[object]);
-      return ["string","!Math","!JSON","!Date","Console"].includes(receiver) || receiver.endsWith("[]") || ["Optional","Result"].includes(genericBase(receiver));
+      return ["string","!Math","!JSON","!Date","Console"].includes(receiver) || receiver.endsWith("[]") || ["Optional","Result","Map","Set"].includes(genericBase(receiver));
     } return false;
+  }
+  unionReceiver(module: number, id: number): number {
+    const n: AstNode = this.node(module,id);
+    if (n.kind != "MemberExpression" && n.kind != "MemberCallExpression") return -1;
+    const object: number = bindingChild(n,"object");
+    for (const part of splitTypes(memoryValue(this.checked.files[module].types[object]),"|")) {
+      const base: string = genericBase(part) == "variant" ? genericArguments(part)[0] : part;
+      for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (this.binding.symbols[sid].kind == "UnionDeclaration" && (base == "#" + numberToString(sid) || base.startsWith("#" + numberToString(sid) + "<"))) return object;
+    }
+    return -1;
   }
   callTargets(module: number, id: number): number[] {
     let result: number[] = []; const n: AstNode = this.node(module,id);
+    const callbacks: number[] = this.synchronousCallbacks(module,id);
+    if (callbacks.length > 0) { for (const callback of callbacks) for (const target of this.points[this.vertex(module,callback)].targets) if (!result.includes(target)) result.push(target); return result; }
+    const payload: number = this.unionReceiver(module,id);
+    if (payload >= 0) return this.points[this.vertex(module,payload)].targets;
     const selected: number = this.checked.files[module].selected[id]; const selectedModule: number = this.checked.files[module].selectedModules[id];
     if (selected >= 0 && bindingChild(this.node(selectedModule,selected),"body") >= 0) {
       const summaryId: number = this.functionIndex(selectedModule,selected); if (summaryId >= 0) result.push(summaryId); return result;
@@ -96,6 +144,10 @@ export class EffectAnalyzer {
     return result;
   }
   callOrigins(module: number, id: number): number[] {
+    const callbacks: number[] = this.synchronousCallbacks(module,id);
+    if (callbacks.length > 0) { let origins: number[] = []; for (const callback of callbacks) for (const origin of this.points[this.vertex(module,callback)].origins) if (!origins.includes(origin)) origins.push(origin); return origins; }
+    const payload: number = this.unionReceiver(module,id);
+    if (payload >= 0) return this.points[this.vertex(module,payload)].origins;
     const sid: number = this.node(module,id).kind == "MemberCallExpression" ? this.member(module,id) : this.reference(module,id);
     if (sid >= 0) return this.points[this.symbol(sid)].origins;
     let empty: number[] = []; return empty;
@@ -137,8 +189,12 @@ export class EffectAnalyzer {
         if (sid >= 0) this.addEdge(this.vertex(m,bindingChild(n,"iterable")),this.symbol(sid),true);
       }
       if (n.kind == "IdentifierExpression" || n.kind == "MemberExpression") {
-        const sid: number = this.member(m,id); if (sid >= 0) this.addEdge(this.symbol(sid),vertex,true);
+        const selected: number = this.checked.files[m].selected[id];
+        if (selected >= 0) this.addTarget(vertex,this.functionIndex(this.checked.files[m].selectedModules[id],selected));
+        else { const sid: number = this.member(m,id); if (sid >= 0) this.addEdge(this.symbol(sid),vertex,true); }
       }
+      const payload: number = this.unionReceiver(m,id);
+      if (payload >= 0 && n.kind == "MemberExpression") this.addEdge(this.vertex(m,payload),vertex,true);
       if (n.kind == "VariableDeclaration" || n.kind == "UsingDeclaration") {
         const sid: number = this.binding.files[m].declarations[id]; const init: number = bindingChild(n,"initializer");
         if (sid >= 0 && init >= 0) this.addEdge(this.vertex(m,init),this.symbol(sid),true);
@@ -156,17 +212,23 @@ export class EffectAnalyzer {
         const property: AstNode = this.node(m,e.node); const value: number = this.vertex(m,bindingChild(property,"value"));
         this.addEdge(value,vertex,true); const member: number = this.fieldOf(m,id,property.get("key")); if (member >= 0) this.addEdge(value,this.symbol(member),true);
       }
-      if (["ArrayLiteralExpression","IndexExpression","TernaryExpression","AsExpression","SatisfiesExpression"].includes(n.kind)) for (const e of n.edges) if (e.role != "condition" && e.role != "index") this.addEdge(this.vertex(m,e.node),vertex,true);
+      if (["ArrayLiteralExpression","IndexExpression","TernaryExpression","AsExpression","SatisfiesExpression","NamedArgumentExpression","SpreadElement"].includes(n.kind)) for (const e of n.edges) if (e.role != "condition" && e.role != "index") this.addEdge(this.vertex(m,e.node),vertex,true);
       if (n.kind == "ClassField") { const value: number = bindingChild(n,"defaultValue"); const sid: number = this.binding.files[m].declarations[id]; if (value >= 0 && sid >= 0) this.addEdge(this.vertex(m,value),this.symbol(sid),true); }
       if (["optionalSome","optionalValueOr","optionalOrElse","resultOk","resultErr","resultValueOr","ok","err"].includes(this.helper(m,id))) for (const edge of n.edges) if (edge.role == "args") this.addEdge(this.vertex(m,edge.node),vertex,true);
+      if ((n.kind == "CallExpression" || n.kind == "MemberCallExpression") && this.member(m,id) >= 0 && this.binding.symbols[this.member(m,id)].kind == "UnionVariant") for (const edge of n.edges) if (edge.role == "args") this.addEdge(this.vertex(m,edge.node),vertex,true);
       if (n.kind == "MemberCallExpression" && ["Optional","Result"].includes(genericBase(memoryValue(this.checked.files[m].types[bindingChild(n,"object")])))) {
-        if (["value","valueOr"].includes(n.get("method"))) { this.addEdge(this.vertex(m,bindingChild(n,"object")),vertex,true); for (const edge of n.edges) if (edge.role == "args") this.addEdge(this.vertex(m,edge.node),vertex,true); }
+        if (["value","valueOr","error"].includes(n.get("method"))) { this.addEdge(this.vertex(m,bindingChild(n,"object")),vertex,true); for (const edge of n.edges) if (edge.role == "args") this.addEdge(this.vertex(m,edge.node),vertex,true); }
+      }
+      if (n.kind == "MemberCallExpression" && n.get("method") == "get" && genericBase(memoryValue(this.checked.files[m].types[bindingChild(n,"object")])) == "Map") this.addEdge(this.vertex(m,bindingChild(n,"object")),vertex,true);
+      if (n.kind == "MemberCallExpression" && memoryValue(this.checked.files[m].types[bindingChild(n,"object")]).endsWith("[]") && ["filter","find","sort","slice","concat"].includes(n.get("method"))) {
+        this.addEdge(this.vertex(m,bindingChild(n,"object")),vertex,true);
+        if (n.get("method") == "concat") for (const edge of n.edges) if (edge.role == "args") this.addEdge(this.vertex(m,edge.node),vertex,true);
       }
       if (n.kind == "BinaryExpression" && n.get("operator") == "??") for (const edge of n.edges) this.addEdge(this.vertex(m,edge.node),vertex,true);
       if (n.kind == "ReturnStatement" && owner >= 0) { const value: number = bindingChild(n,"value"); if (value >= 0) this.addEdge(this.vertex(m,value),this.returnVertex(owner),true); }
       if (n.kind == "ArrowFunctionExpression") { const body: number = bindingChild(n,"body"); if (this.node(m,body).kind != "BlockStatement") this.addEdge(this.vertex(m,body),this.returnVertex(this.functionIndex(m,id)),true); }
       if (n.kind == "CallExpression" || n.kind == "MemberCallExpression" || n.kind == "NewExpression") this.calls.push(new EffectCall(m,id,owner));
-      if (n.kind == "MemberCallExpression" && n.get("method") == "push") {
+      if (n.kind == "MemberCallExpression" && ["push","set","add"].includes(n.get("method"))) {
         const root: number = this.root(m,bindingChild(n,"object")); if (root >= 0) for (const e of n.edges) if (e.role == "args") this.addEdge(this.vertex(m,e.node),this.symbol(root),true);
       }
     }
@@ -178,8 +240,14 @@ export class EffectAnalyzer {
       for (const call of this.calls) for (const target of this.callTargets(call.module,call.node)) {
         const summary = this.summaries[target];
         let at: number = 0;
-        for (const e of this.node(call.module,call.node).edges) if (e.role == "args") {
-          if (at < summary.parameters.length) this.addEdge(this.vertex(call.module,e.node),this.symbol(summary.parameters[at]),true); at = at + 1;
+        if (this.synchronousCallbacks(call.module,call.node).length > 0) {
+          for (const input of this.callbackInputs(call.module,call.node)) {
+            if (at < summary.parameters.length) this.addEdge(this.vertex(call.module,input),this.symbol(summary.parameters[at]),true); at = at + 1;
+          }
+          if (this.node(call.module,call.node).get("method") == "reduce" && summary.parameters.length > 0) this.addEdge(this.returnVertex(target),this.symbol(summary.parameters[0]),true);
+        } else for (const e of this.node(call.module,call.node).edges) if (e.role == "args") {
+          const position: number = argumentParameter(this.checked.files[call.module],e.node,at);
+          if (position < summary.parameters.length) this.addEdge(this.vertex(call.module,e.node),this.symbol(summary.parameters[position]),true); at = at + 1;
         }
         this.addEdge(this.returnVertex(target),this.vertex(call.module,call.node),true);
       }
@@ -195,11 +263,17 @@ export class EffectAnalyzer {
     let s = this.summaries[summaryId]; let values: number[] = mode == "read" ? s.reads : mode == "write" ? s.writes : s.moves;
     if (!values.includes(sid)) { values.push(sid); if (mode == "read") s.reads = values; else if (mode == "write") s.writes = values; else s.moves = values; this.summaries[summaryId] = s; this.changed = true; }
   }
+  actualInput(module: number, id: number, parameter: number): number {
+    if (this.synchronousCallbacks(module,id).length > 0) { const inputs: number[] = this.callbackInputs(module,id); return parameter < inputs.length ? inputs[parameter] : -1; }
+    let position: number = 0;
+    for (const edge of this.node(module,id).edges) if (edge.role == "args") { if (argumentParameter(this.checked.files[module],edge.node,position) == parameter) return edge.node; position = position + 1; }
+    return -1;
+  }
   mapRoot(call: EffectCall, target: number, sid: number): number {
     const callee = this.summaries[target];
     for (let at: number = 0; at < callee.parameters.length; at = at + 1) if (callee.parameters[at] == sid) {
       if (!borrowedType(this.checked.symbolTypes[sid])) return -1;
-      let position: number = 0; for (const e of this.node(call.module,call.node).edges) if (e.role == "args") { if (position == at) return this.root(call.module,e.node); position = position + 1; } return -1;
+      return this.root(call.module,this.actualInput(call.module,call.node,at));
     }
     if (this.binding.symbols[sid].kind == "receiver") return this.root(call.module,bindingChild(this.node(call.module,call.node),"object"));
     if (this.owner(this.binding.symbols[sid].scope) == target) return -1;
@@ -216,7 +290,10 @@ export class EffectAnalyzer {
     this.summaries[summaryId].borrows.push(new EffectBorrow(call,callback,root,mode)); this.changed = true;
   }
   canRetain(module: number, id: number, position: number): boolean {
+    if (this.synchronousCallbacks(module,id).length > 0) return false;
     if (this.builtin(module,id)) return false;
+    let sourcePosition: number = 0;
+    for (const e of this.node(module,id).edges) if (e.role == "args") { if (sourcePosition == position) { position = argumentParameter(this.checked.files[module],e.node,position); break; } sourcePosition = sourcePosition + 1; }
     const targets: number[] = this.callTargets(module,id); if (targets.length == 0) return true;
     for (const target of targets) {
       const s = this.summaries[target];
@@ -242,15 +319,15 @@ export class EffectAnalyzer {
         if (parent >= 0) { const p: AstNode = this.node(m,parent); writeOnly = p.kind == "AssignmentExpression" && bindingChild(p,"target") == id; }
         if (!writeOnly) this.addEffect(owner,this.reference(m,id),"read");
       }
-      if (n.kind == "AssignmentExpression" || n.kind == "CompoundAssignmentExpression") this.addEffect(owner,this.root(m,bindingChild(n,"target")),"write");
+      if (n.kind == "AssignmentExpression" || n.kind == "CompoundAssignmentExpression" || n.kind == "DeleteStatement") this.addEffect(owner,this.root(m,bindingChild(n,"target")),"write");
       if (this.helper(m,id) == "move") this.addEffect(owner,this.root(m,bindingChild(n,"args")),"move");
-      if (n.kind == "MemberCallExpression" && ["push","pop","sort"].includes(n.get("method"))) this.addEffect(owner,this.root(m,bindingChild(n,"object")),"write");
+      if (n.kind == "MemberCallExpression" && ["push","pop","sort","set","add","delete","clear"].includes(n.get("method"))) this.addEffect(owner,this.root(m,bindingChild(n,"object")),"write");
       if (n.kind == "ReturnStatement") { const value: number = bindingChild(n,"value"); if (value >= 0) for (const origin of this.points[this.vertex(m,value)].origins) if (!this.summaries[owner].returned.includes(origin)) this.summaries[owner].returned.push(origin); }
       if (n.kind == "VariableDeclaration" || n.kind == "UsingDeclaration") {
         const sid: number = this.binding.files[m].declarations[id]; const init: number = bindingChild(n,"initializer");
         if (sid >= 0 && this.owner(this.binding.symbols[sid].scope) != owner && init >= 0) this.retain(owner,this.vertex(m,init));
       }
-      if (n.kind == "AssignmentExpression" || (n.kind == "MemberCallExpression" && n.get("method") == "push")) {
+      if (n.kind == "AssignmentExpression" || (n.kind == "MemberCallExpression" && ["push","set","add"].includes(n.get("method")))) {
         const root: number = this.root(m,bindingChild(n,n.kind == "AssignmentExpression" ? "target" : "object"));
         if (root >= 0 && (this.owner(this.binding.symbols[root].scope) != owner || borrowedType(this.checked.symbolTypes[root]))) for (const e of n.edges) if (e.role == "value" || e.role == "args") this.retain(owner,this.vertex(m,e.node));
       }
@@ -258,6 +335,7 @@ export class EffectAnalyzer {
     for (const call of this.calls) if (call.owner >= 0 && !this.builtin(call.module,call.node)) {
       for (const origin of this.callOrigins(call.module,call.node)) if (this.summaries[call.owner].parameters.includes(origin) && !this.summaries[call.owner].invokes.includes(origin)) this.summaries[call.owner].invokes.push(origin);
       for (const callback of this.callOrigins(call.module,call.node)) if (this.summaries[call.owner].parameters.includes(callback)) for (const parameter of this.summaries[call.owner].parameters) if (borrowedType(this.checked.symbolTypes[parameter])) this.obligation(call.owner,call.node,callback,parameter,memoryMode(this.checked.symbolTypes[parameter]));
+      if (this.arrayCallback(call.module,call.node) >= 0) for (const callback of this.callOrigins(call.module,call.node)) if (this.summaries[call.owner].parameters.includes(callback)) this.obligation(call.owner,call.node,callback,this.root(call.module,bindingChild(this.node(call.module,call.node),"object")),"constRef");
       const targets: number[] = this.callTargets(call.module,call.node);
       if (targets.length == 0 && this.callOrigins(call.module,call.node).length == 0) this.summaries[call.owner].unknown = true;
       for (const lease of this.checked.borrows) if (lease.end > lease.begin && lease.module == call.module && lease.owner == this.vertex(this.summaries[call.owner].module,this.summaries[call.owner].node) && (lease.begin) <= this.node(call.module,call.node).start.offset && (this.node(call.module,call.node).start.offset) <= lease.end) {
@@ -274,7 +352,7 @@ export class EffectAnalyzer {
           for (const b of callee.borrows) {
             let callbackOrigins: number[] = []; let position: number = 0;
             for (const parameter of callee.parameters) {
-              if (parameter == b.callback) { let actual: number = 0; for (const e of this.node(call.module,call.node).edges) if (e.role == "args") { if (actual == position) callbackOrigins = this.points[this.vertex(call.module,e.node)].origins; actual = actual + 1; } }
+              if (parameter == b.callback) { const input: number = this.actualInput(call.module,call.node,position); if (input >= 0) callbackOrigins = this.points[this.vertex(call.module,input)].origins; }
               position = position + 1;
             }
             if (!callee.parameters.includes(b.callback)) callbackOrigins.push(b.callback);
@@ -283,12 +361,15 @@ export class EffectAnalyzer {
           for (const invoked of callee.invokes) {
             let origins: number[] = []; let argumentPosition: number = 0;
             for (const parameter of callee.parameters) {
-              if (parameter == invoked) { let actualPosition: number = 0; for (const e of this.node(call.module,call.node).edges) if (e.role == "args") { if (actualPosition == argumentPosition) origins = this.points[this.vertex(call.module,e.node)].origins; actualPosition = actualPosition + 1; } }
+              if (parameter == invoked) { const input: number = this.actualInput(call.module,call.node,argumentPosition); if (input >= 0) origins = this.points[this.vertex(call.module,input)].origins; }
               argumentPosition = argumentPosition + 1;
             }
             if (!callee.parameters.includes(invoked)) origins.push(invoked);
             for (const origin of origins) if (this.summaries[call.owner].parameters.includes(origin)) for (const lease of this.checked.borrows) if (lease.module == call.module && lease.owner == this.vertex(this.summaries[call.owner].module,this.summaries[call.owner].node) && (lease.begin) <= this.node(call.module,call.node).start.offset && (this.node(call.module,call.node).start.offset) <= lease.end && lease.end > lease.begin) this.obligation(call.owner,call.node,origin,lease.root,lease.mode);
             for (const origin of origins) if (this.summaries[call.owner].parameters.includes(origin) && !this.summaries[call.owner].invokes.includes(origin)) { this.summaries[call.owner].invokes.push(origin); this.changed = true; }
+          }
+          if (this.synchronousCallbacks(call.module,call.node).length > 0) for (let p: number = 0; p < callee.parameters.length; p = p + 1) if (callee.retains.includes(callee.parameters[p])) {
+            const input: number = this.actualInput(call.module,call.node,p); if (input >= 0) this.retain(call.owner,this.vertex(call.module,input));
           }
           for (const retained of callee.retains) if (!callee.parameters.includes(retained) && !this.summaries[call.owner].retains.includes(retained)) { this.summaries[call.owner].retains.push(retained); this.changed = true; }
           if (!this.summaries[call.owner].callees.includes(target)) { this.summaries[call.owner].callees.push(target); this.changed = true; }

@@ -104,8 +104,9 @@ continúan permitidos.
 
 No es escape analysis completo: no modela C++ opaco, heaps compartidos,
 lifetimes interprocedurales generales, tareas async, todos los contenedores o
-efectos indirectos. Map/Set/unions declaradas y otros tipos aún no soportados
-continúan rechazados por el núcleo de tipos. La procedencia es insensible al
+efectos indirectos. Map/Set y payloads de uniones transportan la procedencia de
+callbacks; se rechaza almacenar owners o préstamos en esos agregados hasta
+completar sus reglas de transferencia. La procedencia es insensible al
 orden y a los elementos concretos de un contenedor; puede dar falsos positivos.
 No demuestra ausencia de fugas ni seguridad concurrente.
 
@@ -148,3 +149,16 @@ No se anuncia paridad general ni se cambia el checker TS para ocultar diferencia
 El CLI principal y el codegen conservan su cadena. Estos resultados semánticos
 nativos todavía no se traducen a C++ del programa solicitado. No hay caché
 semántica, scheduler paralelo ni certificación completa de memoria.
+
+## Constructores y consumidores síncronos
+
+Los campos de constructores explícitos tienen estados de inicialización unidos
+por rutas. Un campo readonly sólo admite la primera escritura directa a this
+antes de inicializarse; las lecturas, retornos y uso de this exigen los campos
+requeridos inicializados. Los defaults y parámetros-propiedad cuentan como
+inicializaciones.
+
+Los callbacks de arrays se recorren hasta un punto fijo con préstamo temporal
+del iterable. Match une las alternativas de callbacks sin ejecutarlas como una
+secuencia; conserva también la posibilidad de no ejecutar ninguno. Los valores
+retornados por callbacks conservan su procedencia para comprobar escapes.

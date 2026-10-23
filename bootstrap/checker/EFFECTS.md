@@ -78,3 +78,13 @@ restricciones de [SAFETY.md](./SAFETY.md). No implementa aún el [IR](./IR.md)
 ni conecta estas tablas al codegen del programa. Las pruebas nativas verifican
 invariancia/repetición, casos aceptados/rechazados y reutilización de la caché;
 no equivalen a paridad completa con el checker TypeScript.
+
+## Argumentos y contenedores
+
+La proyección de argumentos consulta `argumentParameters`, incluyendo argumentos
+nombrados y rest. Los consumidores de arrays y match enlazan sus entradas con
+los parámetros de callbacks mediante entradas sintéticas; los resultados,
+retención e invocaciones conservan sus orígenes. El conjunto de destinos de una
+unión se transporta desde el payload hasta la extracción e invocación, incluso
+cuando el campo no tiene identidad de símbolo propia. La mezcla entre elementos
+y variantes sigue siendo conservadora.

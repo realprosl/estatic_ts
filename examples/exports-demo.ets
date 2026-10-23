@@ -1,10 +1,7 @@
 // exports-demo.ets — Fase 1.15: `export default` y `export { name as alias }`.
 //
-// El dialecto es single-translation-unit, así que `export` no genera
-// dispatch runtime: las declaraciones se procesan como top-level normales.
-// El AST registra las marcas para tooling (linters, formatters, bundlers).
-// En runtime, todo está en el mismo translation unit y los símbolos son
-// accesibles directamente.
+// Los exports definen la superficie pública del módulo. Un alias exportado
+// es un nombre para sus consumidores; no declara otra variable local.
 
 // `export const`: la variable se declara sin `static` (visible global).
 export const PI: number = 3.14159;
@@ -20,10 +17,9 @@ export default function greet(name: string): string {
   return "hello " + name;
 }
 
-// `export { name }`: re-exporta bindings ya declarados arriba. El alias
-// `as <alias>` se registra en el scope del type-checker para que pueda
-// usarse como nombre local (es un atajo al símbolo original).
-export { PI as PI_RENAMED, E };
+// `export { name as alias }`: publica otro nombre para el mismo binding.
+// E ya está exportado arriba y no debe publicarse dos veces con ese nombre.
+export { PI as PI_RENAMED };
 export { square as squareFn };
 
 // Las funciones y variables exportadas se pueden usar normalmente en runtime.
@@ -31,5 +27,5 @@ print(PI);
 print(E);
 print(square(5));
 print(greet("alice"));
-print(PI_RENAMED);
-print(squareFn(7));
+print(PI);
+print(square(7));
