@@ -210,6 +210,8 @@ declare global {
     set(key: K, value: V): void;
     has(key: K): boolean;
     delete(key: K): boolean;
+    clear(): void;
+    forEach(visitor: (value: V, key: K) => void): void;
     readonly size: number;
   }
   class Set<T> extends Sealed {
@@ -218,6 +220,8 @@ declare global {
     add(value: T): boolean;
     has(value: T): boolean;
     delete(value: T): boolean;
+    clear(): void;
+    forEach(visitor: (value: T) => void): void;
     readonly size: number;
   }
   // ArrayT es la representación genérica. La forma canónica en el

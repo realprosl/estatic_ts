@@ -118,6 +118,7 @@ export class Binder {
       else if (kind == "InterfaceDeclaration" || kind == "TypeAliasDeclaration" || kind == "TypeParameter") symbol = this.declare(name, kind, scope, module, work.node, false, true);
       else if (kind == "Parameter" || kind == "ArrayBinding" || kind == "ObjectBinding") symbol = this.declare(name, kind, scope, module, work.node, true, false);
       else if (isBindingMember(kind)) symbol = this.declare(name, kind, scope, module, work.node, true, false);
+      else if (kind == "Binding" && this.result.scopes[scope].kind == "UnionVariant") symbol = this.declare(name,"UnionVariantBinding",scope,module,work.node,true,false);
       else if (kind == "UnionVariant") {
         const outer: number = this.result.scopes[scope].parent;
         symbol = this.declare(name, kind, outer, module, work.node, true, false);
@@ -139,7 +140,7 @@ export class Binder {
       } else if (kind == "ClassDeclaration" || kind == "InterfaceDeclaration" || kind == "EnumDeclaration" || kind == "UnionDeclaration" || kind == "TypeAliasDeclaration") {
         scope = this.scope(scope, module, work.node, kind);
         if (kind == "ClassDeclaration") this.declare("this", "receiver", scope, module, -1, true, false);
-      } else if ((kind == "BlockStatement" && !work.reuse) || kind == "ForStatement" || kind == "ForOfStatement" || kind == "ForInStatement" || kind == "SwitchStatement") scope = this.scope(scope, module, work.node, kind);
+      } else if (kind == "UnionVariant" || (kind == "BlockStatement" && !work.reuse) || kind == "ForStatement" || kind == "ForOfStatement" || kind == "ForInStatement" || kind == "SwitchStatement") scope = this.scope(scope, module, work.node, kind);
       this.result.files[module].nodeScopes[work.node] = scope;
       // Push in reverse to preserve source/edge order without recursive calls.
       for (let i: number = node.edges.length - 1; i >= 0; i = i - 1) {

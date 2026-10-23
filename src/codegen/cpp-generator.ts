@@ -204,6 +204,9 @@ export class CppGenerator {
     return leftNum && rightNum;
   }
   private resolveAlias(name: string): string { return this.exportAliases.get(name) ?? name; }
+  private deferredStorageInitializer(type: string): string {
+    return type.startsWith("ets::Result<") ? ` = ${type}::failure("uninitialized module binding")` : "";
+  }
   private cppName(name: string): string {
     // V18: si el nombre tiene un alias CPP externo (decorador
     // `@cpp_name("InitWindow")`), resolvemos al nombre C++ exacto.
@@ -1374,7 +1377,10 @@ export class CppGenerator {
       if (this.isAutoUnionTarget(type) || isCallInit || isNonLiteralInit) {
         if (!this._deferredInitVars) this._deferredInitVars = [];
         this._deferredInitVars.push({ variable, cppName, initializer });
-        lines.push(`static ${cppTypeText} ${cppName};`);
+        // Runtime Result has no default constructor. Deferred module bindings
+        // still need valid storage before their initializer runs in main.
+        const storageInit = this.deferredStorageInitializer(cppTypeText);
+        lines.push(`static ${cppTypeText} ${cppName}${storageInit};`);
         continue;
       }
       lines.push(`static ${canBeConstexpr && variable.constValue !== undefined ? "constexpr " : ""}${cppTypeText} ${cppName} = ${initializer};`);
@@ -1643,7 +1649,7 @@ export class CppGenerator {
       // V30.14.2: usar `cppT` helper que tambien cubre `type X = A | B`.
       const cppTypeText = this.cppT(type);
       if(isDefaultExpression(variable)) {
-        lines.push(markCppOrigin(variable.span,`${exportLinkage}${cppTypeText} ${cppName};`));
+        lines.push(markCppOrigin(variable.span,`${exportLinkage}${cppTypeText} ${cppName}${this.deferredStorageInitializer(cppTypeText)};`));
         defaultInitializers.set(variable,{name:cppName,initializer:initializerText});
         continue;
       }
@@ -1660,7 +1666,7 @@ export class CppGenerator {
       if (this.isAutoUnionTarget(type) || isCallInit2 || isNonLiteralInit2) {
         if (!this._deferredInitVars) this._deferredInitVars = [];
         this._deferredInitVars.push({ variable, cppName, initializer: initializerText });
-        lines.push(markCppOrigin(variable.span,`${exportLinkage}${cppTypeText} ${cppName};`));
+        lines.push(markCppOrigin(variable.span,`${exportLinkage}${cppTypeText} ${cppName}${this.deferredStorageInitializer(cppTypeText)};`));
         continue;
       }
       lines.push(markCppOrigin(variable.span,`${exportLinkage}${canBeConstexpr && variable.constValue !== undefined ? "constexpr " : ""}${cppTypeText} ${cppName} = ${initializerText};`));

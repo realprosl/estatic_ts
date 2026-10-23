@@ -7,33 +7,34 @@ registro.** Esta rama reúne la auditoría y la implementación en una sola PR;
 la PR debe permanecer en borrador mientras haya obligaciones abiertas.
 No se cambia la revisión pública para anunciar un cierre que aún no existe.
 
-## Progreso de implementación tras la PR #20
+## Progreso de implementación tras la PR #21
 
-La auditoría pasa de **18/80 a 53/80** obligaciones. Quedan **27 casos de
+La auditoría pasa de **53/80 a 71/80** obligaciones. Quedan **9 casos de
 referencia pendientes**; ninguna cifra de este muestreo cierra por sí sola una
-fila del inventario. La implementación continúa en la misma rama de trabajo,
-sin introducir IR ni conectar el frontend nativo al backend actual.
+fila del inventario. No se introduce IR ni se conecta el frontend nativo al
+backend actual.
 
-Se han añadido literales i64/u64 exactos y conversiones; arrays fijos y tamaños
-constantes; destructuring plano y using; enums; switch con flujo/fallthrough;
-for-of/for-in con préstamos y punto fijo; capturas de funciones anidadas;
-aliases/clases genéricas y constraints/defaults básicos; interfaces estructurales
-e intersecciones; Optional/Result, parámetros opcionales, nullish y acceso opcional
-a campos; inferencia de retornos en bloques; y firmas/efectos de varios builtins.
-Las tablas añaden `exactIntegers`, `conversions`, `caseValues` y `effects.external`.
-Se corrige también el orden de declaración del almacenamiento C++ del
-destructuring global, con pruebas de compilación y ejecución.
+Se añaden argumentos nombrados con correspondencia formal publicada y orden de
+evaluación original; rest de arrays y spread con expansión de posiciones en
+tuplas/arrays fijos; sobrecargas como valores con contexto; Map/Set y delete;
+inicialización de campos y readonly en constructores; métodos funcionales de
+arrays con efectos, préstamos temporales y procedencia de callbacks; uniones
+declaradas, constructores genéricos y payloads; narrowing por discriminador e
+instanceof en ramas, guards, cortocircuitos y ternarios; y match con when,
+whenType, otherwise y discriminadores.
 
-Siguen abiertos packs/rest, argumentos nombrados/spread, sobrecargas como valor,
-unions declaradas/narrowing/instanceof/match, readonly en constructores, API de
-arrays/Map/Set, async y préstamos durante suspensión, expansión comptime y
-decoradores, y ownership de agregados. Además hay límites de composición que
-no cubre el audit: inferencia genérica avanzada, llamadas opcionales, defaults
-de destructuring conservadores, intersecciones con miembros en conflicto y el
-catálogo completo de builtins con retención de callbacks.
-Los arrays de tuplas se comprueban mediante un alias del elemento; el parser
-actual no admite el sufijo directamente tras una tupla (`[number,string][]`).
-La composición sintáctica directa permanece en T07.
+También se corrige el almacenamiento global diferido de Result en C++: se
+inicializa con un estado de error válido antes de ejecutar la inicialización del
+módulo. Las pruebas compilan y ejecutan los caminos de éxito y error.
+
+Los nueve casos del audit abiertos son packs genéricos, async/await,
+for-await-of, préstamos durante suspensión, expresión comptime, función
+comptime, decoradores, ownership en campos y ownership en arrays. Además siguen
+abiertos límites de composición: inferencia genérica avanzada y sobrecargas
+genéricas como valores; llamadas opcionales; callbacks genéricos/bound methods;
+defaults de destructuring; objetos sin contexto; composición
+de tipos callable/union; exhaustividad de match; y catálogo completo de builtins.
+La invalidación de narrowing ante llamadas o escrituras es conservadora.
 
 El switch nativo comprobado no incorpora parser/codegen de switch a stage 0.
 Las declaraciones de helpers nativos tampoco certifican su lowering en el CLI
@@ -70,17 +71,17 @@ con las capas que consume. «Abierto» incluye cobertura parcial en v64.
 | N04 | Parcial; sigue abierto | Contexto y conversiones numéricas en argumentos, defaults, retornos, asignaciones, arrays, objetos, callbacks, genéricos y sobrecargas. Publicar conversiones requeridas sin mutar AST. | `call`, `expression`, documentos `comptime-*-integers.md` |
 | T01 | Parcial; sigue abierto | Arrays fijos, tamaños constantes/simbólicos válidos, longitud e índices; identidad y compatibilidad con arrays dinámicos/tuplas según contrato. | `annotationInner`, `IndexExpression` |
 | T02 | Parcial; sigue abierto | Enums numéricos/string: miembros, incrementos exactos, identidad, rangos y usos entre módulos. | `symbolType`, comprobación nominal, miembros y rangos i32/string |
-| T03 | Abierto | Unions declaradas y parametrizadas, variantes, payloads, constructores y discriminadores. | `UnionDeclaration`, `GenericIdentifierExpression` |
-| T04 | Abierto | Narrowing de unions por discriminador y `instanceof`, uniones de estados al salir de ramas y comprobación de accesos. Fijar la cobertura exigida a match. | `expressionInner` rechaza `instanceof`; README de lenguaje |
+| T03 | Parcial; sigue abierto | Unions declaradas y parametrizadas, variantes, payloads, constructores y discriminadores. | `UnionDeclaration`, `GenericIdentifierExpression` |
+| T04 | Parcial; sigue abierto | Narrowing de unions por discriminador y `instanceof`, uniones de estados al salir de ramas y comprobación de accesos. Fijar la cobertura exigida a match. | `narrowCondition`, refinamientos `variant`, invalidación conservadora |
 | T05 | Parcial; sigue abierto | Intersecciones y compatibilidad estructural de clases/interfaces, campos opcionales y contratos de métodos; detectar ciclos sin confundir homónimos. | `typeCompatible` sólo compara identidades nominales |
 | T06 | Parcial; sigue abierto | Contexto e inferencia de objetos/arrays vacíos, tuplas y retornos; literales de objeto fuera de una interfaz contextual. | `ObjectLiteralExpression`, `signature` |
 | T07 | Abierto | `typeof` cualificado y composiciones de tipos; resolver las diferencias entre parser, binder y checker, con identidad original. | `checker/README.md`, `qualifiedType` |
 | T08 | Parcial; sigue abierto | Casts, `satisfies` y readonly: validar las operaciones permitidas y preservar el tipo correcto del resultado. `satisfies` no debe reemplazar el tipo de la expresión por el tipo comprobado. | `AsExpression`/`SatisfiesExpression` comparten retorno |
 | G01 | Parcial; sigue abierto | Clases y aliases genéricos, sustitución recursiva en miembros/constructores y tipos anidados. | `instantiateType`, `instantiateMember`; inferencia avanzada pendiente |
 | G02 | Parcial; sigue abierto | Constraints, defaults, inferencia contextual y desde retornos cuando esté definida; diagnóstico de argumentos insuficientes/incompatibles. | `statement` rechaza constraint/default |
-| G03 | Abierto | Packs de tipos, parámetros rest, expansión/forwarding y aridad; no descartar el orden de los argumentos. | Rechazos de packs/rest en `statement`/`call` |
-| G04 | Abierto | Sobrecargas como valores con firma contextual, genéricos sobre callables y selección consistente. No elegir una declaración arbitraria ni publicar tipos parciales de candidatos descartados. | `IdentifierExpression`, `call` |
-| F01 | Abierto | Argumentos nombrados y spread: correspondencia con parámetros, duplicados, defaults y orden de evaluación. Publicar correspondencias para el consumidor posterior. | `NamedArgumentExpression`, `SpreadElement` no implementados |
+| G03 | Parcial; sigue abierto | Packs de tipos, parámetros rest, expansión/forwarding y aridad; no descartar el orden de los argumentos. | Rest de arrays y spread comprobados; packs/forwarding genéricos pendientes |
+| G04 | Parcial; sigue abierto | Sobrecargas como valores con firma contextual, genéricos sobre callables y selección consistente. No elegir una declaración arbitraria ni publicar tipos parciales de candidatos descartados. | `IdentifierExpression`, `call` |
+| F01 | Parcial; sigue abierto | Argumentos nombrados y spread: correspondencia con parámetros, duplicados, defaults y orden de evaluación. Publicar correspondencias para el consumidor posterior. | `argumentParameters`, `argumentPosition`, expansión de posiciones en arrays/tuplas |
 | F02 | Parcial; sigue abierto | Parámetros opcionales dentro del cuerpo: su tipo debe modelar ausencia según el contrato Optional, además de admitir omitir el argumento. | `parameterType` envuelve Optional; aridad indirecta pendiente |
 | F03 | Parcial; sigue abierto | Inferencia de retornos de arrows con bloque y funciones cuando corresponda; retornos incompatibles y rutas incompletas. | `signature`, límites del README del checker |
 | F04 | Parcial; sigue abierto | Funciones nombradas anidadas y sus capturas, recursión y transporte del entorno. No bloquearlas sólo por un lowering futuro. | `safety.ets:captures`, transporte de funciones anidadas |
@@ -88,11 +89,11 @@ con las capas que consume. «Abierto» incluye cobertura parcial en v64.
 | B02 | Parcial; sigue abierto | `using`: binding inmutable, tipos válidos y obligaciones de destrucción por salida. Definir la semántica del recurso antes de cualquier emisión. | Binding inmutable y transferencia comprobados; limpieza pendiente de cierre |
 | C01 | Parcial; sigue abierto | `for of`/`for in`: tipo de binding, ámbitos, inicialización, ownership, break/continue y punto fijo del bucle. | `statement`/`safety.walk` |
 | C02 | Parcial; sigue abierto | `switch`: discriminante, compatibilidad/duplicados de etiquetas, default, fallthrough y canales de salida. Resolver el soporte anunciado pero ausente en stage 0. | `parser/README.md`, `LIMITATIONS.md` |
-| C03 | Abierto | Match canónico con `when`/`otherwise`/`whenType` y discriminadores: firmas, acceso a payload y flujo de cada callback. | `docs/match-syntax.md`, builtins pendientes |
-| O01 | Abierto | Inicialización de campos y readonly en constructor: exigir inicialización válida y permitir sólo las escrituras autorizadas. Mantener encapsulación en parámetros-propiedad. | `writableTarget`; riesgo documentado en `status.md` |
+| C03 | Parcial; sigue abierto | Match canónico con `when`/`otherwise`/`whenType` y discriminadores: firmas, acceso a payload y flujo de cada callback. | `docs/match-syntax.md`, builtins pendientes |
+| O01 | Parcial; sigue abierto | Inicialización de campos y readonly en constructor: exigir inicialización válida y permitir sólo las escrituras autorizadas. Mantener encapsulación en parámetros-propiedad. | `constructorInitialization`, slots y rutas; orden/ciclos de defaults por auditar |
 | O02 | Abierto | Efectos de métodos sobre receptores, métodos static/instancia, inicializadores no literales y clases con campos compuestos. Evitar clasificar toda llamada sobre `this` como mutación sin resolver su contrato. | `methodMutates`, `effects.ets:analyze` |
-| L01 | Abierto | API completa de arrays: map/filter/reduce/forEach/find/some/every/concat/flatMap/sort y callbacks genéricos. Comprobar orden, mutabilidad, retornos y efectos. | `member` admite sólo un subconjunto |
-| L02 | Abierto | Map/Set, tipos de clave/valor, métodos, índices y `delete`, incluyendo propagación de capturas/owners. | Tipos genéricos y `DeleteStatement` pendientes |
+| L01 | Parcial; sigue abierto | API completa de arrays: map/filter/reduce/forEach/find/some/every/concat/flatMap/sort y callbacks genéricos. Comprobar orden, mutabilidad, retornos y efectos. | `arrayCall` y consumidores síncronos; callbacks genéricos pendientes |
+| L02 | Parcial; sigue abierto | Map/Set, tipos de clave/valor, métodos, índices y `delete`, incluyendo propagación de capturas/owners. | Constructores/métodos/delete y forEach tipados; ownership pendiente |
 | L03 | Parcial; sigue abierto | Optional/Result, constructores/helpers, payloads y tipos públicos, con identidades semánticas canónicas. | `annotationInner`, `containerCall`, tablas de procedencia |
 | L04 | Parcial; sigue abierto | `??` y `?.`: tipo de resultado y cortocircuito, efectos y ownership de la rama ejecutada. | `expressionInner` y flujo; llamadas opcionales pendientes |
 | A01 | Abierto | Promise/Task, async function/arrow, await y for-await-of: firma externa e interna, contextos válidos y tipo resultante. | `statement` rechaza async; `AwaitExpression` pendiente |
@@ -112,7 +113,7 @@ con las capas que consume. «Abierto» incluye cobertura parcial en v64.
 | P02 | Parcial; sigue abierto | Tablas completas y coherentes entre archivos: tipos, firmas elegidas/instanciadas, correspondencia argumentos, conversiones, capturas, efectos y origen. Un nodo aceptado que necesite semántica no puede quedar sin resolver. | `model.ets`, `format.ets`, `expression` |
 | V01 | Parcial; sigue abierto | Pruebas cruzadas del lenguaje completo, corpus de ejemplos y fuentes ETS del bootstrap, errores combinados y metamórficos. Corregir diferencias de stage 0 sin copiarlas ni ocultarlas. | `checker.test.ts`, nuevo `audit/` |
 | V02 | Parcial; sigue abierto | Cerrar contradicciones documentales y dejar evidencia reproducible de cada fila. Verificar que el CLI nuevo analiza nativamente y no recurre a stage 0 para el proyecto solicitado. | `README.md`, `LIMITATIONS.md`, documentos de cada etapa |
-| V03 | Parcial; sigue abierto | Restablecer validación completa de ejemplos. En esta revisión `npm test` registra 84 fallos del runner: falta libuv (`uv.h`/`-luv`) y también aparecen errores C++ de destructuring global. Separar dependencias ausentes de fallos del compilador y no anunciar suite completa verde. | `test/runner.ts`, `examples/destructuring-demo.ets` |
+| V03 | Parcial; sigue abierto | Restablecer validación completa de ejemplos. La revisión anterior tenía fallos por falta de libuv y almacenamiento C++ de destructuring/Result. Se corrige el almacenamiento y se ejecuta con libuv disponible; la validación completa debe terminar antes de declarar esta fila cerrada. | `test/runner.ts`, `examples/destructuring-demo.ets` |
 
 ## Diferencias que no se pueden llamar «resueltas» sólo por aceptar el fuente
 
@@ -161,7 +162,7 @@ Sale con código 1 mientras haya pendientes. No forma parte de `npm test` todav�
 es una puerta de finalización deliberadamente roja, no una regresión que se
 oculta con skips, TODOs o expectativas de «unsupported».
 
-La suite estable de v64 tiene 348 pruebas del checker. Es un baseline de
+La suite estable inicial de v64 tenía 348 pruebas del checker. Es un baseline de
 regresión, no evidencia de cierre del lenguaje. El audit también es una muestra:
 incluso 80/80 no sustituye revisar y cerrar todas las filas anteriores. Una fila
 sólo se marca cerrada con implementación, contrato, pruebas positivas/negativas,
