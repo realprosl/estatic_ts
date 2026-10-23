@@ -1,6 +1,6 @@
 // Numeric token validation for the native checker. The lexer intentionally
 // preserves raw tokens; it does not certify separators, digits or finiteness.
-// Exact i64/u64 values need a separate representation and remain unsupported.
+// Exact integers use decimal strings, independently of the approximate value.
 export class NativeNumericLiteral {
   value: number; valid: boolean;
   constructor(value: number, valid: boolean) { this.value = value; this.valid = valid; }
@@ -9,6 +9,42 @@ function numericDigit(c: string): number {
   if (c == "") return -1;
   const index: number = "0123456789abcdefABCDEF".indexOf(c,0);
   return index >= 16 ? index - 6 : index;
+}
+function decimalAppend(text: string, radix: number, digit: number): string {
+  let result: string = ""; let carry: number = digit;
+  for (let at: number = text.length - 1; at >= 0; at = at - 1) {
+    const value: number = (text.charCodeAt(at) - 48) * radix + carry;
+    result = "0123456789".charAt(value % 10) + result; carry = Math.floor(value / 10);
+  }
+  while (carry > 0) { result = "0123456789".charAt(carry % 10) + result; carry = Math.floor(carry / 10); }
+  let at: number = 0; while (at + 1 < result.length && result.charAt(at) == "0") at = at + 1;
+  return result.slice(at,result.length);
+}
+export function nativeIntegerText(raw: string): string {
+  // Check separators and source grammar first; never recover an integer from
+  // a double that may already have rounded away its low bits.
+  if (!nativeNumericLiteral(raw).valid) return "";
+  let radix: number = 10; let at: number = 0;
+  const prefix: string = raw.charAt(1);
+  if (raw.charAt(0) == "0") {
+    if (prefix == "x" || prefix == "X") { radix = 16; at = 2; }
+    else if (prefix == "b" || prefix == "B") { radix = 2; at = 2; }
+    else if (prefix == "o" || prefix == "O") { radix = 8; at = 2; }
+  }
+  let value: string = "0"; let fraction: boolean = false;
+  for (; at < raw.length; at = at + 1) {
+    const c: string = raw.charAt(at); if (c == "_") continue;
+    if (c == ".") fraction = true;
+    else if (fraction) { if (c != "0") return ""; }
+    else value = decimalAppend(value,radix,numericDigit(c));
+  } return value;
+}
+export function nativeInteger64(raw: string, negative: boolean, expected: string): string {
+  const magnitude: string = nativeIntegerText(raw); if (magnitude == "") return "";
+  const limit: string = expected == "u64" ? "18446744073709551615" : negative ? "9223372036854775808" : "9223372036854775807";
+  if (negative && expected == "u64" && magnitude != "0") return "";
+  if (magnitude.length > limit.length || (magnitude.length == limit.length && magnitude.localeCompare(limit) > 0)) return "";
+  return negative && magnitude != "0" ? "-" + magnitude : magnitude;
 }
 export function nativeNumericLiteral(raw: string): NativeNumericLiteral {
   let radix: number = 10; let start: number = 0;

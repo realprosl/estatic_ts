@@ -9,7 +9,10 @@ export function formatChecked(result: CheckResult, binding: BindingResult, graph
   for (let m: number = 0; m < result.files.length; m = m + 1) {
     const file = result.files[m]; let types: string[] = []; for (const valueType of file.types) types.push(quoteSource(valueType));
     let signatures: string[] = []; for (const signature of file.signatures) signatures.push(quoteSource(signature));
-    output.push(comma + "{\"file\":" + quoteSource(graph.modules[m].file) + ",\"ast\":" + formatAst(graph.modules[m].cached.result.ast) + ",\"types\":[" + types.join(",") + "],\"members\":" + bindingNumbers(file.members) + ",\"selected\":" + bindingNumbers(file.selected) + ",\"selectedModules\":" + bindingNumbers(file.selectedModules) + ",\"signatures\":[" + signatures.join(",") + "]}"); comma = ",";
+    let exactIntegers: string[] = []; for (const value of file.exactIntegers) exactIntegers.push(quoteSource(value));
+    let conversions: string[] = []; for (const value of file.conversions) conversions.push(quoteSource(value));
+    let caseValues: string[] = []; for (const value of file.caseValues) caseValues.push(quoteSource(value));
+    output.push(comma + "{\"file\":" + quoteSource(graph.modules[m].file) + ",\"ast\":" + formatAst(graph.modules[m].cached.result.ast) + ",\"types\":[" + types.join(",") + "],\"members\":" + bindingNumbers(file.members) + ",\"selected\":" + bindingNumbers(file.selected) + ",\"selectedModules\":" + bindingNumbers(file.selectedModules) + ",\"signatures\":[" + signatures.join(",") + "],\"exactIntegers\":[" + exactIntegers.join(",") + "],\"conversions\":[" + conversions.join(",") + "],\"caseValues\":[" + caseValues.join(",") + "]}"); comma = ",";
   }
   let symbols: string[] = []; for (const valueType of result.symbolTypes) symbols.push(quoteSource(valueType));
   output.push("],\"symbolTypes\":[" + symbols.join(",") + "],\"diagnostics\":["); comma = "";
@@ -26,7 +29,7 @@ export function formatChecked(result: CheckResult, binding: BindingResult, graph
   }
   output.push("],\"effects\":["); comma = "";
   for (const s of result.effects) {
-    output.push(comma + "{\"module\":" + numberToString(s.module) + ",\"node\":" + numberToString(s.node) + ",\"parameters\":" + bindingNumbers(s.parameters) + ",\"reads\":" + bindingNumbers(s.reads) + ",\"writes\":" + bindingNumbers(s.writes) + ",\"moves\":" + bindingNumbers(s.moves) + ",\"invokes\":" + bindingNumbers(s.invokes) + ",\"retains\":" + bindingNumbers(s.retains) + ",\"returned\":" + bindingNumbers(s.returned) + ",\"callees\":" + bindingNumbers(s.callees) + ",\"unknown\":" + bindingBoolean(s.unknown) + ",\"recursive\":" + bindingBoolean(s.recursive) + ",\"borrows\":[");
+    output.push(comma + "{\"module\":" + numberToString(s.module) + ",\"node\":" + numberToString(s.node) + ",\"parameters\":" + bindingNumbers(s.parameters) + ",\"reads\":" + bindingNumbers(s.reads) + ",\"writes\":" + bindingNumbers(s.writes) + ",\"moves\":" + bindingNumbers(s.moves) + ",\"invokes\":" + bindingNumbers(s.invokes) + ",\"retains\":" + bindingNumbers(s.retains) + ",\"returned\":" + bindingNumbers(s.returned) + ",\"callees\":" + bindingNumbers(s.callees) + ",\"unknown\":" + bindingBoolean(s.unknown) + ",\"recursive\":" + bindingBoolean(s.recursive) + ",\"external\":" + bindingBoolean(s.external) + ",\"borrows\":[");
     let separator: string = "";
     for (const b of s.borrows) { output.push(separator + "{\"call\":" + numberToString(b.call) + ",\"callback\":" + numberToString(b.callback) + ",\"root\":" + numberToString(b.root) + ",\"mode\":" + quoteSource(b.mode) + "}"); separator = ","; }
     output.push("]}"); comma = ",";

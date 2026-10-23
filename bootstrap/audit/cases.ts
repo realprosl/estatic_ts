@@ -59,7 +59,7 @@ export const cases: AuditCase[] = [
   yes('narrowing', 'types', 'union R={ok:true;value:number}|{ok:false;error:string};function f(r:R):number{if(r.ok==true)return r.value;return 0;}'),
   yes('instanceof', 'types', 'class A{x:number=1;}class B{y:number=2;}function f(v:A|B):boolean{return v instanceof A;}'),
   yes('overload-call', 'functions', 'function f(x:number):number{return x;}function f(x:string):string{return x;}print(f(1));'),
-  yes('overload-as-value', 'functions', 'function f(x:number):number{return x;}function f(x:string):string{return x;}const g:(number)=>number=f;print(g(1));'),
+  yes('overload-as-value', 'functions', 'function f(x:number):number{return x;}function f(x:string):string{return x;}const g:(x:number)=>number=f;print(g(1));'),
   yes('rest', 'functions', 'function first(...xs:number[]):number{return xs[0];}print(first(1,2));'),
   yes('named-arguments', 'functions', 'function add(x:number,y:number):number{return x+y;}print(add(y:2,x:1));'),
   yes('spread-arguments', 'functions', 'function first(...xs:number[]):number{return xs[0];}const a=[1,2];print(first(...a));'),

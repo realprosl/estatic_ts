@@ -204,3 +204,14 @@ test("module symbols native: plantillas exportadas usan sus helpers privados",as
 test("module symbols native: destructuring evalúa una vez y aplica defaults",async()=>{
   await project({"a.ets":'let calls:number=0;function source():number[]{calls+=1;return [11];}const [first,second=7]=source();export function read():number{print(calls);print(second);return first;}',"main.ets":'import {read} from "./a";print(read());print(read());'},async(entry,dir)=>{assert.equal(native(await compileFile(entry),dir),"1\n7\n11\n1\n7\n11\n");});
 });
+
+test('module destructuring native: globals use resolved types before storage declarations',async()=>{
+ await project({'main.ets':'const values:number[]=[1,2];const [first,second]=values;print(first+second);'},async(entry,dir)=>{
+  assert.equal(native(await compileFile(entry),dir),'3\n');
+ });
+});
+test('module destructuring native: object global referenced by a later pattern',async()=>{
+ await project({'main.ets':'class Pair{x:number=7;}const source=new Pair();const {x:value}=source;print(value);'},async(entry,dir)=>{
+  assert.equal(native(await compileFile(entry),dir),'7\n');
+ });
+});

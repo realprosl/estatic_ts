@@ -66,13 +66,54 @@ export function borrowedType(text: string): boolean { return memoryMode(text) ==
 export function readonlyType(text: string): boolean { return ["readonly","constRef","constPtr"].includes(memoryMode(text)); }
 
 export function semanticArray(element: string): string { return functionClose(element) >= 0 ? "(" + element + ")[]" : element + "[]"; }
+export function semanticTuple(text: string): boolean {
+  if (!text.startsWith("[")) return false;
+  let depth: number = 0;
+  for (let at: number = 0; at < text.length; at = at + 1) {
+    if (text.charAt(at) == "[") depth = depth + 1;
+    if (text.charAt(at) == "]") { depth = depth - 1; if (depth == 0) return at == text.length - 1; }
+  } return false;
+}
 export function semanticElement(text: string): string {
   const element: string = text.slice(0,text.length-2);
   if (element.startsWith("(") && element.endsWith(")") && functionClose(element.slice(1,element.length-1)) >= 0) return element.slice(1,element.length-1);
   return element;
 }
+export function fixedArraySize(text: string): number {
+  if (!text.endsWith("]") || functionClose(text) >= 0) return -1;
+  const open: number = text.lastIndexOf("["); if (open <= 0) return -1;
+  let size: number = 0;
+  if (open + 1 == text.length - 1) return -1;
+  for (let at: number = open + 1; at < text.length - 1; at = at + 1) {
+    const digit: number = text.charCodeAt(at) - 48; if (digit < 0 || digit > 9) return -1;
+    size = size * 10 + digit;
+  } return size;
+}
+export function fixedArrayElement(text: string): string {
+  const element: string = text.slice(0,text.lastIndexOf("["));
+  if (element.startsWith("(") && element.endsWith(")") && functionClose(element.slice(1,element.length-1)) >= 0) return element.slice(1,element.length-1);
+  return element;
+}
+export function semanticFixedArray(element: string, size: number): string {
+  return (functionClose(element) >= 0 ? "(" + element + ")" : element) + "[" + numberToString(size) + "]";
+}
 
 export function containsMemory(text: string): boolean {
   for (const name of ["ptr","constPtr","ref","constRef","readonly"]) if (text.indexOf(name + "<",0) >= 0) return true;
   return false;
+}
+export function localBinding(kind: string): boolean { return ["VariableDeclaration","UsingDeclaration","ArrayBinding","ObjectBinding"].includes(kind); }
+export function genericBase(text: string): string {
+  if (functionClose(text) >= 0) return "";
+  const open: number = text.indexOf("<",0); if (open <= 0 || !text.endsWith(">")) return "";
+  let depth: number = 0;
+  for (let at: number = open; at < text.length; at = at + 1) {
+    if (text.charAt(at) == "<") depth = depth + 1;
+    if (text.charAt(at) == ">" && text.charAt(at-1) != "=") { depth = depth - 1; if (depth == 0 && at != text.length-1) return ""; }
+  }
+  return depth == 0 ? text.slice(0,open) : "";
+}
+export function genericArguments(text: string): string[] {
+  const base: string = genericBase(text); if (base == "") { let empty: string[] = []; return empty; }
+  return splitTypes(text.slice(base.length+1,text.length-1),",");
 }
