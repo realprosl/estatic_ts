@@ -11,8 +11,8 @@ No se cambia la revisión pública para anunciar un cierre que aún no existe.
 
 La auditoría pasa de **77/80 a 80/80** obligaciones de referencia. Ahora exige
 valores constantes tipados y metadatos de decoradores, además de aceptación.
-Ninguna cifra de este muestreo cierra por sí sola una fila del inventario. No se introduce IR ni se conecta el frontend nativo al
-backend actual.
+Ninguna cifra de este muestreo cierra por sí sola una fila del inventario.
+No se introduce IR ni se conecta el frontend nativo al backend actual.
 
 Se añaden argumentos nombrados con correspondencia formal publicada y orden de
 evaluación original; rest de arrays y spread con expansión de posiciones en
@@ -158,7 +158,7 @@ con las capas que consume. «Abierto» incluye cobertura parcial en v64.
 | P02 | Parcial; sigue abierto | Tablas completas y coherentes entre archivos: tipos, firmas elegidas/instanciadas, correspondencia argumentos, conversiones, capturas, efectos y origen. Un nodo aceptado que necesite semántica no puede quedar sin resolver. | `model.ets`, `format.ets`, `expression` |
 | V01 | Parcial; sigue abierto | Pruebas cruzadas del lenguaje completo, corpus de ejemplos y fuentes ETS del bootstrap, errores combinados y metamórficos. Corregir diferencias de stage 0 sin copiarlas ni ocultarlas. | `checker.test.ts`, nuevo `audit/` |
 | V02 | Parcial; sigue abierto | Cerrar contradicciones documentales y dejar evidencia reproducible de cada fila. Verificar que el CLI nuevo analiza nativamente y no recurre a stage 0 para el proyecto solicitado. | `README.md`, `LIMITATIONS.md`, documentos de cada etapa |
-| V03 | Validación completa de esta revisión pasada; repetir tras nuevos cambios | npm test pasa 2994/2994 con libuv, sin fallos ni skips. Después pasan 904/904 pruebas completas del checker; las comprobaciones de contexto de campos posteriores se validan en la ejecución focalizada de async. | npm test, checker.test.ts, test/runner.ts |
+| V03 | Validación completa de esta revisión pasada; repetir tras nuevos cambios | npm test pasa 3101/3101 con libuv, sin fallos, cancelaciones ni skips. Incluye 99 regresiones nuevas de comptime/conversiones/decoradores; audit nativo 80/80 con resultados tipados. | npm test, checker.test.ts, audit/run.ts, test/runner.ts |
 
 ## Diferencias que no se pueden llamar «resueltas» sólo por aceptar el fuente
 

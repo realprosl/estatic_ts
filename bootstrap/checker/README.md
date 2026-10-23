@@ -184,7 +184,8 @@ mejora de rendimiento.
 
 ## Validación
 
-La revisión de async pasa **904/904** pruebas del checker. La revisión de comptime añade **99** regresiones. El audit alcanza
+La revisión de async pasa **904/904** pruebas del checker. La revisión de comptime añade **99** regresiones; npm test pasa
+**3101/3101**, sin fallos ni skips. El audit alcanza
 **80/80**, sin interpretar ese muestreo como paridad completa del lenguaje.
 Las pruebas comprueban creación diferida, defaults, transferencias, joins,
 retornos, préstamos, callbacks, efectos por fase, escapes de frames y builtins.

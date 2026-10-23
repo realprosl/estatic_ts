@@ -51,8 +51,9 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
   pasan. El audit pasa **80/80** y exige materialización de constantes y
   metadatos de decoradores. Esto no cierra el lenguaje: expansiones, ABI,
   memoria y otras composiciones siguen en `bootstrap/PENDING.md`.
-  La suite completa de esta revisión está en ejecución; los resultados
-  anteriores que siguen corresponden a sus revisiones respectivas.
+  npm test pasa **3101/3101**, con ejemplos/libuv incluidos, sin fallos,
+  cancelaciones ni skips. Los resultados anteriores que siguen corresponden
+  a sus revisiones respectivas.
 
 
 - Tras PR #23, el checker nativo incorpora async/await, consumo de tareas,
