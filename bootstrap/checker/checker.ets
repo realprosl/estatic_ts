@@ -326,6 +326,27 @@ export class NativeChecker {
     if (s.kind == "builtin-type" && ["JsonValue","FileReader","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","Request","Response","Server","HttpClientResponse","Timer","FsWatcher","FsEvent","Console"].includes(s.name)) return s.name;
     return this.unsupported(module,id,"tipo " + text);
   }
+  asynchronous(module: number, id: number): boolean {
+    const n: AstNode = this.node(module,id); return n.get("async") == "true" || n.get("isAsync") == "true";
+  }
+  suspensionContext(module: number, id: number): void {
+    let at: number = this.binding.files[module].parents[id];
+    while (at >= 0) {
+      const n: AstNode = this.node(module,at); if (callableBinding(n.kind)) return;
+      if (n.kind == "ClassField") { this.report(module,id,"E4204: suspender en un inicializador de campo requiere un contrato de duración del constructor"); return; }
+      at = this.binding.files[module].parents[at];
+    }
+  }
+  awaitContext(module: number, id: number): void {
+    this.suspensionContext(module,id);
+    let at: number = this.binding.files[module].parents[id];
+    while (at >= 0) {
+      const n: AstNode = this.node(module,at);
+      if (n.kind == "Parameter") { this.report(module,id,"await no es válido en un default de parámetro"); return; }
+      if (callableBinding(n.kind)) { if (!this.asynchronous(module,at)) this.report(module,id,"await sólo es válido dentro de async o en el nivel superior"); return; }
+      at = this.binding.files[module].parents[at];
+    }
+  }
   signature(module: number, id: number): string {
     const n: AstNode = this.node(module,id); let params: string[] = [];
     for (const e of n.edges) if (e.role == "params") {
@@ -342,6 +363,10 @@ export class NativeChecker {
         if (values.length == 0) returns = "void"; else returns = values.join("|");
       } else returns = this.expression(module,body,"");
       this.narrowedSymbols = symbols; this.narrowedTypes = types;
+    }
+    if (this.asynchronous(module,id)) {
+      if (n.get("returnType") == "") returns = "Promise<" + returns + ">";
+      else if (genericBase(returns) != "Promise") this.report(module,id,"Una función async debe retornar Promise<T>");
     }
     return "(" + params.join(",") + ")=>" + returns;
   }
@@ -519,6 +544,9 @@ export class NativeChecker {
     if (name == "numberToString") return "(number)=>string";
     if (name == "argument") return "(number)=>string";
     if (name == "argumentCount") return "()=>number";
+    if (name == "sleep") return "(number)=>Promise<void>";
+    if (["all","race","promiseAll","promiseRace"].includes(name)) return "!tasks:" + name;
+    if (name == "spawn") return "(Promise<void>)=>void";
     if (name == "exitProcess") return "(number)=>void";
     if (name == "move" || name == "ref" || name == "constRef") return "!" + name;
     if (name == "length") return "!length";
@@ -905,7 +933,22 @@ export class NativeChecker {
     for (const field of this.node(declaration.module,selected).edges) if (field.role == "bindings" && !provided.includes(this.node(declaration.module,field.node).get("name"))) this.report(module,id,"Falta el campo requerido '" + this.node(declaration.module,field.node).get("name") + "'");
     return result;
   }
+  taskCollectionCall(module: number, id: number, name: string): string {
+    this.suspensionContext(module,id);
+    const n: AstNode = this.node(module,id); let args: number[] = []; let explicitTypes: string[] = [];
+    for (const edge of n.edges) if (edge.role == "args") args.push(edge.node);
+    for (const attr of n.attributes) if (attr.name == "typeArgument") explicitTypes.push(this.annotation(module,id,attr.value));
+    if (args.length != 1 || explicitTypes.length > 1) { this.report(module,id,"Un combinador de tareas requiere un array y a lo sumo un tipo explícito"); return "!error"; }
+    const context: string = explicitTypes.length == 0 ? "" : "Promise<" + explicitTypes[0] + ">[]";
+    const input: string = this.expression(module,args[0],context);
+    if (!input.endsWith("[]") || genericBase(semanticElement(input)) != "Promise" || borrowedType(input)) { this.report(module,args[0],"Un combinador requiere Promise<T>[] por transferencia"); return "!error"; }
+    const element: string = genericArguments(semanticElement(input))[0];
+    if (explicitTypes.length > 0) this.requireType(module,args[0],element,explicitTypes[0]);
+    const result: string = name == "all" || name == "promiseAll" ? semanticArray(element) : element;
+    this.result.files[module].signatures[id] = "(" + input + ")=>" + result; this.result.files[module].argumentParameters[args[0]] = 0; return result;
+  }
   call(module: number, id: number, callable: string, sid: number, receiver: string = "", expected: string = ""): string {
+    if (callable.startsWith("!tasks:")) return this.taskCollectionCall(module,id,callable.slice(7,callable.length));
     if (callable == "!match") return this.matchCall(module,id);
     if (callable == "!matchCase") { this.report(module,id,"Un caso sólo puede aparecer en el array literal de match"); return "!error"; }
     if (sid >= 0 && this.binding.symbols[sid].kind == "UnionVariant") return this.unionCall(module,id,sid,receiver,expected);
@@ -1083,6 +1126,13 @@ export class NativeChecker {
   }
   expressionInner(module: number, id: number, expected: string): string {
     const n: AstNode = this.node(module,id); const kind: string = n.kind;
+    if (kind == "AwaitExpression") {
+      this.awaitContext(module,id);
+      const value: number = bindingChild(n,"operand"); const input: string = this.expression(module,value,"");
+      if (genericBase(input) != "Promise") { this.report(module,value,"await requiere Promise<T>"); return "!error"; }
+      this.narrowedSymbols = []; this.narrowedTypes = [];
+      return genericArguments(input)[0];
+    }
     if (kind == "NamedArgumentExpression") return this.expression(module,bindingChild(n,"value"),expected);
     if (kind == "SpreadElement") return this.expression(module,bindingChild(n,"expression"),expected);
     if (kind == "LiteralExpression") {
@@ -1462,13 +1512,14 @@ export class NativeChecker {
           if (parameter.get("default") != "") this.annotation(module,edge.node,parameter.get("default"));
         }
       }
-      if ((n.get("async") == "true" || n.get("isAsync") == "true")) this.unsupported(module,id,"función async");
+      if (this.asynchronous(module,id)) for (const edge of n.edges) if (edge.role == "params" && borrowedType(this.parameterType(module,edge.node))) this.report(module,edge.node,"E4204: una tarea async no puede almacenar un parámetro prestado sin duración demostrada");
+      const bodyReturns: string = this.asynchronous(module,id) && genericBase(functionReturn(valueType)) == "Promise" ? genericArguments(functionReturn(valueType))[0] : functionReturn(valueType);
       const body: number = bindingChild(n,"body");
       if (body >= 0) {
         if (this.node(module,body).kind == "BlockStatement") {
-          this.statement(module,body,functionReturn(valueType),0);
+          this.statement(module,body,bodyReturns,0);
 
-        } else this.requireType(module,body,this.expression(module,body,functionReturn(valueType)),functionReturn(valueType));
+        } else this.requireType(module,body,this.expression(module,body,bodyReturns),bodyReturns);
       } this.switches = outerSwitches; this.narrowedSymbols = symbols; this.narrowedTypes = types; return;
     }
     if (kind == "ReturnStatement") {
@@ -1496,7 +1547,11 @@ export class NativeChecker {
       else if (genericBase(container) == "Set" && kind == "ForOfStatement") element = genericArguments(container)[0];
       else this.report(module,source,"El tipo no es iterable en " + kind);
       if (kind == "ForInStatement") { if (genericBase(container) == "Map") element = genericArguments(container)[0]; else element = "number"; }
-      if (n.get("await") == "true") this.unsupported(module,id,"for await y su contrato de suspensión");
+      if (n.get("await") == "true") {
+        this.awaitContext(module,id);
+        if (genericBase(element) != "Promise") this.report(module,source,"for await requiere elementos Promise<T>");
+        else element = genericArguments(element)[0];
+      }
       const binding: number = bindingChild(n,"binding"); const sid: number = this.binding.files[module].declarations[binding];
       const declared: string = this.annotation(module,binding,this.node(module,binding).get("declaredType"));
       if (declared != "") this.requireType(module,binding,element,declared);

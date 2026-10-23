@@ -99,7 +99,6 @@ const invalid:[string,string,RegExp][]=[
 for(const[name,source,pattern]of invalid)test(`checker rejects ${name}`,()=>error(source,pattern));
 for(const[name,source]of Object.entries({
  object:'const x={a:1};',
- async:'async function f():number{return 1;}',
  out:'function f(out x:number):void{x=1;}',
 }))test(`checker fails explicitly for pending ${name}`,()=>error(source,/pendiente/));
 
@@ -1054,3 +1053,108 @@ test('native aggregate ownership allows consuming slice',()=>check(ownerBox+'let
 test('native generic packs cannot hide aggregate owners',()=>error(ownerHolder+'function show<...T>(...values:T):void{print(values);}let h=new Holder();show(h);',/E4203/));
 test('native aggregate ownership can display an owner without copying it',()=>check(ownerHolder+'let h=new Holder();print(h);print(h.p.value);'));
 test('native aggregate ownership rejects moving a displayed owner in the same call',()=>error(ownerHolder+'let h=new Holder();print(h,move(h));',/E4206/));
+
+for(const [name,source] of Object.entries({
+ simple:'async function f():Promise<number>{await sleep(1);return 1;}const n:number=await f();',
+ arrow:'const f=async (x:number):Promise<number> =>{await sleep(1);return x;};const n:number=await f(1);',
+ inferredArrow:'const f=async (x:number)=>x+1;const n:number=await f(1);',
+ void:'async function f():Promise<void>{await sleep(1);}await f();',
+ top:'await sleep(1);',
+ stored:'async function f():Promise<number>{return 1;}const t=f();const n:number=await t;',
+ forwarded:'async function f():Promise<number>{return 1;}function make():Promise<number>{return f();}const t=make();const n:number=await t;',
+ moved:'async function f():Promise<number>{return 1;}const t=f();const u=move(t);print(await u);',
+ owner:'class B{n:number=1;}async function f(p:ptr<B>):Promise<number>{await sleep(1);return p.n;}let p:ptr<B> = new B();print(await f(move(p)));',
+ ownerReturn:'class B{}async function f():Promise<ptr<B>>{return new B();}const p:ptr<B> = await f();',
+ forAwait:'async function f(xs:Promise<number>[]):Promise<void>{for await(const x of xs){print(x);}}',
+ forAwaitCall:'async function one():Promise<number>{return 1;}const xs:Promise<number>[]=[one()];for await(const n of xs){print(n);}',
+ endedLoan:'async function test():Promise<void>{let n=0;const r=constRef(n);print(r);await sleep(1);n=1;}',
+ laterLoan:'async function test():Promise<void>{let n=0;await sleep(1);const r=constRef(n);print(r);}',
+ unusedLoan:'async function test():Promise<void>{let n=0;const r=constRef(n);await sleep(1);}',
+ localFrame:'async function use(cb:()=>number):Promise<number>{await sleep(1);return cb();}async function outer():Promise<number>{let n=0;const t=use(():number=>{n+=1;return n;});return await t;}',
+ detached:'async function f():Promise<void>{await sleep(1);print(1);}spawn(f());',
+ notStarted:'class B{}async function f():Promise<void>{const q=move(p);}const t=f();let p:ptr<B> = new B();await t;',
+ defaultAtCreation:'class B{}let p:ptr<B> = new B();async function f(x:ptr<B> = move(p)):Promise<void>{}const t=f();p=new B();const q=move(p);await t;',
+}))test(`native async accepts ${name}`,()=>check(source));
+for(const [name,source,pattern] of [
+ ['returnType','async function f():number{return 1;}',/Promise/],
+ ['returnValue','async function f():Promise<number>{return "s";}',/incompatible/],
+ ['missingReturn','async function f():Promise<number>{await sleep(1);}',/rutas/],
+ ['syncAwait','function f():void{await sleep(1);}',/await/],
+ ['nestedSync','async function f():Promise<void>{function g():void{await sleep(1);}g();}',/await/],
+ ['notTask','const n=await 1;',/Promise/],
+ ['taskCopy','const a=sleep(1);const b=a;',/E4101/],
+ ['doubleAwait','const t=sleep(1);await t;await t;',/E4102/],
+ ['afterMove','const t=sleep(1);const u=move(t);await t;',/E4102/],
+ ['spawnCopy','const t=sleep(1);spawn(t);',/E4101/],
+ ['spawnAgain','const t=sleep(1);spawn(move(t));await t;',/E4102/],
+ ['borrowParameter','class B{}async function f(x:ref<B>):Promise<void>{}',/E4204/],
+ ['sharedParameter','class B{}async function f(x:constRef<B>):Promise<void>{}',/E4204/],
+ ['liveLoan','async function test():Promise<void>{let n=0;const r=constRef(n);await sleep(1);print(r);}',/E4204/],
+ ['liveMutLoan','async function test():Promise<void>{let n=0;const r=ref(n);await sleep(1);print(r);}',/E4204/],
+ ['indirectSuspend','async function test():Promise<void>{async function f():Promise<void>{await sleep(1);}let n=0;const r=constRef(n);await f();print(r);}',/E4204/],
+ ['forAwaitLoan','async function test():Promise<void>{async function one():Promise<number>{return 1;}const xs:Promise<number>[]=[one()];let n=0;const r=constRef(n);for await(const x of xs){print(x);}print(r);}',/E4204/],
+ ['forAwaitElement','for await(const n of [1]){print(n);}',/Promise/],
+ ['forAwaitConsumed','const xs:Promise<void>[]=[sleep(1)];for await(const x of xs){}print(xs.length);',/E4102/],
+ ['bodyAtAwait','class B{}let p:ptr<B> = new B();async function f():Promise<void>{const q=move(p);}const t=f();const q=move(p);await t;',/E4102/],
+ ['defaultAtCall','class B{}async function f(x:ptr<B> = move(p)):Promise<void>{}const t=f();let p:ptr<B> = new B();await t;',/E4001/],
+ ['noDefaultReplay','class B{}let p:ptr<B> = new B();async function f(x:ptr<B> = move(p)):Promise<void>{}const t=f();await t;const q=move(p);',/E4102/],
+ ['escapingFrame','async function use(cb:()=>number):Promise<number>{return cb();}function make():Promise<number>{let n=0;return use(():number=>{n+=1;return n;});}',/E4210/],
+ ['spawnFrame','async function use(cb:()=>void):Promise<void>{cb();}function f():void{let n=0;spawn(use(():void=>{n+=1;}));}',/E4210/],
+ ['detachedOwner','class B{}let p:ptr<B> = new B();async function f():Promise<void>{const q=move(p);}spawn(f());',/E4204/],
+] as const)test(`native async rejects ${name}`,()=>error(source,pattern));
+test('native async separates creation and deferred body effects',()=>{
+ const g=check('let n=0;function init():number{n+=1;return n;}async function work(x:number=init()):Promise<number>{n+=1;return x;}function create():Promise<number>{return work();}async function run():Promise<number>{return await work();}');
+ const sid=g.binding.symbols.findIndex((s:any)=>s.name==='n');
+ const work=g.binding.symbols.find((s:any)=>s.name==='work'&&s.kind==='FunctionDeclaration');
+ const phases=g.effects.filter((e:any)=>e.node===work.node);assert.equal(phases.length,2);
+ assert.ok(phases.find((e:any)=>e.phase==='creation').writes.includes(sid));
+ assert.ok(phases.find((e:any)=>e.phase==='body').writes.includes(sid));
+ const h=check('let n=0;async function work():Promise<number>{n+=1;return n;}function create():Promise<number>{return work();}');
+ const n=h.binding.symbols.findIndex((s:any)=>s.name==='n');assert.ok(!effect(h,'create').writes.includes(n));
+});
+test('native async publishes task provenance and awaited callable targets',()=>{
+ const g=check('type F=()=>number;async function make():Promise<F>{return ():number=>1;}const t=make();const cb=await t;print(cb());');
+ assert.ok(g.files[0].taskSources.some((s:number[])=>s.length>0));assert.ok(types(g,'AwaitExpression').includes('()=>number'));
+});
+
+test('native async may create a task during a loan that ends before awaiting',()=>check('async function work():Promise<void>{await sleep(1);}async function run():Promise<void>{let n=0;const r=constRef(n);const t=work();print(r);await t;}'));
+test('native async result does not inherit an unrelated frame reference capture',()=>check('type F=()=>number;async function work(cb:()=>number):Promise<F>{cb();return ():number=>1;}async function outer():Promise<F>{let n=0;const t=work(():number=>{n+=1;return n;});return await t;}'));
+test('native async returned callback retains the capture of its input',()=>error('type F=()=>number;async function identity(cb:F):Promise<F>{return cb;}async function outer():Promise<F>{let n=0;return await identity(():number=>{n+=1;return n;});}',/E4210/));
+test('native async rejects use after consuming a task field',()=>error('class H{t:Promise<void> = sleep(1);}let h=new H();await h.t;await h.t;',/E4102/));
+test('native async restores a consumed task field explicitly',()=>check('class H{t:Promise<void> = sleep(1);}let h=new H();await h.t;h.t=sleep(1);await h.t;'));
+test('native async joins possibly consumed tasks across branches',()=>error('const t=sleep(1);if(true){await t;}await t;',/E4102/));
+test('native async rejects a task consumed again by a loop',()=>error('const t=sleep(1);for(let n=0;n<2;n=n+1){await t;}',/E410[23]/));
+test('native async checks code after a possibly empty for-of',()=>error('for(const x of [1]){}print(n);let n=1;',/E4001/));
+
+for(const [name,source] of Object.entries({
+ all:'async function f():Promise<number>{return 1;}const xs=all([f(),f()]);const n:number=xs[0];',
+ race:'async function f():Promise<number>{return 1;}const n:number=race([f(),f()]);',
+ alias:'async function f():Promise<number>{return 1;}const xs=promiseAll([f()]);const n:number=promiseRace([f()]);',
+ moved:'async function f():Promise<number>{return 1;}const ts:Promise<number>[]=[f()];const xs=all(move(ts));',
+ empty:'const xs:number[]=all<number>([]);',
+}))test(`native async combinators accept ${name}`,()=>check(source));
+for(const [name,source,pattern] of [
+ ['copy','const ts:Promise<void>[]=[sleep(1)];all(ts);',/E4101/],
+ ['type','const n=all([1]);',/Promise/],
+ ['loan','async function f():Promise<void>{let n=0;const r=constRef(n);all([sleep(1)]);print(r);}',/E4204/],
+ ['duplicateMove','class B{}let p:ptr<B> = new B();async function f():Promise<number>{const q=move(p);return 1;}all([f(),f()]);',/E410[23]/],
+] as const)test(`native async combinators reject ${name}`,()=>error(source,pattern));
+
+test('native async ends a loan used only to create the awaited task',()=>check('function make(n:number):Promise<void>{return sleep(n);}async function test():Promise<void>{let n=1;const r=constRef(n);await make(r);n=2;}'));
+
+test('native async rejects a task frame escaping the block of a reference capture',()=>error('async function use(cb:()=>void):Promise<void>{cb();}async function run():Promise<void>{let t=sleep(1);{let n=0;t=use(():void=>{n+=1;});}await t;}',/E4210/));
+test('native async permits a reference frame awaited inside its block',()=>check('async function use(cb:()=>void):Promise<void>{cb();}async function run():Promise<void>{{let n=0;const t=use(():void=>{n+=1;});await t;}}'));
+
+test('native async does not waive the return of a synchronous Task factory',()=>error('function make():Promise<void>{}',/rutas/));
+test('native async requires a return after a possibly empty for-await',()=>error('async function make(xs:Promise<number>[]):Promise<number>{for await(const n of xs){return n;}}',/rutas/));
+test('native async external task creation keeps unknown effects',()=>error('class B{}let p:ptr<B> = new B();async function external():Promise<void>;const t=external();',/E4104/));
+test('native async external code cannot silently retain a local reference closure',()=>error('async function external(cb:()=>void):Promise<void>;async function run():Promise<void>{let n=0;const t=external(():void=>{n+=1;});await t;}',/E4210/));
+
+test('native async summaries preserve origins stored in a returned task frame',()=>{
+ const g=check('async function use(cb:()=>number):Promise<number>{return cb();}function factory(cb:()=>number):Promise<number>{return use(cb);}');
+ const summary=effect(g,'factory');assert.ok(summary.returned.includes(summary.parameters[0]));
+});
+
+test('native async rejects suspension in a field without a constructor lifetime contract',()=>error('async function make():Promise<number>{return 1;}class H{n:number = await make();}const h=new H();',/E4204/));
+test('native async rejects an implicit blocking suspension in a field initializer',()=>error('async function make():Promise<number>{return 1;}class H{n:number = race([make()]);}const h=new H();',/E4204/));
+test('native async permits task creation without suspension in a field initializer',()=>check('class H{t:Promise<void> = sleep(1);}let h=new H();await h.t;'));

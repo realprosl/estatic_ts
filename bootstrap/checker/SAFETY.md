@@ -74,7 +74,7 @@ aliasing. Se agrupan campos/índices bajo la raíz del lvalue. El análisis de
 intervalos no es un solver NLL completo sobre CFG: puede rechazar reborrows o
 rutas que un análisis más preciso demostraría disjuntas. Las rutas de movimientos
 parciales distinguen campos e índices constantes; esta precisión no se extiende
-a todos los préstamos. El manejo async/await sigue pendiente en el checker.
+a todos los préstamos. Las reglas de suspensión se describen más abajo.
 
 ## Capturas y procedencia de escapes
 
@@ -106,7 +106,7 @@ Los lectores devueltos por valor y la mutación de globals de vida estática
 continúan permitidos.
 
 No es escape analysis completo: no modela C++ opaco, heaps compartidos,
-lifetimes interprocedurales generales, tareas async, todos los contenedores o
+lifetimes interprocedurales generales, todos los contratos de tareas y contenedores o
 efectos indirectos. Map/Set y payloads de uniones transportan la procedencia de
 callbacks. Los owners almacenados requieren transferencia; los préstamos no se
 pueden almacenar en esos agregados. La procedencia es insensible al
@@ -166,3 +166,34 @@ Los callbacks de arrays se recorren hasta un punto fijo con préstamo temporal
 del iterable. Match une las alternativas de callbacks sin ejecutarlas como una
 secuencia; conserva también la posibilidad de no ejecutar ninguno. Los valores
 retornados por callbacks conservan su procedencia para comprobar escapes.
+
+
+## Frames de tareas y suspensión
+
+Promise es move-only incluso cuando su resultado es void. Await consume la tarea
+sin exigir un move adicional para un identificador; un segundo await o uso se
+rechaza. Crear una tarea conserva los argumentos y evalúa defaults; su cuerpo
+sólo se recorre al reanudarla. Los defaults no se vuelven a evaluar entonces.
+Los efectos opacos de declaraciones externas no se convierten en operaciones
+puras por tener un retorno Promise.
+
+Los parámetros ref/constRef de funciones async siguen prohibidos sin una duración
+demostrada (E4204). Suspender directamente en un inicializador de campo se
+rechaza hasta comprobar la duración y el orden del constructor; crear una tarea
+sin reanudarla sí está permitido. Un préstamo local con usos posteriores al punto de suspensión
+también produce E4204, incluidos préstamos activos de llamadores. El operando de
+await se evalúa antes de suspender: un último uso dentro del operando no prolonga
+artificialmente el préstamo durante la ejecución de la tarea.
+
+Los frames son portadores de procedencia aunque devuelvan un escalar. Una
+captura por referencia puede usarse en una tarea local que se completa dentro
+de su ámbito; no puede escapar por retorno, spawn o almacenamiento fuera de su
+bloque (E4210). El resultado de await transporta las capturas de lo devuelto,
+sin heredar las de todos los argumentos almacenados en el frame. Spawn rechaza
+efectos opacos y acceso a globals con ownership sin duración demostrada.
+
+All/race y for-await combinan conservadoramente los destinos posibles. No prueban
+multiplicidad exacta ni un orden arbitrario de tareas que comparten owners. Las
+tareas opacas conservan obligaciones de efectos; las restricciones de captura de
+owners y receptores no desaparecen al envolver una función en async. El soporte
+nativo de estas reglas no conecta todavía sus tablas al codegen.

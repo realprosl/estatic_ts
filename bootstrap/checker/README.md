@@ -121,10 +121,26 @@ owners o préstamos se rechazan explícitamente. Los agregados con owners se
 comprueban como move-only, con movimientos parciales y restauración por ruta,
 también después de sustituir parámetros genéricos. Ver [SAFETY.md](./SAFETY.md).
 
+## Tareas y suspensión
+
+Las funciones async publican `Promise<T>` y comprueban sus retornos contra `T`.
+Los arrows async sin retorno anotado infieren la envoltura. Await requiere una
+tarea y un contexto async o superior; consume el lvalue, incluso campos e índices.
+For-await consume su iterable. Los combinadores all/race y sus aliases requieren
+transferir el array. Spawn recibe una tarea void por transferencia.
+
+Crear una tarea evalúa argumentos/defaults; reanudarla ejecuta el cuerpo sin
+repetirlos. Los resúmenes publican fases `body` y `creation`, enlazadas por el
+índice `creation`. `files[m].taskSources[node]` conserva los orígenes posibles:
+un valor no negativo identifica un nodo Call mediante los offsets acumulados de
+las arenas del proyecto; uno negativo representa un origen opaco (parámetro o
+llamada sin implementación). Son IDs de esta carga, no un formato persistente.
+Ver [EFFECTS.md](./EFFECTS.md) y [SAFETY.md](./SAFETY.md).
+
 ## Límites y diferencias conocidas
 
 Se emite `Comprobación nativa pendiente: ...` para parámetros
-out, async/await, llamadas opcionales, builtins no registrados, decoradores y
+out, llamadas opcionales, builtins no registrados, decoradores y
 expansión comptime/cppgen/etsgen. Las sobrecargas como valor requieren contexto
 callable y seleccionan también sus efectos; la instanciación genérica avanzada
 sigue abierta.
@@ -135,7 +151,10 @@ formal de cada argumento sin reordenar el AST ni su evaluación. El narrowing po
 discriminador e instanceof se aplica en ramas, guards, cortocircuitos y ternarios;
 una llamada o escritura invalida conservadoramente las garantías anteriores.
 Match comprueba casos, callbacks y resultados, conservando efectos y procedencia.
-La exhaustividad y la composición completa de tipos siguen pendientes.
+La exhaustividad y la composición completa de tipos siguen pendientes. Async
+mantiene restricciones sobre parámetros prestados, tareas opacas, resultados
+owners en for-await, suspensiones en inicializadores de campos y capturas de receptores. Sus comprobaciones de contenedores
+son conservadoras respecto al orden y la multiplicidad de tareas.
 
 Los constructores comprueban inicialización por rutas, lectura anticipada y
 escritura única de readonly. Se mantienen movimientos por ruta, préstamos,
@@ -157,6 +176,11 @@ límite de profundidad 128 y las búsquedas son lineales; no se certifica una
 mejora de rendimiento.
 
 ## Validación
+
+La revisión de async pasa **904/904** pruebas del checker. El audit alcanza
+**77/80**, sin interpretar ese muestreo como paridad completa del lenguaje.
+Las pruebas comprueban creación diferida, defaults, transferencias, joins,
+retornos, préstamos, callbacks, efectos por fase, escapes de frames y builtins.
 
 La suite compila obligatoriamente el ejecutable C++20. Comprueba éxitos y errores
 de las formas descritas, identidades entre módulos, reexports/default/namespaces,
