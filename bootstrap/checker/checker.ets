@@ -4,7 +4,7 @@ import { AstNode } from "../parser/parser";
 import { SourceDiagnostic } from "../frontend/frontend";
 import { splitTypes, functionClose, functionParams, functionReturn, restPosition, argumentType, numericType, primitiveType, typeCompatible, replaceType, memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticArray, semanticTuple, semanticElement, containsMemory, fixedArraySize, fixedArrayElement, semanticFixedArray, genericBase, genericArguments } from "./types";
 
-import { TypedFile, CheckResult, NativeDecorator } from "./model";
+import { TypedFile, CheckResult, NativeDecorator, NativeTypeQuery } from "./model";
 export { TypedFile, CheckResult } from "./model";
 import { evaluateNativeComptime } from "./comptime";
 import { validateSafety } from "./safety";
@@ -128,6 +128,37 @@ export class NativeChecker {
       for (const entry of this.binding.exports) if (entry.module == dependency && entry.name == names[part]) next = this.origin(entry.symbol);
       sid = next;
     } return sid;
+  }
+  queryType(module: number, id: number, text: string): string {
+    const names: string[] = splitTypes(text,"."); if (names.length == 0) return "!error";
+    let sid: number = -1;
+    // Query space permits a type-only import of an original runtime declaration.
+    // Resolve from the root, not a terminal name shared by unrelated query paths.
+    for (const ref of this.binding.references) if (ref.module == module && ref.node == id && ref.name == names[0] && ref.space == "query" && !ref.deferred) { sid = ref.target; break; }
+    if (sid < 0) { this.report(module,id,"No se pudo resolver typeof '" + text + "'"); return "!error"; }
+    let symbols: number[] = [sid]; let value: string = "";
+    for (let part: number = 1; part < names.length; part = part+1) {
+      if (sid >= 0 && this.binding.symbols[sid].namespaceModule >= 0) {
+        const dependency: number = this.binding.symbols[sid].namespaceModule; let next: number = -1;
+        for (const entry of this.binding.exports) if (entry.module == dependency && entry.name == names[part]) next = this.origin(entry.symbol);
+        sid = next; symbols.push(sid);
+        if (sid < 0 || (!this.binding.symbols[sid].values && (this.binding.symbols[sid].namespaceModule) < 0)) { this.report(module,id,"typeof requiere un miembro con declaración de valor: '" + names[part] + "'"); return "!error"; }
+      } else {
+        if (sid >= 0) value = this.symbolType(sid,module,id);
+        symbols.push(this.memberSymbol(memoryValue(value),names[part]));
+        value = this.member(module,id,value,names[part],true); sid = -1;
+      }
+    }
+    if (sid >= 0) {
+      if (this.binding.symbols[sid].namespaceModule >= 0) { this.report(module,id,"typeof requiere un valor; un namespace necesita un miembro"); return "!error"; }
+      value = this.symbolType(sid,module,id);
+    }
+    if (value != "!error") {
+      let present: boolean = false;
+      for (const query of this.result.queries) if (query.module == module && query.node == id && query.text == text) present = true;
+      if (!present) this.result.queries.push(new NativeTypeQuery(module,id,text,value,symbols));
+    }
+    return value;
   }
   reference(module: number, id: number): number {
     for (const ref of this.binding.references) if (ref.module == module && ref.node == id && ref.space == "value" && !ref.deferred) return ref.target;
@@ -259,7 +290,11 @@ export class NativeChecker {
       return "(" + params.join(",") + ")=>" + this.annotation(module,id,functionReturn(text));
     }
     const unions: string[] = splitTypes(text,"|");
-    if (unions.length > 1) { let parts: string[] = []; for (const p of unions) parts.push(this.annotation(module,id,p)); return parts.join("|"); }
+    if (unions.length > 1) {
+      let parts: string[] = [];
+      for (const p of unions) { const part: string = this.annotation(module,id,p); if (functionClose(part) >= 0) return this.unsupported(module,id,"composición de unions con callables"); parts.push(part); }
+      return parts.join("|");
+    }
     const intersection: string[] = splitTypes(text,"&");
     if (intersection.length > 1) {
       let parts: string[] = []; for (const p of intersection) {
@@ -294,12 +329,7 @@ export class NativeChecker {
       if (element == "void") this.report(module,id,"Un array fijo no puede contener void");
       return semanticFixedArray(element,size.value);
     }
-    if (text.startsWith("$typeof$")) {
-      const name: string = text.slice(8,text.length); const sid: number = this.lookup(this.binding.files[module].nodeScopes[id],name,false);
-      // Query references also permit a type-only import of a runtime declaration.
-      for (const ref of this.binding.references) if (ref.module == module && ref.node == id && ref.name == (name.indexOf(".",0) < 0 ? name : name.slice(name.lastIndexOf(".")+1,name.length)) && ref.space == "query") return this.symbolType(ref.target,module,id);
-      return this.symbolType(sid,module,id);
-    }
+    if (text.startsWith("$typeof$")) return this.queryType(module,id,text.slice(8,text.length));
     const generic: number = text.indexOf("<",0);
     if (generic > 0 && text.endsWith(">")) {
       const sid: number = this.qualifiedType(module,id,text.slice(0,generic));
@@ -585,22 +615,22 @@ export class NativeChecker {
       if (item.name == name && item.module == s.module && item.scope >= 0 && this.binding.scopes[item.scope].node == s.node) return i;
     } return -1;
   }
-  member(module: number, id: number, input: string, name: string): string {
+  member(module: number, id: number, input: string, name: string, query: boolean = false): string {
     const boundType: string = this.parameterBound(memoryValue(input));
     const valueType: string = boundType == "" ? memoryValue(input) : boundType;
-    const bound: number = this.reference(module,id); if (bound >= 0) { this.result.files[module].members[id] = bound; return this.symbolType(bound,module,id); }
+    const bound: number = query ? -1 : this.reference(module,id); if (bound >= 0) { this.result.files[module].members[id] = bound; return this.symbolType(bound,module,id); }
     if (valueType == "!error") return valueType;
     if (valueType == "!never") return "!error";
     const alternatives: string[] = splitTypes(valueType,"|");
     if (alternatives.length > 1) {
-      let values: string[] = []; for (const alternative of alternatives) { const found: string = this.member(module,id,alternative,name); if (!values.includes(found)) values.push(found); } return values.join("|");
+      let values: string[] = []; for (const alternative of alternatives) { const found: string = this.member(module,id,alternative,name,query); if (!values.includes(found)) values.push(found); } return values.join("|");
     }
     if (valueType.startsWith("class:")) {
       const receiver: string = valueType.slice(6,valueType.length); const owner: number = this.nominalSymbol(receiver);
       if (owner >= 0 && this.binding.symbols[owner].kind == "UnionDeclaration") {
         const declaration = this.binding.symbols[owner];
         for (const edge of this.node(declaration.module,declaration.node).edges) if (edge.role == "variants" && this.node(declaration.module,edge.node).get("name") == name) {
-          const sid: number = this.binding.files[declaration.module].declarations[edge.node]; this.result.files[module].members[id] = sid;
+          const sid: number = this.binding.files[declaration.module].declarations[edge.node]; if (!query) this.result.files[module].members[id] = sid;
           return this.instantiateMember(receiver,this.symbolType(sid,module,id));
         }
         this.report(module,id,"La unión no declara la variante '" + name + "'"); return "!error";
@@ -624,7 +654,7 @@ export class NativeChecker {
         if (found == "") { this.report(module,id,"El miembro '" + name + "' requiere narrowing a una variante que lo declare"); return "!error"; }
         if (!values.includes(found)) values.push(found);
       }
-      if (refinement.length > 0) this.result.files[module].members[id] = selectedMember;
+      if (refinement.length > 0 && !query) this.result.files[module].members[id] = selectedMember;
       return values.length == 0 ? "!error" : values.join("|");
     }
     if (valueType == "!Math") {
@@ -684,7 +714,7 @@ export class NativeChecker {
     }
     const sid: number = this.memberSymbol(valueType,name);
     if (sid < 0) { this.report(module,id,"El tipo '" + valueType + "' no declara el miembro '" + name + "'"); return "!error"; }
-    this.result.files[module].members[id] = sid;
+    if (!query) this.result.files[module].members[id] = sid;
     const s: BindingSymbol = this.binding.symbols[sid]; const n: AstNode = this.node(s.module,(s.node) < 0 ? this.graph.modules[s.module].cached.result.ast.root : s.node);
     if (((n.get("isStatic") == "true") || s.kind == "EnumMember") != valueType.startsWith("class:")) this.report(module,id,"Receptor estático/de instancia incorrecto para '" + name + "'");
     if (n.get("access") == "private" || n.get("access") == "protected") {

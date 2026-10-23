@@ -46,6 +46,14 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
 ## Verificación conocida
 
+- Tras PR #25 se añaden consultas typeof cualificadas con identidades originales,
+  metadatos por ruta y precedencia correcta en arrays de unions/callables.
+  Pasan 42 pruebas focalizadas del checker y 12 adicionales de parser/binder.
+  npm test pasa **3154/3154**, sin fallos, cancelaciones ni skips, y el audit
+  ampliado pasa **83/83**. Se añaden 53 pruebas netas. T07 sigue parcial;
+  no se modifica IR ni se anuncia paridad del CLI de stage 0.
+
+
 - Tras PR #24 se incorpora un evaluador comptime nativo con valores tipados,
   enteros exactos, callbacks, ámbitos y límites por raíz; 99 regresiones nuevas
   pasan. El audit pasa **80/80** y exige materialización de constantes y

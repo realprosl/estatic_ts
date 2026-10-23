@@ -76,7 +76,20 @@ export function ownedType(text: string): boolean { return memoryMode(text) == "p
 export function borrowedType(text: string): boolean { return memoryMode(text) == "ref" || memoryMode(text) == "constRef"; }
 export function readonlyType(text: string): boolean { return ["readonly","constRef","constPtr"].includes(memoryMode(text)); }
 
-export function semanticArray(element: string): string { return functionClose(element) >= 0 ? "(" + element + ")[]" : element + "[]"; }
+export function aggregateElement(element: string): string {
+  return functionClose(element) >= 0 || splitTypes(element,"|").length > 1 || splitTypes(element,"&").length > 1 ? "(" + element + ")" : element;
+}
+export function ungroupElement(element: string): string {
+  if (element.startsWith("(") && element.endsWith(")")) {
+    let depth: number = 0;
+    for (let at: number = 0; at < element.length; at = at+1) {
+      if (element.charAt(at) == "(") depth = depth+1;
+      if (element.charAt(at) == ")") { depth = depth-1; if (depth == 0) return at == element.length-1 ? element.slice(1,element.length-1) : element; }
+    }
+  }
+  return element;
+}
+export function semanticArray(element: string): string { return aggregateElement(element) + "[]"; }
 export function semanticTuple(text: string): boolean {
   if (!text.startsWith("[")) return false;
   let depth: number = 0;
@@ -87,8 +100,7 @@ export function semanticTuple(text: string): boolean {
 }
 export function semanticElement(text: string): string {
   const element: string = text.slice(0,text.length-2);
-  if (element.startsWith("(") && element.endsWith(")") && functionClose(element.slice(1,element.length-1)) >= 0) return element.slice(1,element.length-1);
-  return element;
+  return ungroupElement(element);
 }
 export function fixedArraySize(text: string): number {
   if (!text.endsWith("]") || functionClose(text) >= 0) return -1;
@@ -102,11 +114,10 @@ export function fixedArraySize(text: string): number {
 }
 export function fixedArrayElement(text: string): string {
   const element: string = text.slice(0,text.lastIndexOf("["));
-  if (element.startsWith("(") && element.endsWith(")") && functionClose(element.slice(1,element.length-1)) >= 0) return element.slice(1,element.length-1);
-  return element;
+  return ungroupElement(element);
 }
 export function semanticFixedArray(element: string, size: number): string {
-  return (functionClose(element) >= 0 ? "(" + element + ")" : element) + "[" + numberToString(size) + "]";
+  return aggregateElement(element) + "[" + numberToString(size) + "]";
 }
 
 export function containsMemory(text: string): boolean {

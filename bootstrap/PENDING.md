@@ -7,9 +7,9 @@ registro.** Esta rama reúne la auditoría y la implementación en una sola PR;
 la PR debe permanecer en borrador mientras haya obligaciones abiertas.
 No se cambia la revisión pública para anunciar un cierre que aún no existe.
 
-## Progreso de implementación tras la PR #24
+## Progreso de implementación tras la PR #25
 
-La auditoría pasa de **77/80 a 80/80** obligaciones de referencia. Ahora exige
+La auditoría pasa de **80/80 a 83/83** obligaciones de referencia. Exige
 valores constantes tipados y metadatos de decoradores, además de aceptación.
 Ninguna cifra de este muestreo cierra por sí sola una fila del inventario.
 No se introduce IR ni se conecta el frontend nativo al backend actual.
@@ -86,6 +86,15 @@ Las declaraciones de helpers nativos tampoco certifican su lowering en el CLI
 anterior. No se presenta el soporte semántico de este núcleo como soporte de
 ejecución de todas esas construcciones en el compilador anterior.
 
+Se añaden consultas `typeof` cualificadas por namespace y miembros, incluidas
+rutas entre módulos con imports sólo de tipo, manteniendo identidades originales.
+Los sufijos de arrays/unions/intersecciones ya se parsean después de consultas
+y tuplas. Los arrays de elementos union/intersección/callable conservan su
+precedencia, y la tabla `queries` publica cada ruta sin sobrescribir metadatos
+de expresiones. Esto amplía T01/T07/P02; no cierra el inventario. Las unions con
+callables se rechazan explícitamente; el parser/codegen de stage 0 conserva sus
+límites de consultas. npm test pasa 3154/3154 y el audit ampliado 83/83.
+
 ## Qué significa «todo el lenguaje»
 
 La referencia es Estatic documentado y ejercitado en `README.md`, `LIMITATIONS.md`,
@@ -120,7 +129,7 @@ con las capas que consume. «Abierto» incluye cobertura parcial en v64.
 | T04 | Parcial; sigue abierto | Narrowing de unions por discriminador y `instanceof`, uniones de estados al salir de ramas y comprobación de accesos. Fijar la cobertura exigida a match. | `narrowCondition`, refinamientos `variant`, invalidación conservadora |
 | T05 | Parcial; sigue abierto | Intersecciones y compatibilidad estructural de clases/interfaces, campos opcionales y contratos de métodos; detectar ciclos sin confundir homónimos. | `typeCompatible` sólo compara identidades nominales |
 | T06 | Parcial; sigue abierto | Contexto e inferencia de objetos/arrays vacíos, tuplas y retornos; literales de objeto fuera de una interfaz contextual. | `ObjectLiteralExpression`, `signature` |
-| T07 | Abierto | `typeof` cualificado y composiciones de tipos; resolver las diferencias entre parser, binder y checker, con identidad original. | `checker/README.md`, `qualifiedType` |
+| T07 | Parcial; sigue abierto | `typeof` cualificado y composiciones de tipos; resolver las diferencias entre parser, binder y checker, con identidad original. | `queryType`, tabla `queries`, sufijos de consultas/tuplas; unions de callable y paridad stage 0 pendientes |
 | T08 | Parcial; sigue abierto | Casts, `satisfies` y readonly: validar las operaciones permitidas y preservar el tipo correcto del resultado. `satisfies` no debe reemplazar el tipo de la expresión por el tipo comprobado. | `AsExpression`/`SatisfiesExpression` comparten retorno |
 | G01 | Parcial; sigue abierto | Clases y aliases genéricos, sustitución recursiva en miembros/constructores y tipos anidados. | `instantiateType`, `instantiateMember`; inferencia avanzada pendiente |
 | G02 | Parcial; sigue abierto | Constraints, defaults, inferencia contextual y desde retornos cuando esté definida; diagnóstico de argumentos insuficientes/incompatibles. | `statement` rechaza constraint/default |
@@ -158,7 +167,7 @@ con las capas que consume. «Abierto» incluye cobertura parcial en v64.
 | P02 | Parcial; sigue abierto | Tablas completas y coherentes entre archivos: tipos, firmas elegidas/instanciadas, correspondencia argumentos, conversiones, capturas, efectos y origen. Un nodo aceptado que necesite semántica no puede quedar sin resolver. | `model.ets`, `format.ets`, `expression` |
 | V01 | Parcial; sigue abierto | Pruebas cruzadas del lenguaje completo, corpus de ejemplos y fuentes ETS del bootstrap, errores combinados y metamórficos. Corregir diferencias de stage 0 sin copiarlas ni ocultarlas. | `checker.test.ts`, nuevo `audit/` |
 | V02 | Parcial; sigue abierto | Cerrar contradicciones documentales y dejar evidencia reproducible de cada fila. Verificar que el CLI nuevo analiza nativamente y no recurre a stage 0 para el proyecto solicitado. | `README.md`, `LIMITATIONS.md`, documentos de cada etapa |
-| V03 | Validación completa de esta revisión pasada; repetir tras nuevos cambios | npm test pasa 3101/3101 con libuv, sin fallos, cancelaciones ni skips. Incluye 99 regresiones nuevas de comptime/conversiones/decoradores; audit nativo 80/80 con resultados tipados. | npm test, checker.test.ts, audit/run.ts, test/runner.ts |
+| V03 | Validación completa de esta revisión pasada; repetir tras nuevos cambios | npm test pasa 3154/3154 con libuv, sin fallos, cancelaciones ni skips. Se añaden 53 pruebas netas de consultas/composición y se amplía el audit a 83/83, comprobando también identidades y tipos entre módulos. | npm test, checker.test.ts, parser.test.ts, binder.test.ts, audit/run.ts |
 
 ## Diferencias que no se pueden llamar «resueltas» sólo por aceptar el fuente
 

@@ -117,4 +117,8 @@ export const cases: AuditCase[] = [
   yes('module-barrel', 'modules', 'import {value} from "./barrel";print(value);', {'barrel.ets':'export {n as value} from "./lib";','lib.ets':'export const n=1;'}),
   no('type-error', 'diagnostics', 'const n:number="wrong";'),
   {...no('unknown-name', 'diagnostics', 'print(missing);'),rejectionPhase:'binder'},
+  {...yes('query-original-module', 'types', 'import * as ns from "./barrel"; type Q=[typeof ns.a.value,typeof ns.b.value]; const result:Q=[1,"x"];', {'barrel.ets':'export * as a from "./a"; export * as b from "./b";','a.ets':'export const value:i32=1;','b.ets':'export const value:string="x";'}),symbols:{result:'[i32,string]'}},
+  {...yes('union-array-precedence', 'types', 'type V=number|string; const result:V[]=[1,"x"];'),symbols:{result:'(number|string)[]'}},
+  {...yes('fixed-array-type-query', 'types', 'const value:i32=1; type Q=typeof value[2]; const result:Q=[1,2];'),symbols:{result:'i32[2]'}},
+
 ];

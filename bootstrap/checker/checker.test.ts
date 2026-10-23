@@ -126,7 +126,7 @@ test('checker: join only supports string elements',()=>error('const a=[1]; print
 test('checker: no string index writes',()=>error('let s="abc"; s[0]="x";',/string por índice/));
 test('checker: class name is not a runtime value',()=>error('class C{} const c=C;',/requiere new/));
 test('checker: overload context does not impose the first array element type',()=>{const g=check('function f(x:number[]):number{return 1;} function f(x:string[]):string{return "x";} const s=f(["x"]);');assert.deepEqual(types(g,'CallExpression'),['string']);});
-test('checker: dotted typeof remains a parser limitation',()=>{const g=run(fixture('import * as ns from "./lib"; type F=typeof ns.f;',{'lib.ets':'export function f():number{return 1;}'}),1);assert.equal(g.diagnostics[0].phase,'parser');assert.equal(g.files.length,0);});
+test('checker: dotted typeof resolves an original imported callable',()=>{const g=check('import * as ns from "./lib"; type F=typeof ns.f; const f:F=():number=>1;',{'lib.ets':'export function f():number{return 1;}'});assert.ok(g.symbolTypes.includes('()=>number'));});
 test('checker: standalone ownership allocation is supported',()=>check('class C{} const c:ptr<C> = new C();'));
 test('checker: reader captures now pass by value',()=>{const g=check('function f():()=>number{const x=1; return ():number=>x;}');assert.equal(g.captures[0].mode,'value');});
 
@@ -1326,3 +1326,77 @@ for(const [name,source] of Object.entries({
  named:'i8(value:1);',
  string:'i8("s");',
 }))test(`native numeric casts reject ${name}`,()=>run(fixture(source),1));
+
+// Type queries resolve each path independently, using original module identities.
+function namedType(g:any,name:string,moduleSuffix='main.ets'){
+ const values=g.binding.symbols.flatMap((s:any,i:number)=>s.name===name&&s.module>=0&&g.files[s.module].file.endsWith(moduleSuffix)?[g.symbolTypes[i]]:[]);
+ assert.equal(values.length,1,name);return values[0];
+}
+for(const[name,source,expected]of [
+ ['queryArray','const n:i32=1; type Q=typeof n[]; const result:Q=[1];','i32[]'],
+ ['queryFixed','const n:i32=1; type Q=typeof n[2]; const result:Q=[1,2];','i32[2]'],
+ ['queryUnion','const n=1; type Q=typeof n|string; const result:Q="x";','number|string'],
+ ['queryNested','const n=1; type Q=Optional<typeof n[]>; const result:Q=optionalSome([1]);','Optional<number[]>'],
+ ['queryTupleArray','type Q=[number,string][]; const result:Q=[[1,"x"]];','[number,string][]'],
+ ['queryTupleUnion','type Q=[number,string]|boolean; const result:Q=true;','[number,string]|boolean'],
+ ['queryField','interface I{field:i32;} const object:I={field:1}; type Q=typeof object.field; const result:Q=2;','i32'],
+ ['queryNestedField','interface I{field:i32;} interface O{inner:I;} const object:O={inner:{field:1}}; type Q=typeof object.inner.field; const result:Q=2;','i32'],
+ ['queryStringLength','const text="hello"; type Q=typeof text.length; const result:Q=2;','number'],
+ ['queryArrayElementMethod','const values:number[]=[]; type Q=typeof values.includes; const result:Q=(n:number):boolean=>true;','(number)=>boolean'],
+ ['queryStaticField','class C{static value:i32=1;} type Q=typeof C.value; const result:Q=2;','i32'],
+ ['queryInstanceField','class C{value:i32=1;} const c=new C(); type Q=typeof c.value; const result:Q=2;','i32'],
+ ['queryMethod','class C{get():i32{return 1;}} const c=new C(); type Q=typeof c.get; const result:Q=():i32=>2;','()=>i32'],
+ ['querySameTerminal','interface N{value:i32;} interface S{value:string;} const a:N={value:1}; const b:S={value:"x"}; type Q=[typeof a.value,typeof b.value]; const result:Q=[1,"x"];','[i32,string]'],
+ ['queryLocalScope','const n="outer"; function f():i32{const n:i32=1; type Q=typeof n; const result:Q=2; return result;}','i32'],
+ ['queryGenericNew','interface I{field:i32;} const object:I={field:1}; class Box<T>{constructor(public value:T){}} const result=new Box<typeof object.field>(1);','BOX'],
+] as const)test(`native type composition: ${name}`,()=>{const g=check(source);const actual=namedType(g,'result');if(expected==='BOX')assert.match(actual,/#\d+<i32>/);else assert.equal(actual,expected);});
+const queryFiles={
+ 'a.ets':'export const value:i32=1; export function f(x:i32):string{return "a";} export interface I{x:number;} export class C{static value:i32=1;} ',
+ 'b.ets':'export const value:string="b";',
+ 'barrel.ets':'export * as first from "./a"; export * as second from "./b"; export {f as default} from "./a";',
+};
+for(const[name,source,expected]of [
+ ['namespace','import * as ns from "./a"; type Q=typeof ns.value; const result:Q=1;','i32'],
+ ['typeNamespace','import type * as ns from "./a"; type Q=typeof ns.value; const result:Q=1;','i32'],
+ ['nestedNamespace','import * as ns from "./barrel"; type Q=[typeof ns.first.value,typeof ns.second.value]; const result:Q=[1,"x"];','[i32,string]'],
+ ['defaultNamespace','import * as ns from "./barrel"; type Q=typeof ns.default; const result:Q=(x:i32):string=>"x";','(i32)=>string'],
+ ['namespaceStatic','import * as ns from "./a"; type Q=typeof ns.C.value; const result:Q=1;','i32'],
+ ['aliasQuery','import type {value as original} from "./a"; type Q=typeof original[]; const result:Q=[1];','i32[]'],
+ ['sameTerminalNamespaces','import * as a from "./a"; import * as b from "./b"; type Q=typeof a.value|typeof b.value; const result:Q="x";','i32|string'],
+] as const)test(`native type composition modules: ${name}`,()=>{const g=check(source,queryFiles);assert.equal(namedType(g,'result'),expected);});
+for(const[name,source,pattern]of [
+ ['missingField','const n=1; type Q=typeof n.missing;',/no declara el miembro/],
+ ['privateField','class C{private field:number=1;} const c=new C(); type Q=typeof c.field;',/privado/],
+ ['wrongStatic','class C{field:number=1;} type Q=typeof C.field;',/Receptor/],
+ ['wrongInstance','class C{static field:number=1;} const c=new C(); type Q=typeof c.field;',/Receptor/],
+ ['namespaceValue','import * as ns from "./a"; type Q=typeof ns;',/namespace/],
+ ['namespaceInterface','import * as ns from "./a"; type Q=typeof ns.I;',/declaración de valor/],
+ ['wrongQueryArrayElement','const n=1; type Q=typeof n[]; const a:Q=["x"];',/incompatible/],
+] as const)test(`native type composition rejects: ${name}`,()=>error(source,pattern,queryFiles));
+
+test('native type composition publishes complete paths without overwriting expression members',()=>{
+ const g=check('import * as ns from "./barrel"; type Q=[typeof ns.first.value,typeof ns.second.value]; const result:Q=[1,"x"];',queryFiles);
+ const queries=g.queries.filter((q:any)=>q.text.endsWith('.value'));assert.equal(queries.length,2);
+ assert.deepEqual(queries.map((q:any)=>q.type),['i32','string']);
+ for(const q of queries){assert.equal(q.symbols.length,3);assert.ok(q.symbols.every((sid:number)=>sid>=0));assert.equal(g.binding.symbols[q.symbols[2]].name,'value');assert.equal(g.files[q.module].members[q.node],-1);}
+ assert.notEqual(queries[0].symbols[2],queries[1].symbols[2]);
+});
+test('native type composition leaves constructor selection intact',()=>{
+ const g=check('interface I{field:i32;} const object:I={field:1}; class Box<T>{constructor(public value:T){}} const result=new Box<typeof object.field>(1);');
+ const query=g.queries.find((q:any)=>q.text==='object.field');assert.ok(query);assert.equal(query.type,'i32');
+ assert.equal(g.binding.symbols[query.symbols[1]].name,'field');assert.equal(g.files[query.module].members[query.node],-1);
+});
+test('native type composition builtin segments have no invented symbol',()=>{
+ const g=check('const text="hello"; type Q=typeof text.length;');const q=g.queries.find((q:any)=>q.text==='text.length');assert.ok(q);assert.equal(q.symbols[1],-1);assert.equal(q.type,'number');
+});
+
+for(const[name,source,expected]of [
+ ['unionQueryArray','let value:number|string=1; type Q=typeof value[]; const result:Q=[1,"x"];','(number|string)[]'],
+ ['unionAliasArray','type V=number|string; type Q=V[]; const result:Q=[1,"x"];','(number|string)[]'],
+ ['unionQueryFixed','let value:number|string=1; type Q=typeof value[2]; const result:Q=[1,"x"];','(number|string)[2]'],
+ ['callableQueryArray','function f(x:number):string{return "x";} type Q=typeof f[]; const result:Q=[(x:number):string=>"a"];','((number)=>string)[]'],
+ ['callableQueryFixed','function f(x:number):string{return "x";} type Q=typeof f[1]; const result:Q=[(x:number):string=>"a"];','((number)=>string)[1]'],
+ ['unionArrayNested','type V=number|string; type Q=V[][]; const result:Q=[[1,"x"]];','(number|string)[][]'],
+] as const)test(`native type composition preserves aggregate precedence: ${name}`,()=>{const g=check(source);assert.equal(namedType(g,'result'),expected);});
+test('native type composition rejects ambiguous callable unions explicitly',()=>error('function f():number{return 1;} type Q=typeof f|string;',/pendiente.*unions con callables/));
+test('native type composition union arrays reject unrelated elements',()=>error('type V=number|string; const a:V[]=[true];',/incompatible/));

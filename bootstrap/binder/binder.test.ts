@@ -69,3 +69,17 @@ test("binder: typeof requires a value declaration rather than an interface",()=>
 test("binder: namespace diamonds compare canonical module identity",()=>{const g=bind('import {ns} from "./barrel"; print(ns.x);',0,{"lib.ets":"export const x=1;","a.ets":'import * as ns from "./lib"; export {ns};',"b.ets":'import * as ns from "./lib"; export {ns};',"barrel.ets":'export * from "./a"; export * from "./b";'});assert.equal(targets(g,"x")[0].name,"x");});
 
 test("binder: default wrappers preserve exported overload visibility",()=>{const g=bind('import run from "./lib"; print(run("x"));',0,{"lib.ets":'export function f(x:number):number{return x;} export default function f(x:string):string{return x;}'});assert.equal(targets(g,"run")[0].declarations.length,2);assert.equal(g.exports.length,2);});
+
+test('binder: qualified type queries preserve original export identities',()=>{
+ const g=bind('import * as ns from "./barrel"; type Q=[typeof ns.left.value,typeof ns.right.value];',0,{
+ 'left.ets':'export const value:number=1;', 'right.ets':'export const value:string="x";',
+ 'barrel.ets':'export * as left from "./left"; export * as right from "./right";',
+ });
+ const values=refs(g,'value').filter((r:any)=>r.space==='query');assert.equal(values.length,2);assert.notEqual(values[0].target,values[1].target);
+ assert.ok(values.every((r:any)=>g.symbols[r.target].kind==='VariableDeclaration'));
+});
+test('binder: type-only namespace can be queried without becoming a runtime value',()=>{
+ const g=bind('import type * as ns from "./lib"; type Q=typeof ns.value[];',0,{'lib.ets':'export const value:number=1;'});
+ assert.ok(refs(g,'ns').some((r:any)=>r.space==='query'));assert.ok(refs(g,'value').some((r:any)=>r.space==='query'));
+ errors('import type * as ns from "./lib"; print(ns.value);',/value/,{'lib.ets':'export const value:number=1;'});
+});

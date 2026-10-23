@@ -39,8 +39,9 @@ try {
     const semanticRejection=diagnostics.length>0 && diagnostics.every((d:{phase:string;message:string})=>d.phase===(c.rejectionPhase??'checker')) && !unsupported
       && diagnostics.some((d:{message:string})=>new RegExp(c.diagnostic!,'i').test(d.message));
     const metadataErrors=[];
+    const entryModule=parsed.files.findIndex((file:{file:string})=>resolve(file.file)===resolve(project,"main.ets"));
     for(const [name,expected] of Object.entries(c.symbols??{})){
-      const matches=parsed.binding.symbols.flatMap((s:{name:string;module:number},i:number)=>s.name===name && s.module===0?[parsed.symbolTypes[i]]:[]);
+      const matches=parsed.binding.symbols.flatMap((s:{name:string;module:number},i:number)=>s.name===name && s.module===entryModule?[parsed.symbolTypes[i]]:[]);
       if(matches.length!==1 || matches[0]!==expected)metadataErrors.push(`${name}: expected ${expected}, got ${JSON.stringify(matches)}`);
     }
     if(c.constants){

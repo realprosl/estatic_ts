@@ -83,7 +83,7 @@ export class Binder {
   local(scope: number, name: string, space: string): number {
     for (const symbol of this.result.scopes[scope].symbols) {
       const item: BindingSymbol = this.result.symbols[symbol];
-      if (item.name == name && (space == "any" || (space == "value" && item.values) || (space == "type" && item.types) || (space == "query" && (item.values || (item.kind == "import" && this.result.symbols[this.origin(symbol)].values))))) return symbol;
+      if (item.name == name && (space == "any" || (space == "value" && item.values) || (space == "type" && item.types) || (space == "query" && (item.values || item.namespaceModule >= 0 || (item.kind == "import" && this.result.symbols[this.origin(symbol)].values))))) return symbol;
     }
     return -1;
   }

@@ -858,7 +858,11 @@ export class Parser {
   }
   typeInner(): string {
     if (this.accept("readonly")) return "readonly<" + this.typeName() + ">";
-    if (this.accept("typeof")) return "$typeof$" + this.expect("identifier").lexeme;
+    if (this.accept("typeof")) {
+      let query: string = "$typeof$" + this.expect("identifier").lexeme;
+      while (this.accept(".")) query = query + "." + (this.check("default") ? this.take().lexeme : this.expect("identifier").lexeme);
+      return this.typeSuffix(query);
+    }
     if (this.accept("(")) {
       let params: string[] = [];
       while (!this.check(")") && !this.check("eof")) {
@@ -869,7 +873,7 @@ export class Parser {
     if (this.accept("[")) {
       let parts: string[] = [];
       while (!this.check("]") && !this.check("eof")) { parts.push(this.typeName()); if (!this.accept(",")) break; }
-      this.expect("]"); return "[" + parts.join(",") + "]";
+      this.expect("]"); return this.typeSuffix("[" + parts.join(",") + "]");
     }
     let result: string = "";
     if (this.check("identifier") || this.check("type")) result = this.take().lexeme;
@@ -882,6 +886,10 @@ export class Parser {
       if (result == "Array" && args.length == 1) result = args[0] + "[]";
       else result = result + "<" + args.join(",") + ">";
     }
+    return this.typeSuffix(result);
+  }
+  typeSuffix(input: string): string {
+    let result: string = input;
     while (this.accept("[")) {
       let size: string = "";
       if (!this.check("]")) { if (this.check("number") || this.check("identifier")) size = this.take().lexeme; else this.report("Tamaño de array no válido"); }

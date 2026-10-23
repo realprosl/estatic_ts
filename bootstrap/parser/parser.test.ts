@@ -1097,3 +1097,18 @@ for (const [name, change] of [
   const tokens = new Lexer('1;').tokenize(); change(tokens); const result = nativeTokens(tokens);
   assert.ok(result.diagnostics.some(d => /coordenadas|span|ordenados/.test(d.message)));
 });
+
+for(const[source,expected]of [
+ ['type Q=typeof ns.deep.value;','$typeof$ns.deep.value'],
+ ['type Q=typeof ns.default;','$typeof$ns.default'],
+ ['type Q=typeof ns.value[];','$typeof$ns.value[]'],
+ ['type Q=typeof ns.value[3];','$typeof$ns.value[3]'],
+ ['type Q=typeof ns.value|string;','$typeof$ns.value | string'],
+ ['type Q=[typeof ns.value,string][];','[$typeof$ns.value,string][]'],
+ ['type Q=[number,string]|boolean;','[number,string] | boolean'],
+] as const)test(`bootstrap parser composes type queries: ${expected}`,()=>{
+ const result=native(source);assert.deepEqual(result.diagnostics,[]);
+ const alias=result.nodes.find(n=>n.kind==='TypeAliasDeclaration');assert.ok(alias);
+ assert.equal(alias.attributes.find(a=>a.name==='type')?.value,expected);
+});
+for(const source of ['type Q=typeof ns.;','type Q=typeof ns..value;','type Q=typeof ns.value[;'])test(`bootstrap parser rejects malformed type query: ${source}`,()=>assert.ok(native(source).diagnostics.length>0));

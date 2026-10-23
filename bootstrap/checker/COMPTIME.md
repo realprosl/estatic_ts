@@ -65,5 +65,5 @@ aridad, objetivo y duplicados no repetibles; los desconocidos se rechazan.
 Estos metadatos no prueban emisión, warnings runtime ni integración ABI/backend.
 
 El audit verifica valores materializados y destinos originales de decoradores.
-Sus 80 muestras y las 99 regresiones nuevas no sustituyen el inventario abierto
+Sus 83 muestras y las 99 regresiones de la revisión de comptime no sustituyen el inventario abierto
 [../PENDING.md](../PENDING.md), que debe cerrarse antes de comenzar IR.
