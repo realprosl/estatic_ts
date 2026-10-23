@@ -207,11 +207,11 @@ mejora de rendimiento.
 
 ## Validación
 
-La revisión de async pasa **904/904** pruebas del checker. La revisión de comptime añade **99** regresiones; npm test pasa
-**3101/3101**, sin fallos ni skips. El audit alcanza
-**83/83**, sin interpretar ese muestreo como paridad completa del lenguaje.
-Las pruebas comprueban creación diferida, defaults, transferencias, joins,
-retornos, préstamos, callbacks, efectos por fase, escapes de frames y builtins.
+La revisión de consultas y composición pasa **3154/3154** pruebas de npm test,
+sin fallos, cancelaciones ni skips, con ejemplos/libuv incluidos. Se añaden 53
+pruebas netas de checker/parser/binder y se amplía el audit a **83/83**, sin
+interpretar ese muestreo como paridad completa del lenguaje. Se comprueban tipos,
+identidades originales, precedencia, metadatos y errores de acceso/receptor.
 
 La suite compila obligatoriamente el ejecutable C++20. Comprueba éxitos y errores
 de las formas descritas, identidades entre módulos, reexports/default/namespaces,

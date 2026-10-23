@@ -93,7 +93,7 @@ y tuplas. Los arrays de elementos union/intersección/callable conservan su
 precedencia, y la tabla `queries` publica cada ruta sin sobrescribir metadatos
 de expresiones. Esto amplía T01/T07/P02; no cierra el inventario. Las unions con
 callables se rechazan explícitamente; el parser/codegen de stage 0 conserva sus
-límites de consultas. La validación completa de esta revisión está en ejecución.
+límites de consultas. npm test pasa 3154/3154 y el audit ampliado 83/83.
 
 ## Qué significa «todo el lenguaje»
 
@@ -167,7 +167,7 @@ con las capas que consume. «Abierto» incluye cobertura parcial en v64.
 | P02 | Parcial; sigue abierto | Tablas completas y coherentes entre archivos: tipos, firmas elegidas/instanciadas, correspondencia argumentos, conversiones, capturas, efectos y origen. Un nodo aceptado que necesite semántica no puede quedar sin resolver. | `model.ets`, `format.ets`, `expression` |
 | V01 | Parcial; sigue abierto | Pruebas cruzadas del lenguaje completo, corpus de ejemplos y fuentes ETS del bootstrap, errores combinados y metamórficos. Corregir diferencias de stage 0 sin copiarlas ni ocultarlas. | `checker.test.ts`, nuevo `audit/` |
 | V02 | Parcial; sigue abierto | Cerrar contradicciones documentales y dejar evidencia reproducible de cada fila. Verificar que el CLI nuevo analiza nativamente y no recurre a stage 0 para el proyecto solicitado. | `README.md`, `LIMITATIONS.md`, documentos de cada etapa |
-| V03 | Validación completa de esta revisión pasada; repetir tras nuevos cambios | npm test pasa 3101/3101 con libuv, sin fallos, cancelaciones ni skips. Incluye 99 regresiones nuevas de comptime/conversiones/decoradores; audit nativo 80/80 con resultados tipados. | npm test, checker.test.ts, audit/run.ts, test/runner.ts |
+| V03 | Validación completa de esta revisión pasada; repetir tras nuevos cambios | npm test pasa 3154/3154 con libuv, sin fallos, cancelaciones ni skips. Se añaden 53 pruebas netas de consultas/composición y se amplía el audit a 83/83, comprobando también identidades y tipos entre módulos. | npm test, checker.test.ts, parser.test.ts, binder.test.ts, audit/run.ts |
 
 ## Diferencias que no se pueden llamar «resueltas» sólo por aceptar el fuente
 

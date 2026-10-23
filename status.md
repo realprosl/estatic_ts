@@ -49,7 +49,8 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 - Tras PR #25 se añaden consultas typeof cualificadas con identidades originales,
   metadatos por ruta y precedencia correcta en arrays de unions/callables.
   Pasan 42 pruebas focalizadas del checker y 12 adicionales de parser/binder.
-  La suite completa de esta revisión está en ejecución. T07 sigue parcial;
+  npm test pasa **3154/3154**, sin fallos, cancelaciones ni skips, y el audit
+  ampliado pasa **83/83**. Se añaden 53 pruebas netas. T07 sigue parcial;
   no se modifica IR ni se anuncia paridad del CLI de stage 0.
 
 
