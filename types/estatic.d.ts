@@ -20,6 +20,19 @@ declare global {
   type f32 = number;
   type f64 = number;
 
+  // Intrínsecos de conversión; el compilador valida rango y signo.
+  // La sintaxis de llamada no implica que sean funciones runtime capturables.
+  function i8(value: number): i8;
+  function u8(value: number): u8;
+  function i16(value: number): i16;
+  function u16(value: number): u16;
+  function i32(value: number): i32;
+  function u32(value: number): u32;
+  function i64(value: number): i64;
+  function u64(value: number): u64;
+  function f32(value: number): f32;
+  function f64(value: number): f64;
+
   // ─── Modificadores de memoria (V22 Memory Model v2) ──────────────────
   // Los 4 modificadores controlan explícitamente cómo se pasa un valor
   // entre funciones / métodos y cómo se almacenan los datos. El codegen

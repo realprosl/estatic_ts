@@ -7,11 +7,11 @@ registro.** Esta rama reúne la auditoría y la implementación en una sola PR;
 la PR debe permanecer en borrador mientras haya obligaciones abiertas.
 No se cambia la revisión pública para anunciar un cierre que aún no existe.
 
-## Progreso de implementación tras la PR #23
+## Progreso de implementación tras la PR #24
 
-La auditoría pasa de **74/80 a 77/80** obligaciones. Quedan **3 casos de
-referencia pendientes**; ninguna cifra de este muestreo cierra por sí sola una
-fila del inventario. No se introduce IR ni se conecta el frontend nativo al
+La auditoría pasa de **77/80 a 80/80** obligaciones de referencia. Ahora exige
+valores constantes tipados y metadatos de decoradores, además de aceptación.
+Ninguna cifra de este muestreo cierra por sí sola una fila del inventario. No se introduce IR ni se conecta el frontend nativo al
 backend actual.
 
 Se añaden argumentos nombrados con correspondencia formal publicada y orden de
@@ -58,8 +58,18 @@ fuera del bloque de sus capturas. Las declaraciones externas sin cuerpo
 conservan efectos opacos. Se corrige además el flujo de for-of/for-in: sus rutas
 de cero iteraciones ya no se tratan como bucles infinitos.
 
-Los tres casos del audit abiertos son expresión comptime, función comptime y
-decoradores. El soporte async no cierra A01/A02: siguen pendientes obligaciones
+Se implementa evaluación nativa de `comptime` y funciones `@comptime`, después
+de validar tipos y seguridad, sin recurrir al evaluador TS desde el driver.
+Se conservan identidades de símbolos, ámbitos, TDZ, control, callbacks y límites
+por raíz; los valores y errores estructurados se publican en tablas laterales.
+Se añaden casts numéricos intrínsecos, enteros exactos de 64 bits y redondeo f32.
+Se corrigen las conversiones de comparaciones y la adaptación de callbacks con
+argumentos de tipo explícitos en map/flatMap/reduce. Hay 99 regresiones nuevas.
+Los decoradores comptime/deprecated/sealed e include/link conservan metadatos
+validados. Ver [checker/COMPTIME.md](./checker/COMPTIME.md) para el contrato y
+los límites: clases, memoria, expansiones y ABI siguen sin cierre.
+
+El soporte async no cierra A01/A02: siguen pendientes obligaciones
 de composición, entre ellas resultados con owners en for-await, captura del
 receptor, efectos polimórficos de tareas opacas y precisión de multiplicidad en
 contenedores e inicializadores de campo que suspenden sin contrato del constructor. El análisis de all/race/for-await conserva alternativas y puede
@@ -135,8 +145,8 @@ con las capas que consume. «Abierto» incluye cobertura parcial en v64.
 | A02 | Parcial; sigue abierto | Memoria durante suspensión: préstamos vivos, capturas, movimientos, tareas retenidas y salidas. Se comprueban préstamos vivos, retención de frames y escapes por bloque; tareas opacas y receptores siguen siendo conservadores. | `SAFETY.md`, `EFFECTS.md`, pruebas `native async` |
 | S01 | Parcial; sigue abierto | Catálogo completo de builtins y métodos: globals de string/array, Math, console/terminal, fs/path/process, JSON/JsonValue, red/TLS/HTTP, timers y callbacks. Alinear binder, checker y `types/estatic.d.ts`. | Registro stage 0 y listas independientes en binder/checker |
 | S02 | Parcial; sigue abierto | Contratos de efectos/retención de cada builtin y operación externa. Una firma de tipos por sí sola no justifica aceptar un callback o ignorar préstamos activos. | `EffectAnalyzer.builtin`, `canRetain`, llamadas opacas |
-| X01 | Abierto | Decoradores reconocidos, argumentos, alcance, compatibilidad y metadatos include/link/ABI/backend. Diagnosticar los desconocidos sin descartarlos. | Todo nodo `Decorator` se rechaza al comprobar |
-| X02 | Abierto | Evaluación comptime nativa: ámbitos, TDZ, control, sobrecargas, numéricos exactos, callbacks y límites de recursos; evaluación determinista sin I/O implícito. | `comptime` y decoradores pendientes; documentos `comptime-*` |
+| X01 | Parcial; sigue abierto | Decoradores reconocidos, argumentos, alcance, compatibilidad y metadatos include/link/ABI/backend. Diagnosticar los desconocidos sin descartarlos. | Metadatos comptime/deprecated/sealed/include/link; ABI y expansiones pendientes |
+| X02 | Parcial; sigue abierto | Evaluación comptime nativa: ámbitos, TDZ, control, sobrecargas, numéricos exactos, callbacks y límites de recursos; evaluación determinista sin I/O implícito. | `comptime.ets`, `constant.ets`, `checker/COMPTIME.md`; clases, memoria y composición pendientes |
 | X03 | Abierto | `@etsgen`: parseo de salida, AST, higiene por símbolo/módulo, publicación, límites, spans y validación antes/después. Unificar o justificar semántica de evaluadores existentes. | Documentos `etsgen-*`, código sólo en stage 0 |
 | X04 | Abierto | `@cppgen` y declaraciones externas: contratos explícitos de tipo/efectos/ownership, auditoría de entrada y spans. No tratarlos como operaciones puras. | `PROJECT.md`, `RawCppExpression`, código stage 0 |
 | M01 | Parcial; sigue abierto | Owners en campos, arrays/tuplas/objetos y demás agregados: copia prohibida donde corresponda, moves parciales, reinicialización y destrucción de cada recurso. | `ownership.ets`, rutas de recursos en `safety.ets`; destrucción y composición completa pendientes |

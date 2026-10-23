@@ -46,6 +46,15 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
 ## Verificación conocida
 
+- Tras PR #24 se incorpora un evaluador comptime nativo con valores tipados,
+  enteros exactos, callbacks, ámbitos y límites por raíz; 99 regresiones nuevas
+  pasan. El audit pasa **80/80** y exige materialización de constantes y
+  metadatos de decoradores. Esto no cierra el lenguaje: expansiones, ABI,
+  memoria y otras composiciones siguen en `bootstrap/PENDING.md`.
+  La suite completa de esta revisión está en ejecución; los resultados
+  anteriores que siguen corresponden a sus revisiones respectivas.
+
+
 - Tras PR #23, el checker nativo incorpora async/await, consumo de tareas,
   for-await y all/race/spawn con separación entre creación y ejecución diferida,
   préstamos durante suspensión y procedencia de frames. Pasan **904/904** pruebas

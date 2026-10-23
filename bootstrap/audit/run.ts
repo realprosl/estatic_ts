@@ -3,6 +3,7 @@ import {join, dirname, relative, resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {buildLoader, root} from '../modules/build.ts';
 import {cases} from './cases.ts';
+import {isDeepStrictEqual} from 'node:util';
 
 // This is an explicit, currently failing language-completion gate, separate
 // from the stable regression suite. A rejection due to missing coverage is
@@ -41,6 +42,21 @@ try {
     for(const [name,expected] of Object.entries(c.symbols??{})){
       const matches=parsed.binding.symbols.flatMap((s:{name:string;module:number},i:number)=>s.name===name && s.module===0?[parsed.symbolTypes[i]]:[]);
       if(matches.length!==1 || matches[0]!==expected)metadataErrors.push(`${name}: expected ${expected}, got ${JSON.stringify(matches)}`);
+    }
+    if(c.constants){
+      const values=[];
+      for(const file of parsed.files)for(let id=0;id<file.constantValues.length;id++)if(file.constantValues[id]){
+        if(file.constantStates[id]!=='evaluated')metadataErrors.push(`constant ${id}: result without evaluated state`);
+        try{values.push(JSON.parse(file.constantValues[id]));}catch{metadataErrors.push(`constant ${id}: invalid materialized value`);}
+      }
+      if(!isDeepStrictEqual(values,c.constants))metadataErrors.push(`constants: expected ${JSON.stringify(c.constants)}, got ${JSON.stringify(values)}`);
+    }
+    for(const name of c.decorators??[]){
+      const metadata=parsed.decorators?.filter((d:{name:string})=>d.name===name)??[];
+      if(metadata.length!==1)metadataErrors.push(`decorator ${name}: expected one metadata entry`);
+      for(const item of metadata){const nodes=parsed.files[item.module]?.ast.nodes;
+        if(nodes?.[item.node]?.kind!=='Decorator'||!nodes?.[item.target]?.edges.some((e:{role:string;node:number})=>e.role==='decorators'&&e.node===item.node))metadataErrors.push(`decorator ${name}: invalid source identity`);
+      }
     }
     const passed=c.accept ? parsed.success && diagnostics.length===0 && metadataErrors.length===0 : !parsed.success && semanticRejection;
     results.push({id:c.id,area:c.area,expected:c.accept?'accept':'reject',passed,diagnostics,metadataErrors});

@@ -137,11 +137,18 @@ las arenas del proyecto; uno negativo representa un origen opaco (parámetro o
 llamada sin implementación). Son IDs de esta carga, no un formato persistente.
 Ver [EFFECTS.md](./EFFECTS.md) y [SAFETY.md](./SAFETY.md).
 
+## Evaluación nativa de constantes
+
+`comptime(callback)` y las llamadas `@comptime` publican valores tipados después
+de comprobar el fuente. No se modifica el AST ni el binding. Se conservan las
+identidades originales entre módulos, errores estructurados y presupuestos por
+raíz. Los decoradores reconocidos publican objetivo y argumentos. El contrato,
+las tablas y los límites están en [COMPTIME.md](./COMPTIME.md).
+
 ## Límites y diferencias conocidas
 
 Se emite `Comprobación nativa pendiente: ...` para parámetros
-out, llamadas opcionales, builtins no registrados, decoradores y
-expansión comptime/cppgen/etsgen. Las sobrecargas como valor requieren contexto
+out, llamadas opcionales, builtins no registrados y expansión cppgen/etsgen. Las sobrecargas como valor requieren contexto
 callable y seleccionan también sus efectos; la instanciación genérica avanzada
 sigue abierta.
 
@@ -177,8 +184,8 @@ mejora de rendimiento.
 
 ## Validación
 
-La revisión de async pasa **904/904** pruebas del checker. El audit alcanza
-**77/80**, sin interpretar ese muestreo como paridad completa del lenguaje.
+La revisión de async pasa **904/904** pruebas del checker. La revisión de comptime añade **99** regresiones. El audit alcanza
+**80/80**, sin interpretar ese muestreo como paridad completa del lenguaje.
 Las pruebas comprueban creación diferida, defaults, transferencias, joins,
 retornos, préstamos, callbacks, efectos por fase, escapes de frames y builtins.
 
