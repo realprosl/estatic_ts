@@ -250,7 +250,7 @@ test('native safety: fresh allocation can initialize owning parameter',()=>check
 test('native safety: factory returns ownership explicitly',()=>check(box+'function make():ptr<Box>{let p:ptr<Box> = new Box();return move(p);}let p=make();print(p.value);'));
 test('native safety: shadowed move is an ordinary function',()=>check('function move(n:number):number{return n;}const n=move(1);print(n);'));
 test('native safety: shadowed ref is an ordinary function',()=>check('function ref(n:number):number{return n;}const n=ref(1);print(n);'));
-test('native safety: owner in aggregate is rejected explicitly',()=>error(box+'const a:ptr<Box>[]=[];',/Ownership en agregados/));
+test('native safety: owner aggregate elements require explicit transfer',()=>error(box+'let p:ptr<Box> = new Box();const a:ptr<Box>[]=[p];',/E4101/));
 test('native safety: borrowed return inside a stored callable is rejected',()=>error(box+'type F=(x:ref<Box>)=>ref<Box>;function use(f:F):void{}',/E4203/));
 test('native safety: field initializer participates in TDZ',()=>error('class C{x:number=late;}const c=new C();let late=1;',/E4001/));
 test('native safety: direct calls propagate global ownership state',()=>error(box+'let p:ptr<Box> = new Box();function take():void{const q=move(p);}take();print(p.value);',/E4102/));
@@ -479,7 +479,7 @@ for(const [name,source] of Object.entries({
  fractionalIndex:'const a:number[2]=[1,2];print(a[0.5]);',
  elementRange:'const a:u8[2]=[1,256];',
  borrowedElement:'class C{}function f(c:ref<C>):void{const a:ref<C>[1]=[c];}',
- ownersRemainChecked:'class C{}let p:ptr<C> = new C();const a:ptr<C>[1]=[move(p)];',
+ ownersRemainChecked:'class C{}let p:ptr<C> = new C();const a:ptr<C>[1]=[p];',
  readonly:'const a:number[2]=[1,2];a[0]=2;',
 }))test(`native fixed arrays rejects ${name}`,()=>run(fixture(source),1));
 test('native fixed arrays preserve exact integer element metadata',()=>{
@@ -611,7 +611,7 @@ for(const [name,source] of Object.entries({
  tooManyArguments:'type A<T> = T[];const x:A<number,string> =[1];',
  wrongConstructor:'class Box<T>{constructor(public value:T){}}const b=new Box<number>("s");',
  memberMismatch:'class Box<T>{constructor(public value:T){}}const b=new Box<number>(1);const s:string=b.value;',
- ownershipRemainsChecked:box+'class Holder<T>{constructor(public value:T){}}let p:ptr<Box> = new Box();const h=new Holder<ptr<Box>>(move(p));',
+ ownershipRemainsChecked:box+'class Holder<T>{constructor(public value:T){}}let p:ptr<Box> = new Box();const h=new Holder<ptr<Box>>(move(p));const copy=h;',
 }))test(`native generic instances reject ${name}`,()=>run(fixture(source),1));
 test('native generic class field has concrete instantiated type',()=>{
  const g=check('class Box<T>{constructor(public value:T){}}const b=new Box<number>(1);const n=b.value;');
@@ -795,7 +795,7 @@ for(const [name,source] of Object.entries({
  iteratorMutation:'let m=new Map<string,number>();for(const key in m){m.set(key,1);}',
  constructor:'let m=new Map<string,number>(1);',
  classKey:box+'let m=new Map<Box,number>();',
- ownerValue:box+'let m=new Map<string,ptr<Box>>();',
+ ownerValue:box+'let m=new Map<string,ptr<Box>>();let p:ptr<Box> = new Box();m.set("s",p);',
  capturedEscape:'type Fn=()=>number;let m=new Map<string,Fn>();function f():void{let n=0;m.set("s",():number=>{n+=1;return n;});}',
 }))test(`native Map/Set rejects ${name}`,()=>run(fixture(source),1));
 test('native array push cannot retain a reference closure in global storage',()=>error('type Fn=()=>number;let saved:Fn[]=[];function f():void{let n=0;saved.push(():number=>{n+=1;return n;});}',/E4210/));
@@ -945,3 +945,112 @@ test('native collection callbacks compose effects',()=>{const g=check('let n=0;f
 test('native public union payloads cannot expose private types',()=>error('class Hidden{x:number=1;}export union U=Value(Hidden)|Empty;',/E4401/));
 test('native public union record fields cannot expose private types',()=>error('class Hidden{x:number=1;}export union U={kind:"Value";data:Hidden}|{kind:"Empty"};',/E4401/));
 test('native public union payloads allow exported types',()=>check('export class Box{x:number=1;}export union U=Value(Box)|Empty;'));
+
+for(const [name,source] of Object.entries({
+ inferred:'function show<...T>(...values:T):void{print(values);}show(1,"s",true);',
+ explicit:'function show<...T>(...values:T):void{print(values);}show<number,string>(1,"s");',
+ empty:'function show<...T>(...values:T):void{print(values);}show();',
+ forwarding:'function show<...T>(...values:T):void{print(values);}function forward<...T>(...values:T):void{show(values);}forward(1,"s");',
+ spreadForwarding:'function show<...T>(...values:T):void{print(values);}function forward<...T>(...values:T):void{show(...values);}forward(1,"s");',
+ fixed:'function f<A,...T>(head:A,...values:T):A{print(values);return head;}const n:number=f(1,"s",true);',
+ fixedExplicit:'function f<A,...T>(head:A,...values:T):A{print(values);return head;}const n:number=f<number,string,boolean>(1,"s",true);',
+ tuple:'function f<...T>(...values:T):void{print(values);}const t:[number,string]=[1,"s"];f(...t);',
+ variadicPrint:'print();print(1,"s",true);',
+}))test(`native generic packs accept ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ unused:'function f<...T>():void{}',
+ notLast:'function f<...T,U>(...values:T):void{}',
+ duplicate:'function f<...T,...U>(...a:T,...b:U):void{}',
+ scalar:'function f<T>(...values:T):void{}',
+ wrongCount:'function f<...T>(...values:T):void{}f<number,string>(1);',
+ wrongType:'function f<...T>(...values:T):void{}f<number>("s");',
+ wrongHead:'function f<A,...T>(head:A,...values:T):A{return head;}const n=f<number,string>("s","s");',
+ missingHead:'function f<A,...T>(head:A,...values:T):A{return head;}f();',
+ stored:'function f<...T>(...values:T):void{const v=values;}',
+ returned:'function f<...T>(...values:T):T{return values;}',
+ fixedUse:'function f<...T>(values:T,...rest:T):void{}',
+ dynamicSpread:'function f<...T>(...values:T):void{}const a=[1,2];f(...a);',
+ named:'function f<...T>(...values:T):void{}f(values:1);',
+ range:'function f<...T>(...values:T):void{}f<i8>(128);',
+ hiddenOwner:'class Box{x:number=1;}function f<...T>(...values:T):void{}let p:ptr<Box> = new Box();f(move(p));',
+}))test(`native generic packs reject ${name}`,()=>run(fixture(source),1));
+test('native generic packs publish the ordered instantiated signature',()=>{
+ const g=check('function f<...T>(...values:T):void{}f<number,string>(1,"s");');const f=g.files[0];const id=f.ast.nodes.findIndex((n:any)=>n.kind==='CallExpression'&&n.attributes.some((a:any)=>a.name==='callee'&&a.value==='f'));assert.equal(f.signatures[id],'(...pack<number,string>)=>void');const args=f.ast.nodes[id].edges.filter((e:any)=>e.role==='args');assert.deepEqual(args.map((e:any)=>f.argumentParameters[e.node]),[0,0]);
+});
+
+const ownerBox='class Box{value:number=1;}';
+const ownerHolder=ownerBox+'class Holder{p:ptr<Box> = new Box();q:ptr<Box> = new Box();}';
+for(const [name,source] of Object.entries({
+ field:ownerHolder+'let h=new Holder();print(h.p.value);',
+ array:ownerBox+'let a:ptr<Box>[]=[];let p:ptr<Box> = new Box();a.push(move(p));',
+ literal:ownerBox+'let p:ptr<Box> = new Box();let a:ptr<Box>[]=[move(p)];',
+ whole:ownerHolder+'let h=new Holder();const next=move(h);print(next.p.value);',
+ returned:ownerHolder+'function f():Holder{let h=new Holder();return move(h);}const h=f();',
+ argument:ownerHolder+'function consume(h:Holder):void{print(h.p.value);}let h=new Holder();consume(move(h));',
+ partial:ownerHolder+'let h=new Holder();const p=move(h.p);print(h.q.value);',
+ reinitialize:ownerHolder+'let h=new Holder();const p=move(h.p);h.p=new Box();const next=move(h);',
+ disjoint:ownerHolder+'let h=new Holder();const p=move(h.p);const q=move(h.q);',
+ tuple:ownerBox+'let t:[ptr<Box>,ptr<Box>]=[new Box(),new Box()];const p=move(t[0]);print(t[1].value);t[0]=new Box();const next=move(t);',
+ arrayIndex:ownerBox+'let a:ptr<Box>[]=[new Box(),new Box()];const p=move(a[0]);print(a[1].value);a[0]=new Box();const next=move(a);',
+ fieldBranches:ownerHolder+'function f(b:boolean):void{let h=new Holder();if(b){const p=move(h.p);h.p=new Box();}print(h.p.value);}',
+ nested:ownerHolder+'class Outer{h:Holder=new Holder();}let o=new Outer();const p=move(o.h.p);print(o.h.q.value);o.h.p=new Box();const next=move(o);',
+ map:ownerBox+'let m=new Map<string,ptr<Box>>();let p:ptr<Box> = new Box();m.set("a",move(p));',
+ optional:ownerBox+'let p:ptr<Box> = new Box();const o=optionalSome(move(p));',
+ borrowedCallback:ownerBox+'let a:ptr<Box>[]=[new Box()];a.forEach((p:constRef<Box>):void=>{print(p.value);});',
+}))test(`native aggregate ownership accepts ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ copy:ownerHolder+'let h=new Holder();const copy=h;',
+ arrayCopy:ownerBox+'let a:ptr<Box>[]=[];const b=a;',
+ argument:ownerHolder+'function consume(h:Holder):void{}let h=new Holder();consume(h);',
+ return:ownerHolder+'function f():Holder{let h=new Holder();return h;}',
+ fieldCopy:ownerBox+'let p:ptr<Box> = new Box();class C{p:ptr<Box> = p;}',
+ literalCopy:ownerBox+'let p:ptr<Box> = new Box();let a:ptr<Box>[]=[p];',
+ doubleMove:ownerHolder+'let h=new Holder();const p=move(h.p);const q=move(h.p);',
+ partialRead:ownerHolder+'let h=new Holder();const p=move(h.p);print(h.p.value);',
+ partialWhole:ownerHolder+'let h=new Holder();const p=move(h.p);const next=move(h);',
+ partialCopy:ownerHolder+'let h=new Holder();const p=move(h.p);const next=h;',
+ conditional:ownerHolder+'function f(b:boolean):void{let h=new Holder();if(b){const p=move(h.p);}print(h.p.value);}',
+ loop:ownerHolder+'function f(b:boolean):void{let h=new Holder();while(b){const p=move(h.p);}}',
+ parent:ownerHolder+'class Outer{h:Holder=new Holder();}let o=new Outer();const h=move(o.h);o.h.p=new Box();',
+ movedTuple:ownerBox+'let t:[ptr<Box>,ptr<Box>]=[new Box(),new Box()];const p=move(t[0]);print(t[0].value);',
+ wildcard:ownerBox+'function f(index:number):void{let a:ptr<Box>[]=[new Box(),new Box()];const p=move(a[index]);print(a[0].value);}',
+ wildcardRestore:ownerBox+'function f(index:number):void{let a:ptr<Box>[]=[new Box(),new Box()];const p=move(a[index]);a[index]=new Box();const next=move(a);}',
+ borrowed:ownerHolder+'let h=new Holder();const loan=constRef(h);const p=move(h.p);print(loan.q.value);',
+ readonly:ownerBox+'class H{readonly p:ptr<Box> = new Box();}let h=new H();const p=move(h.p);',
+ callbackCopy:ownerBox+'let a:ptr<Box>[]=[new Box()];a.forEach((p:ptr<Box>):void=>{});',
+ optionalCopy:ownerBox+'let p:ptr<Box> = new Box();const o=optionalSome(p);',
+ capture:ownerHolder+'function f():void{let h=new Holder();const cb=():number=>h.p.value;}',
+}))test(`native aggregate ownership rejects ${name}`,()=>run(fixture(source),1));
+
+for(const [name,source] of Object.entries({
+ genericMove:ownerHolder+'function identity<T>(x:T):T{return move(x);}let h=new Holder();const q=identity(move(h));',
+ genericPrimitive:'function identity<T>(x:T):T{return x;}const n=identity(1);',
+ fixedArray:ownerBox+'let a:ptr<Box>[1]=[new Box()];const p=move(a[0]);a[0]=new Box();const b=move(a);',
+}))test(`native aggregate substitution accepts ${name}`,()=>check(source));
+for(const [name,source] of Object.entries({
+ genericCopy:ownerHolder+'function identity<T>(x:T):T{return x;}let h=new Holder();const q=identity(move(h));',
+ genericLocal:ownerHolder+'function copy<T>(x:T):void{const y=x;}let h=new Holder();copy(move(h));',
+ genericNested:ownerHolder+'function copy<T>(x:T):void{const y=x;}function outer<T>(x:T):void{copy(move(x));}let h=new Holder();outer(move(h));',
+ genericCapture:ownerHolder+'function f<T>(x:T):void{const cb=():T=>x;}let h=new Holder();f(move(h));',
+ methodCopy:ownerBox+'class H<T>{constructor(public value:T){}copy():void{const y=this.value;}}let p:ptr<Box> = new Box();let h=new H<ptr<Box>>(move(p));h.copy();',
+ methodReturn:ownerBox+'class H<T>{constructor(public value:T){}get():T{return this.value;}}let p:ptr<Box> = new Box();let h=new H<ptr<Box>>(move(p));const q=h.get();',
+}))test(`native aggregate substitution rejects ${name}`,()=>run(fixture(source),1));
+
+test('native aggregate ownership allows consuming spread',()=>check(ownerBox+'let a:ptr<Box>[]=[new Box()];const b:ptr<Box>[]=[...move(a)];'));
+test('native aggregate ownership rejects copying spread',()=>error(ownerBox+'let a:ptr<Box>[]=[new Box()];const b:ptr<Box>[]=[...a];',/E4101/));
+test('native aggregate ownership rejects erasing casts',()=>error(ownerHolder+'class Empty{}let h=new Holder();const x=h as Empty;',/E4101/));
+test('native aggregate ownership rejects erasing generic casts',()=>error(ownerHolder+'function erase<T>(x:T):number{return x as number;}let h=new Holder();print(erase(move(h)));',/E4101/));
+test('native aggregate ownership rejects reusing a property parameter',()=>error(ownerBox+'class H{constructor(public p:ptr<Box>){const q=move(p);}}',/E4102/));
+
+test('native aggregate ownership transports partial moves through methods',()=>check(ownerBox+'class H{p:ptr<Box> = new Box();q:ptr<Box> = new Box();take():ptr<Box>{return move(this.p);}}let h=new H();const p=h.take();print(h.q.value);h.p=new Box();const next=move(h);'));
+test('native aggregate ownership rejects a method reading its moved field',()=>error(ownerBox+'class H{p:ptr<Box> = new Box();take():ptr<Box>{return move(this.p);}}let h=new H();const p=h.take();print(h.p.value);',/E4102/));
+test('native aggregate ownership treats a moving method as mutation',()=>error(ownerBox+'class H{p:ptr<Box> = new Box();take():ptr<Box>{return move(this.p);}}const h=new H();const p=h.take();',/inmutable/));
+
+test('native aggregate ownership rejects copying slice',()=>error(ownerBox+'let a:ptr<Box>[]=[new Box()];const b=a.slice(0,1);',/E4101/));
+test('native aggregate ownership rejects copying concat receiver',()=>error(ownerBox+'let a:ptr<Box>[]=[new Box()];const b=a.concat([]);',/E4101/));
+test('native aggregate ownership rejects shifting a moved element',()=>error(ownerBox+'let a:ptr<Box>[]=[new Box(),new Box()];const p=move(a[1]);delete a[0];print(a[0].value);',/E4102/));
+test('native aggregate ownership allows consuming slice',()=>check(ownerBox+'let a:ptr<Box>[]=[new Box()];const b=move(a).slice(0,1);'));
+
+test('native generic packs cannot hide aggregate owners',()=>error(ownerHolder+'function show<...T>(...values:T):void{print(values);}let h=new Holder();show(h);',/E4203/));
+test('native aggregate ownership can display an owner without copying it',()=>check(ownerHolder+'let h=new Holder();print(h);print(h.p.value);'));
+test('native aggregate ownership rejects moving a displayed owner in the same call',()=>error(ownerHolder+'let h=new Holder();print(h,move(h));',/E4206/));

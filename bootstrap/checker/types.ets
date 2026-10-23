@@ -28,6 +28,7 @@ export function restPosition(text: string): number {
 export function argumentType(text: string, spread: boolean): string {
   if (!text.startsWith("...")) return text;
   const array: string = text.slice(3,text.length);
+  if (!array.endsWith("[]")) return "";
   return spread ? array : semanticElement(array);
 }
 export function numericType(text: string): boolean { return ["number","i8","u8","i16","u16","i32","u32","i64","u64","f32","f64"].includes(text); }

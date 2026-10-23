@@ -1,6 +1,6 @@
 # Ts2cpp — Estado actual
 
-Última revisión documental: **2026-10-22**. Este archivo es una fotografía
+Última revisión documental: **2026-10-23**. Este archivo es una fotografía
 del repositorio, no un historial de sesiones. El historial vive en
 [`CHANGELOG.md`](./CHANGELOG.md) y en [`docs/historical/`](./docs/historical/).
 
@@ -45,6 +45,14 @@ Retirado el PCH no utilizado y preservados los artefactos idénticos, incluida
 la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
 ## Verificación conocida
+
+- Revisión posterior a PR #22: `npm test` pasa **2926/2926**, incluida la suite
+  de ejemplos con libuv, sin fallos ni skips. Las comprobaciones posteriores
+  de composición pasan dentro de una ejecución focalizada de **86/86**.
+  El audit nativo pasa **74/80**; los seis casos pendientes y las obligaciones
+  adicionales de composición siguen en [`bootstrap/PENDING.md`](./bootstrap/PENDING.md).
+  Se implementan packs de funciones y owners en agregados con movimientos
+  parciales. Esto no certifica el cierre del lenguaje ni autoriza comenzar IR.
 
 - v64 incorpora [resúmenes de efectos nativos](./bootstrap/checker/EFFECTS.md):
   lecturas/escrituras/moves transitivos, destinos conservadores de callables,

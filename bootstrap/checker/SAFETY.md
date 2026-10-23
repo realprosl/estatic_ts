@@ -17,12 +17,14 @@ arena como si fuera orden de ejecución.
   que retorna no contamina la continuación de la función, pero sus efectos sí
   se unen al volver al llamador. Se conservan canales de return/break/continue.
 - Los bucles incluyen la ruta de cero iteraciones y el retorno al encabezado.
-  Se itera hasta estabilizar el estado, con un máximo de cuatro pasadas para
-  este dominio finito. Se detecta el uso de un owner en una iteración posterior.
+  Se itera hasta estabilizar el estado del dominio finito. Se detecta el uso de un owner en una iteración posterior.
   Los literales booleanos y el cortocircuito evitan rutas evidentemente muertas.
-- `move(identifier)` sólo admite `ptr<T>`/`constPtr<T>`. Consume el origen;
+- `move(lvalue)` admite owners directos y agregados que los contienen. Consume el origen;
   se rechazan lecturas y segundos movimientos posteriores (E4102/E4103).
-  Transferir un owner sin move produce E4101. Un `new C()` puede inicializar
+  Transferir un owner sin move produce E4101. Los movimientos parciales de campos
+  e índices dejan una obligación de reinicialización antes de usar el agregado
+  completo. Los índices dinámicos se solapan conservadoramente y escribir en uno
+  no demuestra restaurar una posición movida. Un `new C()` puede inicializar
   directamente un owner. Asignarle de nuevo un valor válido restablece el estado.
 - Se comprueban lecturas **y escrituras** antes de inicialización (E4001).
   Las llamadas directas seleccionadas se recorren con el estado del llamador,
@@ -62,16 +64,17 @@ esos helpers. Los nombres locales homónimos conservan su comportamiento normal.
   accesos a globals en el callee. Una captura por valor ya creada es una copia,
   no una lectura tardía de su fuente original.
 - Un cast no puede introducir o borrar un contrato de memoria. Las
-  instanciaciones genéricas con esos contratos se rechazan hasta comprobar
-  transferencias tras la sustitución de tipos.
+  instanciaciones de agregados genéricos revalidan transferencias y capturas
+  después de sustituir tipos. Los argumentos genéricos directamente ptr/ref
+  y los packs de owners o préstamos conservan restricciones explícitas.
 
 `borrows` entrega `{module,symbol,root,begin,end,mode}`. Los intervalos son
 metadatos conservadores, no lifetimes persistentes ni una prueba general de
 aliasing. Se agrupan campos/índices bajo la raíz del lvalue. El análisis de
 intervalos no es un solver NLL completo sobre CFG: puede rechazar reborrows o
-rutas que un análisis más preciso demostraría disjuntas. El ownership dentro de
-agregados/fields queda bloqueado explícitamente hasta modelar su copia y
-movimiento por elemento. El manejo async/await sigue pendiente en el checker.
+rutas que un análisis más preciso demostraría disjuntas. Las rutas de movimientos
+parciales distinguen campos e índices constantes; esta precisión no se extiende
+a todos los préstamos. El manejo async/await sigue pendiente en el checker.
 
 ## Capturas y procedencia de escapes
 
@@ -105,8 +108,8 @@ continúan permitidos.
 No es escape analysis completo: no modela C++ opaco, heaps compartidos,
 lifetimes interprocedurales generales, tareas async, todos los contenedores o
 efectos indirectos. Map/Set y payloads de uniones transportan la procedencia de
-callbacks; se rechaza almacenar owners o préstamos en esos agregados hasta
-completar sus reglas de transferencia. La procedencia es insensible al
+callbacks. Los owners almacenados requieren transferencia; los préstamos no se
+pueden almacenar en esos agregados. La procedencia es insensible al
 orden y a los elementos concretos de un contenedor; puede dar falsos positivos.
 No demuestra ausencia de fugas ni seguridad concurrente.
 
@@ -143,7 +146,8 @@ diferencias de v62 se añaden dos casos de préstamos en una sola línea que el
 checker TS directo rechaza por su granularidad de líneas y el nativo acepta
 usando offsets. Los callables reasignados usan conjuntos conservadores de destinos y la
 recursión consulta resúmenes; los casos opacos siguen restringidos. Permanecen
-las restricciones a callbacks retenidos, owners capturados y ownership en agregados.
+las restricciones a callbacks retenidos, owners capturados y transferencias
+polimórficas de owners/préstamos en packs.
 No se anuncia paridad general ni se cambia el checker TS para ocultar diferencias.
 
 El CLI principal y el codegen conservan su cadena. Estos resultados semánticos
