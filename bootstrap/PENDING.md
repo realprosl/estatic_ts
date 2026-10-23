@@ -7,9 +7,9 @@ registro.** Esta rama reúne la auditoría y la implementación en una sola PR;
 la PR debe permanecer en borrador mientras haya obligaciones abiertas.
 No se cambia la revisión pública para anunciar un cierre que aún no existe.
 
-## Progreso de implementación tras la PR #22
+## Progreso de implementación tras la PR #23
 
-La auditoría pasa de **71/80 a 74/80** obligaciones. Quedan **6 casos de
+La auditoría pasa de **74/80 a 77/80** obligaciones. Quedan **3 casos de
 referencia pendientes**; ninguna cifra de este muestreo cierra por sí sola una
 fila del inventario. No se introduce IR ni se conecta el frontend nativo al
 backend actual.
@@ -43,8 +43,27 @@ Los métodos propagan sus movimientos al receptor; los consumidores que copian
 owners exigen transferencia explícita. Esto amplía M01/M02, sin cerrar todas sus
 obligaciones de composición y destrucción.
 
-Los seis casos del audit abiertos son async/await, for-await-of, préstamos
-durante suspensión, expresión comptime, función comptime y decoradores.
+Se añaden firmas async externas `Promise<T>` con retornos internos `T`, arrows,
+await de consumo único y for-await-of. Las tablas conservan la procedencia de
+las tareas por punto fijo. Se separan los efectos de creación (defaults) de los
+del cuerpo suspendido: crear una tarea no ejecuta su cuerpo, y reanudarla no
+repite argumentos ni defaults. All/race y sus aliases consumen arrays de tareas;
+spawn exige transferencia y conserva restricciones de retención/efectos.
+
+Los préstamos vivos no pueden cruzar una suspensión; los que terminan durante
+la evaluación del operando de await ya no están vivos al suspender. Los frames
+transportan sus capturas, pero el resultado de await sólo transporta las del
+valor devuelto. Se rechazan escapes de frames por return, spawn y almacenamiento
+fuera del bloque de sus capturas. Las declaraciones externas sin cuerpo
+conservan efectos opacos. Se corrige además el flujo de for-of/for-in: sus rutas
+de cero iteraciones ya no se tratan como bucles infinitos.
+
+Los tres casos del audit abiertos son expresión comptime, función comptime y
+decoradores. El soporte async no cierra A01/A02: siguen pendientes obligaciones
+de composición, entre ellas resultados con owners en for-await, captura del
+receptor, efectos polimórficos de tareas opacas y precisión de multiplicidad en
+contenedores e inicializadores de campo que suspenden sin contrato del constructor. El análisis de all/race/for-await conserva alternativas y puede
+rechazar secuencias seguras de tareas que comparten recursos.
 Además siguen abiertos límites de composición: inferencia genérica avanzada y
 sobrecargas genéricas como valores; llamadas opcionales; callbacks
 genéricos/bound methods; defaults de destructuring; objetos sin contexto;
@@ -112,8 +131,8 @@ con las capas que consume. «Abierto» incluye cobertura parcial en v64.
 | L02 | Parcial; sigue abierto | Map/Set, tipos de clave/valor, métodos, índices y `delete`, incluyendo propagación de capturas/owners. | Constructores/métodos/delete y forEach tipados; ownership pendiente |
 | L03 | Parcial; sigue abierto | Optional/Result, constructores/helpers, payloads y tipos públicos, con identidades semánticas canónicas. | `annotationInner`, `containerCall`, tablas de procedencia |
 | L04 | Parcial; sigue abierto | `??` y `?.`: tipo de resultado y cortocircuito, efectos y ownership de la rama ejecutada. | `expressionInner` y flujo; llamadas opcionales pendientes |
-| A01 | Abierto | Promise/Task, async function/arrow, await y for-await-of: firma externa e interna, contextos válidos y tipo resultante. | `statement` rechaza async; `AwaitExpression` pendiente |
-| A02 | Abierto | Memoria durante suspensión: préstamos vivos, capturas, movimientos, tareas retenidas y salidas. El rechazo actual por tipo no demuestra una regla de seguridad async. | `SAFETY.md`, `EFFECTS.md` |
+| A01 | Parcial; sigue abierto | Promise/Task, async function/arrow, await y for-await-of: firma externa e interna, contextos válidos y tipo resultante. | Firmas externas/internas, await de consumo único, for-await y all/race; resultados owners en for-await pendientes |
+| A02 | Parcial; sigue abierto | Memoria durante suspensión: préstamos vivos, capturas, movimientos, tareas retenidas y salidas. Se comprueban préstamos vivos, retención de frames y escapes por bloque; tareas opacas y receptores siguen siendo conservadores. | `SAFETY.md`, `EFFECTS.md`, pruebas `native async` |
 | S01 | Parcial; sigue abierto | Catálogo completo de builtins y métodos: globals de string/array, Math, console/terminal, fs/path/process, JSON/JsonValue, red/TLS/HTTP, timers y callbacks. Alinear binder, checker y `types/estatic.d.ts`. | Registro stage 0 y listas independientes en binder/checker |
 | S02 | Parcial; sigue abierto | Contratos de efectos/retención de cada builtin y operación externa. Una firma de tipos por sí sola no justifica aceptar un callback o ignorar préstamos activos. | `EffectAnalyzer.builtin`, `canRetain`, llamadas opacas |
 | X01 | Abierto | Decoradores reconocidos, argumentos, alcance, compatibilidad y metadatos include/link/ABI/backend. Diagnosticar los desconocidos sin descartarlos. | Todo nodo `Decorator` se rechaza al comprobar |
@@ -129,7 +148,7 @@ con las capas que consume. «Abierto» incluye cobertura parcial en v64.
 | P02 | Parcial; sigue abierto | Tablas completas y coherentes entre archivos: tipos, firmas elegidas/instanciadas, correspondencia argumentos, conversiones, capturas, efectos y origen. Un nodo aceptado que necesite semántica no puede quedar sin resolver. | `model.ets`, `format.ets`, `expression` |
 | V01 | Parcial; sigue abierto | Pruebas cruzadas del lenguaje completo, corpus de ejemplos y fuentes ETS del bootstrap, errores combinados y metamórficos. Corregir diferencias de stage 0 sin copiarlas ni ocultarlas. | `checker.test.ts`, nuevo `audit/` |
 | V02 | Parcial; sigue abierto | Cerrar contradicciones documentales y dejar evidencia reproducible de cada fila. Verificar que el CLI nuevo analiza nativamente y no recurre a stage 0 para el proyecto solicitado. | `README.md`, `LIMITATIONS.md`, documentos de cada etapa |
-| V03 | Validación completa de esta revisión pasada; repetir tras nuevos cambios | La suite declarada pasa 2926/2926 con libuv. Se corrige la posición de `--test-concurrency=1` antes de los archivos: Node ignoraba la opción posterior y ejecutaba compilaciones nativas simultáneas, causando timeouts. Los casos de composición posteriores pasan en una ejecución focalizada de 86/86. | `npm test`, `checker.test.ts`, `test/runner.ts` |
+| V03 | Validación completa de esta revisión pasada; repetir tras nuevos cambios | npm test pasa 2994/2994 con libuv, sin fallos ni skips. Después pasan 904/904 pruebas completas del checker; las comprobaciones de contexto de campos posteriores se validan en la ejecución focalizada de async. | npm test, checker.test.ts, test/runner.ts |
 
 ## Diferencias que no se pueden llamar «resueltas» sólo por aceptar el fuente
 

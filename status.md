@@ -46,6 +46,13 @@ la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
 ## Verificación conocida
 
+- Tras PR #23, el checker nativo incorpora async/await, consumo de tareas,
+  for-await y all/race/spawn con separación entre creación y ejecución diferida,
+  préstamos durante suspensión y procedencia de frames. Pasan **904/904** pruebas
+  del checker. npm test pasa **2994/2994**, con ejemplos/libuv incluidos.
+  El audit llega a **77/80**; comptime, decoradores y obligaciones
+  adicionales de composición siguen abiertos. No se implementa IR.
+
 - Revisión posterior a PR #22: `npm test` pasa **2926/2926**, incluida la suite
   de ejemplos con libuv, sin fallos ni skips. Las comprobaciones posteriores
   de composición pasan dentro de una ejecución focalizada de **86/86**.

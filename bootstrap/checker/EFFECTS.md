@@ -4,13 +4,15 @@
 capturas y préstamos locales de `safety.ets`. Construye tablas independientes;
 no modifica el AST, los símbolos ni la caché de sintaxis. Los IDs sólo tienen
 sentido dentro de ese resultado. `CheckResult.effects` y el JSON del driver
-publican una entrada por función, arrow, método o constructor comprobado.
+publican resúmenes por función, arrow, método o constructor comprobado. Las
+funciones async añaden un resumen separado de creación.
 
 ## Contenido
 
 | Campo | Significado |
 |---|---|
 | `module`, `node` | Declaración en el AST original |
+| `phase`, `creation` | Fase body/creation e índice de creación de un cuerpo async (-1 si no corresponde) |
 | `parameters` | Identidades de los parámetros |
 | `reads`, `writes`, `moves` | Efectos posibles por símbolo, también transitivos |
 | `invokes` | Parámetros callback que pueden invocarse, incluidos wrappers |
@@ -72,8 +74,8 @@ Los resúmenes no certifican terminación ni expresan multiplicidad de efectos.
 Los inicializadores de campos no literales vuelven opaco el resumen de una función
 que construye esa clase, aunque el recorrido preciso todavía los comprueba.
 
-No introduce lifetime parameters, retornos prestados, ownership en agregados,
-async, contratos de C++ externo, ni semántica incremental. Permanecen las
+No introduce lifetime parameters, retornos prestados, contratos de C++ externo
+ni semántica incremental. Permanecen las
 restricciones de [SAFETY.md](./SAFETY.md). No implementa aún el [IR](./IR.md)
 ni conecta estas tablas al codegen del programa. Las pruebas nativas verifican
 invariancia/repetición, casos aceptados/rechazados y reutilización de la caché;
@@ -88,3 +90,20 @@ retención e invocaciones conservan sus orígenes. El conjunto de destinos de un
 unión se transporta desde el payload hasta la extracción e invocación, incluso
 cuando el campo no tiene identidad de símbolo propia. La mezcla entre elementos
 y variantes sigue siendo conservadora.
+
+
+## Efectos diferidos de tareas
+
+Los defaults pertenecen a la fase creation. Las operaciones del cuerpo pertenecen
+a body; crear una tarea compone únicamente creation y await compone body. Un
+grafo separado de orígenes de tareas se propaga por variables, moves, retornos,
+campos y contenedores. Una fábrica síncrona que devuelve una tarea transporta
+su origen, sin inventar un segundo frame ni ejecutar el cuerpo diferido.
+
+Los retornos de callbacks de un cuerpo async se enlazan al resultado de await,
+no al valor de la tarea. Las capturas almacenadas en el frame mantienen su propia
+procedencia para comprobar retención y escapes. Las declaraciones externas sin
+cuerpo y las tareas recibidas sin un origen conocido conservan efectos opacos.
+La composición es insensible al contexto de cada invocación: puede mezclar
+argumentos de llamadores diferentes y rechazar programas que un contrato de
+efectos polimórficos más preciso permitiría.

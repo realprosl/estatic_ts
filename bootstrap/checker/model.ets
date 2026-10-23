@@ -2,11 +2,11 @@ import { SourceDiagnostic } from "../frontend/frontend";
 
 export class TypedFile {
   types: string[]; members: number[]; selected: number[]; selectedModules: number[]; signatures: string[]; states: number[];
-  exactIntegers: string[]; conversions: string[]; caseValues: string[]; argumentParameters: number[];
+  taskSources: number[][]; exactIntegers: string[]; conversions: string[]; caseValues: string[]; argumentParameters: number[];
   constructor(count: number) {
     this.types = []; this.members = []; this.selected = []; this.selectedModules = []; this.signatures = []; this.states = [];
-    this.exactIntegers = []; this.conversions = []; this.caseValues = []; this.argumentParameters = [];
-    for (let i: number = 0; i < count; i = i + 1) { this.types.push(""); this.members.push(-1); this.selected.push(-1); this.selectedModules.push(-1); this.signatures.push(""); this.states.push(0); this.exactIntegers.push(""); this.conversions.push(""); this.caseValues.push(""); this.argumentParameters.push(-1); }
+    this.taskSources = []; this.exactIntegers = []; this.conversions = []; this.caseValues = []; this.argumentParameters = [];
+    for (let i: number = 0; i < count; i = i + 1) { this.taskSources.push([]); this.types.push(""); this.members.push(-1); this.selected.push(-1); this.selectedModules.push(-1); this.signatures.push(""); this.states.push(0); this.exactIntegers.push(""); this.conversions.push(""); this.caseValues.push(""); this.argumentParameters.push(-1); }
   }
 }
 export function argumentParameter(file: TypedFile, node: number, position: number): number {
@@ -23,18 +23,18 @@ export class BorrowLease {
   }
 }
 export class EffectPoint {
-  targets: number[]; origins: number[];
-  constructor() { this.targets = []; this.origins = []; }
+  targets: number[]; origins: number[]; tasks: number[];
+  constructor() { this.targets = []; this.origins = []; this.tasks = []; }
 }
 export class EffectBorrow {
   call: number; callback: number; root: number; mode: string;
   constructor(call: number, callback: number, root: number, mode: string) { this.call = call; this.callback = callback; this.root = root; this.mode = mode; }
 }
 export class EffectSummary {
-  module: number; node: number; parameters: number[]; reads: number[]; writes: number[]; moves: number[];
+  phase: string; creation: number; module: number; node: number; parameters: number[]; reads: number[]; writes: number[]; moves: number[];
   invokes: number[]; retains: number[]; returned: number[]; callees: number[]; borrows: EffectBorrow[]; unknown: boolean; recursive: boolean; external: boolean;
   constructor(module: number, node: number) {
-    this.module = module; this.node = node; this.parameters = []; this.reads = []; this.writes = []; this.moves = [];
+    this.phase = "body"; this.creation = -1; this.module = module; this.node = node; this.parameters = []; this.reads = []; this.writes = []; this.moves = [];
     this.invokes = []; this.retains = []; this.returned = []; this.callees = []; this.borrows = []; this.unknown = false; this.recursive = false; this.external = false;
   }
 }
