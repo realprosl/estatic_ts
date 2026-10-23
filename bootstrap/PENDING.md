@@ -7,9 +7,9 @@ registro.** Esta rama reúne la auditoría y la implementación en una sola PR;
 la PR debe permanecer en borrador mientras haya obligaciones abiertas.
 No se cambia la revisión pública para anunciar un cierre que aún no existe.
 
-## Progreso de implementación tras la PR #21
+## Progreso de implementación tras la PR #22
 
-La auditoría pasa de **53/80 a 71/80** obligaciones. Quedan **9 casos de
+La auditoría pasa de **71/80 a 74/80** obligaciones. Quedan **6 casos de
 referencia pendientes**; ninguna cifra de este muestreo cierra por sí sola una
 fila del inventario. No se introduce IR ni se conecta el frontend nativo al
 backend actual.
@@ -30,13 +30,26 @@ Las tareas globales diferidas usan un handle vacío y reconstrucción por movimi
 sin exigir asignación de Task ni adelantar la ejecución de la corutina. Se corrige
 además el namespace de los wrappers globales readFile/writeFile.
 
-Los nueve casos del audit abiertos son packs genéricos, async/await,
-for-await-of, préstamos durante suspensión, expresión comptime, función
-comptime, decoradores, ownership en campos y ownership en arrays. Además siguen
-abiertos límites de composición: inferencia genérica avanzada y sobrecargas
-genéricas como valores; llamadas opcionales; callbacks genéricos/bound methods;
-defaults de destructuring; objetos sin contexto; composición
-de tipos callable/union; exhaustividad de match; y catálogo completo de builtins.
+Se implementan packs de funciones con expansión, forwarding y firma instanciada;
+el orden de evaluación se conserva. Los packs con owners o préstamos se rechazan
+explícitamente hasta disponer de una prueba de transferencia polimórfica.
+
+Los agregados con owners son move-only, también tras sustitución genérica. Se
+comprueban movimientos parciales de campos e índices constantes, reinicialización,
+uniones de ramas y puntos fijos de bucles. Una lectura del agregado completo
+exige que no queden partes movidas. Los índices dinámicos se solapan de forma
+conservadora y una escritura dinámica no demuestra la restauración de un hueco.
+Los métodos propagan sus movimientos al receptor; los consumidores que copian
+owners exigen transferencia explícita. Esto amplía M01/M02, sin cerrar todas sus
+obligaciones de composición y destrucción.
+
+Los seis casos del audit abiertos son async/await, for-await-of, préstamos
+durante suspensión, expresión comptime, función comptime y decoradores.
+Además siguen abiertos límites de composición: inferencia genérica avanzada y
+sobrecargas genéricas como valores; llamadas opcionales; callbacks
+genéricos/bound methods; defaults de destructuring; objetos sin contexto;
+composición de tipos callable/union; exhaustividad de match; y catálogo completo
+de builtins.
 La invalidación de narrowing ante llamadas o escrituras es conservadora.
 
 El switch nativo comprobado no incorpora parser/codegen de switch a stage 0.
@@ -82,7 +95,7 @@ con las capas que consume. «Abierto» incluye cobertura parcial en v64.
 | T08 | Parcial; sigue abierto | Casts, `satisfies` y readonly: validar las operaciones permitidas y preservar el tipo correcto del resultado. `satisfies` no debe reemplazar el tipo de la expresión por el tipo comprobado. | `AsExpression`/`SatisfiesExpression` comparten retorno |
 | G01 | Parcial; sigue abierto | Clases y aliases genéricos, sustitución recursiva en miembros/constructores y tipos anidados. | `instantiateType`, `instantiateMember`; inferencia avanzada pendiente |
 | G02 | Parcial; sigue abierto | Constraints, defaults, inferencia contextual y desde retornos cuando esté definida; diagnóstico de argumentos insuficientes/incompatibles. | `statement` rechaza constraint/default |
-| G03 | Parcial; sigue abierto | Packs de tipos, parámetros rest, expansión/forwarding y aridad; no descartar el orden de los argumentos. | Rest de arrays y spread comprobados; packs/forwarding genéricos pendientes |
+| G03 | Parcial; sigue abierto | Packs de tipos, parámetros rest, expansión/forwarding y aridad; no descartar el orden de los argumentos. | Rest, spread y packs de funciones con forwarding comprobados; transferencia polimórfica de owners pendiente |
 | G04 | Parcial; sigue abierto | Sobrecargas como valores con firma contextual, genéricos sobre callables y selección consistente. No elegir una declaración arbitraria ni publicar tipos parciales de candidatos descartados. | `IdentifierExpression`, `call` |
 | F01 | Parcial; sigue abierto | Argumentos nombrados y spread: correspondencia con parámetros, duplicados, defaults y orden de evaluación. Publicar correspondencias para el consumidor posterior. | `argumentParameters`, `argumentPosition`, expansión de posiciones en arrays/tuplas |
 | F02 | Parcial; sigue abierto | Parámetros opcionales dentro del cuerpo: su tipo debe modelar ausencia según el contrato Optional, además de admitir omitir el argumento. | `parameterType` envuelve Optional; aridad indirecta pendiente |
@@ -107,7 +120,7 @@ con las capas que consume. «Abierto» incluye cobertura parcial en v64.
 | X02 | Abierto | Evaluación comptime nativa: ámbitos, TDZ, control, sobrecargas, numéricos exactos, callbacks y límites de recursos; evaluación determinista sin I/O implícito. | `comptime` y decoradores pendientes; documentos `comptime-*` |
 | X03 | Abierto | `@etsgen`: parseo de salida, AST, higiene por símbolo/módulo, publicación, límites, spans y validación antes/después. Unificar o justificar semántica de evaluadores existentes. | Documentos `etsgen-*`, código sólo en stage 0 |
 | X04 | Abierto | `@cppgen` y declaraciones externas: contratos explícitos de tipo/efectos/ownership, auditoría de entrada y spans. No tratarlos como operaciones puras. | `PROJECT.md`, `RawCppExpression`, código stage 0 |
-| M01 | Abierto | Owners en campos, arrays/tuplas/objetos y demás agregados: copia prohibida donde corresponda, moves parciales, reinicialización y destrucción de cada recurso. | Rechazos explícitos en `safety.ets:memoryContracts` |
+| M01 | Parcial; sigue abierto | Owners en campos, arrays/tuplas/objetos y demás agregados: copia prohibida donde corresponda, moves parciales, reinicialización y destrucción de cada recurso. | `ownership.ets`, rutas de recursos en `safety.ets`; destrucción y composición completa pendientes |
 | M02 | Parcial; sigue abierto | Préstamos y genéricos tras sustitución; reborrows y procedencia de lvalues; definir qué rechazos conservadores pertenecen al lenguaje y cuáles son carencias de análisis. | `call`, `SAFETY.md` |
 | M03 | Parcial; sigue abierto | Capturas de `this`/owners/préstamos donde el lenguaje las admita; transporte por valor/move/ref, lifetime y escape por todos los contenedores soportados. | `captures`, `provenance`, `SAFETY.md` |
 | M04 | Parcial; sigue abierto | Efectos interprocedurales completos para todas las construcciones añadidas; callbacks simbólicos/recursivos, instanciación de obligaciones y efectos opacos. | `effects.ets`, E4104 y límites de `EFFECTS.md` |
@@ -116,7 +129,7 @@ con las capas que consume. «Abierto» incluye cobertura parcial en v64.
 | P02 | Parcial; sigue abierto | Tablas completas y coherentes entre archivos: tipos, firmas elegidas/instanciadas, correspondencia argumentos, conversiones, capturas, efectos y origen. Un nodo aceptado que necesite semántica no puede quedar sin resolver. | `model.ets`, `format.ets`, `expression` |
 | V01 | Parcial; sigue abierto | Pruebas cruzadas del lenguaje completo, corpus de ejemplos y fuentes ETS del bootstrap, errores combinados y metamórficos. Corregir diferencias de stage 0 sin copiarlas ni ocultarlas. | `checker.test.ts`, nuevo `audit/` |
 | V02 | Parcial; sigue abierto | Cerrar contradicciones documentales y dejar evidencia reproducible de cada fila. Verificar que el CLI nuevo analiza nativamente y no recurre a stage 0 para el proyecto solicitado. | `README.md`, `LIMITATIONS.md`, documentos de cada etapa |
-| V03 | Parcial; sigue abierto | Restablecer validación completa de ejemplos. La ejecución completa con libuv registra 2783/2831: 45 fallos por timeout (loader y pruebas numéricas/aliases), dos ejemplos con errores C++ y su subtest padre. Loader pasa 42/42 aislado; numéricos/aliases pasan 62/62 aislados. Se corrigen y ejecutan fs-demo y result-files; aún se exige repetir la suite completa antes del cierre. | `test/runner.ts`, `examples/destructuring-demo.ets` |
+| V03 | Validación completa de esta revisión pasada; repetir tras nuevos cambios | La suite declarada pasa 2926/2926 con libuv. Se corrige la posición de `--test-concurrency=1` antes de los archivos: Node ignoraba la opción posterior y ejecutaba compilaciones nativas simultáneas, causando timeouts. Los casos de composición posteriores pasan en una ejecución focalizada de 86/86. | `npm test`, `checker.test.ts`, `test/runner.ts` |
 
 ## Diferencias que no se pueden llamar «resueltas» sólo por aceptar el fuente
 

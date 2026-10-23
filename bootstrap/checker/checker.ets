@@ -2,11 +2,12 @@ import { ModuleGraph } from "../modules/loader";
 import { BindingResult, BindingSymbol, bindingChild, callableBinding } from "../binder/binder";
 import { AstNode } from "../parser/parser";
 import { SourceDiagnostic } from "../frontend/frontend";
-import { splitTypes, functionClose, functionParams, functionReturn, restPosition, argumentType, numericType, primitiveType, typeCompatible, replaceType, memoryMode, memoryInner, memoryValue, ownedType, readonlyType, semanticArray, semanticTuple, semanticElement, containsMemory, fixedArraySize, fixedArrayElement, semanticFixedArray, genericBase, genericArguments } from "./types";
+import { splitTypes, functionClose, functionParams, functionReturn, restPosition, argumentType, numericType, primitiveType, typeCompatible, replaceType, memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticArray, semanticTuple, semanticElement, containsMemory, fixedArraySize, fixedArrayElement, semanticFixedArray, genericBase, genericArguments } from "./types";
 
 import { TypedFile, CheckResult } from "./model";
 export { TypedFile, CheckResult } from "./model";
 import { validateSafety } from "./safety";
+import { resourceType, resourceSubstitution } from "./ownership";
 import { nativeNumericLiteral, nativeUnaryPromotion, nativeBinaryPromotion, nativeIntegerText, nativeInteger64 } from "./numeric";
 
 export class NativeChecker {
@@ -73,6 +74,7 @@ export class NativeChecker {
     } return false;
   }
   requireType(module: number, id: number, actual: string, expected: string): void {
+    if (borrowedType(actual) && this.transferType(expected)) this.report(module,id,"E4101: una vista prestada no puede copiarse como owner");
     this.literalRange(module,id,expected);
     if (ownedType(expected) && actual == memoryInner(expected) && id >= 0 && this.node(module,id).kind == "NewExpression") return;
     if (id >= 0 && actual != expected && actual != "!error" && expected != "!error" && expected != "" && this.compatible(actual,expected)) this.result.files[module].conversions[id] = expected;
@@ -326,7 +328,11 @@ export class NativeChecker {
   }
   signature(module: number, id: number): string {
     const n: AstNode = this.node(module,id); let params: string[] = [];
-    for (const e of n.edges) if (e.role == "params") params.push((this.node(module,e.node).get("variadic") == "true" ? "..." : "") + this.parameterType(module,e.node));
+    for (const e of n.edges) if (e.role == "params") {
+      let value: string = this.parameterType(module,e.node); const rest: boolean = this.node(module,e.node).get("variadic") == "true";
+      if (rest && genericBase(value) == "pack") value = genericArguments(value)[0];
+      params.push((rest ? "..." : "") + value);
+    }
     let returns: string = this.annotation(module,id,n.get("returnType"));
     if (returns == "") {
       const symbols: number[] = this.narrowedSymbols; const types: string[] = this.narrowedTypes; this.narrowedSymbols = []; this.narrowedTypes = [];
@@ -363,7 +369,83 @@ export class NativeChecker {
   }
   parameterType(module: number, id: number): string {
     const n: AstNode = this.node(module,id); const text: string = this.annotation(module,id,n.get("type"));
+    if (n.get("variadic") == "true" && this.packToken(text)) return "pack<" + text + ">";
     return n.get("optional") == "true" && genericBase(text) != "Optional" ? "Optional<" + text + ">" : text;
+  }
+  transferType(text: string): boolean {
+    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
+      const field = this.binding.symbols[sid];
+      if (["ClassField","InterfaceField","UnionVariant"].includes(field.kind) && this.result.symbolTypes[sid] == "" && this.symbolStates[sid] != 1) this.symbolType(sid,field.module,field.node);
+    }
+    return resourceType(this.graph,this.binding,this.result.symbolTypes,text,[]);
+  }
+  packToken(text: string): boolean {
+    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (text == "@" + numberToString(sid)) {
+      const symbol = this.binding.symbols[sid]; return symbol.kind == "TypeParameter" && this.node(symbol.module,symbol.node).get("variadic") == "true";
+    }
+    return false;
+  }
+  packActuals(module: number, args: number[], actual: string[], positions: number[], rest: number): string[] {
+    let values: string[] = [];
+    for (let at: number = 0; at < args.length; at = at + 1) if (positions[at] == rest) {
+      if (genericBase(actual[at]) == "pack") { for (const item of genericArguments(actual[at])) values.push(item); }
+      else if (this.node(module,args[at]).kind == "SpreadElement") {
+        if (semanticTuple(actual[at])) for (const item of splitTypes(actual[at].slice(1,actual[at].length-1),",")) values.push(item);
+        else values.push("!invalid-pack-spread");
+      } else values.push(actual[at]);
+    }
+    return values;
+  }
+  inferToken(pattern: string, actual: string, token: string): string { return resourceSubstitution(pattern,actual,token); }
+  packSignature(module: number, id: number, ownerModule: number, candidate: number, args: number[], actual: string[], positions: number[], expected: string): string {
+    const declaration: AstNode = this.node(ownerModule,candidate); let signature: string = this.signature(ownerModule,candidate);
+    const parameters: string[] = functionParams(signature); const rest: number = restPosition(signature); if (rest < 0) return "";
+    let genericNodes: number[] = []; let explicitTypes: string[] = [];
+    for (const edge of declaration.edges) if (edge.role == "typeParameters") genericNodes.push(edge.node);
+    for (const attr of this.node(module,id).attributes) if (attr.name == "typeArgument") explicitTypes.push(this.annotation(module,id,attr.value));
+    const values: string[] = this.packActuals(module,args,actual,positions,rest);
+    if (values.includes("!invalid-pack-spread")) return "";
+    const normal: number = genericNodes.length-1;
+    if (explicitTypes.length > 0 && (explicitTypes.length) < normal) return "";
+    for (let g: number = 0; g < genericNodes.length; g = g + 1) {
+      const parameter: AstNode = this.node(ownerModule,genericNodes[g]); const token: string = "@" + numberToString(this.binding.files[ownerModule].declarations[genericNodes[g]]); let value: string = "";
+      if (parameter.get("variadic") == "true") {
+        let elements: string[] = values;
+        if (explicitTypes.length > 0) { elements = []; for (let at: number = normal; at < explicitTypes.length; at = at + 1) elements.push(explicitTypes[at]); }
+        if (elements.length != values.length) return "";
+        for (let at: number = 0; at < values.length; at = at + 1) if (!this.compatible(values[at],elements[at])) return "";
+        value = "pack<" + elements.join(",") + ">";
+      } else {
+        if (g < explicitTypes.length) value = explicitTypes[g];
+        else for (let at: number = 0; at < args.length; at = at + 1) {
+          const position: number = positions[at]; if (position < 0 || position >= rest) continue;
+          const inferred: string = this.inferToken(parameters[position],actual[at],token);
+          if (inferred != "") { if (value != "" && value != inferred) return ""; value = inferred; }
+        }
+        if (value == "" && expected != "") value = this.inferToken(functionReturn(signature),expected,token);
+        if (value == "" && parameter.get("default") != "") value = this.annotation(ownerModule,genericNodes[g],parameter.get("default"));
+        if (value == "") return "";
+        if (parameter.get("constraint") != "" && !this.compatible(value,this.annotation(ownerModule,genericNodes[g],parameter.get("constraint")))) return "";
+      }
+      if (containsMemory(value) || this.transferType(value)) { this.report(module,id,"E4203: un pack genérico no puede ocultar transferencia de ownership o préstamos"); return ""; }
+      signature = replaceType(signature,token,value);
+    }
+    const instantiated: string[] = functionParams(signature); let at: number = 0;
+    for (const edge of declaration.edges) if (edge.role == "params") {
+      const parameter: AstNode = this.node(ownerModule,edge.node);
+      if (at != rest && parameter.get("optional") != "true" && bindingChild(parameter,"defaultValue") < 0 && !positions.includes(at)) return "";
+      at = at + 1;
+    }
+    let used: number[] = [];
+    for (let a: number = 0; a < args.length; a = a + 1) {
+      const position: number = positions[a]; if (position < 0 || position > rest) return "";
+      if (position == rest) { if (this.node(module,args[a]).kind == "NamedArgumentExpression") return ""; continue; }
+      if (used.includes(position) || this.node(module,args[a]).kind == "SpreadElement") return ""; used.push(position);
+      let target: string = instantiated[position];
+      if (this.optionalParameter(ownerModule,candidate,position) && genericBase(target) == "Optional" && genericBase(actual[a]) != "Optional") target = genericArguments(target)[0];
+      if (!this.compatible(actual[a],target)) return "";
+    }
+    return signature;
   }
   optionalParameter(module: number, id: number, position: number): boolean {
     let at: number = 0; for (const e of this.node(module,id).edges) if (e.role == "params") { if (at == position) return this.node(module,e.node).get("optional") == "true"; at = at + 1; } return false;
@@ -585,10 +667,11 @@ export class NativeChecker {
     const s: BindingSymbol = this.binding.symbols[sid]; if ((s.module) < 0 || s.kind != "ClassMethod") return false;
     let work: number[] = []; for (const declaration of s.declarations) work.push(declaration);
     while (work.length > 0) {
-      const n: AstNode = this.node(s.module,work[work.length-1]); work.pop();
+      const nodeId: number = work[work.length-1]; const n: AstNode = this.node(s.module,nodeId); work.pop();
       let target: number = -1;
       if (n.kind == "AssignmentExpression" || n.kind == "CompoundAssignmentExpression") target = bindingChild(n,"target");
       else if (n.kind == "MemberCallExpression") target = bindingChild(n,"object");
+      else if (n.kind == "CallExpression") { const helper: number = this.reference(s.module,nodeId); if (helper >= 0 && this.binding.symbols[helper].name == "move" && (this.binding.symbols[helper].module) < 0) target = bindingChild(n,"args"); }
       while (target >= 0) {
         const receiver: AstNode = this.node(s.module,target);
         if (receiver.kind == "IdentifierExpression" && receiver.get("name") == "this") return true;
@@ -716,7 +799,17 @@ export class NativeChecker {
     if (["filter","find","some","every"].includes(method)) expectedReturn = "boolean";
     if (method == "forEach") expectedReturn = "void";
     if (sort) expectedReturn = "number";
-    this.requireType(module,callback,signature,"(" + parameters.join(",") + ")=>" + expectedReturn);
+    const inputs: string[] = functionParams(signature);
+    if (inputs.length != parameters.length) this.report(module,callback,"Aridad incorrecta del callback de array");
+    for (let at: number = 0; at < inputs.length && at < parameters.length; at = at+1) {
+      this.requireType(module,callback,parameters[at],inputs[at]);
+      if (this.transferType(parameters[at]) && !borrowedType(inputs[at]) && !(reduce && at == 0)) this.report(module,callback,"E4101: el callback debe prestar el elemento con ownership");
+    }
+    this.requireType(module,callback,returns,expectedReturn);
+    if (["filter","find","sort"].includes(method) && this.transferType(array)) {
+      const object: number = bindingChild(n,"object"); const call: AstNode = this.node(module,object); const target: number = this.reference(module,object);
+      if (call.kind != "CallExpression" || target < 0 || this.binding.symbols[target].name != "move" || this.binding.symbols[target].module >= 0) this.report(module,id,"E4101: una operación que copia owners requiere consumir el array con move");
+    }
     let result: string = array;
     if (method == "map") { if (returns == "void") this.report(module,callback,"map no admite un resultado void"); result = semanticArray(returns); }
     if (method == "flatMap") { if (!returns.endsWith("[]") || functionClose(returns) >= 0) this.report(module,callback,"flatMap requiere un callback que devuelva un array"); result = returns; }
@@ -847,7 +940,8 @@ export class NativeChecker {
       if (args.length != 1) { this.report(module,id,"El helper de memoria necesita un argumento"); return "!error"; }
       const arg: AstNode = this.node(module,args[0]);
       if (callable == "!move") {
-        if (arg.kind != "IdentifierExpression" || !ownedType(actual[0])) this.report(module,id,"E4100: move requiere un identificador ptr/constPtr");
+        if (!["IdentifierExpression","MemberExpression","IndexExpression"].includes(arg.kind) || (!this.transferType(actual[0]) && !actual[0].startsWith("@"))) this.report(module,id,"E4100: move requiere un lvalue con ownership");
+        if (arg.kind != "IdentifierExpression") this.writable(module,args[0]);
         return actual[0];
       }
       if (arg.kind != "IdentifierExpression" && arg.kind != "MemberExpression" && arg.kind != "IndexExpression") this.report(module,id,"E4208: un préstamo necesita un lvalue");
@@ -860,7 +954,7 @@ export class NativeChecker {
       this.result.files[module].signatures[id] = "(" + actual.join(",") + ")=>number"; return "number";
     }
     if (callable == "!print" || callable == "!consoleLog") {
-      if (callable == "!print" && args.length != 1) this.report(module,id,"print requiere un argumento");
+
       for (const valueType of actual) if (valueType == "void") this.report(module,id,"No se puede imprimir void");
       this.result.files[module].signatures[id] = "(" + actual.join(",") + ")=>void"; return "void";
     }
@@ -888,6 +982,15 @@ export class NativeChecker {
       let parameters: string[] = functionParams(signature); let returns: string = functionReturn(signature);
       let positions: number[] = [];
       for (let at: number = 0; at < args.length; at = at + 1) positions.push(this.argumentPosition(ownerModule,candidate,module,args[at],at));
+      let pack: boolean = false; for (const edge of declaration.edges) if (edge.role == "typeParameters" && this.node(ownerModule,edge.node).get("variadic") == "true") pack = true;
+      if (pack) {
+        const instantiated: string = this.packSignature(module,id,ownerModule,candidate,args,actual,positions,expected);
+        if (instantiated != "") {
+          if (selected >= 0) { this.report(module,id,"Llamada ambigua entre sobrecargas"); return "!error"; }
+          selected = candidate; selectedType = functionReturn(instantiated); selectedPositions = positions; this.result.files[module].signatures[id] = instantiated;
+        }
+        continue;
+      }
       let genericNames: string[] = []; let genericValues: string[] = []; let genericNodes: number[] = [];
       for (const edge of declaration.edges) if (edge.role == "typeParameters") { genericNames.push("@" + numberToString(this.binding.files[ownerModule].declarations[edge.node])); genericValues.push(""); genericNodes.push(edge.node); }
       let explicitTypes: string[] = []; for (const attr of n.attributes) if (attr.name == "typeArgument") explicitTypes.push(this.annotation(module,id,attr.value));
@@ -950,7 +1053,12 @@ export class NativeChecker {
         const p: number = selectedPositions[a]; this.result.files[module].argumentParameters[args[a]] = p;
         const value: number = this.argumentValue(module,args[a]);
         const wrap: boolean = this.optionalParameter(ownerModule,selected,p) && genericBase(parameters[p]) == "Optional" && genericBase(actual[a]) != "Optional";
-        this.requireType(module,value,actual[a],wrap ? genericArguments(parameters[p])[0] : argumentType(parameters[p],this.node(module,args[a]).kind == "SpreadElement"));
+        const rest: number = restPosition(this.result.files[module].signatures[id]);
+        if (p == rest && genericBase(parameters[p].slice(3,parameters[p].length)) == "pack") {
+          const wanted: string[] = genericArguments(parameters[p].slice(3,parameters[p].length)); let offset: number = 0;
+          for (let previous: number = 0; previous < a; previous = previous + 1) if (selectedPositions[previous] == rest) offset = offset + (genericBase(actual[previous]) == "pack" ? genericArguments(actual[previous]).length : semanticTuple(actual[previous]) && this.node(module,args[previous]).kind == "SpreadElement" ? splitTypes(actual[previous].slice(1,actual[previous].length-1),",").length : 1);
+          if (genericBase(actual[a]) != "pack" && this.node(module,args[a]).kind != "SpreadElement" && offset < wanted.length) this.requireType(module,value,actual[a],wanted[offset]);
+        } else this.requireType(module,value,actual[a],wrap ? genericArguments(parameters[p])[0] : argumentType(parameters[p],this.node(module,args[a]).kind == "SpreadElement"));
         if (wrap) this.result.files[module].conversions[value] = parameters[p];
       }
     } return selectedType;
@@ -1004,7 +1112,14 @@ export class NativeChecker {
           if (parent >= 0) { const p: AstNode = this.node(module,parent); staticReceiver = (p.kind == "MemberExpression" || p.kind == "MemberCallExpression") && bindingChild(p,"object") == id; }
           if (!staticReceiver) this.report(module,id,"Una clase requiere new o un miembro estático");
         }
-      } return this.flowType(sid,module,id);
+      }
+      const valueType: string = this.flowType(sid,module,id);
+      if (genericBase(valueType) == "pack") {
+        let parent: number = this.binding.files[module].parents[id];
+        if (parent >= 0 && this.node(module,parent).kind == "SpreadElement") parent = this.binding.files[module].parents[parent];
+        if (parent < 0 || !["CallExpression","MemberCallExpression"].includes(this.node(module,parent).kind)) this.report(module,id,"Un pack sólo puede expandirse como argumento de llamada");
+      }
+      return valueType;
     }
     if (kind == "CallExpression") { const sid: number = this.reference(module,id); return this.call(module,id,this.symbolType(sid,module,id),sid,"",expected); }
     if (kind == "GenericIdentifierExpression") {
@@ -1027,6 +1142,15 @@ export class NativeChecker {
       }
       const valueType: string = this.member(module,id,receiver,kind == "MemberExpression" ? n.get("member") : n.get("method"));
       if (kind == "MemberExpression") return valueType;
+      if (["Optional","Result","Map"].includes(genericBase(memoryValue(receiver))) && ["value","valueOr","get"].includes(n.get("method")) && this.transferType(functionReturn(valueType))) {
+        const receiverNode: AstNode = this.node(module,object); let consumed: boolean = receiverNode.kind == "NewExpression" || receiverNode.kind == "ArrayLiteralExpression";
+        if (receiverNode.kind == "CallExpression") { const target: number = this.reference(module,object); consumed = target >= 0 && this.binding.symbols[target].name == "move" && (this.binding.symbols[target].module) < 0; }
+        if (!consumed) this.report(module,id,"E4101: extraer un payload con ownership requiere consumir el contenedor con move");
+      }
+      if (memoryValue(receiver).endsWith("[]") && this.transferType(memoryValue(receiver)) && ["slice","concat","filter","find","sort"].includes(n.get("method"))) {
+        const receiverNode: AstNode = this.node(module,object);
+        if (borrowedType(receiver) || !["CallExpression","MemberCallExpression","NewExpression","ArrayLiteralExpression","TernaryExpression"].includes(receiverNode.kind)) this.report(module,id,"E4101: una operación que copia owners requiere consumir el array con move");
+      }
       const memberId: number = this.result.files[module].members[id];
       if ((memberId >= 0 && this.methodMutates(memberId)) || (memoryValue(receiver).endsWith("[]") && ["push","pop","sort"].includes(n.get("method"))) || (["Map","Set"].includes(genericBase(memoryValue(receiver))) && ["set","add","delete","clear"].includes(n.get("method")))) this.writableTarget(module,object,true);
       return this.call(module,id,valueType,this.result.files[module].members[id],receiver,expected);
@@ -1204,6 +1328,7 @@ export class NativeChecker {
     if (kind == "AsExpression" || kind == "SatisfiesExpression") {
       const valueType: string = this.annotation(module,id,n.get(kind == "AsExpression" ? "targetType" : "declaredType"));
       const actual: string = this.expression(module,bindingChild(n,kind == "AsExpression" ? "expression" : "operand"),valueType);
+      if (kind == "AsExpression" && (this.transferType(actual) || this.transferType(valueType)) && !this.compatible(actual,valueType)) this.report(module,id,"E4101: un cast no puede borrar ni fabricar ownership");
       if (kind == "SatisfiesExpression") {
         this.literalRange(module,bindingChild(n,"operand"),valueType);
         if (!this.compatible(actual,valueType)) this.report(module,id,"Tipo incompatible en satisfies");
@@ -1314,13 +1439,25 @@ export class NativeChecker {
           if (param.get("out") == "true") this.unsupported(module,edge.node,"parámetro out");
           if (param.get("variadic") == "true") {
             let last: number = -1; for (const item of n.edges) if (item.role == "params") last = item.node;
-            if (last != edge.node || functionClose(pt) >= 0 || !pt.endsWith("[]") || param.get("optional") == "true" || bindingChild(param,"defaultValue") >= 0) this.report(module,edge.node,"Un parámetro rest requiere un array, debe ser el último y no admite default ni optional");
+            if (last != edge.node || functionClose(pt) >= 0 || (!pt.endsWith("[]") && genericBase(pt) != "pack") || param.get("optional") == "true" || bindingChild(param,"defaultValue") >= 0) this.report(module,edge.node,"Un parámetro rest requiere un array, debe ser el último y no admite default ni optional");
           }
           const value: number = bindingChild(param,"defaultValue"); if (value >= 0) this.requireType(module,value,this.expression(module,value,pt),pt);
         }
         if (edge.role == "typeParameters") {
           const parameter: AstNode = this.node(module,edge.node);
-          if (parameter.get("variadic") == "true") this.unsupported(module,edge.node,"pack genérico");
+          if (parameter.get("variadic") == "true") {
+            const token: string = "@" + numberToString(this.binding.files[module].declarations[edge.node]); let count: number = 0; let last: number = -1;
+            for (const item of n.edges) {
+              if (item.role == "typeParameters") last = item.node;
+              if (item.role == "params") {
+                const param: AstNode = this.node(module,item.node); const input: string = this.annotation(module,item.node,param.get("type"));
+                if (input == token && param.get("variadic") == "true") count = count + 1;
+                else if (replaceType(input,token,"!pack") != input) this.report(module,item.node,"Un pack sólo puede usarse como tipo de su parámetro rest");
+              }
+            }
+            if (last != edge.node || count != 1 || parameter.get("constraint") != "" || parameter.get("default") != "") this.report(module,edge.node,"Un pack debe ser el último parámetro de tipo y necesita un único rest correspondiente, sin constraint ni default");
+            if (replaceType(functionReturn(valueType),token,"!pack") != functionReturn(valueType)) this.report(module,id,"Un pack no puede usarse como tipo de retorno");
+          }
           if (parameter.get("constraint") != "") this.annotation(module,edge.node,parameter.get("constraint"));
           if (parameter.get("default") != "") this.annotation(module,edge.node,parameter.get("default"));
         }
@@ -1363,7 +1500,7 @@ export class NativeChecker {
       const binding: number = bindingChild(n,"binding"); const sid: number = this.binding.files[module].declarations[binding];
       const declared: string = this.annotation(module,binding,this.node(module,binding).get("declaredType"));
       if (declared != "") this.requireType(module,binding,element,declared);
-      if (ownedType(element)) this.report(module,binding,"E4101: iterar por valor no puede copiar ownership");
+      if (this.transferType(element) && memoryMode(declared) != "constRef") this.report(module,binding,"E4101: iterar un elemento con ownership requiere constRef");
       const valueType: string = declared == "" ? element : declared;
       this.result.files[module].types[binding] = valueType; if (sid >= 0) { this.result.symbolTypes[sid] = valueType; this.symbolStates[sid] = 2; }
       this.statement(module,bindingChild(n,"body"),returns,loop+1); return;

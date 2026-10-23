@@ -115,9 +115,15 @@ semántica ni ejecución concurrente del checker.
 - Globals de string, Math, console, Date, JSON y un subconjunto de filesystem.
   Los efectos externos se publican separados de las lecturas/escrituras de símbolos.
 
+Los packs de funciones admiten inferencia, argumentos explícitos, vacío y
+forwarding; la firma elegida conserva la expansión ordenada. Los packs con
+owners o préstamos se rechazan explícitamente. Los agregados con owners se
+comprueban como move-only, con movimientos parciales y restauración por ruta,
+también después de sustituir parámetros genéricos. Ver [SAFETY.md](./SAFETY.md).
+
 ## Límites y diferencias conocidas
 
-Se emite `Comprobación nativa pendiente: ...` para packs genéricos, parámetros
+Se emite `Comprobación nativa pendiente: ...` para parámetros
 out, async/await, llamadas opcionales, builtins no registrados, decoradores y
 expansión comptime/cppgen/etsgen. Las sobrecargas como valor requieren contexto
 callable y seleccionan también sus efectos; la instanciación genérica avanzada
