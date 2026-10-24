@@ -1,3 +1,4 @@
+import { containsOwner } from "./owned-values.ts";
 import { TERMINAL_METHODS } from "../semantic/terminal-methods.ts";
 import { markCppOrigin } from "./cpp-source-map.ts";
 import { binaryNumericType } from "../types/numeric-semantics.ts";
@@ -175,6 +176,9 @@ export class CppGenerator {
   private readonly identifierTypes = new Map<string, TypeName>();
   private destructuringCounter = 0;
   private spreadCounter = 0;
+  private ownerCounter = 0;
+  private readonly sourceNames = new Set<string>();
+  private readonly ownershipTypes = new Map<string, boolean>();
   constructor(expressionType?: (node: Expression) => TypeName | undefined, expressionIsVariadic?: (node: Expression) => boolean, callTypeArguments?: (node: Expression) => TypeName[], resolveTypeAlias?: (name: string) => string | undefined, resolveUnionAliasName?: (union: TypeName) => string | undefined) {
     this.expressionType = expressionType ?? (() => undefined); this.expressionIsVariadic = expressionIsVariadic ?? (() => false);
     this.callTypeArguments = callTypeArguments ?? (() => []);
@@ -234,6 +238,18 @@ export class CppGenerator {
     this.prepare(program);
   }
   prepare(program: Program): void {
+    this.ownerCounter = 0;
+    this.sourceNames.clear();
+    this.ownershipTypes.clear();
+    const names = (value: unknown): void => {
+      if (!value || typeof value !== "object") return;
+      if (Array.isArray(value)) { value.forEach(names); return; }
+      for (const [key, child] of Object.entries(value)) {
+        if (key === "name" && typeof child === "string") this.sourceNames.add(child);
+        if (!["span", "resolvedType", "resolvedSignature", "resolvedRuntimeType", "generatedSources"].includes(key)) names(child);
+      }
+    };
+    names(program);
     // `export default` envuelve una declaración; el dialecto es single-
     // translation-unit, así que la declaración se procesa como si fuera
     // top-level directa. Unwrap para que `prepare` la vea igual que las demás.
@@ -3252,6 +3268,22 @@ export class CppGenerator {
     return false;
   }
 
+  private constructClass(className: string, args: string[], owned: boolean): string {
+    const parameters = this.ownerTemporary();
+    const value = this.ownerTemporary();
+    const declaration = owned ? `auto ${value} = std::make_unique<${cppType(className)}>();` : `${cppType(className)} ${value}{};`;
+    // A captureless forwarding lambda also works in namespace initializers
+    // and inside closures. Evaluate each source argument once, outside it.
+    return `([](auto&&... ${parameters}) { ${declaration} ${value}${owned ? "->" : "."}constructor(std::forward<decltype(${parameters})>(${parameters})...); return ${value}; }(${args.join(", ")}))`;
+  }
+
+  private ownerTemporary(): string {
+    let name: string;
+    do { name = `__ets_owned_${++this.ownerCounter}`; } while (this.sourceNames.has(name));
+    this.sourceNames.add(name);
+    return name;
+  }
+
   private variableIsConst(node: VariableDeclaration): boolean { return !node.mutable && !(node.initializer.kind === "ArrowFunctionExpression" && node.initializer.mutatesCapturedState); }
 
   /**
@@ -3299,7 +3331,7 @@ export class CppGenerator {
     }
     // .push(value) -> ets_push_vec<T>(arr, value)
     if (method === "push" && node.args.length === 1) {
-      return `ets_push_vec<${cppElement}>(${arrayObj}, ${argsText(node.args)})`;
+      return `ets_push_vec<${cppElement}>(${arrayObj}, ${this.emitExpression(node.args[0]!, elementType)})`;
     }
     // .pop() -> ets_pop_vec<T>(arr)
     if (method === "pop" && node.args.length === 0) {
@@ -4412,7 +4444,10 @@ export class CppGenerator {
         // `<typename T0> requires I<T0> void add(T0 child)` y el call site
         // pasa el tipo crudo (T0 deduce como Line), lo que produce UB
         // cuando el codegen mete un Line en un std::variant<SvgChild_AutoUnion>.
-        const objClass = objectType ? this.classesByName.get(objectType) : undefined;
+        const receiverIsOwner = !!objectType && isGenericType(objectType) && ["ptr", "constPtr"].includes(genericBase(objectType));
+        const receiverType = receiverIsOwner ? genericArguments(objectType!)[0] : objectType;
+        const memberOperator = receiverIsOwner ? "->" : ".";
+        const objClass = receiverType ? this.classesByName.get(receiverType) : undefined;
         if (objClass) {
           const method_ = objClass.methods.find(m => m.name === method);
           if (method_) {
@@ -4428,12 +4463,12 @@ export class CppGenerator {
                   if (argClass) return `make_${argClass.name}(${this.emitExpression(arg)})`;
                 }
               }
-              return this.emitExpression(arg);
+              return this.emitExpression(arg, param?.type);
             });
-            return `${this.emitExpression(node.object)}.${method}${typeArguments.length ? `<${typeArguments.map(cppType).join(", ")}>` : ""}(${argTexts.join(", ")})`;
+            return `${receiverIsOwner && node.object.kind !== "IdentifierExpression" ? `(${this.emitExpression(node.object)})` : this.emitExpression(node.object)}${memberOperator}${method}${typeArguments.length ? `<${typeArguments.map(cppType).join(", ")}>` : ""}(${argTexts.join(", ")})`;
           }
         }
-        return `${this.emitExpression(node.object)}.${method}${typeArguments.length ? `<${typeArguments.map(cppType).join(", ")}>` : ""}(${node.args.map(a => this.emitExpression(a)).join(", ")})`;
+        return `${receiverIsOwner && node.object.kind !== "IdentifierExpression" ? `(${this.emitExpression(node.object)})` : this.emitExpression(node.object)}${memberOperator}${method}${typeArguments.length ? `<${typeArguments.map(cppType).join(", ")}>` : ""}(${node.args.map(a => this.emitExpression(a)).join(", ")})`;
       }
       case "MemberExpression": {
               // V30.22.1: `ClassName.staticField` se emite como
@@ -4485,10 +4520,11 @@ export class CppGenerator {
                               const obj = this.emitExpression(node.object);
                               return `optionalAndThen(${obj}, [](auto _ets_optional_chain) { return optionalSome(_ets_optional_chain.${node.member}); })`;
                             }
-                            // Si el objeto es un parámetro `Mut<T>`, en C++ es `T*` y debemos usar `->`.
-              // Si es `MutRef<T>`, es `T&` y debemos usar `.` (que ya es el comportamiento por defecto).
-              if (node.object.kind === "IdentifierExpression" && this.identifierIsPtrPointer(node.object.name)) {
-                return `${this.emitExpression(node.object)}->${node.member}`;
+                            // Los owners ptr<T>/constPtr<T> usan ->, también cuando provienen
+              // de campos o índices. Los préstamos ref/constRef usan .
+              const checkedObjectType = this.expressionType(node.object);
+              if (checkedObjectType ? isGenericType(checkedObjectType) && ["ptr", "constPtr"].includes(genericBase(checkedObjectType)) : node.object.kind === "IdentifierExpression" && this.identifierIsPtrPointer(node.object.name)) {
+                return `${node.object.kind === "IdentifierExpression" ? this.emitExpression(node.object) : `(${this.emitExpression(node.object)})`}->${node.member}`;
               }
               // V22-gap-#2: `xs.length` (propiedad) sobre `Array<T>` se mapea a
               // `xs.size()` en std::vector. Detectamos que el objeto es array
@@ -4516,11 +4552,15 @@ export class CppGenerator {
         // `Person{..., 42.0}` y g++ falla con `-Wnarrowing`.
         // La misma lógica V3 ya existía para variables, fixed arrays y
         // assignments; aquí faltaba.
-        const cls = this.classesByName.get(node.className);
+        const classBase = isGenericType(node.className) ? genericBase(node.className) : node.className;
+        const cls = this.classesByName.get(classBase);
+        const classArguments = isGenericType(node.className) ? genericArguments(node.className) : [];
+        const substitutions = new Map(cls?.typeParameters.map((parameter, index) => [parameter.name, classArguments[index] ?? parameter.default ?? parameter.name]) ?? []);
+        const parameterType = (type: string) => type.replace(/[A-Za-z_$][\w$]*/g, token => substitutions.get(token) ?? token);
         const paramTypes: TypeName[] = cls
           ? (() => {
               const ctor = cls.methods.find(m => m.name === "constructor");
-              if (ctor) return ctor.params.map(p => p.type);
+              if (ctor) return ctor.params.map(p => parameterType(p.type));
               // Aggregate init: el orden posicional sigue el orden de
               // declaración de los campos. Solo el subconjunto con valor
               // por defecto omitido se inicializa; aquí simplificamos
@@ -4548,6 +4588,11 @@ export class CppGenerator {
         if (targetType && isGenericType(targetType)) {
           const memBase = genericBase(targetType);
           if (memBase === "ptr" || memBase === "constPtr") {
+            const constructor = cls?.methods.find(method => method.name === "constructor");
+            const defaults = !constructor && cls?.fields.some(field => !field.isStatic && field.defaultValue !== undefined);
+            if (constructor || defaults) {
+              return this.constructClass(node.className, args, true);
+            }
             return `std::make_unique<${cppType(node.className)}>(${args.join(", ")})`;
           }
         }
@@ -4587,6 +4632,10 @@ export class CppGenerator {
           // V30.34: el ctor sintetico (sin ctor explicito + hay
           // defaults) tampoco acepta args; el type-checker rechaza
           // `new K(7)` en este caso.
+          if (containsOwner(node.className, this.classesByName, this.ownershipTypes)) {
+            const value = this.constructClass(node.className, args, false);
+            return targetIsAutoUnion ? `make_${node.className}(${value})` : value;
+          }
           const callExpr = `${cppType(node.className)}{}`;
           if (targetIsAutoUnion) return `make_${node.className}(${callExpr}.constructor(${args.join(", ")}))`;
           return `${callExpr}.constructor(${args.join(", ")})`;

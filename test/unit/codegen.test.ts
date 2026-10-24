@@ -401,7 +401,8 @@ test("codegen V22: move(p) se traduce a std::move(p)", () => {
   `);
   // V22: move() emite std::move() y el tipo ptr<Counter> se traduce a
   // std::unique_ptr<Counter>.
-  assert.match(out, /std::make_unique<Counter>\(10\.0\)/);
+  assert.match(out, /std::make_unique<Counter>\(\)/);
+  assert.match(out, /->constructor\(/);
   assert.match(out, /std::move\(p\)/);
   assert.match(out, /std::unique_ptr<Counter>\s+q\s*=\s*std::move\(p\)/);
 });
@@ -415,7 +416,9 @@ test("codegen V22: make_unique<T> cuando targetType es ptr<T>", () => {
     function make(): ptr<Counter> { return new Counter(42); }
   `);
   assert.match(out, /std::unique_ptr<Counter>\s+make\(\)/);
-  assert.match(out, /return std::make_unique<Counter>\(42\.0\)/);
+  assert.match(out, /std::make_unique<Counter>\(\)/);
+  assert.match(out, /->constructor\(/);
+  assert.match(out, /42\.0/);
 });
 
 function checkDiagnostics(src: string) {

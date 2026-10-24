@@ -205,6 +205,13 @@ inline void ets_push_vec(std::vector<T>& vec, const T& value) {
     vec.push_back(value);
 }
 
+// An explicit ETS move (or a fresh allocation) must remain an rvalue here.
+// The const-reference overload above continues to copy ordinary lvalues.
+template <typename T>
+inline void ets_push_vec(std::vector<T>& vec, T&& value) {
+    vec.push_back(std::move(value));
+}
+
 // V30.55: `ets_set_vec<T>(vec, index, value)` — asignación indexada
 // con auto-resize. Equivalente a `arr[i] = x` en el dialecto, pero
 // seguro cuando `i >= vec.size()` (hace resize en vez de OOB).
