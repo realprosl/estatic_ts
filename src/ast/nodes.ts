@@ -13,11 +13,10 @@ export interface Program { kind: "Program"; statements: Statement[]; span: Span;
 export interface ModuleHeaderDeclaration { kind: "ModuleHeaderDeclaration"; decorators: Decorator[]; span: Span }
 export type Statement = VariableDeclaration | FunctionDeclaration | InterfaceDeclaration | ClassDeclaration | BlockStatement | ExpressionStatement | IfStatement | WhileStatement | ForStatement | BreakStatement | ContinueStatement | ReturnStatement | TypeAliasDeclaration | EnumDeclaration | UnionDeclaration | SwitchStatement | ForOfStatement | ForInStatement | DeleteStatement | UsingDeclaration | ExportDefaultDeclaration | ExportNamedDeclaration | ModuleHeaderDeclaration;
 export interface VariableDeclaration { kind: "VariableDeclaration"; exported?: boolean; mutable: boolean; name: string; declaredType?: TypeName; initializer: Expression; arrayBindings?: ArrayBinding[]; objectBindings?: ObjectBinding[]; span: Span; /** V0.2: anotación opcional que el type-checker escribe si el nombre colisiona con un singleton del runtime. El codegen lo consulta para renombrar el símbolo en C++. */ fromRuntime?: boolean; /** V6: si el initializer es un literal, el checker anota el valor aquí. El codegen lo usa para emitir `constexpr` y propagar el valor a usos posteriores (p.ej. tamaño de array fijo). */ constValue?: number | string | boolean | null; /** V28: decoradores sobre la variable (e.g. `@cpp_drogon` sobre `let server: Server = ...`). */ decorators?: Decorator[] }
-// `using name = expr;` (TC39 stage 3): declara un recurso cuyo destructor se
-// invoca al salir del bloque. En el dialecto es syntactic sugar sobre
-// `let name = expr` con la garantía de que el destructor C++ del tipo se llama
-// al final del bloque contenedor (RAII automático). Si el tipo define un método
-// `dispose()`, también se invoca explícitamente.
+// `using name = expr;` declara un binding inmutable con las reglas de
+// ownership del tipo. El backend actual usa RAII ordinario de C++ al salir
+// del ámbito; no llama automáticamente a un método llamado `dispose`.
+// El contrato de limpieza del futuro IR se documenta en bootstrap/PENDING.md.
 export interface UsingDeclaration { kind: "UsingDeclaration"; exported?: boolean; name: string; declaredType?: TypeName; initializer: Expression; span: Span }
 export interface ExportDefaultDeclaration { kind: "ExportDefaultDeclaration"; declaration: Statement | Expression; span: Span }
 export interface ExportSpecifier { kind: "ExportSpecifier"; name: string; alias?: string; span: Span }

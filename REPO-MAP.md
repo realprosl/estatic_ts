@@ -1,31 +1,30 @@
 # Mapa del repositorio
 
-Una sola página para localizar dónde vive cada cosa. Cada carpeta tiene su
-propio `README.md` con detalle.
+Revisión del frontend bootstrap: **2026-10-24**, sobre `24e32ac`.
 
-| Carpeta | Qué es | Más detalle |
+| Carpeta | Qué contiene | Más detalle |
 |---|---|---|
-| `src/` | **El transpilador.** TS sin dependencias npm, ~3K LOC en 26 ficheros. | [src/README.md](src/README.md) |
-| `runtime/` | Cabeceras C++ (`inline namespace ets`) consumidas por el código generado. | [runtime/README.md](runtime/README.md) |
-| `third_party/` | Tree-sitter y su grammar TypeScript vendoreadas. | [third_party/README.md](third_party/README.md) |
-| `editors/` | Soporte de editor: grammar Estatic + plugins vscode/neovim. | [editors/README.md](editors/README.md) |
-| `examples/` | Programas de prueba `.ets` y `.ts` — uno por característica. | [examples/README.md](examples/README.md) |
-| `scripts/` | Tres utilidades bash: build-tree-sitter, regenerate-tree-sitter, build-ast-dump. | [scripts/README.md](scripts/README.md) |
-| `build/` | Salidas generadas (no en git). `.cpp`, binarios, cache incremental, `transpiler-report.json`. | — |
-| raíz | `package.json`, `tsconfig.json`, `estatic.config.ts`, `README.md` (Quickstart y referencia del lenguaje). | [README.md](README.md) |
+| `src/` | Compilador stage 0 en TypeScript: CLI, análisis, evaluación estática y codegen C++ actual. | [src/README.md](src/README.md) |
+| `bootstrap/` | Frontend nativo en Estatic: lexer, parser, cargador, expansión, binder, checker, seguridad, efectos y comptime. | [bootstrap/README.md](bootstrap/README.md) |
+| `runtime/` | Runtime C++ consumido por los programas y por los ejecutables de bootstrap. | [runtime/README.md](runtime/README.md) |
+| `test/` | Regresiones unitarias y proyectos de ejecución. Las pruebas nativas del frontend también viven junto a sus capas en `bootstrap/`. | [package.json](package.json) |
+| `examples/` | Programas de ejemplo y casos negativos explícitos. | [examples/README.md](examples/README.md) |
+| `scripts/` | Herramientas de build, auditoría de documentación, generación y benchmarks. | [scripts/README.md](scripts/README.md) |
+| `third_party/` | Tree-sitter y fuentes vendorizadas. | [third_party/README.md](third_party/README.md) |
+| `editors/` | Soporte de editor y grammar Estatic. | [editors/README.md](editors/README.md) |
+| `docs/` | Contratos técnicos e historial marcado como histórico. | [docs/README.md](docs/README.md) |
+| `build/` | Salidas generadas, cachés, C++, objetos y ejecutables; no describe una entrega versionada. | [docs/build-system.md](docs/build-system.md) |
 
-## Flujo de un build
+## Recorridos actuales
 
-```
-.ets / .ts  ──►  src/  ──►  .cpp + cabecera  ──►  g++ + runtime/  ──►  binario
-                       ▲                          ▲
-                       │                          │
-              editor: examples/             third_party/ + scripts/
-```
+| Recorrido | Entrada y salida |
+|---|---|
+| CLI stage 0 | Fuentes Estatic → `src/` → C++/cabecera → compilador C++/runtime → ejecutable |
+| Construcción de bootstrap | Fuentes ETS de `bootstrap/` → stage 0/C++ → ejecutable nativo de una capa o del frontend |
+| Análisis nativo solicitado | Fuentes del proyecto → frontend ETS → grafo de archivos, ASTs y tablas semánticas `ets-checked-2` |
+| IR/backend del frontend ETS | Diseño propuesto; todavía sin implementación ni conexión al codegen del programa |
 
-## Estado actual
-
-- `src/` es la implementación canónica. Hay una fase 2 (autoalojado) pospuesta
-  según [[project-status]] — no invertir esfuerzo en `/selfhost/` salvo que se
-  pida.
-- Build limpio en el árbol: `build/configured-app` imprime `26`.
+Bootstrap no está pospuesto ni vive en `/selfhost/`. Su estado verificable está
+en [FRONTEND-REVIEW.md](bootstrap/audit/FRONTEND-REVIEW.md); el inventario antes del
+IR está en [PENDING.md](bootstrap/PENDING.md). La revisión no anuncia cierre del
+lenguaje a partir de los totales de pruebas ni rediseña el almacenamiento del AST.

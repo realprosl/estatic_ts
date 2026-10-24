@@ -74,5 +74,10 @@ aridad, objetivo y duplicados no repetibles; los desconocidos se rechazan.
 Estos metadatos no prueban emisión, warnings runtime ni integración ABI/backend.
 
 El audit verifica valores materializados y destinos originales de decoradores.
-Sus 83 muestras y las 99 regresiones de la revisión de comptime no sustituyen el inventario abierto
-[../PENDING.md](../PENDING.md), que debe cerrarse antes de comenzar IR.
+La revisión reproducible de 2026-10-24 vuelve a pasar sus 83 muestras; las
+99 regresiones del checkpoint de comptime son una cifra histórica, no el tamaño
+actual de esta suite. Véanse [FRONTEND-REVIEW.md](../audit/FRONTEND-REVIEW.md) y el
+[inventario vigente](../PENDING.md), que conserva X02 abierto por cobertura de
+contratos de memoria durante evaluación. Por ejemplo, una función que recibe
+`constRef<number>` es válida fuera de comptime, pero invocarla desde una raíz
+comptime produce `COMPTIME_UNSUPPORTED`; no se cuenta como evaluación soportada.

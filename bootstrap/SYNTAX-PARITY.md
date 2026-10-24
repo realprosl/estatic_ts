@@ -17,8 +17,8 @@ Reproducir: `npm run audit:bootstrap:syntax`. Actualizar este documento y
 `bootstrap/audit/syntax-parity.json`: añadir `-- --write`.
 
 Casos nombrados: **75/75** con el resultado esperado.
-Corpus físico: **131/131** archivos aceptados por el
-parser ETS, **131/131** por el cargador/parser TS.
+Corpus físico: **132/132** archivos aceptados por el
+parser ETS, **132/132** por el cargador/parser TS.
 Archivos aceptados antes y rechazados ahora: **0**.
 Estas muestras no constituyen una equivalencia formal para cualquier entrada.
 

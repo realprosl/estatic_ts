@@ -1002,46 +1002,39 @@ constante manual en este README.
 
 ## Autoalojamiento
 
-El trabajo avanza por módulos independientes en [`bootstrap/`](./bootstrap/README.md).
-El primer módulo es un lexer escrito en Estatic, con una función de inspección
-de tokens. `npm run bootstrap:lexer -- 'let total: number = 42;'` lo transpila,
-compila su C++ y ejecuta el ejemplo. Sus 64 pruebas incluyen comparación nativa
-con el lexer actual. El parser cierra su primera etapa como módulo independiente:
-`npm run bootstrap:parser` ejecuta un ejemplo con tokens preparados y muestra
-su AST. Sus 542 pruebas incluyen analizar su propio fuente ETS, el del lexer y
-los drivers, declaraciones enum/union, imports/exports con alias y árboles de
-switch, destructuring plano de variables, propiedades de parámetros de constructor,
-metadatos de packs genéricos, parámetros rest, cabeceras include/link y decoradores
-de declaraciones/miembros. La auditoría acepta en C++ los 120 ejemplos que admite
-el parser TS directo. También se comprueban posiciones de tokens y recuperación,
-templates anidados e interpolaciones mediante tokens preparados.
-Ambos lexers preservan los templates completos incluso con objetos, strings y
-comentarios internos. El parser de stage 0 también valida sus expresiones y
-conserva las posiciones originales. Esto valida el análisis sintáctico
-del bootstrap; todavía no añade switch al frontend ni al backend de stage 0.
-La [cobertura y los límites](./bootstrap/parser/README.md) están documentados.
-v59 añade el [puente nativo por archivo](./bootstrap/frontend/README.md):
-`npm run bootstrap:frontend -- --file examples/todo-project/main.ets` entrega el
-texto al binario, que ejecuta lexer, expansión de templates y parser ETS y muestra
-tokens, AST y diagnósticos con archivo/posición. Sus 57 pruebas conservan las suites
-aisladas y comparan tokens y arenas completas. Node hace I/O/build, sin preparar
-tokens para este recorrido.
-v60 añade el [cargador nativo y su caché por archivo](./bootstrap/modules/README.md):
-`npm run bootstrap:modules -- examples/todo-project/main.ets --cache build/project-cache`.
-El binario abre los fuentes, resuelve imports/reexports y construye el grafo sin
-analizar el proyecto en TypeScript. Reutiliza tokens/AST entre ejecuciones, verifica
-contenido y registra metadatos/dependencias por archivo. El [binder nativo v61](./bootstrap/binder/README.md) añade ámbitos, símbolos y
-referencias entre esos archivos mediante `npm run bootstrap:binder -- archivo.ets`.
-Conserva el AST de caché intacto. v62 incorpora el [checker nativo inicial](./bootstrap/checker/README.md):
-`npm run bootstrap:checker -- examples/hello.ets` entrega los AST con tablas de tipos,
-miembros y firmas seleccionadas/instanciadas. Comprueba el núcleo de expresiones,
-funciones y relaciones de tipos entre módulos. v63 añade [flujo, movimientos, préstamos, capturas/escapes y tipos públicos](./bootstrap/checker/SAFETY.md)
-en una pasada ETS independiente, conservando intactos AST y binding. v64 incorpora
-[resúmenes de efectos y obligaciones de préstamos](./bootstrap/checker/EFFECTS.md)
-para resolver callbacks y llamadas recursivas. El [contrato propuesto del IR](./bootstrap/checker/IR.md)
-define la siguiente etapa común para los codegens de cada backend. La paridad
-completa con stage 0, lifetimes/efectos generales, caché semántica, codegen desde
-estas tablas y scheduler concurrente siguen pendientes.
+El frontend nativo de [`bootstrap/`](./bootstrap/README.md) ya ejecuta lexer,
+parser, resolución de módulos, expansión @etsgen, binder, tipos,
+seguridad/efectos, comptime y procedencia por archivo. `src/` sigue siendo stage 0:
+construye los ejecutables nativos y conserva el CLI/codegen actual. El binario
+ETS analiza las fuentes solicitadas sin delegar ese análisis al checker TS.
+
+```bash
+npm run bootstrap:lexer -- 'const x: number = 1;'
+npm run bootstrap:frontend -- --file examples/hello.ets
+npm run bootstrap:checker -- examples/hello.ets
+npm run audit:bootstrap
+npm run audit:bootstrap:syntax
+npm run audit:bootstrap:self
+```
+
+La [revisión reproducible de 2026-10-24](./bootstrap/audit/FRONTEND-REVIEW.md)
+pasa **2182/2182** pruebas del frontend, **83/83** obligaciones de referencia y
+**75/75** contratos de sintaxis. Ambos pipelines parsean **132/132** archivos del
+corpus; el checker acepta 131 y rechaza el ejemplo privado inválido esperado.
+El autoanálisis nativo termina con **23 módulos, 6594 símbolos y cero diagnósticos**.
+Estas muestras no certifican por sí solas cierre completo ni equivalencia formal.
+
+La salida actual contiene un AST por archivo y tablas semánticas laterales.
+Los enums internos del AST conservan nombres legibles en JSON. Los tipos del
+checker siguen siendo strings canónicos; la caché persistente nativa almacena
+sintaxis, no resultados semánticos. No hay IR, verificador ni codegen conectado
+a estas tablas, scheduler concurrente o compilación completa del compilador por sí mismo.
+
+El [inventario vigente](./bootstrap/PENDING.md) separa implementación ejercitada,
+restricciones explícitas y obligaciones antes del [IR propuesto](./bootstrap/checker/IR.md).
+Los checkpoints anteriores están archivados; los límites de stage 0 no se
+atribuyen automáticamente al frontend ETS. La arena actual del parser puede
+alimentar el IR sin un rediseño previo del almacenamiento de nodos.
 
 ## Licencia
 
