@@ -1,3 +1,4 @@
+import { AttributeKind, NodeKind, nodeKindName } from "../parser/ast-schema";
 import { ParserToken, AstNode, ParseResult } from "../parser/parser";
 import { SourceDiagnostic, SourceResult, quoteSource, formatSource, formatDiagnostic } from "../frontend/frontend";
 import { canonicalFile, readSnapshot } from "./platform";
@@ -14,8 +15,8 @@ export class LoaderOptions {
 export class ModuleRequest {
   specifier: string; node: number; kind: string; typeOnly: boolean; dependency: string;
   constructor(node: AstNode, nodeIndex: number) {
-    this.specifier = node.get("source"); this.node = nodeIndex; this.kind = node.kind;
-    this.typeOnly = node.get("typeOnly") == "true"; this.dependency = "";
+    this.specifier = node.get(AttributeKind.Source); this.node = nodeIndex; this.kind = nodeKindName(node.kind);
+    this.typeOnly = node.get(AttributeKind.TypeOnly) == "true"; this.dependency = "";
   }
 }
 export class LoadedFile {
@@ -27,9 +28,9 @@ export class LoadedFile {
       // in the syntax arena for the later binder; type-only edges still load.
       for (const edge of cached.result.ast.nodes[cached.result.ast.root].edges) {
         const node: AstNode = cached.result.ast.nodes[edge.node];
-        if (node.kind == "ImportDeclaration" || node.kind == "ExportNamedDeclaration" || node.kind == "ExportAllDeclaration") {
+        if (node.kind == NodeKind.ImportDeclaration || node.kind == NodeKind.ExportNamedDeclaration || node.kind == NodeKind.ExportAllDeclaration) {
           let hasSource: boolean = false;
-          for (const attr of node.attributes) { if (attr.name == "source") hasSource = true; }
+          for (const attr of node.attributes) { if (attr.name == AttributeKind.Source) hasSource = true; }
           if (hasSource) this.requests.push(new ModuleRequest(node, edge.node));
         }
       }

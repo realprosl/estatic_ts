@@ -131,7 +131,7 @@ test("native graph: deep dependency chain uses iterative traversal",()=>{
   const f=fixture(files);const g=run(f);assert.equal(g.modules.length,181);assert.equal(g.cache.misses,181);assert.equal(run(f).cache.hits,181);
 });
 test("native loader analyzes its own complete project without host syntax/runtime resolution",()=>{
-  const g=invoke(join(root,"bootstrap/modules/demo.ets"))[0];assert.equal(g.success,true);assert.equal(g.modules.length,7);
+  const g=invoke(join(root,"bootstrap/modules/demo.ets"))[0];assert.equal(g.success,true);assert.equal(g.modules.length,8);
   for(const m of g.modules) assert.equal(m.hash,hash(readFileSync(m.file)));
   const adapter=readFileSync(join(root,"bootstrap/modules/run.ts"),"utf8");assert.doesNotMatch(adapter,/lexer|parser|loadModuleGraph|readFile/);
 });
@@ -145,7 +145,7 @@ function frame(values: string[]) { return values.map(value=>`${value.length}:${v
 function rewriteRecord(path: string, change: (fields:string[])=>void) {
   const fields=unpack(readFileSync(path,"utf8"));change(fields);const body=frame(fields.slice(1));writeFileSync(path,frame([hash(body)])+body);
 }
-for(const corruption of ["identity","file","hash","root","coordinate","edge","cycle","framing"] as const)
+for(const corruption of ["identity","file","hash","root","coordinate","edge","cycle","framing","nodeKind","edgeRole","attributeKind"] as const)
   test(`native cache: validates ${corruption} even with a recomputed envelope checksum`,()=>{
     const f=fixture({"main.ets":"const x=1; print(x);"});const good=run(f);
     rewriteRecord(record(f),fields=>{
@@ -160,8 +160,15 @@ for(const corruption of ["identity","file","hash","root","coordinate","edge","cy
         else {
           const count=Number(syntax[rootAt+1]);let cursor=rootAt+2,changed=false;
           for(let i=0;i<count;i++){
-            cursor+=17;const attrs=Number(syntax[cursor++]);cursor+=attrs*2;const edges=Number(syntax[cursor++]);
-            if(edges>0&&!changed){syntax[cursor+1]=corruption==="cycle"?String(i):"2147483647";changed=true;}
+            if(corruption==="nodeKind"&&!changed){syntax[cursor]="UnknownNode";changed=true;}
+            cursor+=17;const attrs=Number(syntax[cursor++]);
+            if(corruption==="attributeKind"&&attrs>0&&!changed){syntax[cursor]="unknownAttribute";changed=true;}
+            cursor+=attrs*2;const edges=Number(syntax[cursor++]);
+            if(edges>0&&!changed&&corruption!=="attributeKind"){
+              if(corruption==="edgeRole")syntax[cursor]="unknownRole";
+              else syntax[cursor+1]=corruption==="cycle"?String(i):"2147483647";
+              changed=true;
+            }
             cursor+=edges*2;
           }
           assert.ok(changed);

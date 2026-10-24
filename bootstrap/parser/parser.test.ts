@@ -26,7 +26,7 @@ type NativeResult = { root: number; nodes: NativeNode[]; diagnostics: { message:
 before(async () => {
   graph = await loadModuleGraph(entry);
   const result = await compileFile(entry, { baseDirectory: root });
-  assert.deepEqual(result.moduleNames.map(file => relative(root, file)), ["bootstrap/parser/parser.ets", "bootstrap/parser/demo.ets"]);
+  assert.deepEqual(result.moduleNames.map(file => relative(root, file)), ["bootstrap/parser/ast-schema.ets", "bootstrap/parser/parser.ets", "bootstrap/parser/demo.ets"]);
   writeFileSync(join(directory, "estatic_common.hpp"), result.header);
   const units = result.modules.map((module, index) => {
     const file = join(directory, `unit-${index}.cpp`); writeFileSync(file, module.cpp); return file;
@@ -479,7 +479,13 @@ test("bootstrap parser: every expression span matches stage 0", () => {
   assert.deepEqual(actual.sort(sort), spans.sort(sort));
 });
 test("bootstrap parser: parses the complete isolated lexer source", () => { parity(readFileSync(join(root, "bootstrap/lexer/lexer.ets"), "utf8")); });
-test("bootstrap parser: parses its own complete ETS source", () => { parity(readFileSync(join(root, "bootstrap/parser/parser.ets"), "utf8")); });
+test("bootstrap parser: parses its own complete ETS source", () => {
+  const source = readFileSync(join(root, "bootstrap/parser/parser.ets"), "utf8");
+  assert.deepEqual(native(source).diagnostics, []);
+  // Stage 0 erases imports into placeholders; compare the same module-free
+  // source in both parsers. Import metadata has its own native tests below.
+  parity(scanModuleSyntax(source).source);
+});
 test("bootstrap parser: accepts repository examples accepted by the stage 0 grammar", t => {
   const files = readdirSync(join(root, "examples"), { recursive: true }).map(String).filter(file => file.endsWith(".ets")).sort();
   let accepted = 0; const failures: string[] = [], excluded: string[] = [];
@@ -494,8 +500,8 @@ test("bootstrap parser: accepts repository examples accepted by the stage 0 gram
   assert.deepEqual(excluded, ["exports-demo.ets", "generated-module-exports/index.ets", "generated-module-exports/main.ets", "generated-module-exports/producer.ets", "imports-as/main.ets", "module-exports/counter.ets", "module-exports/index.ets", "module-exports/main.ets"], "a new stage 0 rejection must not silently remove an example from the audit");
   assert.ok(accepted >= 120); assert.deepEqual(failures, []);
 });
-test("bootstrap parser: graph contains only parser and its driver", () => {
-  assert.equal(graph.modules.length, 2); assert.deepEqual(graph.modules[0].dependencies, []);
+test("bootstrap parser: graph contains only schema, parser and its driver", () => {
+  assert.equal(graph.modules.length, 3); assert.deepEqual(graph.modules[0].dependencies, []);
   assert.ok(graph.modules.every(module => module.file.includes("bootstrap/parser/")));
 });
 

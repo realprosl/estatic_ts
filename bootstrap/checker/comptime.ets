@@ -1,3 +1,4 @@
+import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind, nodeKindName } from "../parser/ast-schema";
 import { ModuleGraph } from "../modules/loader";
 import { BindingResult, bindingChild, callableBinding } from "../binder/binder";
 import { nodeBegin, AstNode } from "../parser/parser";
@@ -38,7 +39,7 @@ export class NativeComptime {
   }
   helper(module: number, id: number): string { const sid: number = this.reference(module,id); return sid >= 0 && (this.binding.symbols[sid].module) < 0 ? this.binding.symbols[sid].name : ""; }
   decorated(module: number, id: number, name: string): boolean {
-    for (const edge of this.node(module,id).edges) if (edge.role == "decorators" && this.node(module,edge.node).get("name") == name) return true; return false;
+    for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Decorators && this.node(module,edge.node).get(AttributeKind.Name) == name) return true; return false;
   }
   functionOwner(scope: number): number {
     let at: number = scope; while (at >= 0) { const s = this.binding.scopes[at]; if (s.kind == "function" || s.kind == "arrow") return s.node; at = s.parent; } return -1;
@@ -78,8 +79,8 @@ export class NativeComptime {
   }
   argumentCell(module: number, id: number, environment: number): number {
     const n: AstNode = this.node(module,id);
-    if (n.kind == "NamedArgumentExpression") return this.argumentCell(module,bindingChild(n,"value"),environment);
-    return n.kind == "IdentifierExpression" ? this.find(environment,this.reference(module,id)) : -1;
+    if (n.kind == NodeKind.NamedArgumentExpression) return this.argumentCell(module,bindingChild(n,EdgeRole.Value),environment);
+    return n.kind == NodeKind.IdentifierExpression ? this.find(environment,this.reference(module,id)) : -1;
   }
   alias(environment: number, sid: number, cell: number): void {
     let env = this.environments[environment];
@@ -91,26 +92,26 @@ export class NativeComptime {
   }
   prepare(module: number, id: number, environment: number): void {
     const n: AstNode = this.node(module,id);
-    for (const edge of n.edges) if (edge.role == "statements") {
-      let declaration: number = edge.node; if (this.node(module,declaration).kind == "ExportDefaultDeclaration") declaration = bindingChild(this.node(module,declaration),"declaration");
+    for (const edge of n.edges) if (edge.role == EdgeRole.Statements) {
+      let declaration: number = edge.node; if (this.node(module,declaration).kind == NodeKind.ExportDefaultDeclaration) declaration = bindingChild(this.node(module,declaration),EdgeRole.Declaration);
       const item: AstNode = this.node(module,declaration);
-      if (item.kind == "VariableDeclaration" || item.kind == "UsingDeclaration" || item.kind == "FunctionDeclaration") {
+      if (item.kind == NodeKind.VariableDeclaration || item.kind == NodeKind.UsingDeclaration || item.kind == NodeKind.FunctionDeclaration) {
         const cell: number = this.reserve(environment,this.binding.files[module].declarations[declaration]);
-        if (item.kind == "FunctionDeclaration" && cell >= 0) { this.cells[cell].value = this.functionValue(module,declaration,environment); this.cells[cell].state = 1; }
-        for (const binding of item.edges) if (binding.role == "arrayBindings" || binding.role == "objectBindings") this.reserve(environment,this.binding.files[module].declarations[binding.node]);
+        if (item.kind == NodeKind.FunctionDeclaration && cell >= 0) { this.cells[cell].value = this.functionValue(module,declaration,environment); this.cells[cell].state = 1; }
+        for (const binding of item.edges) if (binding.role == EdgeRole.ArrayBindings || binding.role == EdgeRole.ObjectBindings) this.reserve(environment,this.binding.files[module].declarations[binding.node]);
       }
     }
   }
   directRoot(module: number, id: number): number {
-    let at: number = id; while (at >= 0) { const n: AstNode = this.node(module,at); if (n.kind == "IdentifierExpression") return this.reference(module,at); if (n.kind == "MemberExpression" || n.kind == "IndexExpression") at = bindingChild(n,"object"); else return -1; } return -1;
+    let at: number = id; while (at >= 0) { const n: AstNode = this.node(module,at); if (n.kind == NodeKind.IdentifierExpression) return this.reference(module,at); if (n.kind == NodeKind.MemberExpression || n.kind == NodeKind.IndexExpression) at = bindingChild(n,EdgeRole.Object); else return -1; } return -1;
   }
   runtimeWrite(sid: number): boolean {
     const rootOwner: number = this.functionOwner(this.binding.files[this.rootModule].nodeScopes[this.rootNode]);
     for (let id: number = 0; id < this.checked.files[this.rootModule].types.length; id = id+1) {
       const n: AstNode = this.node(this.rootModule,id); if (nodeBegin(n) >= nodeBegin(this.node(this.rootModule,this.rootNode)) || this.functionOwner(this.binding.files[this.rootModule].nodeScopes[id]) != rootOwner) continue;
-      if ((n.kind == "AssignmentExpression" || n.kind == "CompoundAssignmentExpression" || n.kind == "DeleteStatement") && this.directRoot(this.rootModule,bindingChild(n,"target")) == sid) return true;
-      if (n.kind == "MemberCallExpression" && ["push","pop","sort","set","add","delete","clear"].includes(n.get("method")) && this.directRoot(this.rootModule,bindingChild(n,"object")) == sid) return true;
-      if ((n.kind == "CallExpression" || n.kind == "MemberCallExpression") && this.checked.files[this.rootModule].constantStates[id] != "evaluated") {
+      if ((n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression || n.kind == NodeKind.DeleteStatement) && this.directRoot(this.rootModule,bindingChild(n,EdgeRole.Target)) == sid) return true;
+      if (n.kind == NodeKind.MemberCallExpression && ["push","pop","sort","set","add","delete","clear"].includes(n.get(AttributeKind.Method)) && this.directRoot(this.rootModule,bindingChild(n,EdgeRole.Object)) == sid) return true;
+      if ((n.kind == NodeKind.CallExpression || n.kind == NodeKind.MemberCallExpression) && this.checked.files[this.rootModule].constantStates[id] != "evaluated") {
         const selected: number = this.checked.files[this.rootModule].selected[id]; const module: number = this.checked.files[this.rootModule].selectedModules[id];
         for (const effect of this.checked.effects) if (effect.module == module && effect.node == selected && effect.phase == "body" && (effect.writes.includes(sid) || effect.moves.includes(sid) || effect.unknown)) return true;
       }
@@ -121,14 +122,14 @@ export class NativeComptime {
     const s = this.binding.symbols[sid]; const cell: number = this.find(environment,sid);
     if (cell >= 0 && this.cells[cell].state == 1) return this.cells[cell].value;
     if (s.module >= 0 && (s.kind == "FunctionDeclaration" || s.kind == "ClassMethod")) return this.functionValue(s.module,s.node,0);
-    if (s.module >= 0 && s.kind == "EnumMember") { const value: number = this.eval(s.module,bindingChild(this.node(s.module,s.node),"value"),environment,mode); let literal = this.values[value]; literal.typeName = this.checked.symbolTypes[sid]; return this.put(literal,module,id); }
+    if (s.module >= 0 && s.kind == "EnumMember") { const value: number = this.eval(s.module,bindingChild(this.node(s.module,s.node),EdgeRole.Value),environment,mode); let literal = this.values[value]; literal.typeName = this.checked.symbolTypes[sid]; return this.put(literal,module,id); }
     if (cell >= 0 && (this.functionOwner(s.scope) >= 0 || this.cells[cell].state == 2)) return this.fail(module,id,"COMPTIME_TDZ","lectura antes de inicializar el binding");
     if (s.module >= 0 && (s.kind == "VariableDeclaration" || s.kind == "UsingDeclaration") && (this.functionOwner(s.scope) < 0 || (cell < 0 && s.module == this.rootModule && this.functionOwner(s.scope) == this.functionOwner(this.binding.files[this.rootModule].nodeScopes[this.rootNode])))) {
       if (this.functionOwner(s.scope) < 0 && s.module > this.rootModule) return this.fail(module,id,"COMPTIME_TDZ","Módulo todavía no inicializado");
       if (s.module == this.rootModule && nodeBegin(this.node(s.module,s.node)) >= nodeBegin(this.node(this.rootModule,this.rootNode))) return this.fail(module,id,"COMPTIME_TDZ","declaración global posterior a la evaluación");
       if (this.runtimeWrite(sid)) return this.fail(module,id,"COMPTIME_VALUE_UNAVAILABLE","Una escritura runtime anterior invalida la captura estática");
       const slot: number = cell >= 0 ? cell : this.reserve(0,sid); this.cells[slot].state = 2;
-      const init: number = bindingChild(this.node(s.module,s.node),"initializer"); const value: number = this.eval(s.module,init,0,"input");
+      const init: number = bindingChild(this.node(s.module,s.node),EdgeRole.Initializer); const value: number = this.eval(s.module,init,0,"input");
       const converted: number = this.convert(value,this.checked.symbolTypes[sid],s.module,init);
       this.cells[slot].value = converted; this.cells[slot].state = 1; return converted;
     }
@@ -141,7 +142,7 @@ export class NativeComptime {
         const field = this.binding.symbols[member]; if (field.module != owner.module || (field.scope) < 0 || field.name != key || this.binding.scopes[field.scope].node != owner.node) continue;
         if (field.kind != "ClassField" && field.kind != "InterfaceField") continue;
         let text: string = this.checked.symbolTypes[member]; const inputs: string[] = genericArguments(name); let at: number = 0;
-        for (const edge of this.node(owner.module,owner.node).edges) if (edge.role == "typeParameters") { if (at < inputs.length) text = replaceType(text,"@"+numberToString(this.binding.files[owner.module].declarations[edge.node]),inputs[at]); at = at+1; }
+        for (const edge of this.node(owner.module,owner.node).edges) if (edge.role == EdgeRole.TypeParameters) { if (at < inputs.length) text = replaceType(text,"@"+numberToString(this.binding.files[owner.module].declarations[edge.node]),inputs[at]); at = at+1; }
         return text;
       }
     } return "";
@@ -213,17 +214,17 @@ export class NativeComptime {
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid+1) if (this.binding.symbols[sid].kind == "ClassDeclaration" && (name == "#"+numberToString(sid) || name.startsWith("#"+numberToString(sid)+"<"))) owner = sid;
     if (owner < 0) return this.fail(module,id,"COMPTIME_UNSUPPORTED","Constructor no materializable");
     const symbol = this.binding.symbols[owner]; let args: number[] = []; let positions: number[] = []; let argumentCells: number[] = [];
-    let at: number = 0; for (const edge of n.edges) if (edge.role == "args") { args.push(this.eval(module,edge.node,environment,mode)); argumentCells.push(this.argumentCell(module,edge.node,environment)); positions.push(argumentParameter(this.checked.files[module],edge.node,at)); at = at+1; }
+    let at: number = 0; for (const edge of n.edges) if (edge.role == EdgeRole.Args) { args.push(this.eval(module,edge.node,environment,mode)); argumentCells.push(this.argumentCell(module,edge.node,environment)); positions.push(argumentParameter(this.checked.files[module],edge.node,at)); at = at+1; }
     let object = new ConstantValue("object",name); let fields: number[] = [];
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid+1) {
       const field = this.binding.symbols[sid];
-      if (field.kind == "ClassField" && field.module == symbol.module && this.binding.scopes[field.scope].node == symbol.node && this.node(field.module,field.node).get("isStatic") != "true") { fields.push(sid); object.keys.push(field.name); object.entries.push(0); }
+      if (field.kind == "ClassField" && field.module == symbol.module && this.binding.scopes[field.scope].node == symbol.node && this.node(field.module,field.node).get(AttributeKind.IsStatic) != "true") { fields.push(sid); object.keys.push(field.name); object.entries.push(0); }
     }
     const receiver: number = this.put(object,module,id); const defaults: number = this.bindReceiver(symbol.module,symbol.node,environment,receiver);
     for (let p: number = 0; p < fields.length; p = p+1) {
-      const field = this.binding.symbols[fields[p]]; const node: AstNode = this.node(field.module,field.node); const initializer: number = bindingChild(node,"defaultValue");
+      const field = this.binding.symbols[fields[p]]; const node: AstNode = this.node(field.module,field.node); const initializer: number = bindingChild(node,EdgeRole.DefaultValue);
       let value: number = 0;
-      if (node.kind != "Parameter" && initializer >= 0) value = this.eval(field.module,initializer,defaults,mode);
+      if (node.kind != NodeKind.Parameter && initializer >= 0) value = this.eval(field.module,initializer,defaults,mode);
       else if (numericType(this.fieldType(name,field.name))) value = this.put(constantNumber(0),module,id);
       else if (this.fieldType(name,field.name) == "string") value = this.put(constantString(""),module,id);
       else if (this.fieldType(name,field.name) == "boolean") value = this.put(constantBoolean(false),module,id);
@@ -241,77 +242,77 @@ export class NativeComptime {
     return receiver;
   }
   optionalValue(module: number, id: number, value: number): number {
-    if (this.node(module,id).get("optional") != "true" || this.checked.files[module].types[id] == "void") return value;
+    if (this.node(module,id).get(AttributeKind.Optional) != "true" || this.checked.files[module].types[id] == "void") return value;
     let result = new ConstantValue("optional",this.checked.files[module].types[id]); result.entries.push(this.copy(value,module,id)); return this.put(result,module,id);
   }
   eval(module: number, id: number, environment: number, mode: string): number {
     const value: number = this.inner(module,id,environment,mode); if (id < 0 || this.failure != "") return value;
     const conversion: string = this.checked.files[module].conversions[id]; const parent: number = this.binding.files[module].parents[id];
-    if (parent >= 0 && this.node(module,parent).kind == "MemberCallExpression") { const object: number = bindingChild(this.node(module,parent),"object"); if (object >= 0 && this.checked.files[module].types[object] == "!Math") return value; }
+    if (parent >= 0 && this.node(module,parent).kind == NodeKind.MemberCallExpression) { const object: number = bindingChild(this.node(module,parent),EdgeRole.Object); if (object >= 0 && this.checked.files[module].types[object] == "!Math") return value; }
     return conversion == "" ? value : this.convert(value,conversion,module,id);
   }
   inner(module: number, id: number, environment: number, mode: string): number {
     if (id < 0 || !this.step(module,id)) return 0;
     const n: AstNode = this.node(module,id); const name: string = this.checked.files[module].types[id];
     const exact: string = this.checked.files[module].exactIntegers[id]; if (exact != "") return this.put(constantInteger(exact,name),module,id);
-    if (n.kind == "LiteralExpression") {
-      if (n.get("literalType") == "string") return this.put(constantString(n.get("value")),module,id);
-      if (n.get("literalType") == "boolean") return this.put(constantBoolean(n.get("value") == "true"),module,id);
-      const raw: string = n.get("raw") == "" ? n.get("value") : n.get("raw"); const parsed = nativeNumericLiteral(raw);
+    if (n.kind == NodeKind.LiteralExpression) {
+      if (n.get(AttributeKind.LiteralType) == "string") return this.put(constantString(n.get(AttributeKind.Value)),module,id);
+      if (n.get(AttributeKind.LiteralType) == "boolean") return this.put(constantBoolean(n.get(AttributeKind.Value) == "true"),module,id);
+      const raw: string = n.get(AttributeKind.Raw) == "" ? n.get(AttributeKind.Value) : n.get(AttributeKind.Raw); const parsed = nativeNumericLiteral(raw);
       if (!parsed.valid) return this.fail(module,id,"COMPTIME_INVALID_NUMBER","literal inválido");
       if (name != "number" && name != "f32" && name != "f64" && numericType(name)) return this.put(constantCast(constantInteger(nativeIntegerText(raw),name),name),module,id);
       return this.put(constantCast(constantNumber(parsed.value),name),module,id);
     }
-    if (n.kind == "IdentifierExpression") return this.read(module,id,environment,this.reference(module,id),mode);
-    if (n.kind == "ArrowFunctionExpression") return this.functionValue(module,id,environment);
-    if (n.kind == "NewExpression") return this.construct(module,id,environment,mode);
-    if (n.kind == "NamedArgumentExpression") return this.eval(module,bindingChild(n,"value"),environment,mode);
-    if (n.kind == "SpreadElement" || n.kind == "SatisfiesExpression") return this.eval(module,bindingChild(n,n.kind == "SpreadElement" ? "expression" : "operand"),environment,mode);
-    if (n.kind == "AsExpression") return this.eval(module,bindingChild(n,"expression"),environment,mode);
-    if (n.kind == "ArrayLiteralExpression" || n.kind == "ObjectLiteralExpression") {
-      let v = new ConstantValue(n.kind == "ArrayLiteralExpression" ? "array" : "object",name);
-      for (const edge of n.edges) if (edge.role == "elements") {
+    if (n.kind == NodeKind.IdentifierExpression) return this.read(module,id,environment,this.reference(module,id),mode);
+    if (n.kind == NodeKind.ArrowFunctionExpression) return this.functionValue(module,id,environment);
+    if (n.kind == NodeKind.NewExpression) return this.construct(module,id,environment,mode);
+    if (n.kind == NodeKind.NamedArgumentExpression) return this.eval(module,bindingChild(n,EdgeRole.Value),environment,mode);
+    if (n.kind == NodeKind.SpreadElement || n.kind == NodeKind.SatisfiesExpression) return this.eval(module,bindingChild(n,n.kind == NodeKind.SpreadElement ? EdgeRole.Expression : EdgeRole.Operand),environment,mode);
+    if (n.kind == NodeKind.AsExpression) return this.eval(module,bindingChild(n,EdgeRole.Expression),environment,mode);
+    if (n.kind == NodeKind.ArrayLiteralExpression || n.kind == NodeKind.ObjectLiteralExpression) {
+      let v = new ConstantValue(n.kind == NodeKind.ArrayLiteralExpression ? "array" : "object",name);
+      for (const edge of n.edges) if (edge.role == EdgeRole.Elements) {
         const entry: number = this.eval(module,edge.node,environment,mode);
-        if (this.node(module,edge.node).kind == "SpreadElement") for (const item of this.values[entry].entries) v.entries.push(this.copy(item,module,id)); else v.entries.push(this.copy(entry,module,id));
-      } else if (edge.role == "properties") { const property: AstNode = this.node(module,edge.node); v.keys.push(property.get("key")); v.entries.push(this.copy(this.eval(module,bindingChild(property,"value"),environment,mode),module,id)); }
+        if (this.node(module,edge.node).kind == NodeKind.SpreadElement) for (const item of this.values[entry].entries) v.entries.push(this.copy(item,module,id)); else v.entries.push(this.copy(entry,module,id));
+      } else if (edge.role == EdgeRole.Properties) { const property: AstNode = this.node(module,edge.node); v.keys.push(property.get(AttributeKind.Key)); v.entries.push(this.copy(this.eval(module,bindingChild(property,EdgeRole.Value),environment,mode),module,id)); }
       return this.put(v,module,id);
     }
-    if (n.kind == "MemberExpression" && this.checked.files[module].types[bindingChild(n,"object")] == "!Math" && ["PI","E"].includes(n.get("member"))) return this.put(constantNumber(n.get("member") == "PI" ? 3.141592653589793 : 2.718281828459045),module,id);
-    if (n.kind == "MemberExpression") {
+    if (n.kind == NodeKind.MemberExpression && this.checked.files[module].types[bindingChild(n,EdgeRole.Object)] == "!Math" && ["PI","E"].includes(n.get(AttributeKind.Member))) return this.put(constantNumber(n.get(AttributeKind.Member) == "PI" ? 3.141592653589793 : 2.718281828459045),module,id);
+    if (n.kind == NodeKind.MemberExpression) {
       const member: number = this.checked.files[module].members[id];
       if (member >= 0 && ["VariableDeclaration","FunctionDeclaration","EnumMember"].includes(this.binding.symbols[this.origin(member)].kind)) return this.read(module,id,environment,this.origin(member),mode);
     }
-    if (n.kind == "IndexExpression" || n.kind == "MemberExpression") {
-      const object: number = this.eval(module,bindingChild(n,"object"),environment,mode); let v = this.values[object];
-      if (n.get("optional") == "true") {
+    if (n.kind == NodeKind.IndexExpression || n.kind == NodeKind.MemberExpression) {
+      const object: number = this.eval(module,bindingChild(n,EdgeRole.Object),environment,mode); let v = this.values[object];
+      if (n.get(AttributeKind.Optional) == "true") {
         if (v.kind != "optional") return this.fail(module,id,"COMPTIME_INVALID_CONTAINER","receptor opcional inválido");
         if (v.entries.length == 0) return this.put(new ConstantValue("optional",name),module,id);
         v = this.values[v.entries[0]];
       }
-      if (n.kind == "MemberExpression") {
-        const key: string = n.get("member");
+      if (n.kind == NodeKind.MemberExpression) {
+        const key: string = n.get(AttributeKind.Member);
         if (v.kind == "result" && key == "kind") return this.put(constantString(v.text == "error" ? "Err" : "Ok"),module,id);
         if (v.kind == "result" && key == "ok") return this.put(constantBoolean(v.text != "error"),module,id);
         if (key == "length" && (v.kind == "array" || v.kind == "string")) return this.optionalValue(module,id,this.put(constantNumber(v.kind == "array" ? v.entries.length : v.text.length),module,id));
         for (let at: number = 0; at < v.keys.length; at = at+1) if (v.keys[at] == key) return this.optionalValue(module,id,v.entries[at]);
         return this.fail(module,id,"COMPTIME_INVALID_MEMBER","campo no disponible");
       }
-      const index: number = this.index(this.eval(module,bindingChild(n,"index"),environment,mode),module,id);
+      const index: number = this.index(this.eval(module,bindingChild(n,EdgeRole.Index),environment,mode),module,id);
       if (index < 0) return 0;
       if (v.kind == "string") return this.put(constantString(v.text.charAt(index)),module,id);
       if (index >= v.entries.length) return this.fail(module,id,"COMPTIME_INVALID_INDEX","índice fuera de rango"); return v.entries[index];
     }
-    if (n.kind == "BinaryExpression") {
-      const left: number = this.eval(module,bindingChild(n,"left"),environment,mode); const op: string = n.get("operator");
-      if (op == "instanceof") { const right: string = this.checked.files[module].types[bindingChild(n,"right")]; const target: string = right.slice(6,right.length); const actual: string = this.values[left].typeName; return this.put(constantBoolean(actual == target || (target == "number" && numericType(actual))),module,id); }
+    if (n.kind == NodeKind.BinaryExpression) {
+      const left: number = this.eval(module,bindingChild(n,EdgeRole.Left),environment,mode); const op: string = n.get(AttributeKind.Operator);
+      if (op == "instanceof") { const right: string = this.checked.files[module].types[bindingChild(n,EdgeRole.Right)]; const target: string = right.slice(6,right.length); const actual: string = this.values[left].typeName; return this.put(constantBoolean(actual == target || (target == "number" && numericType(actual))),module,id); }
       if (op == "&&" && this.values[left].scalar == 0) return left; if (op == "||" && this.values[left].scalar != 0) return left;
-      if (op == "??") { if (this.values[left].kind == "optional") { if (this.values[left].entries.length > 0) return this.values[left].entries[0]; } else return left; return this.eval(module,bindingChild(n,"right"),environment,mode); }
-      const right: number = this.eval(module,bindingChild(n,"right"),environment,mode); if (op == "&&" || op == "||") return right;
+      if (op == "??") { if (this.values[left].kind == "optional") { if (this.values[left].entries.length > 0) return this.values[left].entries[0]; } else return left; return this.eval(module,bindingChild(n,EdgeRole.Right),environment,mode); }
+      const right: number = this.eval(module,bindingChild(n,EdgeRole.Right),environment,mode); if (op == "&&" || op == "||") return right;
       return this.binary(module,id,left,right,op);
     }
-    if (n.kind == "TernaryExpression") { const condition: number = this.eval(module,bindingChild(n,"condition"),environment,mode); return this.eval(module,bindingChild(n,this.values[condition].scalar != 0 ? "thenBranch" : "elseBranch"),environment,mode); }
-    if (n.kind == "UnaryExpression") {
-      const value: number = this.eval(module,bindingChild(n,"operand"),environment,mode); const v = this.values[value]; const op: string = n.get("operator");
+    if (n.kind == NodeKind.TernaryExpression) { const condition: number = this.eval(module,bindingChild(n,EdgeRole.Condition),environment,mode); return this.eval(module,bindingChild(n,this.values[condition].scalar != 0 ? EdgeRole.ThenBranch : EdgeRole.ElseBranch),environment,mode); }
+    if (n.kind == NodeKind.UnaryExpression) {
+      const value: number = this.eval(module,bindingChild(n,EdgeRole.Operand),environment,mode); const v = this.values[value]; const op: string = n.get(AttributeKind.Operator);
       if (op == "typeof") return this.put(constantString(v.kind == "integer" || v.kind == "number" ? "number" : v.kind == "void" ? "undefined" : v.kind == "function" ? "function" : v.kind == "string" || v.kind == "boolean" ? v.kind : "object"),module,id);
       if (op == "!") return this.put(constantBoolean(v.scalar == 0),module,id);
       if (op == "+") return this.convert(value,name,module,id);
@@ -319,19 +320,19 @@ export class NativeComptime {
       if (op == "-") { const zero = v.kind == "integer" ? constantInteger("0",name) : constantNumber(0,name); return this.put(constantNumeric(zero,v,"-",name),module,id); }
       if (op == "~") { if (v.kind == "integer") { let result = v; result.bits = ~result.bits; return this.put(constantCast(result,name),module,id); } const bits: i32 = constantWord(v.scalar); return this.put(constantNumber(constantSignedDouble(~bits)),module,id); }
     }
-    if (n.kind == "AssignmentExpression" || n.kind == "CompoundAssignmentExpression") {
-      const target: number = bindingChild(n,"target"); const location: ConstantLocation = this.location(module,target,environment,mode);
-      const previous: number = n.kind == "CompoundAssignmentExpression" ? this.load(location,module,target) : 0;
-      let value: number = this.eval(module,bindingChild(n,"value"),environment,mode);
-      if (n.kind == "CompoundAssignmentExpression") value = this.binary(module,id,previous,value,n.get("operator").slice(0,n.get("operator").length-1));
+    if (n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression) {
+      const target: number = bindingChild(n,EdgeRole.Target); const location: ConstantLocation = this.location(module,target,environment,mode);
+      const previous: number = n.kind == NodeKind.CompoundAssignmentExpression ? this.load(location,module,target) : 0;
+      let value: number = this.eval(module,bindingChild(n,EdgeRole.Value),environment,mode);
+      if (n.kind == NodeKind.CompoundAssignmentExpression) value = this.binary(module,id,previous,value,n.get(AttributeKind.Operator).slice(0,n.get(AttributeKind.Operator).length-1));
       value = this.convert(value,this.checked.files[module].types[target],module,id); this.store(location,value,module,target); return value;
     }
-    if (n.kind == "TemplateLiteralExpression") {
-      let text: string = ""; for (const edge of n.edges) { const part: string = edge.role == "parts" ? this.node(module,edge.node).get("value") : this.text(this.eval(module,edge.node,environment,mode),module,id); if (!this.charge(module,id,this.utf8(part))) return 0; text = text+part; } return this.put(constantString(text),module,id);
+    if (n.kind == NodeKind.TemplateLiteralExpression) {
+      let text: string = ""; for (const edge of n.edges) { const part: string = edge.role == EdgeRole.Parts ? this.node(module,edge.node).get(AttributeKind.Value) : this.text(this.eval(module,edge.node,environment,mode),module,id); if (!this.charge(module,id,this.utf8(part))) return 0; text = text+part; } return this.put(constantString(text),module,id);
     }
-    if (n.kind == "CallExpression") return this.call(module,id,environment,mode);
-    if (n.kind == "MemberCallExpression") return this.method(module,id,environment,mode);
-    return this.fail(module,id,"COMPTIME_UNSUPPORTED","construcción " + n.kind);
+    if (n.kind == NodeKind.CallExpression) return this.call(module,id,environment,mode);
+    if (n.kind == NodeKind.MemberCallExpression) return this.method(module,id,environment,mode);
+    return this.fail(module,id,"COMPTIME_UNSUPPORTED","construcción " + nodeKindName(n.kind));
   }
   keyIndex(keys: string[], key: string): number { for (let at: number = 0; at < keys.length; at = at+1) if (keys[at] == key) return at; return -1; }
   index(value: number, module: number, id: number): number {
@@ -340,12 +341,12 @@ export class NativeComptime {
   }
   location(module: number, id: number, environment: number, mode: string): ConstantLocation {
     let result = new ConstantLocation(); const n: AstNode = this.node(module,id);
-    if (n.kind == "IdentifierExpression") {
+    if (n.kind == NodeKind.IdentifierExpression) {
       const sid: number = this.reference(module,id); this.read(module,id,environment,sid,mode); result.cell = this.find(environment,sid); return result;
     }
-    result.receiver = this.eval(module,bindingChild(n,"object"),environment,mode); const v = this.values[result.receiver];
-    if (n.kind == "MemberExpression") result.index = this.keyIndex(v.keys,n.get("member"));
-    else result.index = this.index(this.eval(module,bindingChild(n,"index"),environment,mode),module,id);
+    result.receiver = this.eval(module,bindingChild(n,EdgeRole.Object),environment,mode); const v = this.values[result.receiver];
+    if (n.kind == NodeKind.MemberExpression) result.index = this.keyIndex(v.keys,n.get(AttributeKind.Member));
+    else result.index = this.index(this.eval(module,bindingChild(n,EdgeRole.Index),environment,mode),module,id);
     if ((result.index) < 0 && this.failure == "") this.fail(module,id,"COMPTIME_INVALID_MEMBER","Lvalue sin una posición conocida"); return result;
   }
   load(location: ConstantLocation, module: number, id: number): number {
@@ -372,29 +373,29 @@ export class NativeComptime {
   variant(module: number, id: number, environment: number, mode: string, sid: number): number {
     const symbol = this.binding.symbols[sid]; const declaration: AstNode = this.node(symbol.module,symbol.node); const n: AstNode = this.node(module,id);
     let result = new ConstantValue("object",this.checked.files[module].types[id]); result.keys.push("kind"); result.entries.push(this.put(constantString(symbol.name),module,id));
-    const discriminator: number = bindingChild(declaration,"discriminator");
+    const discriminator: number = bindingChild(declaration,EdgeRole.Discriminator);
     if (discriminator >= 0) {
-      const tag: AstNode = this.node(symbol.module,discriminator); result.keys.push(tag.get("field"));
-      if (tag.get("literalType") == "string") result.entries.push(this.put(constantString(tag.get("value")),module,id));
-      else if (tag.get("literalType") == "boolean") result.entries.push(this.put(constantBoolean(tag.get("value") == "true"),module,id));
-      else result.entries.push(this.put(constantNumber(nativeNumericLiteral(tag.get("value")).value),module,id));
+      const tag: AstNode = this.node(symbol.module,discriminator); result.keys.push(tag.get(AttributeKind.Field));
+      if (tag.get(AttributeKind.LiteralType) == "string") result.entries.push(this.put(constantString(tag.get(AttributeKind.Value)),module,id));
+      else if (tag.get(AttributeKind.LiteralType) == "boolean") result.entries.push(this.put(constantBoolean(tag.get(AttributeKind.Value) == "true"),module,id));
+      else result.entries.push(this.put(constantNumber(nativeNumericLiteral(tag.get(AttributeKind.Value)).value),module,id));
     }
     const params: string[] = functionParams(this.checked.files[module].signatures[id]); let at: number = 0;
-    for (const edge of n.edges) if (edge.role == "args") { const value: number = this.eval(module,edge.node,environment,mode); result.keys.push("value"); result.entries.push(this.convert(value,at < params.length ? params[at] : "",module,id)); at = at+1; }
+    for (const edge of n.edges) if (edge.role == EdgeRole.Args) { const value: number = this.eval(module,edge.node,environment,mode); result.keys.push("value"); result.entries.push(this.convert(value,at < params.length ? params[at] : "",module,id)); at = at+1; }
     return this.put(result,module,id);
   }
   match(module: number, id: number, environment: number, mode: string): number {
-    let args: number[] = []; for (const edge of this.node(module,id).edges) if (edge.role == "args") args.push(edge.node);
+    let args: number[] = []; for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Args) args.push(edge.node);
     const subject: number = this.eval(module,args[0],environment,mode); let pattern: number = subject;
     if (args.length == 3) {
-      const key: string = this.node(module,args[1]).get("value"); const object = this.values[subject]; let found: boolean = false;
+      const key: string = this.node(module,args[1]).get(AttributeKind.Value); const object = this.values[subject]; let found: boolean = false;
       if (object.kind == "result" && (key == "kind" || key == "ok")) { pattern = (key == "kind" ? this.put(constantString(object.text == "error" ? "Err" : "Ok"),module,id) : this.put(constantBoolean(object.text != "error"),module,id)); found = true; }
       else for (let at: number = 0; at < object.keys.length; at = at+1) if (object.keys[at] == key) { pattern = object.entries[at]; found = true; }
       if (!found) return this.fail(module,id,"COMPTIME_INVALID_MEMBER","Discriminador de match no disponible");
     }
-    for (const edge of this.node(module,args[args.length-1]).edges) if (edge.role == "elements") {
+    for (const edge of this.node(module,args[args.length-1]).edges) if (edge.role == EdgeRole.Elements) {
       if (!this.step(module,edge.node)) return 0; const item: AstNode = this.node(module,edge.node); const helper: string = this.helper(module,edge.node); let values: number[] = [];
-      for (const value of item.edges) if (value.role == "args") values.push(value.node);
+      for (const value of item.edges) if (value.role == EdgeRole.Args) values.push(value.node);
       let chosen: boolean = helper == "otherwise";
       if (helper == "when") { const candidate: number = this.eval(module,values[0],environment,mode); const equal: number = this.binary(module,edge.node,pattern,candidate,"=="); chosen = this.values[equal].scalar != 0; }
       if (helper == "whenType") { const key: string = this.checked.files[module].caseValues[edge.node]; chosen = key == "type:"+this.values[subject].typeName; }
@@ -411,9 +412,9 @@ export class NativeComptime {
     if (helper == "match") return this.match(module,id,environment,mode);
     const target: number = this.reference(module,id); if (target >= 0 && this.binding.symbols[target].kind == "UnionVariant") return this.variant(module,id,environment,mode,target);
     let args: number[] = []; let positions: number[] = []; let argumentCells: number[] = []; let at: number = 0;
-    for (const edge of n.edges) if (edge.role == "args") {
+    for (const edge of n.edges) if (edge.role == EdgeRole.Args) {
       const value: number = this.eval(module,edge.node,environment,helper == "comptime" ? "strict" : mode);
-      if (this.node(module,edge.node).kind == "SpreadElement") for (const item of this.values[value].entries) { args.push(item); argumentCells.push(-1); positions.push(argumentParameter(this.checked.files[module],edge.node,at)); }
+      if (this.node(module,edge.node).kind == NodeKind.SpreadElement) for (const item of this.values[value].entries) { args.push(item); argumentCells.push(-1); positions.push(argumentParameter(this.checked.files[module],edge.node,at)); }
       else { args.push(value); argumentCells.push(this.argumentCell(module,edge.node,environment)); positions.push(argumentParameter(this.checked.files[module],edge.node,at)); } at = at+1;
     }
     if (this.failure != "") return 0;
@@ -452,46 +453,46 @@ export class NativeComptime {
   invoke(callable: number, args: number[], positions: number[], module: number, id: number, mode: string, signature: string, argumentCells: number[] = []): number {
     if (this.failure != "") return 0; const fn = this.values[callable];
     if (fn.kind != "function") return this.fail(module,id,"COMPTIME_VALUE_UNAVAILABLE","destino invocable no disponible");
-    const declaration: AstNode = this.node(fn.module,fn.node); const body: number = bindingChild(declaration,"body");
+    const declaration: AstNode = this.node(fn.module,fn.node); const body: number = bindingChild(declaration,EdgeRole.Body);
     if (this.decorated(fn.module,fn.node,"cppgen")) return this.fail(module,id,mode == "input" ? "COMPTIME_VALUE_UNAVAILABLE" : "COMPTIME_FORBIDDEN_EFFECT","Escape opaco de backend; no se ejecuta durante el análisis del frontend");
-    if (declaration.get("async") == "true" || declaration.get("isAsync") == "true") return this.fail(module,id,"COMPTIME_FORBIDDEN_EFFECT","tarea async durante evaluación");
+    if (declaration.get(AttributeKind.Async) == "true" || declaration.get(AttributeKind.IsAsync) == "true") return this.fail(module,id,"COMPTIME_FORBIDDEN_EFFECT","tarea async durante evaluación");
     if (body < 0 || this.node(fn.module,body).start.kind == ";") return this.fail(module,id,mode == "input" ? "COMPTIME_VALUE_UNAVAILABLE" : "COMPTIME_FORBIDDEN_EFFECT","Implementación externa");
     this.depth = this.depth+1; if (this.depth > 100) { this.depth = this.depth-1; return this.fail(module,id,"COMPTIME_RECURSION_LIMIT","profundidad máxima excedida"); }
-    const frame: number = this.environment(fn.environment); let parameters: number[] = []; for (const edge of declaration.edges) if (edge.role == "params") { parameters.push(edge.node); this.reserve(frame,this.binding.files[fn.module].declarations[edge.node]); }
+    const frame: number = this.environment(fn.environment); let parameters: number[] = []; for (const edge of declaration.edges) if (edge.role == EdgeRole.Params) { parameters.push(edge.node); this.reserve(frame,this.binding.files[fn.module].declarations[edge.node]); }
     const effective: string = fn.typeName.indexOf("@",0) >= 0 && signature != "" ? signature : fn.typeName;
     const types: string[] = functionParams(effective);
     for (let p: number = 0; p < parameters.length; p = p+1) {
       const parameter: AstNode = this.node(fn.module,parameters[p]); const sid: number = this.binding.files[fn.module].declarations[parameters[p]]; const cell: number = this.find(frame,sid);
-      if (parameter.get("out") == "true") {
+      if (parameter.get(AttributeKind.Out) == "true") {
         let aliasCell: number = -1;
         for (let a: number = 0; a < args.length; a = a+1) if ((a < positions.length ? positions[a] : a) == p && a < argumentCells.length) aliasCell = argumentCells[a];
         if (aliasCell < 0) { this.fail(module,id,"COMPTIME_INVALID_ALIAS","Un argumento out necesita una celda mutable inicializada"); break; }
         this.alias(frame,sid,aliasCell); continue;
       }
       const target: string = p < types.length ? types[p] : this.checked.symbolTypes[sid]; if (containsMemory(target)) { this.fail(module,id,"COMPTIME_UNSUPPORTED","Un contrato de memoria requiere una prueba de aliasing del evaluador"); break; } let value: number = 0; let supplied: boolean = false;
-      if (parameter.get("variadic") == "true") {
+      if (parameter.get(AttributeKind.Variadic) == "true") {
         let rest = new ConstantValue("array",target.startsWith("...") ? target.slice(3,target.length) : target);
         for (let a: number = 0; a < args.length; a = a+1) if ((a < positions.length ? positions[a] : a) >= p) rest.entries.push(this.copy(args[a],module,id));
         value = this.put(rest,module,id); supplied = true;
       } else for (let a: number = 0; a < args.length; a = a+1) if ((a < positions.length ? positions[a] : a) == p) { value = this.convert(args[a],target,module,id); supplied = true; }
       if (!supplied) {
-        const fallback: number = bindingChild(parameter,"defaultValue");
+        const fallback: number = bindingChild(parameter,EdgeRole.DefaultValue);
         if (fallback >= 0) value = this.convert(this.eval(fn.module,fallback,frame,mode),target,fn.module,fallback);
         else if (genericBase(target) == "Optional") value = this.put(new ConstantValue("optional",target),module,id);
         else { this.fail(module,id,"COMPTIME_ARITY","argumento requerido ausente"); break; }
       }
       if (cell >= 0) { this.cells[cell].value = value; this.cells[cell].state = 1; }
-      if (parameter.get("parameterProperty") == "true") for (let receiverSid: number = 0; receiverSid < this.binding.symbols.length; receiverSid = receiverSid+1) {
+      if (parameter.get(AttributeKind.ParameterProperty) == "true") for (let receiverSid: number = 0; receiverSid < this.binding.symbols.length; receiverSid = receiverSid+1) {
         const s = this.binding.symbols[receiverSid];
         if (s.kind == "receiver" && s.module == fn.module && this.binding.scopes[s.scope].node == fn.node) {
           const receiverCell: number = this.find(frame,receiverSid);
-          if (receiverCell >= 0) { const receiver: number = this.cells[receiverCell].value; let object = this.values[receiver]; for (let f: number = 0; f < object.keys.length; f = f+1) if (object.keys[f] == parameter.get("name")) object.entries[f] = this.copy(value,module,id); this.values[receiver] = object; }
+          if (receiverCell >= 0) { const receiver: number = this.cells[receiverCell].value; let object = this.values[receiver]; for (let f: number = 0; f < object.keys.length; f = f+1) if (object.keys[f] == parameter.get(AttributeKind.Name)) object.entries[f] = this.copy(value,module,id); this.values[receiver] = object; }
         }
       }
     }
     const outerSignal: string = this.signal; const outerReturned: number = this.returned; this.signal = ""; this.returned = 0;
     let value: number = 0;
-    if (this.node(fn.module,body).kind == "BlockStatement") { this.walk(fn.module,body,frame,mode); value = this.returned; }
+    if (this.node(fn.module,body).kind == NodeKind.BlockStatement) { this.walk(fn.module,body,frame,mode); value = this.returned; }
     else value = this.eval(fn.module,body,frame,mode);
     if (this.signal == "break" || this.signal == "continue") this.fail(fn.module,body,"COMPTIME_INVALID_CONTROL","control fuera de un bucle");
     const returns: string = functionReturn(effective); if (this.failure == "" && returns != "void") value = this.convert(value,returns,fn.module,body);
@@ -523,10 +524,10 @@ export class NativeComptime {
     return this.put(constantString(result),module,id);
   }
   method(module: number, id: number, environment: number, mode: string): number {
-    const n: AstNode = this.node(module,id); const object: number = bindingChild(n,"object"); const name: string = n.get("method");
+    const n: AstNode = this.node(module,id); const object: number = bindingChild(n,EdgeRole.Object); const name: string = n.get(AttributeKind.Method);
     const member: number = this.checked.files[module].members[id]; if (member >= 0 && this.binding.symbols[member].kind == "UnionVariant") return this.variant(module,id,environment,mode,member);
     let receiver: number = ["!Math","namespace"].includes(this.checked.files[module].types[object]) ? 0 : this.eval(module,object,environment,mode);
-    if (n.get("optional") == "true") {
+    if (n.get(AttributeKind.Optional) == "true") {
       const container = this.values[receiver];
       if (container.kind != "optional") return this.fail(module,id,"COMPTIME_INVALID_CONTAINER","receptor opcional inválido");
       if (container.entries.length == 0) return this.checked.files[module].types[id] == "void" ? 0 : this.put(new ConstantValue("optional",this.checked.files[module].types[id]),module,id);
@@ -535,13 +536,13 @@ export class NativeComptime {
     return this.optionalValue(module,id,this.methodValue(module,id,environment,mode,receiver));
   }
   methodValue(module: number, id: number, environment: number, mode: string, receiver: number): number {
-    const n: AstNode = this.node(module,id); const object: number = bindingChild(n,"object"); const name: string = n.get("method");
+    const n: AstNode = this.node(module,id); const object: number = bindingChild(n,EdgeRole.Object); const name: string = n.get(AttributeKind.Method);
     let args: number[] = []; let argumentCells: number[] = [];
-    for (const edge of n.edges) if (edge.role == "args") { args.push(this.eval(module,edge.node,environment,mode)); argumentCells.push(this.argumentCell(module,edge.node,environment)); }
+    for (const edge of n.edges) if (edge.role == EdgeRole.Args) { args.push(this.eval(module,edge.node,environment,mode)); argumentCells.push(this.argumentCell(module,edge.node,environment)); }
     if (this.checked.files[module].types[object] == "namespace" || this.checked.files[module].selected[id] >= 0) {
       const selected: number = this.checked.files[module].selected[id]; const targetModule: number = this.checked.files[module].selectedModules[id];
       if (selected < 0) return this.fail(module,id,"COMPTIME_VALUE_UNAVAILABLE","Miembro de namespace no invocable");
-      let positions: number[] = []; let at: number = 0; for (const edge of n.edges) if (edge.role == "args") { positions.push(argumentParameter(this.checked.files[module],edge.node,at)); at = at+1; }
+      let positions: number[] = []; let at: number = 0; for (const edge of n.edges) if (edge.role == EdgeRole.Args) { positions.push(argumentParameter(this.checked.files[module],edge.node,at)); at = at+1; }
       const receiverEnvironment: number = this.bindReceiver(targetModule,selected,environment,receiver);
       return this.invoke(this.functionValue(targetModule,selected,receiverEnvironment),args,positions,module,id,this.decorated(targetModule,selected,"comptime") ? "strict" : mode,this.checked.files[module].signatures[id],argumentCells);
     }
@@ -604,54 +605,54 @@ export class NativeComptime {
     return this.put(result,module,id);
   }
   declare(module: number, id: number, environment: number, mode: string): void {
-    const n: AstNode = this.node(module,id); const initializer: number = bindingChild(n,"initializer"); const value: number = this.eval(module,initializer,environment,mode);
+    const n: AstNode = this.node(module,id); const initializer: number = bindingChild(n,EdgeRole.Initializer); const value: number = this.eval(module,initializer,environment,mode);
     const sid: number = this.binding.files[module].declarations[id];
     if (sid >= 0) { const cell: number = this.reserve(environment,sid); this.cells[cell].value = this.convert(value,this.checked.symbolTypes[sid],module,initializer); this.cells[cell].state = 1; }
     let position: number = 0;
-    for (const edge of n.edges) if (edge.role == "arrayBindings" || edge.role == "objectBindings") {
+    for (const edge of n.edges) if (edge.role == EdgeRole.ArrayBindings || edge.role == EdgeRole.ObjectBindings) {
       const binding: AstNode = this.node(module,edge.node); const target: number = this.binding.files[module].declarations[edge.node]; const cell: number = this.reserve(environment,target);
-      const v = this.values[value]; const at: number = edge.role == "arrayBindings" ? position : this.keyIndex(v.keys,binding.get("property")); let item: number = 0;
-      if (at >= 0 && at < v.entries.length) item = v.entries[at]; else item = this.eval(module,bindingChild(binding,"defaultValue"),environment,mode);
+      const v = this.values[value]; const at: number = edge.role == EdgeRole.ArrayBindings ? position : this.keyIndex(v.keys,binding.get(AttributeKind.Property)); let item: number = 0;
+      if (at >= 0 && at < v.entries.length) item = v.entries[at]; else item = this.eval(module,bindingChild(binding,EdgeRole.DefaultValue),environment,mode);
       this.cells[cell].value = this.convert(item,this.checked.symbolTypes[target],module,edge.node); this.cells[cell].state = 1; position = position+1;
     }
   }
   walk(module: number, id: number, environment: number, mode: string): void {
     if (id < 0 || this.signal != "" || !this.step(module,id)) return; const n: AstNode = this.node(module,id);
-    if (n.kind == "BlockStatement" || n.kind == "Program") { const block: number = this.environment(environment); this.prepare(module,id,block); for (const edge of n.edges) if (edge.role == "statements") this.walk(module,edge.node,block,mode); return; }
-    if (n.kind == "VariableDeclaration" || n.kind == "UsingDeclaration") { this.declare(module,id,environment,mode); return; }
-    if (n.kind == "FunctionDeclaration" || n.kind == "TypeAliasDeclaration" || n.kind == "InterfaceDeclaration" || n.kind == "ClassDeclaration" || n.kind == "UnionDeclaration" || n.kind == "EnumDeclaration") return;
-    if (n.kind == "ExpressionStatement") { this.eval(module,bindingChild(n,"expression"),environment,mode); return; }
-    if (n.kind == "ReturnStatement") { this.returned = this.eval(module,bindingChild(n,"value"),environment,mode); this.signal = "return"; return; }
-    if (n.kind == "BreakStatement" || n.kind == "ContinueStatement") { this.signal = (n.kind == "BreakStatement" ? "break" : "continue"); return; }
-    if (n.kind == "IfStatement") { const value: number = this.eval(module,bindingChild(n,"condition"),environment,mode); this.walk(module,bindingChild(n,this.values[value].scalar != 0 ? "thenBranch" : "elseBranch"),environment,mode); return; }
-    if (n.kind == "WhileStatement" || n.kind == "ForStatement") {
-      const loop: number = this.environment(environment); const init: number = bindingChild(n,"initializer");
-      if (init >= 0) { if (this.node(module,init).kind == "VariableDeclaration") this.reserve(loop,this.binding.files[module].declarations[init]); if (this.node(module,init).kind.endsWith("Expression")) this.eval(module,init,loop,mode); else this.walk(module,init,loop,mode); }
+    if (n.kind == NodeKind.BlockStatement || n.kind == NodeKind.Program) { const block: number = this.environment(environment); this.prepare(module,id,block); for (const edge of n.edges) if (edge.role == EdgeRole.Statements) this.walk(module,edge.node,block,mode); return; }
+    if (n.kind == NodeKind.VariableDeclaration || n.kind == NodeKind.UsingDeclaration) { this.declare(module,id,environment,mode); return; }
+    if (n.kind == NodeKind.FunctionDeclaration || n.kind == NodeKind.TypeAliasDeclaration || n.kind == NodeKind.InterfaceDeclaration || n.kind == NodeKind.ClassDeclaration || n.kind == NodeKind.UnionDeclaration || n.kind == NodeKind.EnumDeclaration) return;
+    if (n.kind == NodeKind.ExpressionStatement) { this.eval(module,bindingChild(n,EdgeRole.Expression),environment,mode); return; }
+    if (n.kind == NodeKind.ReturnStatement) { this.returned = this.eval(module,bindingChild(n,EdgeRole.Value),environment,mode); this.signal = "return"; return; }
+    if (n.kind == NodeKind.BreakStatement || n.kind == NodeKind.ContinueStatement) { this.signal = (n.kind == NodeKind.BreakStatement ? "break" : "continue"); return; }
+    if (n.kind == NodeKind.IfStatement) { const value: number = this.eval(module,bindingChild(n,EdgeRole.Condition),environment,mode); this.walk(module,bindingChild(n,this.values[value].scalar != 0 ? EdgeRole.ThenBranch : EdgeRole.ElseBranch),environment,mode); return; }
+    if (n.kind == NodeKind.WhileStatement || n.kind == NodeKind.ForStatement) {
+      const loop: number = this.environment(environment); const init: number = bindingChild(n,EdgeRole.Initializer);
+      if (init >= 0) { if (this.node(module,init).kind == NodeKind.VariableDeclaration) this.reserve(loop,this.binding.files[module].declarations[init]); if (isExpressionNodeKind(this.node(module,init).kind)) this.eval(module,init,loop,mode); else this.walk(module,init,loop,mode); }
       while (this.step(module,id)) {
-        const condition: number = bindingChild(n,"condition"); if (condition >= 0 && this.values[this.eval(module,condition,loop,mode)].scalar == 0) break;
-        this.walk(module,bindingChild(n,"body"),loop,mode); if (this.signal == "return") return; if (this.signal == "break") { this.signal = ""; break; } this.signal = "";
-        this.eval(module,bindingChild(n,"increment"),loop,mode);
+        const condition: number = bindingChild(n,EdgeRole.Condition); if (condition >= 0 && this.values[this.eval(module,condition,loop,mode)].scalar == 0) break;
+        this.walk(module,bindingChild(n,EdgeRole.Body),loop,mode); if (this.signal == "return") return; if (this.signal == "break") { this.signal = ""; break; } this.signal = "";
+        this.eval(module,bindingChild(n,EdgeRole.Increment),loop,mode);
       } return;
     }
-    if (n.kind == "ForOfStatement" || n.kind == "ForInStatement") {
-      if (n.get("await") == "true") { this.fail(module,id,"COMPTIME_FORBIDDEN_EFFECT","suspensión"); return; }
-      const input: number = this.eval(module,bindingChild(n,n.kind == "ForOfStatement" ? "iterable" : "target"),environment,mode); const value = this.values[input];
-      const binding: number = bindingChild(n,"binding"); const sid: number = this.binding.files[module].declarations[binding];
+    if (n.kind == NodeKind.ForOfStatement || n.kind == NodeKind.ForInStatement) {
+      if (n.get(AttributeKind.Await) == "true") { this.fail(module,id,"COMPTIME_FORBIDDEN_EFFECT","suspensión"); return; }
+      const input: number = this.eval(module,bindingChild(n,n.kind == NodeKind.ForOfStatement ? EdgeRole.Iterable : EdgeRole.Target),environment,mode); const value = this.values[input];
+      const binding: number = bindingChild(n,EdgeRole.Binding); const sid: number = this.binding.files[module].declarations[binding];
       const count: number = value.kind == "string" ? value.text.length : value.entries.length;
       for (let at: number = 0; at < count && this.step(module,id); at = at+1) {
         const loop: number = this.environment(environment); const cell: number = this.reserve(loop,sid);
-        let item: number = n.kind == "ForInStatement" ? this.put(constantNumber(at),module,id) : value.kind == "string" ? this.put(constantString(value.text.charAt(at)),module,id) : value.entries[at];
+        let item: number = n.kind == NodeKind.ForInStatement ? this.put(constantNumber(at),module,id) : value.kind == "string" ? this.put(constantString(value.text.charAt(at)),module,id) : value.entries[at];
         this.cells[cell].value = this.convert(item,this.checked.symbolTypes[sid],module,id); this.cells[cell].state = 1;
-        this.walk(module,bindingChild(n,"body"),loop,mode); if (this.signal == "return") return; if (this.signal == "break") { this.signal = ""; break; } this.signal = "";
+        this.walk(module,bindingChild(n,EdgeRole.Body),loop,mode); if (this.signal == "return") return; if (this.signal == "break") { this.signal = ""; break; } this.signal = "";
       } return;
     }
-    if (n.kind == "SwitchStatement") {
-      const subject: number = this.eval(module,bindingChild(n,"discriminant"),environment,mode); let matched: boolean = false; let fallback: number = -1;
-      for (const edge of n.edges) if (edge.role == "clauses") { const clause: AstNode = this.node(module,edge.node); if (clause.kind == "DefaultClause") fallback = edge.node; else { const value: number = this.eval(module,bindingChild(clause,"labels"),environment,mode); const equal: number = this.binary(module,id,subject,value,"=="); if (this.values[equal].scalar != 0) matched = true; } if (matched) break; }
-      let running: boolean = false; for (const edge of n.edges) if (edge.role == "clauses") { const clause: AstNode = this.node(module,edge.node); if (!running) { if (!matched) running = edge.node == fallback; else if (clause.kind != "DefaultClause") { const equal: number = this.binary(module,id,subject,this.eval(module,bindingChild(clause,"labels"),environment,mode),"=="); running = this.values[equal].scalar != 0; } } if (running) for (const statement of clause.edges) if (statement.role == "body") this.walk(module,statement.node,environment,mode); if (this.signal != "") break; }
+    if (n.kind == NodeKind.SwitchStatement) {
+      const subject: number = this.eval(module,bindingChild(n,EdgeRole.Discriminant),environment,mode); let matched: boolean = false; let fallback: number = -1;
+      for (const edge of n.edges) if (edge.role == EdgeRole.Clauses) { const clause: AstNode = this.node(module,edge.node); if (clause.kind == NodeKind.DefaultClause) fallback = edge.node; else { const value: number = this.eval(module,bindingChild(clause,EdgeRole.Labels),environment,mode); const equal: number = this.binary(module,id,subject,value,"=="); if (this.values[equal].scalar != 0) matched = true; } if (matched) break; }
+      let running: boolean = false; for (const edge of n.edges) if (edge.role == EdgeRole.Clauses) { const clause: AstNode = this.node(module,edge.node); if (!running) { if (!matched) running = edge.node == fallback; else if (clause.kind != NodeKind.DefaultClause) { const equal: number = this.binary(module,id,subject,this.eval(module,bindingChild(clause,EdgeRole.Labels),environment,mode),"=="); running = this.values[equal].scalar != 0; } } if (running) for (const statement of clause.edges) if (statement.role == EdgeRole.Body) this.walk(module,statement.node,environment,mode); if (this.signal != "") break; }
       if (this.signal == "break") this.signal = ""; return;
     }
-    this.fail(module,id,"COMPTIME_UNSUPPORTED","sentencia " + n.kind);
+    this.fail(module,id,"COMPTIME_UNSUPPORTED","sentencia " + nodeKindName(n.kind));
   }
   serialize(value: number, module: number, id: number): string {
     if (!this.step(module,id)) return ""; const v = this.values[value];
@@ -667,7 +668,7 @@ export class NativeComptime {
   }
   nested(module: number, id: number): boolean {
     let at: number = this.binding.files[module].parents[id];
-    while (at >= 0) { const n: AstNode = this.node(module,at); if (n.kind == "CallExpression" && this.helper(module,at) == "comptime") return true; if (callableBinding(n.kind) && this.decorated(module,at,"comptime")) return true; at = this.binding.files[module].parents[at]; } return false;
+    while (at >= 0) { const n: AstNode = this.node(module,at); if (n.kind == NodeKind.CallExpression && this.helper(module,at) == "comptime") return true; if (isCallableNodeKind(n.kind) && this.decorated(module,at,"comptime")) return true; at = this.binding.files[module].parents[at]; } return false;
   }
   evaluate(module: number, id: number, strict: boolean): void {
     this.values = []; this.cells = []; this.environments = []; this.instructions = 0; this.bytes = 0; this.depth = 0; this.signal = ""; this.returned = 0; this.failureCode = ""; this.failure = ""; this.rootModule = module; this.rootNode = id;
@@ -682,7 +683,7 @@ export class NativeComptime {
   }
   run(): CheckResult {
     for (let m: number = 0; m < this.checked.files.length; m = m+1) for (let id: number = 0; id < this.checked.files[m].types.length; id = id+1) {
-      if (this.binding.files[m].nodeScopes[id] < 0 || !["CallExpression","MemberCallExpression"].includes(this.node(m,id).kind)) continue;
+      if (this.binding.files[m].nodeScopes[id] < 0 || ![NodeKind.CallExpression,NodeKind.MemberCallExpression].includes(this.node(m,id).kind)) continue;
       const selected: number = this.checked.files[m].selected[id]; const selectedModule: number = this.checked.files[m].selectedModules[id]; const strict: boolean = this.helper(m,id) == "comptime";
       if (!strict && !(selected >= 0 && this.decorated(selectedModule,selected,"comptime"))) continue;
       if (this.nested(m,id)) this.checked.files[m].constantStates[id] = "deferred"; else this.evaluate(m,id,strict);

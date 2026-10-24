@@ -1,3 +1,4 @@
+import { AttributeKind, EdgeRole } from "../parser/ast-schema";
 import { ModuleGraph } from "../modules/loader";
 import { BindingResult } from "../binder/binder";
 import { CheckResult } from "./model";
@@ -27,11 +28,11 @@ export function resourceType(graph: constRef<ModuleGraph>, binding: constRef<Bin
   const sid: number = canonicalSymbol(text);
   if (sid >= 0 && sid < binding.symbols.length) {
     const owner = binding.symbols[sid]; const declaration = graph.modules[owner.module].cached.result.ast.nodes[owner.node]; let tokens: string[] = [];
-    for (const edge of declaration.edges) if (edge.role == "typeParameters") tokens.push("@" + numberToString(binding.files[owner.module].declarations[edge.node]));
+    for (const edge of declaration.edges) if (edge.role == EdgeRole.TypeParameters) tokens.push("@" + numberToString(binding.files[owner.module].declarations[edge.node]));
     for (let member: number = 0; member < binding.symbols.length; member = member + 1) {
       const field = binding.symbols[member]; if (field.module != owner.module || (field.scope) < 0 || (field.kind == "UnionVariant" ? binding.files[field.module].parents[field.node] != owner.node : binding.scopes[field.scope].node != owner.node)) continue;
       if (!["ClassField","InterfaceField","UnionVariant"].includes(field.kind)) continue;
-      const node = graph.modules[field.module].cached.result.ast.nodes[field.node]; if (node.get("isStatic") == "true") continue;
+      const node = graph.modules[field.module].cached.result.ast.nodes[field.node]; if (node.get(AttributeKind.IsStatic) == "true") continue;
       let value: string = checked.symbolTypes[member];
       for (let at: number = 0; at < tokens.length && at < arguments.length; at = at + 1) value = replaceType(value,tokens[at],arguments[at]);
       if (field.kind == "UnionVariant") { for (const payload of functionParams(value)) if (resourceType(graph,binding,checked,payload,next)) return true; }

@@ -26,8 +26,8 @@ before(async () => {
   // Complete asynchronous source reads before building executable fixtures.
   const frontend = await compileFile(entry, { baseDirectory: root });
   const parser = await compileFile(join(root,"bootstrap/parser/demo.ets"), { baseDirectory: root });
-  assert.deepEqual(frontend.moduleNames.map(file => relative(root,file)), ["bootstrap/lexer/lexer.ets","bootstrap/parser/parser.ets","bootstrap/frontend/frontend.ets","bootstrap/frontend/demo.ets"]);
-  assert.equal(parser.moduleNames.length, 2);
+  assert.deepEqual(frontend.moduleNames.map(file => relative(root,file)), ["bootstrap/lexer/lexer.ets","bootstrap/parser/ast-schema.ets","bootstrap/parser/parser.ets","bootstrap/frontend/frontend.ets","bootstrap/frontend/demo.ets"]);
+  assert.equal(parser.moduleNames.length, 3);
   for (const [name, result, executable] of [["frontend",frontend,binary],["parser",parser,parserBinary]] as const) {
     const build = join(directory,name); mkdirSync(build);
     writeFileSync(join(build,"estatic_common.hpp"),result.header);
@@ -102,10 +102,10 @@ test("bootstrap frontend preserves module syntax without resolving files or merg
   assert.ok(!results[0].ast.nodes.some(n=>n.kind==="VariableDeclaration"));
   assert.equal(results[1].ast.nodes.filter(n=>n.kind==="VariableDeclaration").length,1);
 });
-for(const file of ['bootstrap/lexer/lexer.ets','bootstrap/parser/parser.ets','bootstrap/frontend/frontend.ets','bootstrap/frontend/demo.ets'])
+for(const file of ['bootstrap/lexer/lexer.ets','bootstrap/parser/ast-schema.ets','bootstrap/parser/parser.ets','bootstrap/frontend/frontend.ets','bootstrap/frontend/demo.ets'])
   test(`bootstrap frontend parses real source with exact token/AST parity: ${file}`,()=>{assert.deepEqual(parity(readFileSync(join(root,file),"utf8"),file).diagnostics,[]);});
-test("bootstrap frontend graph integrates exactly four ETS modules and leaves isolated phases independent",()=>{
-  assert.equal(graph.modules.length,4);assert.deepEqual(graph.modules[0].dependencies,[]);assert.deepEqual(graph.modules[1].dependencies,[]);
+test("bootstrap frontend graph integrates exactly five ETS modules and leaves isolated phases independent",()=>{
+  assert.equal(graph.modules.length,5);assert.deepEqual(graph.modules[0].dependencies,[]);assert.deepEqual(graph.modules[1].dependencies,[]);
   const host=readFileSync(join(root,'bootstrap/frontend/run.ts'),'utf8');assert.doesNotMatch(host,/src\/(?:lexer|parser)|template-tokens|token-transport/);
 });
 test("bootstrap frontend accepts repository examples accepted by the direct stage 0 parser",t=>{

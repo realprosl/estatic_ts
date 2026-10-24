@@ -1,3 +1,4 @@
+import { AttributeKind, EdgeRole, NodeKind, nodeKindName } from "../parser/ast-schema";
 import { nativeBuiltinNames, nativeBuiltinTypes } from "../frontend/builtins";
 import { ModuleGraph } from "../modules/loader";
 import { AstNode, ParserToken } from "../parser/parser";
@@ -43,7 +44,7 @@ export class BindingResult {
   files: BoundFile[]; diagnostics: SourceDiagnostic[]; success: boolean;
   constructor() { this.scopes = []; this.symbols = []; this.references = []; this.exports = []; this.files = []; this.diagnostics = []; this.success = false; }
 }
-export function bindingChild(node: AstNode, role: string): number {
+export function bindingChild(node: AstNode, role: EdgeRole): number {
   for (const edge of node.edges) { if (edge.role == role) return edge.node; } return -1;
 }
 export function isBindingMember(kind: string): boolean {
@@ -113,7 +114,7 @@ export class Binder {
     while (stack.length > 0) {
       const work: ScopeWork = stack[stack.length - 1]; stack.pop();
       const node: AstNode = arena[work.node]; let scope: number = work.scope;
-      let symbol: number = -1; const kind: string = node.kind; const name: string = node.get("name");
+      let symbol: number = -1; const kind: string = nodeKindName(node.kind); const name: string = node.get(AttributeKind.Name);
       if (kind == "VariableDeclaration" || kind == "UsingDeclaration" || kind == "FunctionDeclaration") symbol = this.declare(name, kind, scope, module, work.node, true, false);
       else if (kind == "ClassDeclaration" || kind == "EnumDeclaration" || kind == "UnionDeclaration") symbol = this.declare(name, kind, scope, module, work.node, true, true);
       else if (kind == "InterfaceDeclaration" || kind == "TypeAliasDeclaration" || kind == "TypeParameter") symbol = this.declare(name, kind, scope, module, work.node, false, true);
@@ -124,11 +125,11 @@ export class Binder {
         const outer: number = this.result.scopes[scope].parent;
         symbol = this.declare(name, kind, outer, module, work.node, true, false);
       } else if (kind == "ImportSpecifier") {
-        const typeOnly: boolean = node.get("typeOnly") == "true";
-        symbol = this.declare(node.get("local"), "import", scope, module, work.node, !typeOnly, true);
+        const typeOnly: boolean = node.get(AttributeKind.TypeOnly) == "true";
+        symbol = this.declare(node.get(AttributeKind.Local), "import", scope, module, work.node, !typeOnly, true);
         if (symbol >= 0) this.result.symbols[symbol].typeOnly = typeOnly;
       }
-      if (kind == "Parameter" && node.get("parameterProperty") == "true") {
+      if (kind == "Parameter" && node.get(AttributeKind.ParameterProperty) == "true") {
         const parent: number = this.result.scopes[scope].parent;
         if (parent >= 0) {
           this.declare(name, "ClassField", parent, module, work.node, true, false);
@@ -147,7 +148,7 @@ export class Binder {
       for (let i: number = node.edges.length - 1; i >= 0; i = i - 1) {
         const child: number = node.edges[i].node;
         this.result.files[module].parents[child] = work.node;
-        stack.push(new ScopeWork(child, scope, callableBinding(kind) && node.edges[i].role == "body"));
+        stack.push(new ScopeWork(child, scope, callableBinding(kind) && node.edges[i].role == EdgeRole.Body));
       }
     }
   }
@@ -186,14 +187,14 @@ export class Binder {
   imports(module: number): void {
     const arena: AstNode[] = this.graph.modules[module].cached.result.ast.nodes;
     for (const request of this.graph.modules[module].requests) {
-      const node: AstNode = arena[request.node]; if (node.kind != "ImportDeclaration") continue;
+      const node: AstNode = arena[request.node]; if (node.kind != NodeKind.ImportDeclaration) continue;
       const dependency: number = this.dependency(module, request.node); if (dependency < 0) continue;
       for (const edge of node.edges) {
-        if (edge.role != "specifiers") continue;
+        if (edge.role != EdgeRole.Specifiers) continue;
         const specifier: AstNode = arena[edge.node]; const sid: number = this.result.files[module].declarations[edge.node];
         if (sid < 0) continue;
-        if (specifier.get("form") == "namespace") { this.result.symbols[sid].namespaceModule = dependency; continue; }
-        const entry: number = this.target(module, dependency, edge.node, specifier.get("imported"));
+        if (specifier.get(AttributeKind.Form) == "namespace") { this.result.symbols[sid].namespaceModule = dependency; continue; }
+        const entry: number = this.target(module, dependency, edge.node, specifier.get(AttributeKind.Imported));
         if (entry < 0) { this.result.symbols[sid].invalid = true; continue; }
         const exported: BoundExport = this.result.exports[entry]; const origin: number = this.origin(exported.symbol);
         this.result.symbols[sid].target = exported.symbol;
@@ -208,31 +209,31 @@ export class Binder {
     const root: number = this.graph.modules[module].cached.result.ast.root;
     for (const edge of arena[root].edges) {
       const node: AstNode = arena[edge.node]; const sid: number = this.result.files[module].declarations[edge.node];
-      if (node.kind == "ExportDefaultDeclaration") {
-        const declaration: number = bindingChild(node, "declaration"); let target: number = this.result.files[module].declarations[declaration];
+      if (node.kind == NodeKind.ExportDefaultDeclaration) {
+        const declaration: number = bindingChild(node, EdgeRole.Declaration); let target: number = this.result.files[module].declarations[declaration];
         if (target < 0) {
-          const kind: string = arena[declaration].kind;
+          const kind: string = nodeKindName(arena[declaration].kind);
           target = this.declare("default", kind, -1, module, declaration, true, kind == "ClassDeclaration");
         }
         this.publish(module, "default", target, false, true, edge.node);
-      } else if (node.get("exported") == "true" && sid >= 0) {
-        const old: number = this.exported(module, node.get("name"));
-        if (old < 0 || node.kind != "FunctionDeclaration" || this.result.exports[old].symbol != sid) this.publish(module, node.get("name"), sid, false, true, edge.node);
+      } else if (node.get(AttributeKind.Exported) == "true" && sid >= 0) {
+        const old: number = this.exported(module, node.get(AttributeKind.Name));
+        if (old < 0 || node.kind != NodeKind.FunctionDeclaration || this.result.exports[old].symbol != sid) this.publish(module, node.get(AttributeKind.Name), sid, false, true, edge.node);
       }
-      else if (node.get("exported") == "true" && node.get("pattern") != "") {
+      else if (node.get(AttributeKind.Exported) == "true" && node.get(AttributeKind.Pattern) != "") {
         for (const item of node.edges) {
-          if (item.role == "arrayBindings" || item.role == "objectBindings") {
+          if (item.role == EdgeRole.ArrayBindings || item.role == EdgeRole.ObjectBindings) {
             const target: number = this.result.files[module].declarations[item.node];
-            if (target >= 0) this.publish(module, arena[item.node].get("name"), target, false, true, item.node);
+            if (target >= 0) this.publish(module, arena[item.node].get(AttributeKind.Name), target, false, true, item.node);
           }
         }
       }
-      if (node.kind == "ExportNamedDeclaration") {
+      if (node.kind == NodeKind.ExportNamedDeclaration) {
         const dependency: number = this.dependency(module, edge.node);
         for (const item of node.edges) {
-          if (item.role != "specifiers") continue;
-          const specifier: AstNode = arena[item.node]; const name: string = specifier.get("name"); let symbol: number = -1;
-          let typeOnly: boolean = node.get("typeOnly") == "true" || specifier.get("typeOnly") == "true";
+          if (item.role != EdgeRole.Specifiers) continue;
+          const specifier: AstNode = arena[item.node]; const name: string = specifier.get(AttributeKind.Name); let symbol: number = -1;
+          let typeOnly: boolean = node.get(AttributeKind.TypeOnly) == "true" || specifier.get(AttributeKind.TypeOnly) == "true";
           if (dependency >= 0) {
             const entry: number = this.target(module, dependency, item.node, name);
             if (entry >= 0) { symbol = this.result.exports[entry].symbol; typeOnly = typeOnly || this.result.exports[entry].typeOnly; }
@@ -241,22 +242,22 @@ export class Binder {
             if (symbol < 0) this.report(module, item.node, "No existe el nombre exportado '" + name + "'");
             else typeOnly = typeOnly || this.result.symbols[symbol].typeOnly;
           }
-          if (symbol >= 0) this.publish(module, specifier.get("alias") == "" ? name : specifier.get("alias"), symbol, typeOnly, true, item.node);
+          if (symbol >= 0) this.publish(module, specifier.get(AttributeKind.Alias) == "" ? name : specifier.get(AttributeKind.Alias), symbol, typeOnly, true, item.node);
         }
-      } else if (node.kind == "ExportAllDeclaration" && node.get("namespace") != "") {
+      } else if (node.kind == NodeKind.ExportAllDeclaration && node.get(AttributeKind.Namespace) != "") {
         const dependency: number = this.dependency(module, edge.node); if (dependency < 0) continue;
-        const symbol: number = this.declare(node.get("namespace"), "namespace", -1, module, edge.node, true, true);
+        const symbol: number = this.declare(node.get(AttributeKind.Namespace), "namespace", -1, module, edge.node, true, true);
         this.result.symbols[symbol].namespaceModule = dependency;
-        this.publish(module, node.get("namespace"), symbol, node.get("typeOnly") == "true", true, edge.node);
+        this.publish(module, node.get(AttributeKind.Namespace), symbol, node.get(AttributeKind.TypeOnly) == "true", true, edge.node);
       }
     }
     for (const request of this.graph.modules[module].requests) {
-      const node: AstNode = arena[request.node]; if (node.kind != "ExportAllDeclaration" || node.get("namespace") != "") continue;
+      const node: AstNode = arena[request.node]; if (node.kind != NodeKind.ExportAllDeclaration || node.get(AttributeKind.Namespace) != "") continue;
       const dependency: number = this.dependency(module, request.node); if (dependency < 0) continue;
       const count: number = this.result.exports.length;
       for (let i: number = 0; i < count; i = i + 1) {
         const entry: BoundExport = this.result.exports[i];
-        if (entry.module == dependency && entry.name != "default") this.publish(module, entry.name, entry.symbol, entry.typeOnly || node.get("typeOnly") == "true", false, request.node);
+        if (entry.module == dependency && entry.name != "default") this.publish(module, entry.name, entry.symbol, entry.typeOnly || node.get(AttributeKind.TypeOnly) == "true", false, request.node);
       }
     }
   }
@@ -273,8 +274,8 @@ export class Binder {
           for (const declaration of current.declarations) {
             const node: AstNode = this.graph.modules[current.module].cached.result.ast.nodes[declaration];
             const parent: number = this.result.files[current.module].parents[declaration];
-            let exported: string = node.get("exported");
-            if (parent >= 0 && this.graph.modules[current.module].cached.result.ast.nodes[parent].kind == "ExportDefaultDeclaration") exported = "true";
+            let exported: string = node.get(AttributeKind.Exported);
+            if (parent >= 0 && this.graph.modules[current.module].cached.result.ast.nodes[parent].kind == NodeKind.ExportDefaultDeclaration) exported = "true";
             if (!first && visibility != exported) this.report(current.module, declaration, "Las sobrecargas requieren la misma visibilidad");
             first = false; visibility = exported;
           }
@@ -284,7 +285,7 @@ export class Binder {
   }
   reference(module: number, node: number, name: string, space: string): number {
     let scope: number = this.result.files[module].nodeScopes[node];
-    const definition: string = this.graph.modules[module].cached.result.ast.nodes[node].get("generatedDefinition");
+    const definition: string = this.graph.modules[module].cached.result.ast.nodes[node].get(AttributeKind.GeneratedDefinition);
     if (definition != "") for (let m: number = 0; m < this.graph.modules.length; m = m+1) if (this.graph.modules[m].file == definition) scope = this.result.files[m].scope;
     const sid: number = this.lookup(scope, name, space);
     if (sid < 0) {
@@ -352,7 +353,7 @@ export class Binder {
     const parent: number = this.result.files[module].parents[node];
     if (parent >= 0) {
       const owner: AstNode = this.graph.modules[module].cached.result.ast.nodes[parent];
-      if ((owner.kind == "MemberExpression" || owner.kind == "MemberCallExpression") && bindingChild(owner, "object") == node) return;
+      if ((owner.kind == NodeKind.MemberExpression || owner.kind == NodeKind.MemberCallExpression) && bindingChild(owner, EdgeRole.Object) == node) return;
     }
     this.report(module, node, "Un namespace requiere un miembro estático; no es un valor runtime");
   }
@@ -363,30 +364,30 @@ export class Binder {
     for (let id: number = 0; id < arena.length; id = id + 1) {
       const scope: number = this.result.files[module].nodeScopes[id]; if (scope < 0) continue;
       const node: AstNode = arena[id];
-      if (node.kind == "IdentifierExpression" || node.kind == "GenericIdentifierExpression") {
+      if (node.kind == NodeKind.IdentifierExpression || node.kind == NodeKind.GenericIdentifierExpression) {
         const parent: number = this.result.files[module].parents[id]; let typeOperand: boolean = false;
-        if (parent >= 0) { const expression: AstNode = arena[parent]; typeOperand = expression.kind == "BinaryExpression" && expression.get("operator") == "instanceof" && bindingChild(expression,"right") == id; }
-        if (typeOperand) this.typeReferences(module,id,node.get("name"),false);
-        else { const symbol: number = this.reference(module, id, node.get("name"), "value"); this.namespaceValue(module, id, symbol); }
-      } else if (node.kind == "CallExpression") {
-        const symbol: number = this.reference(module, id, node.get("callee"), "value"); this.namespaceValue(module, id, symbol);
+        if (parent >= 0) { const expression: AstNode = arena[parent]; typeOperand = expression.kind == NodeKind.BinaryExpression && expression.get(AttributeKind.Operator) == "instanceof" && bindingChild(expression,EdgeRole.Right) == id; }
+        if (typeOperand) this.typeReferences(module,id,node.get(AttributeKind.Name),false);
+        else { const symbol: number = this.reference(module, id, node.get(AttributeKind.Name), "value"); this.namespaceValue(module, id, symbol); }
+      } else if (node.kind == NodeKind.CallExpression) {
+        const symbol: number = this.reference(module, id, node.get(AttributeKind.Callee), "value"); this.namespaceValue(module, id, symbol);
       }
-      else if (node.kind == "NewExpression") this.typeReferences(module, id, node.get("className"), true);
+      else if (node.kind == NodeKind.NewExpression) this.typeReferences(module, id, node.get(AttributeKind.ClassName), true);
       for (const attribute of node.attributes) {
-        if (attribute.name == "declaredType" || attribute.name == "type" || attribute.name == "returnType" || attribute.name == "constraint" || attribute.name == "targetType" || attribute.name == "typeArgument" || attribute.name == "payload" || (node.kind == "TypeParameter" && attribute.name == "default")) this.typeReferences(module, id, attribute.value, false);
+        if (attribute.name == AttributeKind.DeclaredType || attribute.name == AttributeKind.Type || attribute.name == AttributeKind.ReturnType || attribute.name == AttributeKind.Constraint || attribute.name == AttributeKind.TargetType || attribute.name == AttributeKind.TypeArgument || attribute.name == AttributeKind.Payload || (node.kind == NodeKind.TypeParameter && attribute.name == AttributeKind.Default)) this.typeReferences(module, id, attribute.value, false);
       }
     }
     // Resolve static namespace chains after lexical names, in dependency order
     // of expression nodes (parser allocates member parents after their object).
     for (let id: number = 0; id < arena.length; id = id + 1) {
       const node: AstNode = arena[id]; const scope: number = this.result.files[module].nodeScopes[id];
-      if (scope < 0 || (node.kind != "MemberExpression" && node.kind != "MemberCallExpression")) continue;
-      const object: number = bindingChild(node, "object"); let receiver: number = -1;
+      if (scope < 0 || (node.kind != NodeKind.MemberExpression && node.kind != NodeKind.MemberCallExpression)) continue;
+      const object: number = bindingChild(node, EdgeRole.Object); let receiver: number = -1;
       for (const reference of this.result.references) { if (reference.module == module && reference.node == object && reference.space == "value" && !reference.deferred) receiver = reference.symbol; }
       const origin: number = this.origin(receiver);
-      const member: string = node.kind == "MemberExpression" ? node.get("member") : node.get("method");
+      const member: string = node.kind == NodeKind.MemberExpression ? node.get(AttributeKind.Member) : node.get(AttributeKind.Method);
       if (origin >= 0 && this.result.symbols[origin].namespaceModule >= 0) {
-        if (node.get("optional") == "true") this.report(module, id, "Un namespace no admite acceso opcional");
+        if (node.get(AttributeKind.Optional) == "true") this.report(module, id, "Un namespace no admite acceso opcional");
         const symbol: number = this.namespaceMember(module, id, receiver, member, "value"); this.namespaceValue(module, id, symbol);
       }
       else this.result.references.push(new BoundReference(module, id, scope, member, "member", -1, -1, true));
