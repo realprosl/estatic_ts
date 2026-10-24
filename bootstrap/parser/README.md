@@ -155,7 +155,9 @@ cobertura compartida. Sus diferencias se prueban por separado:
 - `Discriminator` tiene atributos `field`, `literalType` y `value`; los
   discriminadores numéricos usan el mismo texto decimal exacto que enum.
 - Se admite la forma canónica `union Nombre<T> = Variante(T) | Otra;`.
-  La forma histórica con parámetros antes del nombre no está soportada.
+  También se conserva `union<T> Nombre = Variante(T) | Otra;`, reteniendo
+  sus parámetros genéricos. Stage 0 acepta esta escritura pero los descarta.
+  Una declaración no puede combinar listas antes y después del nombre.
 
 Switch se comprueba contra árboles esperados independientes: stage 0 tiene un
 tipo AST `SwitchStatement`, pero su parser no lo reconoce y su codegen omite
@@ -439,7 +441,7 @@ entrada. Los mensajes y la recuperación de errores de TS y ETS no son idéntico
 los spans nuevos de parámetros, bindings y decoradores siguen el contrato local.
 Las formas excluidas en las secciones anteriores continúan fuera de alcance:
 TypeScript completo, import dinámico/import=, atributos de importación, tagged
-templates, regex, destructuring anidado/rest y la forma histórica de union.
+templates, regex y destructuring anidado/rest.
 Tras un tipo genérico hace falta separar `>` y `=` para evitar `>=`, como en
 stage 0. No se validan aquí tipos, acceso, ownership ni resolución de módulos.
 

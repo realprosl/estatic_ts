@@ -36,10 +36,16 @@ export class LoadedFile {
     }
   }
 }
+export class GeneratedSource {
+  id: string; module: number; call: number; generatorModule: number; generator: number; parentId: string; source: string; start: ParserToken; end: ParserToken;
+  constructor(id: string, module: number, call: number, generatorModule: number, generator: number, parentId: string, source: string, start: ParserToken, end: ParserToken) {
+    this.id = id; this.module = module; this.call = call; this.generatorModule = generatorModule; this.generator = generator; this.parentId = parentId; this.source = source; this.start = start; this.end = end;
+  }
+}
 export class ModuleGraph {
-  entry: string; modules: LoadedFile[]; diagnostics: SourceDiagnostic[]; hits: number; misses: number; writes: number; success: boolean;
+  generatedSources: GeneratedSource[]; entry: string; modules: LoadedFile[]; diagnostics: SourceDiagnostic[]; hits: number; misses: number; writes: number; success: boolean;
   constructor(entry: string) {
-    this.entry = entry; this.modules = []; this.diagnostics = []; this.hits = 0; this.misses = 0; this.writes = 0; this.success = true;
+    this.generatedSources = []; this.entry = entry; this.modules = []; this.diagnostics = []; this.hits = 0; this.misses = 0; this.writes = 0; this.success = true;
   }
 }
 export function originToken(): ParserToken { return new ParserToken("", "", 0, 1, 1, 0, 1, 1); }

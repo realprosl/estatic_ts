@@ -3,7 +3,7 @@
 El lenguaje completo sigue pendiente. El [registro de cierre](../PENDING.md)
 es la referencia para completar este núcleo antes de empezar el IR.
 `npm run audit:bootstrap` es una puerta de cobertura separada de las regresiones:
-actualmente falla y no se interpreta como una suite terminada.
+pasa 83/83 obligaciones de referencia y no certifica por sí sola el cierre del lenguaje.
 
 ```bash
 npm run bootstrap:checker -- examples/hello.ets --cache build/project-cache
@@ -12,7 +12,8 @@ npm run test:bootstrap:checker
 ```
 
 Node construye el ejecutable. Después el binario abre el proyecto, ejecuta el
-cargador, el binder y `checkProject(graph, binding)` en ETS compilado a C++20.
+cargador y `analyzeProject(graph)` en ETS compilado a C++20. Este punto de entrada
+expande los generadores ETS, enlaza y comprueba el grafo resultante.
 No consulta el checker TypeScript para analizar el proyecto solicitado. Los tests
 sí lo usan como referencia diferencial para un conjunto acotado de casos.
 
@@ -97,8 +98,9 @@ semántica ni ejecución concurrente del checker.
   forma estructural arbitraria para objetos sin contexto.
 - Builtins de impresión, `numberToString`, `argument`, `argumentCount`,
   `exitProcess`, métodos de string y un subconjunto de métodos de array
-  (`push`, `pop`, `includes`, `join` de strings y `slice`). Firmas contrastadas
-  con stage 0; los otros builtins se rechazan explícitamente.
+  (`push`, `pop`, `includes`, `join`, `slice` y consumidores funcionales). Los
+  contratos concretos se generan desde las tablas de stage 0 y se verifican
+  con `node --experimental-strip-types scripts/generate-native-builtins.ts --check`.
 - Lecturas locales evidentes antes de inicialización, ciclos de inferencia y
   aliases circulares. Rangos de literales enteros decimales en contextos
   numéricos concretos, también al pasar argumentos. La rama de cierre añade
@@ -111,13 +113,16 @@ semántica ni ejecución concurrente del checker.
   por estabilización de estados, conservando break/continue y préstamos del iterable.
 - Aliases y clases genéricas con sustitución de miembros, constraints/defaults
   básicos; Optional/Result con helpers, parámetros opcionales, `??` y acceso
-  opcional a campos. Las llamadas a métodos opcionales siguen pendientes.
-- Globals de string, Math, console, Date, JSON y un subconjunto de filesystem.
+  opcional a campos y llamadas, con cortocircuito de argumentos y efectos.
+- Globals de string, Math, console/terminal, Date, JSON, filesystem, path/process,
+  HTTP/red, timers y FileReader. El catálogo estático generado se comparte con
+  los contratos de stage 0; las operaciones genéricas se comprueban en ETS.
   Los efectos externos se publican separados de las lecturas/escrituras de símbolos.
 
 Los packs de funciones admiten inferencia, argumentos explícitos, vacío y
 forwarding; la firma elegida conserva la expansión ordenada. Los packs con
-owners o préstamos se rechazan explícitamente. Los agregados con owners se
+owners exigen transferencias explícitas y conservan `argumentElements`; los packs
+que almacenarían préstamos se rechazan sin un contrato de lifetime. Los agregados con owners se
 comprueban como move-only, con movimientos parciales y restauración por ruta,
 también después de sustituir parámetros genéricos. Ver [SAFETY.md](./SAFETY.md).
 
@@ -137,6 +142,14 @@ las arenas del proyecto; uno negativo representa un origen opaco (parámetro o
 llamada sin implementación). Son IDs de esta carga, no un formato persistente.
 Ver [EFFECTS.md](./EFFECTS.md) y [SAFETY.md](./SAFETY.md).
 
+## Procedencia y contrato de salida
+
+Cada archivo del resultado conserva su AST, ruta canónica, ID persistente y hash
+de contenido. `symbolIds` normaliza identidades entre cargas; `moduleRecords`
+publica interfaces, cuerpos y dependencias para invalidación futura. Los IDs
+numéricos de nodos y símbolos siguen siendo locales a la carga. El contrato y
+sus límites están en [MODULES.md](./MODULES.md). No se implementa backend ni IR.
+
 ## Consultas y composición de tipos
 
 El parser nativo admite sufijos de arrays, unions e intersecciones tras una
@@ -153,9 +166,9 @@ expresiones; dos consultas de la misma anotación no se pisan. Las posiciones
 siguen ancladas al nodo propietario de la anotación.
 
 Los arrays dinámicos y fijos conservan la precedencia del elemento union,
-intersección o callable en su representación canónica. Las unions que contienen
-callables se rechazan explícitamente mientras no exista una representación sin
-ambigüedad con la union del retorno; no se reinterpretan silenciosamente.
+intersección o callable en su representación canónica. Las unions con callables y los tipos agrupados conservan la distinción respecto
+a una función que devuelve una union. Los guards typeof refinan alternativas
+y los ternarios publican su tipo común o union sin cambiar el tipo de una rama.
 
 ## Evaluación nativa de constantes
 
@@ -167,10 +180,27 @@ las tablas y los límites están en [COMPTIME.md](./COMPTIME.md).
 
 ## Límites y diferencias conocidas
 
-Se emite `Comprobación nativa pendiente: ...` para parámetros
-out, llamadas opcionales, builtins no registrados y expansión cppgen/etsgen. Las sobrecargas como valor requieren contexto
-callable y seleccionan también sus efectos; la instanciación genérica avanzada
-sigue abierta.
+El punto de entrada `analyzeProject` expande @etsgen sobre una copia del grafo,
+resuelve símbolos y comprueba el AST resultante. `checkProject` comprueba un grafo
+ya expandido. Las llamadas opcionales conservan el receptor efectivo en
+`receivers[node]`, el resultado Optional y la firma de la invocación interior;
+los argumentos y efectos solo se ejecutan si existe el payload. Un método void
+con acceso opcional produce void.
+
+`out` conserva el contrato vigente de referencia mutable de entrada/salida a
+una variable inicializada. Se publica como ref<T> en la firma, junto con el
+atributo out de la declaración; se comprueban mutabilidad, aliasing, préstamos y
+los movimientos que el cuerpo propaga al caller. No admite optional, default,
+rest, propiedad de parámetro ni suspensión async.
+
+`@cppgen` conserva un contrato de sentencia opaca: no produce un valor runtime,
+publica efectos externos desconocidos y no se ejecuta durante comptime. Los
+decoradores ABI conservan sus datos y validan objetivo y argumentos. La emisión
+de C++ de esos escapes pertenece al backend y queda fuera de esta entrega. Las sobrecargas como valor requieren contexto callable y
+seleccionan también sus efectos. La sustitución genérica comprueba ownership
+sobre el cuerpo instanciado, incluidos préstamos readonly y aliasing. Una función
+genérica como valor requiere un arrow que fije los argumentos de tipo; los
+literales de objeto requieren contexto de interfaz, según el dialecto vigente.
 
 Se comprueban argumentos nombrados/rest/spread, uniones declaradas y payloads,
 Map/Set/delete y callbacks de arrays. `argumentParameters` conserva la posición
@@ -178,9 +208,10 @@ formal de cada argumento sin reordenar el AST ni su evaluación. El narrowing po
 discriminador e instanceof se aplica en ramas, guards, cortocircuitos y ternarios;
 una llamada o escritura invalida conservadoramente las garantías anteriores.
 Match comprueba casos, callbacks y resultados, conservando efectos y procedencia.
-La exhaustividad y la composición completa de tipos siguen pendientes. Async
+`matchCoverage[node]` publica `total` o `traps`: si no coincide ningún caso, la
+operación termina con un trap. En comptime se diagnostica COMPTIME_MATCH_UNMATCHED. Async
 mantiene restricciones sobre parámetros prestados, tareas opacas, resultados
-owners en for-await, suspensiones en inicializadores de campos y capturas de receptores. Sus comprobaciones de contenedores
+prestados en for-await, suspensiones en inicializadores de campos y capturas de receptores. Sus comprobaciones de contenedores
 son conservadoras respecto al orden y la multiplicidad de tareas.
 
 Los constructores comprueban inicialización por rutas, lectura anticipada y
@@ -235,3 +266,39 @@ sin reescribirlos. Es una demostración del frontend; no ejecuta el programa.
 Antes del IR común descrito en [IR.md](./IR.md) se debe cerrar el
 [registro del lenguaje](../PENDING.md). El IR sigue siendo un contrato de
 diseño: esta entrega no implementa el IR ni sus codegens.
+
+Los constructores implícitos por composición publican `constructionFields[node]`
+con los símbolos de campos en orden de declaración y `argumentParameters[arg]`
+con la posición formal de cada argumento; el AST conserva el orden original de
+evaluación. Si existen inicializadores de campos, el constructor implícito no
+acepta argumentos. Los campos static no forman parte de la composición.
+
+Optional admite map, andThen y orElse con tipos y efectos de callbacks. map y
+andThen invocan el callback cero o una vez y prestan temporalmente el receptor;
+los payloads con ownership requieren parámetros prestados. orElse recibe un
+Optional alternativo. Result publica los discriminadores inmutables kind
+(Ok/Err) y ok (boolean). La evaluación comptime conserva estas operaciones.
+
+@etsgen publica `generatedSources` con id, módulo/callsite, generador, padre y
+texto virtual. Cada nodo generado conserva el id y sus coordenadas internas en
+atributos, además del span primario de la llamada. Los diagnósticos incluyen
+`generated.sourceId` y la posición en el fragmento. El orden usado por el análisis
+de flujo se calcula aparte de los spans de origen. Se mantienen higiene léxica,
+publicación explícita @etsPublish, etsCapture y etsDefinition, y se rechazan
+imports/exports dentro de fragmentos. Los errores originales sobreviven al
+chequeo final; un argumento inválido se comprueba antes de eliminar la llamada.
+
+La API pública comprueba también las referencias a tipos en constraints y defaults
+de genéricos, incluidos métodos y declaraciones generadas. Los valores callable
+conservan la aridad de su tipo: defaults y parámetros opcionales de una declaración
+sólo permiten omisión en llamadas directas, igual que el contrato vigente de stage 0.
+
+`npm run audit:bootstrap:self` construye un ejecutable de auditoría que carga y
+analiza las fuentes del frontend con sus propias pasadas ETS. Publica módulos,
+símbolos, nodos tipados y diagnósticos; el modo trace muestra sus fases por stderr.
+La construcción del ejecutable usa el adaptador existente, sin analizar con el
+checker TypeScript el proyecto solicitado ni generar su backend.
+El adaptador permite construir la auditoría con optimización O2; las pruebas
+funcionales conservan O0. Las consultas de argumentos y estados inmutables usan
+constRef para evitar copiar tablas completas en cada acceso. La comparación de
+gramática está en [SYNTAX-PARITY.md](../SYNTAX-PARITY.md).

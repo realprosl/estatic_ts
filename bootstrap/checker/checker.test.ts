@@ -1,6 +1,7 @@
+import {createHash} from "node:crypto";
 import {test,before,after} from "node:test";
 import assert from "node:assert/strict";
-import {mkdtempSync,mkdirSync,writeFileSync,rmSync,readFileSync} from "node:fs";
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync,readFileSync,readdirSync} from "node:fs";
 import {dirname,join} from "node:path";
 import {spawnSync} from "node:child_process";
 import {Lexer} from "../../src/lexer/lexer.ts";
@@ -99,8 +100,7 @@ const invalid:[string,string,RegExp][]=[
 for(const[name,source,pattern]of invalid)test(`checker rejects ${name}`,()=>error(source,pattern));
 for(const[name,source]of Object.entries({
  object:'const x={a:1};',
- out:'function f(out x:number):void{x=1;}',
-}))test(`checker fails explicitly for pending ${name}`,()=>error(source,/pendiente/));
+}))test(`checker rejects object literal without interface context ${name}`,()=>error(source,/requiere contexto de interfaz/));
 
 test('checker: inferred node and symbol types plus selected overload',()=>{const g=check(valid.overload);assert.deepEqual(types(g,'CallExpression'),['number','string']);assert.equal(g.files[0].selected.filter((n:number)=>n>=0).length,2);const symbols=g.binding.symbols;assert.equal(g.symbolTypes[symbols.findIndex((s:any)=>s.name==='n')],'number');});
 test('checker: imported function and alias use original types',()=>{const g=check('import {f,N} from "./lib"; const n:N=f(2);',{'lib.ets':'export type N=number; export function f(x:N):N{return x;}'});assert.equal(g.files.length,2);assert.ok(types(g,'CallExpression').includes('number'));});
@@ -275,7 +275,7 @@ test('native safety: interface method calls do not dereference a missing body',(
 for(const name of ['move','borrowedParameter','sharedParameter','sharedBorrows','localClosure','returnedReader','globalClosure','fullRoutes'])test(`native safety differential accepts ${name}`,()=>{const source=safetyValid[name];const ast=new Parser(new Lexer(source).tokenize()).parseProgram();new TypeChecker().check(ast);check(source);});
 for(const name of ['useMoved','doubleMove','movePlain','maybeMove','borrowField','borrowReturn','overlap','closureBorrow','directEscape','aliasEscape'])test(`native safety differential rejects ${name}`,()=>{const [,source]=safetyInvalid.find(([key])=>key===name)!;assert.throws(()=>{const ast=new Parser(new Lexer(source).tokenize()).parseProgram();new TypeChecker().check(ast);},DiagnosticError);run(fixture(source),1);});
 test('native safety: unions cannot hide a borrowed lifetime',()=>error(box+'function f():void{let b=new Box();const r:ref<Box>|number=ref(b);}',/E4203/));
-test('native safety: generic substitution cannot hide owner copying',()=>error(box+'function id<T>(x:T):T{return x;}let p:ptr<Box> = new Box();const q=id(move(p));',/genérica con contrato/));
+test('native safety: generic substitution cannot hide owner copying',()=>error(box+'function id<T>(x:T):T{return x;}let p:ptr<Box> = new Box();const q=id(move(p));',/E4101/));
 
 for(const name of ['nll','unusedBorrows'])test(`native safety known stage-zero line-granularity limitation: ${name}`,()=>{assert.throws(()=>{const ast=new Parser(new Lexer(safetyValid[name]).tokenize()).parseProgram();new TypeChecker().check(ast);},DiagnosticError);check(safetyValid[name]);});
 test('native safety: default arguments are evaluated at the actual call site',()=>error('const n=f();let late=1;function f(x:number=late):number{return x;}',/E4001/));
@@ -879,8 +879,6 @@ for(const [name,source] of Object.entries({
  wrongBranch:'union R={ok:true;value:number}|{ok:false;error:string};function f(r:R):number{if(r.ok==false)return r.value;return 0;}',
  objectMissing:'union R={ok:true;value:number}|{ok:false;error:string};const r:R={ok:true};',
  mutateTag:'union R={ok:true;value:number}|{ok:false;error:string};let r:R={ok:true,value:1};r.ok=false;',
- instancePrimitive:'class A{x:number=1;}const b=1 instanceof A;',
- instanceTarget:'class A{x:number=1;}const a=new A();const b=a instanceof number;',
 }))test(`native narrowing rejects ${name}`,()=>run(fixture(source),1));
 test('native narrowing invalidates facts after branch assignments',()=>error('union R={ok:true;value:number}|{ok:false;error:string};function f(r:R,b:boolean):number{if(r.ok){if(b)r={ok:false,error:"s"};return r.value;}return 0;}',/narrowing/));
 test('native inferred returns cannot reuse facts after calls',()=>error('union R={ok:true;value:number}|{ok:false;error:string};const f=(r:R)=>{if(r.ok){print(1);return r.value;}return 0;};',/narrowing/));
@@ -971,7 +969,6 @@ for(const [name,source] of Object.entries({
  dynamicSpread:'function f<...T>(...values:T):void{}const a=[1,2];f(...a);',
  named:'function f<...T>(...values:T):void{}f(values:1);',
  range:'function f<...T>(...values:T):void{}f<i8>(128);',
- hiddenOwner:'class Box{x:number=1;}function f<...T>(...values:T):void{}let p:ptr<Box> = new Box();f(move(p));',
 }))test(`native generic packs reject ${name}`,()=>run(fixture(source),1));
 test('native generic packs publish the ordered instantiated signature',()=>{
  const g=check('function f<...T>(...values:T):void{}f<number,string>(1,"s");');const f=g.files[0];const id=f.ast.nodes.findIndex((n:any)=>n.kind==='CallExpression'&&n.attributes.some((a:any)=>a.name==='callee'&&a.value==='f'));assert.equal(f.signatures[id],'(...pack<number,string>)=>void');const args=f.ast.nodes[id].edges.filter((e:any)=>e.role==='args');assert.deepEqual(args.map((e:any)=>f.argumentParameters[e.node]),[0,0]);
@@ -1050,7 +1047,7 @@ test('native aggregate ownership rejects copying concat receiver',()=>error(owne
 test('native aggregate ownership rejects shifting a moved element',()=>error(ownerBox+'let a:ptr<Box>[]=[new Box(),new Box()];const p=move(a[1]);delete a[0];print(a[0].value);',/E4102/));
 test('native aggregate ownership allows consuming slice',()=>check(ownerBox+'let a:ptr<Box>[]=[new Box()];const b=move(a).slice(0,1);'));
 
-test('native generic packs cannot hide aggregate owners',()=>error(ownerHolder+'function show<...T>(...values:T):void{print(values);}let h=new Holder();show(h);',/E4203/));
+test('native generic packs cannot hide aggregate owners',()=>error(ownerHolder+'function show<...T>(...values:T):void{print(values);}let h=new Holder();show(h);',/E4101/));
 test('native aggregate ownership can display an owner without copying it',()=>check(ownerHolder+'let h=new Holder();print(h);print(h.p.value);'));
 test('native aggregate ownership rejects moving a displayed owner in the same call',()=>error(ownerHolder+'let h=new Holder();print(h,move(h));',/E4206/));
 
@@ -1398,5 +1395,547 @@ for(const[name,source,expected]of [
  ['callableQueryFixed','function f(x:number):string{return "x";} type Q=typeof f[1]; const result:Q=[(x:number):string=>"a"];','((number)=>string)[1]'],
  ['unionArrayNested','type V=number|string; type Q=V[][]; const result:Q=[[1,"x"]];','(number|string)[][]'],
 ] as const)test(`native type composition preserves aggregate precedence: ${name}`,()=>{const g=check(source);assert.equal(namedType(g,'result'),expected);});
-test('native type composition rejects ambiguous callable unions explicitly',()=>error('function f():number{return 1;} type Q=typeof f|string;',/pendiente.*unions con callables/));
+test('frontend closure: callable union is represented without changing its return',()=>{const g=check('function f():number{return 1;} type Q=typeof f|string; const result:Q=():number=>2;');assert.equal(namedType(g,'Q'),'(()=>number)|string');});
 test('native type composition union arrays reject unrelated elements',()=>error('type V=number|string; const a:V[]=[true];',/incompatible/));
+
+for(const[name,source,expected]of [
+ ['callableReturnUnion','type F=(x:number)=>number|string; const result:F=(x:number):number=>x;','(number)=>number|string'],
+ ['groupedCallable','type F=((x:number)=>number); const result:F=(x:number):number=>x;','(number)=>number'],
+ ['unionOfCallables','type A=()=>number;type B=()=>string;type Q=A|B;const result:Q=():number=>1;','(()=>number)|(()=>string)'],
+ ['arrayOfCallableUnion','type A=()=>number;type B=()=>string;type Q=(A|B)[];const result:Q=[():number=>1,():string=>"x"];','((()=>number)|(()=>string))[]'],
+ ['queryOfGrouped','const n=1;type Q=(typeof n|string)[];const result:Q=[1,"x"];','(number|string)[]'],
+ ['nestedUnionReturn','type A=()=>number|string;type Q=A|boolean;const result:Q=():number=>1;','(()=>number|string)|boolean'],
+ ['functionArgumentUnion','type F=(x:number|string)=>boolean;const result:F=(x:number|string):boolean=>true;','(number|string)=>boolean'],
+] as const)test(`frontend closure type grammar: ${name}`,()=>{const g=check(source);assert.equal(namedType(g,'result'),expected);});
+for(const[name,source]of [
+ ['wrongFunctionReturn','type Q=(()=>number)|string;const result:Q=():boolean=>true;'],
+ ['wrongReturnUnion','type F=()=>number|string;const result:F=():boolean=>true;'],
+ ['wrongUnionArray','type Q=((()=>number)|string)[];const result:Q=[true];'],
+] as const)test(`frontend closure rejects incompatible composed types: ${name}`,()=>error(source,/incompatible/));
+
+for(const[name,source,expected]of [
+ ['ternaryUnion','const result=true?1:"x";','number|string'],
+ ['ternaryFunctionUnion','const a=():number=>1;const b=():string=>"x";const result=true?a:b;','(()=>number)|(()=>string)'],
+ ['genericUnionArray','type V<T> =T[];type E=number|string;const result:V<E> =[1,"x"];','(number|string)[]'],
+ ['genericCallableUnion','type V<T> =T|string;const result:V<()=>number> =():number=>1;','(()=>number)|string'],
+ ['genericFixedUnion','type V<T> =T[2];type E=number|string;const result:V<E> =[1,"x"];','(number|string)[2]'],
+] as const)test(`frontend closure preserves inferred composition: ${name}`,()=>{const g=check(source);assert.equal(namedType(g,'result'),expected);});
+for(const[name,source]of [
+ ['callableGuard','type Q=(()=>number)|string;function f(x:Q):number{if(typeof x=="function")return x();return x.length;}'],
+ ['reverseGuard','type Q=(()=>number)|string;function f(x:Q):number{if("function"==typeof x)return x();return x.length;}'],
+ ['negativeGuard','type Q=(()=>number)|string;function f(x:Q):number{if(typeof x!="function")return x.length;return x();}'],
+ ['numericGuard','function f(x:number|string):number{if(typeof x=="number")return x+1;return x.length;}'],
+] as const)test(`frontend closure type guards: ${name}`,()=>check(source));
+test('frontend closure rejects callable union without a guard',()=>error('type Q=(()=>number)|string;function f(x:Q):number{return x();}',/no es invocable/));
+test('frontend closure preserves captured callback effects across a type guard',()=>error('class Box{}let p:ptr<Box> =new Box();function f(cb:(()=>void)|string):void{if(typeof cb=="function")cb();}const read=ref(p);f(():void=>{const q=move(p);});print(read);',/E4207|E4104|E4210/));
+
+function moduleRecord(g:any,name:string){const record=g.moduleRecords.find((r:any)=>r.file.endsWith('/'+name));assert.ok(record,name);return record;}
+function rewriteProject(f:ReturnType<typeof fixture>,name:string,text:string){writeFileSync(join(dirname(f.entry),name),text);}
+test('frontend provenance: typed arenas retain module identity and source hash',()=>{
+ const source='import {f} from "./lib"; const n=f();';const g=check(source,{'lib.ets':'export function f():number{return 1;}'});
+ assert.equal(g.symbolIds.length,g.binding.symbols.length);
+ for(const file of g.files){const record=moduleRecord(g,file.file.split('/').at(-1));assert.match(record.id,/^module:[0-9a-f]{64}$/);assert.equal(file.moduleId,record.id);assert.equal(file.sourceHash,record.sourceHash);assert.equal(record.sourceHash,createHash('sha256').update(readFileSync(file.file)).digest('hex'));assert.match(record.interfaceHash,/^[0-9a-f]{64}$/);assert.match(record.semanticKey,/^[0-9a-f]{64}$/);}
+ const reference=g.binding.references.find((r:any)=>r.name==='f'&&g.files[r.module].file.endsWith('/main.ets'));assert.ok(reference);const original=g.binding.symbols[reference.target];assert.ok(g.files[original.module].file.endsWith('/lib.ets'));assert.equal(g.symbolIds[reference.symbol],g.symbolIds[reference.target]);
+});
+test('frontend provenance: cold and warm loads have identical semantic records',()=>{
+ const f=fixture('import {f} from "./lib";const n=f();',{'lib.ets':'export function f():number{return 1;}'});const a=run(f);const b=run(f);assert.deepEqual(a.moduleRecords,b.moduleRecords);assert.deepEqual(a.symbolIds,b.symbolIds);
+});
+test('frontend provenance: module insertion does not renumber persistent nominal identities',()=>{
+ const f=fixture('import {C} from "./lib";const c=new C();',{'lib.ets':'export class C{x:number=1;}','other.ets':'export class Other{value:string="x";}'});const a=run(f);rewriteProject(f,'main.ets','import {Other} from "./other";import {C} from "./lib";const c=new C();');const b=run(f);
+ assert.deepEqual(moduleRecord(a,'lib.ets'),moduleRecord(b,'lib.ets'));
+ const sid=(g:any)=>g.binding.symbols.findIndex((s:any)=>s.name==='C'&&s.kind==='ClassDeclaration');assert.notEqual(sid(a),sid(b));assert.equal(a.symbolIds[sid(a)],b.symbolIds[sid(b)]);
+});
+test('frontend provenance: ordinary body edits preserve consumer interface inputs',()=>{
+ const f=fixture('import {f} from "./lib";export function g():number{return f();}',{'lib.ets':'export function f():number{return 1;}'});const a=run(f);rewriteProject(f,'lib.ets','export function f():number{return 2;}');const b=run(f);
+ const old=moduleRecord(a,'lib.ets'),next=moduleRecord(b,'lib.ets');assert.notEqual(old.sourceHash,next.sourceHash);assert.notEqual(old.implementationHash,next.implementationHash);assert.equal(old.interfaceHash,next.interfaceHash);assert.equal(old.requiresBody,false);
+ assert.equal(moduleRecord(a,'main.ets').semanticKey,moduleRecord(b,'main.ets').semanticKey);
+});
+test('frontend provenance: public type changes invalidate inferred consumers',()=>{
+ const f=fixture('import {f} from "./lib";export const g=()=>f();',{'lib.ets':'export function f():number{return 1;}'});const a=run(f);rewriteProject(f,'lib.ets','export function f():string{return "x";}');const b=run(f);
+ assert.notEqual(moduleRecord(a,'lib.ets').interfaceHash,moduleRecord(b,'lib.ets').interfaceHash);assert.notEqual(moduleRecord(a,'main.ets').interfaceHash,moduleRecord(b,'main.ets').interfaceHash);assert.notEqual(moduleRecord(a,'main.ets').semanticKey,moduleRecord(b,'main.ets').semanticKey);
+});
+test('frontend provenance: observable effect changes invalidate a stable signature',()=>{
+ const f=fixture('import {f} from "./lib";export function g():number{return f();}',{'lib.ets':'let n=0;export function f():number{return n;}'});const a=run(f);rewriteProject(f,'lib.ets','let n=0;export function f():number{n+=1;return n;}');const b=run(f);assert.notEqual(moduleRecord(a,'lib.ets').interfaceHash,moduleRecord(b,'lib.ets').interfaceHash);assert.notEqual(moduleRecord(a,'main.ets').semanticKey,moduleRecord(b,'main.ets').semanticKey);
+});
+test('frontend provenance: generic bodies remain explicit semantic dependencies',()=>{
+ const f=fixture('import {id} from "./lib";export function g():number{return id(1);}',{'lib.ets':'export function id<T>(x:T):T{return x;}'});const a=run(f);rewriteProject(f,'lib.ets','export function id<T>(x:T):T{if(true)return x;return x;}');const b=run(f);
+ assert.equal(moduleRecord(a,'lib.ets').interfaceHash,moduleRecord(b,'lib.ets').interfaceHash);assert.equal(moduleRecord(b,'lib.ets').requiresBody,true);assert.ok(moduleRecord(b,'main.ets').bodyDependencies.includes(moduleRecord(b,'lib.ets').id));assert.notEqual(moduleRecord(a,'main.ets').semanticKey,moduleRecord(b,'main.ets').semanticKey);
+});
+test('frontend provenance: comptime bodies propagate through a reexport barrel',()=>{
+ const f=fixture('import {f} from "./barrel";export const n=f();',{'lib.ets':'@comptime function f():number{return 1;}export {f};','barrel.ets':'export {f} from "./lib";'});const a=run(f);rewriteProject(f,'lib.ets','@comptime function f():number{return 2;}export {f};');const b=run(f);
+ assert.equal(moduleRecord(a,'lib.ets').interfaceHash,moduleRecord(b,'lib.ets').interfaceHash);assert.equal(moduleRecord(b,'barrel.ets').requiresBody,true);assert.notEqual(moduleRecord(a,'main.ets').semanticKey,moduleRecord(b,'main.ets').semanticKey);assert.ok(moduleRecord(b,'main.ets').bodyDependencies.includes(moduleRecord(b,'barrel.ets').id));
+});
+test('frontend provenance: changing a private constant behind a public constant invalidates consumers',()=>{
+ const f=fixture('import {N} from "./lib";const a:number[N]=[1];',{'lib.ets':'const value=1;export const N=value;'});const a=run(f);rewriteProject(f,'lib.ets','const value=2;export const N=value;');rewriteProject(f,'main.ets','import {N} from "./lib";const a:number[N]=[1,2];');const b=run(f);assert.equal(moduleRecord(a,'lib.ets').interfaceHash,moduleRecord(b,'lib.ets').interfaceHash);assert.equal(moduleRecord(b,'lib.ets').requiresBody,true);assert.notEqual(moduleRecord(a,'lib.ets').implementationHash,moduleRecord(b,'lib.ets').implementationHash);
+});
+test('frontend provenance: invalid programs never publish reusable semantic keys',()=>{
+ const g=run(fixture('const n:number="x";'),1);assert.ok(g.moduleRecords.length>0);for(const record of g.moduleRecords){assert.equal(record.interfaceHash,'');assert.equal(record.implementationHash,'');assert.equal(record.semanticKey,'');assert.match(record.id,/^module:/);}
+});
+
+test('frontend provenance: private helper body edits preserve later declaration identities',()=>{
+ const f=fixture('import {f} from "./lib";export function g():number{return f();}',{'lib.ets':'function helper():number{return 1;}export function f():number{return helper();}'});const a=run(f);rewriteProject(f,'lib.ets','function helper():number{const local=2;return local;}export function f():number{return helper();}');const b=run(f);
+ assert.equal(moduleRecord(a,'lib.ets').interfaceHash,moduleRecord(b,'lib.ets').interfaceHash);assert.equal(moduleRecord(a,'main.ets').semanticKey,moduleRecord(b,'main.ets').semanticKey);
+});
+test('frontend provenance: variant node numbers do not enter public fingerprints',()=>{
+ const f=fixture('import {make} from "./lib";const value=make();',{'lib.ets':'function helper():number{return 1;}export union U=A(number)|B;export const make=()=>A(helper());'});const a=run(f);rewriteProject(f,'lib.ets','function helper():number{const local=2;return local;}export union U=A(number)|B;export const make=()=>A(helper());');const b=run(f);
+ assert.equal(moduleRecord(a,'lib.ets').interfaceHash,moduleRecord(b,'lib.ets').interfaceHash);
+});
+
+for(const[name,source]of [
+ ['aggregate','class C{x:number;y:string;}const c=new C(1,"x");'],
+ ['empty','class C{}const c=new C();'],
+ ['defaults','class C{x:number=1;}const c=new C();'],
+ ['staticExcluded','class C{static x:number=1;y:string;}const c=new C("x");'],
+ ['named','class C{x:number;y:string;}const c=new C(y:"x",x:1);'],
+ ['genericExplicit','class C<T>{value:T;}const c=new C<number>(1);'],
+ ['genericInferred','class C<T>{value:T;}const c=new C(1);'],
+ ['ownerMove','class B{}class C{p:ptr<B>;}let p:ptr<B> = new B();const c=new C(move(p));'],
+ ['ownerFresh','class B{}class C{p:ptr<B>;}const c=new C(new B());'],
+] as const)test(`frontend parity composition constructor accepts ${name}`,()=>check(source));
+for(const[name,source,pattern]of [
+ ['missing','class C{x:number;}const c=new C();',/Aridad/],
+ ['extra','class C{x:number;}const c=new C(1,2);',/sobrante|Aridad/],
+ ['wrongType','class C{x:number;}const c=new C("x");',/incompatible/],
+ ['defaultsArguments','class C{x:number=1;}const c=new C(2);',/no admite argumentos/],
+ ['duplicate','class C{x:number;y:string;}const c=new C(x:1,x:2);',/duplicado/],
+ ['unknown','class C{x:number;}const c=new C(missing:1);',/desconocido/],
+ ['ownerCopy','class B{}class C{p:ptr<B>;}let p:ptr<B> = new B();const c=new C(p);',/E4101/],
+ ['ownerUseAfterMove','class B{}class C{p:ptr<B>;}let p:ptr<B> = new B();const c=new C(move(p));print(p);',/E4102/],
+ ['uninitializedOwner','class B{}class C{x:number=1;p:ptr<B>;}const c=new C();',/E4100/],
+ ['callbackEscape','class C{cb:()=>number;}function f():C{let n=0;return new C(():number=>{n+=1;return n;});}',/E4210/],
+] as const)test(`frontend parity composition constructor rejects ${name}`,()=>error(source,pattern));
+test('frontend parity composition constructors publish field and argument correspondence',()=>{
+ const g=check('class C{x:i32;y:string;}const c=new C(y:"x",x:1);');const file=g.files[0];const id=file.ast.nodes.findIndex((n:any)=>n.kind==='NewExpression');assert.equal(file.constructionFields[id].length,2);assert.deepEqual(file.constructionFields[id].map((sid:number)=>g.binding.symbols[sid].name),['x','y']);assert.equal(file.signatures[id],`(i32,string)=>${namedType(g,'c')}`);const args=file.ast.nodes[id].edges.filter((e:any)=>e.role==='args');assert.deepEqual(args.map((e:any)=>file.argumentParameters[e.node]),[1,0]);
+});
+
+for(const [name,source] of Object.entries({
+  tags:'const r:Result<number,string> =ok(3);const k:string=r.kind;const b:boolean=r.ok;',
+  kindMatch:'const r:Result<number,boolean> =ok(3);const n:number=match(r,"kind",[when("Ok",(v:Result<number,boolean>):number=>1),when("Err",(v:Result<number,boolean>):number=>2)]);',
+  okMatch:'const r:Result<number,string> =err("oops");const n:number=match(r,"ok",[when(true,():number=>1),when(false,():number=>2)]);'
+}))test(`frontend parity Result discriminator ${name}`,()=>check(source));
+for(const name of ['kind','ok'])test(`frontend parity Result discriminator rejects assignment ${name}`,()=>error(`let r:Result<number,string> =ok(3);r.${name}=${name==='kind'?'"Err"':'false'};`,/discriminador.*inmutable/));
+for(const [name,body,expected] of [
+  ['okKind','const r:Result<number,string> =ok(3);return r.kind=="Ok"?1:0;',1],
+  ['errKind','const r:Result<number,string> =err("oops");return r.kind=="Err"?1:0;',1],
+  ['okTag','const r:Result<number,string> =ok(3);return r.ok?1:0;',1],
+  ['errTag','const r:Result<number,string> =err("oops");return r.ok?1:0;',0]
+] as const)test(`frontend parity Result discriminator comptime ${name}`,()=>constantNumberResult(body,expected));
+
+for(const [name,source] of Object.entries({
+  map:'const o:Optional<number> =optionalSome(3);const r:Optional<string> =o.map((n:number):string=>"n"+n);',
+  inferred:'const o:Optional<number> =optionalSome(3);const r=o.map((n:number)=>n*2);const n:number=r.value();',
+  explicit:'const o:Optional<number> =optionalSome(3);const r=o.map<f32>((n:number):number=>n);',
+  andThen:'const o:Optional<number> =optionalSome(3);const r:Optional<string> =o.andThen((n:number):Optional<string> =>optionalSome("n"+n));',
+  orElse:'const o:Optional<number> =optionalNone<number>();const r:Optional<number> =o.orElse(optionalSome(7));'
+}))test(`frontend parity Optional methods ${name}`,()=>check(source));
+for(const [name,source,pattern] of [
+  ['arity','const o:Optional<number> =optionalSome(3);o.map();',/callback/],
+  ['notCallback','const o:Optional<number> =optionalSome(3);o.map(1);',/callback/],
+  ['wrongInput','const o:Optional<number> =optionalSome(3);o.map((n:string):number=>1);',/incompatible/],
+  ['wrongOutput','const o:Optional<number> =optionalSome(3);const r:Optional<number> =o.map((n:number):string=>"x");',/incompatible/],
+  ['andThenOutput','const o:Optional<number> =optionalSome(3);o.andThen((n:number):number=>n);',/devuelva Optional/],
+  ['fallback','const o:Optional<number> =optionalSome(3);o.orElse(optionalSome("x"));',/incompatible/]
+] as const)test(`frontend parity Optional methods rejects ${name}`,()=>error(source,pattern));
+for(const [name,body,expected] of [
+  ['mapSome','const o:Optional<number> =optionalSome(3);return o.map((n:number):number=>n*2).value();',6],
+  ['mapNone','let calls=0;const o:Optional<number> =optionalNone<number>();const r=o.map((n:number):number=>{calls+=1;return n;});return calls+(r.isEmpty()?10:0);',10],
+  ['andThenSome','const o:Optional<number> =optionalSome(3);return o.andThen((n:number):Optional<number> =>optionalSome(n+1)).value();',4],
+  ['andThenNone','let calls=0;const o:Optional<number> =optionalNone<number>();const r=o.andThen((n:number):Optional<number> =>{calls+=1;return optionalSome(n);});return calls+(r.isEmpty()?10:0);',10],
+  ['fallbackSome','const o:Optional<number> =optionalSome(3);return o.orElse(optionalSome(7)).value();',3],
+  ['fallbackNone','const o:Optional<number> =optionalNone<number>();return o.orElse(optionalSome(7)).value();',7],
+  ['mapF32','const o:Optional<number> =optionalSome(16777217);return o.map<f32>((n:number):number=>n).value();',16777216]
+] as const)test(`frontend parity Optional methods comptime ${name}`,()=>constantNumberResult(body,expected));
+for(const [name,source,pattern] of [
+ ['ownerCopy','class B{}let o:Optional<ptr<B>> =optionalSome(new B());o.map((p:ptr<B>):number=>1);',/E4101/],
+ ['borrowedCapture','class B{}let p:ptr<B> =new B();const o:Optional<number> =optionalSome(1);const read=ref(p);o.map((n:number):number=>{const q=move(p);return n;});print(read);',/E4207|E4104|E4210/],
+ ['conditionalMove','class B{}let p:ptr<B> =new B();const o:Optional<number> =optionalSome(1);o.map((n:number):number=>{const q=move(p);return n;});print(p);',/E4102|E4103|E4104/],
+ ['returnedClosure','function f():Optional<()=>number>{let n=0;const o:Optional<number> =optionalSome(1);return o.map((x:number):()=>number=>():number=>{n+=x;return n;});}',/E4210/]
+] as const)test(`frontend parity Optional methods safety ${name}`,()=>error(source,pattern));
+test('frontend parity Optional methods executes callback at most once',()=>check('class B{}let p:ptr<B> =new B();const o:Optional<number> =optionalSome(1);o.map((n:number):number=>{const q=move(p);return n;});'));
+
+for(const [name,source] of Object.entries({
+  string:'const o:Optional<string> =optionalSome("abc");const r:Optional<string> =o?.slice(0,1);',
+  generic:'class Box<T>{value:T;get():T{return this.value;}}const o:Optional<Box<number>> =optionalSome(new Box(3));const r:Optional<number> =o?.get();',
+  void:'let o:Optional<number[]> =optionalSome([1]);o?.push(2);',
+  nested:'const o:Optional<string> =optionalSome("abc");const r:Optional<string> =o?.slice(0,1)?.toUpperCase();',
+}))test(`frontend closure optional call accepts ${name}`,()=>check(source));
+for(const [name,source,pattern] of [
+  ['receiver','const s="a";s?.toUpperCase();',/requiere Optional/],
+  ['argument','const o:Optional<string> =optionalSome("abc");o?.charAt("x");',/incompatible/],
+  ['member','const o:Optional<string> =optionalSome("abc");o?.absent();',/miembro/],
+  ['constMutation','const o:Optional<number[]> =optionalSome([1]);o?.push(2);',/inmutable/],
+  ['moveJoin','class B{}class C{f(p:ptr<B>):number{return 1;}}let p:ptr<B> =new B();const o:Optional<C> =optionalNone<C>();o?.f(move(p));print(p);',/E4103|E4102/],
+  ['receiverWrite','class C{x:number=1;set():void{this.x=2;}}const o:Optional<C> =optionalSome(new C());o?.set();',/inmutable/],
+] as const)test(`frontend closure optional call rejects ${name}`,()=>error(source,pattern));
+for(const [name,body,expected] of [
+  ['present','const o:Optional<string> =optionalSome("abc");return o?.slice(0,1).value().length;',1],
+  ['absent','let n=0;const o:Optional<string> =optionalNone<string>();const r=o?.slice(n+=1,2);return n+(r.isEmpty()?10:0);',10],
+  ['argumentsOnce','let n=0;const o:Optional<string> =optionalSome("abc");const r=o?.slice(n+=1,n+=1);return n+r.value().length;',3],
+  ['nested','const o:Optional<string> =optionalSome("abc");return o?.slice(0,1)?.toUpperCase().value()=="A"?1:0;',1],
+  ['propertyNone','const o:Optional<string> =optionalNone<string>();return o?.length.isEmpty()?1:0;',1],
+] as const)test(`frontend closure optional call comptime ${name}`,()=>constantNumberResult(body,expected));
+test('frontend closure optional call publishes unwrapped receiver and signature',()=>{
+ const g=check('const o:Optional<string> =optionalSome("abc");const r=o?.charAt(1);');const f=g.files[0];const id=f.ast.nodes.findIndex((n:any)=>n.kind==='MemberCallExpression');assert.equal(f.receivers[id],'string');assert.equal(f.types[id],'Optional<string>');assert.equal(f.signatures[id],'(number)=>string');
+});
+
+for(const [name,source] of Object.entries({
+  primitive:'function f(out x:number):void{x=x+1;}let n=1;f(n);',
+  forwarding:'function inc(out x:number):void{x+=1;}function f(out x:number):void{inc(x);}let n=1;f(n);',
+  named:'function f(out x:number,y:number):void{x=y;}let n=1;f(y:2,x:n);',
+  class:'class B{x:number=1;}function f(out b:B):void{b.x=2;}let b=new B();f(b);',
+  method:'class C{f(out n:number):void{n+=1;}}const c=new C();let n=1;c.f(n);',
+  owner:'class B{x:number=1;}function f(out p:ptr<B>):void{print(p.x);}let p:ptr<B> =new B();f(p);print(p);',
+}))test(`frontend closure out parameter accepts ${name}`,()=>check(source));
+for(const [name,source,pattern] of [
+  ['constant','function f(out n:number):void{n=1;}const n=0;f(n);',/inmutable|constante/],
+  ['temporary','function f(out n:number):void{n=1;}f(1);',/variable mutable|prestado/],
+  ['wrongType','function f(out n:number):void{n=1;}let n="x";f(n);',/firma/],
+  ['optional','function f(out n?:number):void{}',/out requiere/],
+  ['default','function f(out n:number=1):void{}',/out requiere/],
+  ['async','async function f(out n:number):Promise<void>{n=1;}',/E4204/],
+  ['alias','function f(out n:number,out m:number):void{n=1;m=2;}let n=0;f(n,n);',/E4206/],
+  ['borrow','class B{}function f(out p:ptr<B>):void{const q=move(p);}let p:ptr<B> =new B();const r=constRef(p);f(p);print(r);',/E4207/],
+  ['moved','class B{}function f(out p:ptr<B>):void{const q=move(p);}let p:ptr<B> =new B();f(p);print(p);',/E4102/],
+  ['reborrow','class B{}function g(out p:ptr<B>):void{const q=move(p);}function f(out p:ptr<B>):void{g(p);print(p);}let p:ptr<B> =new B();f(p);',/E4102/],
+] as const)test(`frontend closure out parameter rejects ${name}`,()=>error(source,pattern));
+for(const [name,body,expected] of [
+ ['assignment','function f(out x:number):void{x=7;}let n=1;f(n);return n;',7],
+ ['readWrite','function f(out x:number):void{x+=2;}let n=1;f(n);return n;',3],
+ ['forwarding','function inc(out x:number):void{x+=1;}function f(out x:number):void{inc(x);}let n=1;f(n);return n;',2],
+ ['named','function f(out x:number,y:number):void{x=y;}let n=1;f(y:7,x:n);return n;',7],
+ ['optionalSkip','function f(out x:number):number{x+=1;return x;}let n=1;const o:Optional<string> =optionalNone<string>();const r=o?.charAt(f(n));return n;',1],
+] as const)test(`frontend closure out parameter comptime ${name}`,()=>constantNumberResult(body,expected));
+for(const [name,body,expected] of [
+ ['composition','class C{x:number;y:number;}const c=new C(2,3);return c.x+c.y;',5],
+ ['named','class C{x:number;y:number;}const c=new C(y:2,x:3);return c.x*10+c.y;',32],
+ ['defaults','class C{x:number=2;y:number=this.x+1;}const c=new C();return c.y;',3],
+ ['constructor','class C{x:number;constructor(n:number){this.x=n+1;}}const c=new C(2);return c.x;',3],
+ ['parameterProperty','class C{constructor(public n:number){}}const c=new C(7);return c.n;',7],
+ ['method','class C{x:number=2;f(n:number):number{return this.x+n;}}const c=new C();return c.f(3);',5],
+ ['mutation','class C{x:number=2;inc():void{this.x+=1;}}let c=new C();c.inc();return c.x;',3],
+ ['generic','class C<T>{x:T;get():T{return this.x;}}const c=new C<number>(7);return c.get();',7],
+ ['optional','class C{x:number=3;f(n:number):number{return this.x+n;}}const o:Optional<C> =optionalSome(new C());return o?.f(4).value();',7],
+ ['optionalNone','class C{f(n:number):number{return n;}}let n=0;const o:Optional<C> =optionalNone<C>();const r=o?.f(n+=1);return n+(r.isEmpty()?1:0);',1],
+] as const)test(`frontend closure comptime class ${name}`,()=>constantNumberResult(body,expected));
+for(const [name,source] of Object.entries({
+ owner:'class B{}function id<T>(x:T):T{return move(x);}let p:ptr<B> =new B();const q=id(move(p));',
+ borrowed:'class B{x:number=1;}function f<T>(x:constRef<T>):number{return 1;}let p:ptr<B> =new B();print(f<B>(p));',
+ out:'function f<T>(out x:T,y:T):void{x=y;}let n=1;f(n,2);',
+ nested:'function f<T>(xs:Optional<T[]>):T[]{return xs.value();}const xs:number[]=f(optionalSome([1,2]));',
+ callback:'function f<T>(cb:()=>T):T{return cb();}const n:number=f(():number=>1);',
+ contextual:'function f<T>():Optional<T>{return optionalNone<T>();}const o:Optional<number> =f();',
+}))test(`frontend closure generic composition accepts ${name}`,()=>check(source));
+for(const [name,source,pattern] of [
+ ['ownerCopy','class B{}function id<T>(x:T):T{return x;}let p:ptr<B> =new B();const q=id(move(p));',/E4101/],
+ ['ownerTwice','class B{}function f<T>(x:T):void{const a=move(x);const b=move(x);}let p:ptr<B> =new B();f(move(p));',/E4102/],
+ ['ownerCapture','class B{}function f<T>(x:T):void{const cb=():T=>x;}let p:ptr<B> =new B();f(move(p));',/E4209|E4210|E4101/],
+ ['borrowCopy','class B{}function id<T>(x:T):T{return x;}let p:ptr<B> =new B();const r=constRef(p);const q:ptr<B> =id(r);',/E4101|incompatible/],
+] as const)test(`frontend closure generic composition rejects ${name}`,()=>error(source,pattern));
+
+function etsGenerator(code:string){return `@etsgen function emit():string{return ${JSON.stringify(code)};}`;}
+for(const [name,source] of Object.entries({
+ empty:etsGenerator('')+'emit();',
+ function:etsGenerator('function generated(n:number):number{return n+1;}print(generated(1));')+'emit();',
+ repeated:etsGenerator('const n=1;print(n);')+'const n="caller";emit();emit();print(n);',
+ local:etsGenerator('print(base);')+'function f():void{const base=3;emit();}f();',
+ capture:etsGenerator('const n=etsCapture("n")+1;print(n);')+'const n=3;emit();',
+ publication:etsGenerator('@etsPublish function answer(n:number):number{return n+1;}')+'emit();print(answer(n:3));',
+ publishedBefore:etsGenerator('@etsPublish function answer(n:number):number{return n+1;}')+'print(answer(n:3));emit();',
+ nested:'@etsgen function child():string{return "@etsPublish const answer=7;";}'+etsGenerator('child();print(answer);')+'emit();print(answer);',
+ definition:'const base=7;'+etsGenerator('print(etsDefinition("base"));')+'function f():void{const base="wrong";emit();}f();',
+ typeHygiene:etsGenerator('interface I{x:number;}const i:I={x:1};print(i.x);')+'interface I{y:string;}emit();emit();',
+}))test(`frontend closure etsgen accepts ${name}`,()=>check(source));
+for(const [name,source,pattern] of [
+ ['parse',etsGenerator('const x=;')+'emit();',/ETSGEN_GENERATED_PARSE/],
+ ['type',etsGenerator('const n:number="x";')+'emit();',/incompatible/],
+ ['private',etsGenerator('const secret=1;')+'emit();print(secret);',/secret/],
+ ['collision',etsGenerator('@etsPublish const n=1;')+'const n=2;emit();',/duplicad/],
+ ['argument','@etsgen function emit(n:number):string{return "";}emit("x");',/firma/],
+ ['context',etsGenerator('')+'const x=emit();',/ETSGEN_INVALID_CONTEXT/],
+ ['capture',etsGenerator('print(etsCapture("absent"));')+'emit();',/ETSGEN_GENERATED_HYGIENE/],
+ ['recursive','@etsgen function emit():string{return "emit();";}emit();',/ETSGEN_RECURSION_LIMIT/],
+ ['export',etsGenerator('export const n=1;')+'emit();',/ETSGEN_GENERATED_HYGIENE/],
+] as const)test(`frontend closure etsgen rejects ${name}`,()=>{const g=run(fixture(source),1);assert.ok(g.diagnostics.some((d:any)=>pattern.test(d.message)),JSON.stringify(g.diagnostics));});
+test('frontend closure etsgen publishes generated source and typed AST provenance',()=>{
+ const g=check(etsGenerator('const n:i32=7;print(n);')+'emit();');assert.equal(g.generatedSources.length,1);assert.equal(g.generatedSources[0].module,0);assert.equal(g.generatedSources[0].source,'const n:i32=7;print(n);');const f=g.files[0];const id=f.ast.nodes.findIndex((n:any)=>n.kind==='VariableDeclaration'&&n.attributes.some((a:any)=>a.name==='generatedOriginalName'&&a.value==='n'));assert.ok(id>=0);assert.equal(f.types[id],'i32');assert.ok(f.ast.nodes[id].attributes.some((a:any)=>a.name==='generatedSource'&&a.value===g.generatedSources[0].id));assert.ok(g.moduleRecords[0].semanticKey);
+});
+test('frontend closure etsgen keeps module definition references behind imports',()=>{
+ check('import {emit} from "./lib";const base="caller";emit();',{'lib.ets':'import {helper as hidden} from "./dep";const base=7;@etsgen export function emit():string{return "print(etsDefinition(\\\"hidden\\\",etsDefinition(\\\"base\\\")));";}','dep.ets':'export function helper(n:number):number{return n+1;}'});
+});
+test('frontend closure etsgen imports generated published exports',()=>{
+ check('import {answer} from "./lib";print(answer(3));',{'lib.ets':etsGenerator('@etsPublish function answer(n:number):number{return n+1;}')+'emit();export {answer};'});
+});
+test('frontend closure etsgen reports original call and generated semantic span',()=>{
+ const source=etsGenerator('const good=1;\nconst bad:string=1;')+'\nemit();';const g=run(fixture(source),1);const d=g.diagnostics.find((d:any)=>d.phase==='checker'&&/incompatible/.test(d.message));assert.ok(d);assert.equal(d.line,2);assert.equal(d.generated.line,2);assert.equal(d.generated.sourceId,g.generatedSources[0].id);assert.equal(g.generatedSources[0].source,'const good=1;\nconst bad:string=1;');
+});
+test('frontend closure etsgen reports generated parser span',()=>{
+ const g=run(fixture(etsGenerator('const good=1;\nconst bad=;')+'\nemit();'),1);assert.ok(g.generatedSources.length);assert.ok(g.diagnostics.some((d:any)=>/ETSGEN_GENERATED_PARSE/.test(d.message)&&d.line===2&&d.generated.line===2));
+});
+test('frontend closure etsgen uses generated lexical order for borrows',()=>{
+ check(etsGenerator('class B{x:number=1;}let b=new B();const a=constRef(b);print(a.x);b.x=2;const c=constRef(b);print(c.x);')+'function run():void{emit();}run();');
+});
+for(const [name,source] of Object.entries({
+ metadata:'@cppgen function emit():string{return "opaque backend text";}emit();',
+ imported:'import {emit} from "./lib";emit();',
+}))test(`frontend closure opaque backend contract accepts ${name}`,()=>check(source,name==='imported'?{'lib.ets':'@cppgen export function emit():string{return "opaque";}'}:{}));
+for(const [name,source,pattern] of [
+ ['value','@cppgen function emit():string{return "opaque";}const s=emit();',/sentencia opaca/],
+ ['escape','@cppgen function emit():string{return "opaque";}const f=emit;',/llamada directa/],
+ ['borrow','class B{}@cppgen function emit():string{return "opaque";}function f():void{let b=new B();const r=constRef(b);emit();print(r);}',/E4104/],
+ ['comptime','@cppgen function emit():string{return "opaque";}const s=comptime(():number=>{emit();return 1;});',/COMPTIME_FORBIDDEN_EFFECT/],
+] as const)test(`frontend closure opaque backend contract rejects ${name}`,()=>error(source,pattern));
+test('frontend closure opaque backend contract publishes unknown external effects',()=>{
+ const g=check('@cppgen function emit():string{return "opaque backend text";}function f():void{emit();}f();');const entry=g.decorators.find((d:any)=>d.name==='cppgen');assert.ok(entry);assert.ok(g.effects.some((e:any)=>e.node===entry.target&&e.unknown&&e.external));const file=g.files[0];const id=file.ast.nodes.findIndex((n:any)=>n.kind==='CallExpression'&&n.attributes.some((a:any)=>a.name==='callee'&&a.value==='emit'));assert.equal(file.types[id],'void');assert.equal(file.constantStates[id],'');assert.deepEqual(g.generatedSources,[]);
+});
+
+for(const [name,source] of Object.entries({
+ asyncFiles:'async function f():Promise<void>{const a:Result<string> =await readFileAsync("x");const b:Result<boolean> =await writeFileAsync("x","y");}',
+ cancellation:'const source=createCancellation();const token=cancellationToken(source);cancel(source);const done:boolean=isCancelled(token);',
+ network:'async function f():Promise<void>{const listener:Result<TcpListener> =listenTcp("localhost",80);const r:Result<TcpConnection> =await acceptTcp(listener.value());}',
+ fs:'const r:Result<string> =fs.readFileSync("x");const n:string=path.basename("x");const args:string[]=process.argv();',
+ legacyOut:'let text="";let error="";const ok:boolean=readFile("x",text,error);const written:boolean=writeFile("x",text,error);',
+ timer:'const callback=():void=>{};const timer:Timer=setTimeout(callback,1);cancelTimer(timer);const alive:boolean=timer.valid();',
+ http:'const app=http.express();app.get("/",(req:Request,res:Response):void=>{res.status(200).send(req.path());});app.listen(8080);',
+ terminal:'const a:boolean=console.writeLine("x");const columns:number=console.columns();console.moveTo(1,2);',
+ size:'const m=new Map<string,number>();const n:number=m.size();const s=new Set<number>();print(s.size());',
+}))test(`frontend closure runtime catalog accepts ${name}`,()=>check(source));
+for(const [name,source,pattern] of [
+ ['arity','createCancellation(1);',/builtin compatible/],
+ ['argument','listenTcp("x","y");',/builtin compatible/],
+ ['outConst','const text="";let error="";readFile("x",text,error);',/inmutable|constante/],
+ ['outAlias','let text="";readFile("x",text,text);',/E4206/],
+ ['callback','setTimeout((n:number):void=>{},1);',/builtin compatible/],
+ ['timerCapture','function f():void{let n=0;setTimeout(():void=>{n+=1;},1);}',/E4210/],
+ ['routeCapture','function f():void{let n=0;const app=http.express();app.get("/",(req:Request,res:Response):void=>{n+=1;});}',/E4210/],
+ ['comptimeIO','const n=comptime(():boolean=>fileExists("x"));',/COMPTIME_FORBIDDEN_EFFECT/],
+] as const)test(`frontend closure runtime catalog rejects ${name}`,()=>error(source,pattern));
+test('frontend closure runtime catalog is synchronized with stage zero',()=>{const p=spawnSync(process.execPath,['--experimental-strip-types','scripts/generate-native-builtins.ts','--check'],{cwd:root,encoding:'utf8'});assert.equal(p.status,0,p.stderr+p.stdout);});
+for(const [name,source] of Object.entries({
+ map:'const o:Optional<number> =optionalSome(3);const r:Optional<string> =optionalMap(o,(n:number):string=>"n"+n);',
+ andThen:'const o:Optional<number> =optionalSome(3);const r:Optional<number> =optionalAndThen(o,(n:number):Optional<number> =>optionalSome(n+1));',
+ abi:'@cpp_name("external_name") function f(n:number):number;const n:number=f(1);',
+ typeABI:'@cpp_type("ExternalType") interface I{x:number;@cpp_name("external_method") f():number;}function f(i:I):number{return i.f();}',
+ backend:'@cpp_drogon let server:Server=http.createServer();server.listen(8080);',
+}))test(`frontend closure runtime aliases and ABI accepts ${name}`,()=>check(source));
+for(const [name,source,pattern] of [
+ ['mapArgument','optionalMap(1,(n:number):number=>n);',/requiere Optional/],
+ ['mapCallback','optionalMap(optionalSome(1),(n:string):string=>n);',/incompatible/],
+ ['abiArgument','@cpp_name(1) function f():void;',/literal string|nombre externo/],
+ ['abiScope','@cpp_type("x") function f():void{}',/declaración compatible/],
+ ['backendType','@cpp_drogon let n=1;',/variable Server/],
+] as const)test(`frontend closure runtime aliases and ABI rejects ${name}`,()=>error(source,pattern));
+for(const [name,body,expected] of [
+ ['map','return optionalMap(optionalSome(3),(n:number):number=>n+1).value();',4],
+ ['andThen','return optionalAndThen(optionalSome(3),(n:number):Optional<number> =>optionalSome(n+1)).value();',4],
+ ['none','let n=0;const r=optionalMap(optionalNone<number>(),(x:number):number=>{n+=1;return x;});return n+(r.isEmpty()?1:0);',1],
+] as const)test(`frontend closure runtime aliases and ABI comptime ${name}`,()=>constantNumberResult(body,expected));
+for(const [name,source] of Object.entries({
+ string:'function f(x:number|string):number{if(x instanceof string)return x.length;return x+1;}print(f("x"));',
+ number:'function f(x:number|string):number{if(x instanceof number)return x+1;return x.length;}print(f(3));',
+ boolean:'function f(x:boolean|string):boolean{if(x instanceof boolean)return x;return false;}',
+ class:'class C{x:number=1;}function f(x:C|string):number{if(x instanceof C)return x.x;return x.length;}',
+ generic:'class C<T>{value:T;}const c=new C(1);if(c instanceof C<number>)print(c.value);',
+}))test(`frontend closure instanceof primitives accepts ${name}`,()=>check(source));
+for(const [name,body,expected] of [
+ ['number','const n:number|string=3;return n instanceof number?1:0;',1],
+ ['string','const n:number|string="s";return n instanceof string?1:0;',1],
+ ['class','class C{x:number=1;}const c:C|string=new C();return c instanceof C?1:0;',1],
+ ['otherClass','class A{}class B{}const a=new A();return a instanceof B?1:0;',0],
+] as const)test(`frontend closure instanceof primitives comptime ${name}`,()=>constantNumberResult(body,expected));
+test('frontend closure overload ranking prefers concrete signatures over generic fallback',()=>{
+ const g=check('function f(x:number):number{return 1;}function f(x:string):string{return "x";}function f<T>(x:T):boolean{return true;}const n:number=f(1);const s:string=f("x");const b:boolean=f(true);');assert.deepEqual(types(g,'CallExpression'),['number','string','boolean']);
+});
+test('frontend closure overload ranking retains equal numeric ambiguity',()=>error('function f(x:number):number{return x;}function f(x:i32):i32{return x;}f(1);',/ambigua/));
+for(const [name,source,pattern] of [
+ ['readonly','interface I{x:number;}class B{x:number=1;}function f<T extends I>(x:T):void{x.x=2;}function run():void{let b=new B();const r=constRef(b);f(r);}run();',/E4300/],
+ ['returnBorrow','class B{}function f<T>(x:T):T{return x;}let b=new B();const r=f(constRef(b));',/E4203/],
+ ['borrowThenMove','class B{}let p:ptr<B> =new B();function f<T>(x:T):void{const q=move(p);print(x);}f(constRef(p));',/E4207/],
+ ['mutableAliasing','class B{x:number=1;}function f<T>(a:T,b:T):void{}let b=new B();f(ref(b),ref(b));',/E4206/],
+] as const)test(`frontend closure generic borrow contract rejects ${name}`,()=>error(source,pattern));
+test('frontend closure generic borrow contract permits a readonly constrained view',()=>check('interface I{x:number;}class B{x:number=1;}function f<T extends I>(x:T):number{return x.x;}function run():void{let b=new B();const r=constRef(b);print(f(r));}run();'));
+for(const [name,source] of Object.entries({
+ direct:'class B{}function f<...T>(...values:T):void{}let p:ptr<B> =new B();f(move(p));',
+ fresh:'class B{}function f<...T>(...values:T):void{}f(new B());',
+ mixed:'class B{}function f<...T>(...values:T):void{}let p:ptr<B> =new B();f(1,move(p),"x");',
+ forwarding:'class B{}function sink<...T>(...values:T):void{}function forward<...T>(...values:T):void{sink(...move(values));}let p:ptr<B> =new B();forward(move(p));',
+ read:'class B{}function f<...T>(...values:T):void{print(values);}let p:ptr<B> =new B();f(move(p));',
+}))test(`frontend closure owning packs accepts ${name}`,()=>check(source));
+for(const [name,source,pattern] of [
+ ['copy','class B{}function f<...T>(...values:T):void{}let p:ptr<B> =new B();f(p);',/E4101/],
+ ['usedAfter','class B{}function f<...T>(...values:T):void{}let p:ptr<B> =new B();f(move(p));print(p);',/E4102/],
+ ['forwardCopy','class B{}function sink<...T>(...values:T):void{}function f<...T>(...values:T):void{sink(...values);}let p:ptr<B> =new B();f(move(p));',/E4101/],
+ ['forwardTwice','class B{}function sink<...T>(...values:T):void{}function f<...T>(...values:T):void{sink(...move(values));sink(...move(values));}let p:ptr<B> =new B();f(move(p));',/E4102/],
+ ['borrow','class B{}function f<...T>(...values:T):void{}let b=new B();f(constRef(b));',/E4203/],
+] as const)test(`frontend closure owning packs rejects ${name}`,()=>error(source,pattern));
+test('frontend closure owning packs publish element positions',()=>{const g=check('class B{}function f<...T>(...values:T):void{}let p:ptr<B> =new B();f(1,move(p),"x");');const file=g.files[0];const id=file.ast.nodes.findIndex((n:any)=>n.kind==='CallExpression'&&n.attributes.some((a:any)=>a.name==='callee'&&a.value==='f'));const args=file.ast.nodes[id].edges.filter((e:any)=>e.role==='args');assert.deepEqual(args.map((e:any)=>file.argumentParameters[e.node]),[0,0,0]);assert.deepEqual(args.map((e:any)=>file.argumentElements[e.node]),[0,1,2]);});
+for(const [name,body,expected] of [
+ ['value','return match(1,[when(1,():number=>7),otherwise(():number=>0)]);',7],
+ ['fallback','return match(2,[when(1,():number=>7),otherwise(():number=>3)]);',3],
+ ['subject','return match(2,[otherwise((n:number):number=>n+1)]);',3],
+ ['type','const v:number|string="abc";return match(v,[whenType<number>((n:number):number=>n),whenType<string>((s:string):number=>s.length)]);',3],
+ ['resultKind','const r:Result<number,string> =ok(3);return match(r,"kind",[when("Ok",(x:Result<number,string>):number=>x.value()),when("Err",():number=>0)]);',3],
+ ['resultOk','const r:Result<number,string> =err("x");return match(r,"ok",[when(true,():number=>3),when(false,():number=>7)]);',7],
+ ['union','union U=A(number)|B(string);const u:U=U.A(7);return match(u,"kind",[when("A",():number=>1),when("B",():number=>2)]);',1],
+ ['payload','union U=A(number)|B(string);const u:U=U.A(7);if(u.kind=="A")return u.value;return 0;',7],
+ ['lazy','let n=0;const result=match(1,[when(1,():number=>7),otherwise(():number=>{n+=1;return 0;})]);return result+n;',7],
+] as const)test(`frontend closure comptime match ${name}`,()=>constantNumberResult(body,expected));
+test('frontend closure comptime match diagnoses unmatched case',()=>error('const n=comptime(():number=>match(2,[when(1,():number=>7)]));',/COMPTIME_MATCH_UNMATCHED/));
+test('frontend closure match publishes coverage and the unmatched trap policy',()=>{
+ const g=check('function f(n:number):number{return match(n,[when(1,():number=>7)]);}const a=match(true,[when(true,():number=>1),when(false,():number=>0)]);');const file=g.files[0];const ids=file.ast.nodes.map((n:any,i:number)=>n.kind==='CallExpression'&&n.attributes.some((a:any)=>a.name==='callee'&&a.value==='match')?i:-1).filter((i:number)=>i>=0);assert.deepEqual(ids.map((i:number)=>file.matchCoverage[i]),['traps','total']);
+});
+for(const [name,body,expected] of [
+ ['numeric','enum E{A=3,B}const n:number=E.B;return n;',4],
+ ['string','enum E{A="x",B="y"}return E.A==E.B?1:0;',0],
+ ['switch','enum E{A=3,B}let n=0;switch(E.B){case E.A:n=1;break;case E.B:n=2;break;}return n;',2],
+ ['match','enum E{A=3,B}return match(E.B,[when(E.A,():number=>1),otherwise(():number=>2)]);',2],
+] as const)test(`frontend closure comptime enum ${name}`,()=>constantNumberResult(body,expected));
+
+test('frontend closure statically disjoint instanceof operands remain well typed',()=>check('class A{x:number=1;}const a=new A();const left=1 instanceof A;const right=a instanceof number;'));
+test('frontend closure HTTP Request fields support readonly property syntax',()=>check('const app=http.createServer();app.post("/",(req:Request,res:Response):void=>{const body:string=req.body;res.send(body);});'));
+test('frontend closure HTTP Request properties reject mutation',()=>error('function f(req:Request):void{req.body="changed";}',/E4300/));
+test('frontend closure known native IO task effects permit spawning a handler',()=>check('async function handle(c:TcpConnection):Promise<void>{const r:Result<string> =await readTcp(c,1024);if(r.isOk()){const written:Result<number> =await writeTcp(c,r.value());}closeTcp(c);}function start(c:TcpConnection):void{spawn(handle(c));}'));
+test('frontend closure external effects preserve borrows isolated in another frame',()=>check('@cpp_name("external") function external():number;class B{x:number=1;}function helper():number{return external();}function run():void{let b=new B();const r=constRef(b);print(helper());print(r.x);}run();'));
+test('frontend closure external effects reject access to a borrowed argument',()=>error('@cpp_name("external") function external(b:constRef<B>):number;class B{x:number=1;}function run():void{let b=new B();const r=ref(b);print(external(constRef(b)));print(r.x);}run();',/E4207|E4206|E4104/));
+test('frontend closure opaque lexical effects preserve borrows in a caller frame',()=>check('@cppgen function opaque():string{return "opaque";}class B{x:number=1;}function helper():void{opaque();}function run():void{let b=new B();const r=constRef(b);helper();print(r.x);}run();'));
+
+for(const [name,source] of Object.entries({
+ direct:'class B{readonly x:number=1;}function f(x:ref<number>):void{x=2;}let b=new B();f(b.x);',
+ indirect:'class B{readonly x:number=1;}const f=(x:ref<number>):void=>{x=2;};let b=new B();f(b.x);',
+ array:'let a=[1,2];a.forEach((x:ref<number>):void=>{x=3;});',
+ optional:'const o=optionalSome(1);o.map((x:ref<number>):number=>{x=2;return x;});',
+}))test(`frontend closure readonly callback and reference rejects ${name}`,()=>error(source,/readonly|inmutable/));
+test('frontend closure readonly callback preserves constRef in published signature',()=>{const g=check('let a=[1,2];const b=a.map((x:constRef<number>):number=>x+1);');assert.ok(g.files.some((f:any)=>f.signatures.some((s:string)=>s==='((constRef<number>)=>number)=>number[]')));});
+for(const [name,source] of [
+ ['present','const o=optionalSome(3);return optionalValueOr(optionalOrElse(o,optionalSome(9)),0);'],
+ ['empty','const o=optionalNone<number>();return optionalValueOr(optionalOrElse(o,optionalSome(3)),0);'],
+] as const)test(`frontend closure optionalOrElse comptime ${name}`,()=>constantNumberResult(source,3));
+
+for(const source of ['function id<T>(x:T):T{return x;}const f=id;','function id<T>(x:T):T{return x;}const f:(x:number)=>number =id;'])test(`frontend closure generic function extraction rejects unresolved signature ${source.length}`,()=>error(source,/función genérica requiere una llamada/));
+test('frontend closure etsgen overload publication must be uniform',()=>error('@etsgen function make():string{return "@etsPublish function f(x:number):number{return x;}function f(x:string):string{return x;}";}make();',/ETSGEN_GENERATED_HYGIENE/));
+test('frontend closure etsgen publishes separate lexical order ranges',()=>{const g=check('@etsgen function make():string{return "const x=1;print(x);";}make();');const f=g.files[0];assert.equal(f.analysisRanges.length,f.ast.nodes.length);assert.ok(f.analysisRanges.some((r:number[])=>r[0]>=0&&r[1]>r[0]));});
+
+test('frontend closure checks every repository example with native module loading',t=>{
+ const files=readdirSync(join(root,'examples'),{recursive:true}).map(String).filter(f=>f.endsWith('.ets')).sort();let accepted=0;
+ for(const file of files){
+  const invalid=file==='expected-errors/private-bad.ets';
+  const g=run({entry:join(root,'examples',file),cache:join(directory,'example-cache')},invalid?1:0);
+  if(invalid)assert.ok(g.diagnostics.some((d:any)=>d.phase==='checker'&&/privad/.test(d.message)),file);
+  else {assert.deepEqual(g.diagnostics,[],file);accepted++;}
+ }
+ t.diagnostic(`${accepted}/${files.length} examples accepted; expected-errors/private-bad.ets rejected for private access`);
+});
+test('frontend closure pack overload ranking includes fixed parameters',()=>{
+ const g=check('function f<...Ts>(x:number,...values:Ts):number{return 1;}function f<T>(...values:T[]):string{return "rest";}const n:number=f(1,2);');
+ assert.ok(types(g,'CallExpression').includes('number'));
+});
+
+for(const [name,source] of Object.entries({
+ local:'class B{x:number=0;run():number{const f=():number=>{this.x+=1;return this.x;};return f();}}let b=new B();print(b.run());',
+ match:'class B{x:number=0;run():number{return match(true,[when(true,():number=>{this.x+=1;return this.x;}),otherwise(():number=>0)]);}}let b=new B();print(b.run());',
+ array:'class B{x:number=0;run():void{const a=[1];a.forEach((n:number):void=>{this.x+=n;});}}let b=new B();b.run();',
+}))test(`frontend closure receiver capture accepts ${name}`,()=>{const g=check(source);assert.ok(g.captures.some((c:any)=>c.mode==='reference'&&g.binding.symbols[c.symbol].kind==='receiver'));});
+for(const [name,source] of Object.entries({
+ returned:'class B{x:number=0;reader():()=>number{return ():number=>this.x;}}',
+ timer:'class B{x:number=0;run():void{setTimeout(():void=>{this.x+=1;},1);}}',
+}))test(`frontend closure receiver capture rejects escaping ${name}`,()=>error(source,/E4210/));
+
+test('frontend closure borrowed method receiver can mutate through its own loan',()=>check('class B{x:number=0;add():void{this.x+=1;}}function run():void{let b=new B();const loan=ref(b);loan.add();print(loan.x);}run();'));
+for(const loan of ['ref','constRef'])test(`frontend closure direct receiver respects active ${loan} loan`,()=>error(`class B{x:number=0;add():void{this.x+=1;}}function run():void{let b=new B();const loan=${loan}(b);b.add();print(loan.x);}run();`,/E4207/));
+
+for(const [name,source] of Object.entries({
+ array:'function f(a:number[]):number{if(a.length==0)return 0;return a[0];}',
+ arrayElse:'function f(a:number[]):number{if(a.length==0){return 0;}else{return a[0];}}',
+ classField:'class C{tag:string="x";values:number[]=[1];read():number{if(this.tag!="x")return 0;return this.values[0];}}',
+ object:'interface I{tag:string;values:number[];}function f(v:I):number{if(v.tag=="x")return v.values[0];return 0;}',
+ mixedUnion:'union U={tag:"a"};class C{tag:string="c";}function f(v:U|C):void{if(v.tag=="a")print(v.tag);}',
+}))test(`frontend closure discriminant narrowing preserves unrelated alternatives ${name}`,()=>check(source));
+
+const ownedAsync='class B{x:number;constructor(x:number){this.x=x;}}async function make(x:number):Promise<ptr<B>>{let p:ptr<B> =new B(x);return move(p);}';
+test('frontend closure for await transfers owning results into each iteration',()=>{const g=check(ownedAsync+'const xs=[make(1),make(2)];for await(const p of xs){const q=move(p);print(q.x);}');assert.ok(g.symbolTypes.some((t:string)=>/^ptr<#/.test(t)));});
+test('frontend closure for await restores partially moved paths for the next result',()=>check(ownedAsync+'class H{p:ptr<B>;}async function wrap():Promise<H>{let p:ptr<B> =new B(1);return new H(move(p));}const xs=[wrap(),wrap()];for await(let h of xs){const p=move(h.p);print(p.x);}'));
+for(const [name,body,pattern] of [
+ ['copy','const q=p;',/E4101/],
+ ['twice','const q=move(p);const r=move(p);',/E4102/],
+ ['borrowedBinding','',/E4203/],
+] as const)test(`frontend closure for await ownership rejects ${name}`,()=>error(ownedAsync+`const xs=[make(1)];for await(const p${name==='borrowedBinding'?':constRef<B>':''} of xs){${body}}`,pattern));
+test('frontend closure for await consumes the task collection',()=>error(ownedAsync+'const xs=[make(1)];for await(const p of xs){print(p.x);}print(xs.length);',/E4102/));
+
+for(const source of [
+ 'function f(x?:number):number{return optionalValueOr(x,0);}const g=f;print(g());',
+ 'function f(x:number=1):number{return x;}const g=f;print(g());',
+ 'const g=(x:number=1):number=>x;print(g());',
+])test(`frontend closure function values keep required callable arity ${source.length}`,()=>error(source,/Aridad incorrecta/));
+
+for(const [name,source] of Object.entries({
+ classConstraint:'class Hidden{x:number=1;}export function f<T extends Hidden>(x:T):number{return x.x;}',
+ interfaceConstraint:'interface Hidden{x:number;}export class C<T extends Hidden>{value:T;}',
+ classDefault:'class Hidden{x:number=1;}export function f<T=Hidden>():number{return 1;}',
+ enumDefault:'enum Hidden{A}export class C<T=Hidden>{value:T;}',
+ aliasConstraint:'type Hidden=number;export function f<T extends Hidden>(x:T):T{return x;}',
+ methodConstraint:'class Hidden{x:number=1;}export class C{f<T extends Hidden>(x:T):number{return x.x;}}',
+ generated:'export {f};@etsgen function make():string{return "class Hidden{x:number=1;}@etsPublish function f<T extends Hidden>(x:T):number{return x.x;}";}make();',
+}))test(`frontend closure public generic contracts reject private types ${name}`,()=>error(source,/E4401/));
+test('frontend closure public generic contracts allow exported constraints and defaults',()=>check('export interface I{x:number;}export class B{x:number=1;}export function f<T extends I=B>(x:T):number{return x.x;}'));
+
+const matchOwner='class B{x:number=1;}';
+for(const [name,source] of Object.entries({
+ read:'let p:ptr<B> =new B();const n=match(p,[otherwise((v:constRef<B>):number=>v.x)]);print(p.x);',
+ mutable:'let p:ptr<B> =new B();match(p,[otherwise((v:ref<B>):void=>{v.x=2;})]);print(p.x);',
+ noParameter:'let p:ptr<B> =new B();match(p,[otherwise(():number=>1)]);print(p.x);',
+ fresh:'const n=match(new B(),[otherwise((v:constRef<B>):number=>v.x)]);',
+ consumed:'let p:ptr<B> =new B();match(move(p),[otherwise((v:ptr<B>):void=>{print(v.x);})]);',
+}))test(`frontend closure match owning subject accepts ${name}`,()=>check(matchOwner+source));
+for(const [name,source,pattern] of [
+ ['copy','let p:ptr<B> =new B();match(p,[otherwise((v:ptr<B>):void=>{})]);',/E4101/],
+ ['borrowedCopy','let p:ptr<B> =new B();const r=constRef(p);match(r,[otherwise((v:ptr<B>):void=>{})]);',/E4101/],
+ ['aliasMutation','let p:ptr<B> =new B();match(p,[otherwise((v:constRef<B>):number=>{p.x=2;return v.x;})]);',/E4207/],
+ ['constMutable','const p:ptr<B> =new B();match(p,[otherwise((v:ref<B>):void=>{v.x=2;})]);',/E4208|inmutable/],
+] as const)test(`frontend closure match owning subject rejects ${name}`,()=>error(matchOwner+source,pattern));
+
+for(const [name,source] of Object.entries({
+ extern:'function tick():number;function f(n:number):number{if(n==0)return tick();return f(n-1);}print(f(1));',
+ cppgen:'@cppgen function tick():string{return "opaque";}function f(n:number):void{if(n==0){tick();return;}f(n-1);}f(1);',
+}))test(`frontend closure recursive external effects allow isolated value state ${name}`,()=>{const g=check(source);assert.ok(g.effects.some((s:any)=>s.unknown&&s.external));});
+test('frontend closure recursive external effects preserve owner obligations',()=>error('class B{}let p:ptr<B> =new B();function tick():number;function f(n:number):number{if(n==0)return tick();return f(n-1);}print(f(1));',/E4104/));
+
+for(const [name,source] of Object.entries({
+ losingPack:'class B{x:number=1;}function f(x:constRef<B>):number{return x.x;}function f<...Ts>(...xs:Ts):number{return 0;}function run():void{let b=new B();print(f(constRef(b)));}run();',
+ fixedBorrow:'interface I{x:number;}class B{x:number=1;}function f<T extends I,...Ts>(x:T,...xs:Ts):number{return x.x;}function run():void{let b=new B();print(f(constRef(b)));}run();',
+ callableElement:'class B{x:number=1;}function read(x:constRef<B>):number{return x.x;}function f<...Ts>(...xs:Ts):void{}f(read);',
+}))test(`frontend closure packs validate only selected stored borrow contracts ${name}`,()=>check(source));
+
+test('frontend closure generated definition hashes survive unrelated module insertion',()=>{
+ const f=fixture('import {answer} from "./generated";print(answer);',{
+  'generated.ets':'import {make} from "./macro";export {answer};make();',
+  'macro.ets':'function value(x:number):number{return x;}@etsgen export function make():string{return "@etsPublish const answer=etsDefinition(\\"value\\",2);";}',
+  'extra.ets':'export const extra=1;',
+ });
+ const a=run(f);writeFileSync(f.entry,'import {extra} from "./extra";import {answer} from "./generated";print(extra+answer);');const b=run(f);
+ const before=moduleRecord(a,'generated.ets'),after=moduleRecord(b,'generated.ets');
+ assert.equal(before.sourceHash,after.sourceHash);assert.equal(before.interfaceHash,after.interfaceHash);assert.equal(before.semanticKey,after.semanticKey);
+});
+
+test('frontend closure value summaries retain hidden reads before initialization',()=>error('function leaf():number{return later;}function wrapper():number{return leaf();}print(wrapper());const later=1;',/E4001/));
+test('frontend closure value summaries retain hidden writes before initialization',()=>error('function leaf():void{later=2;}function wrapper():void{leaf();}wrapper();let later=1;',/E4001/));
+test('frontend closure value summaries preserve skipped transitive defaults',()=>check('class C{x:number;constructor(x:number=later){this.x=x;}}function wrap():C{return new C(1);}const c=wrap();const later=2;print(c.x);'));
+test('frontend closure value summaries handle a large acyclic call tree',()=>{const functions=Array.from({length:15},(_,n)=>`function f${n}(x:number):number{return ${n===14?'x':`f${n+1}(x)+f${n+1}(x)`};}`).join('');check(functions+'print(f0(1));');});
+
+test('frontend closure recursive summaries authorize forwarded out aliases',()=>check('function inc(out x:number,n:number):void{x+=1;if(n>0)inc(x,n-1);}let n=0;inc(n,2);'));
+test('frontend closure recursive summaries authorize a borrowed receiver',()=>check('class B{x:number=0;inc(n:number):void{this.x+=1;if(n>0)this.inc(n-1);}}function run():void{let b=new B();const loan=ref(b);loan.inc(2);print(loan.x);}run();'));
+test('frontend closure recursive summaries still reject hidden alias access',()=>error('let n=0;function inc(out x:number,k:number):void{n+=1;if(k>0)inc(x,k-1);}inc(n,2);',/E4207/));
+
+test('frontend closure value summaries preserve deeply skipped defaults',()=>check('class C{x:number;constructor(x:number=later){this.x=x;}}function a():C{return new C(1);}function b():C{return a();}function c():C{return b();}const result=c();const later=2;print(result.x);'));
+test('frontend closure value summaries check deeply used defaults',()=>error('class C{x:number;constructor(x:number=later){this.x=x;}}function a():C{return new C();}function b():C{return a();}function c():C{return b();}const result=c();const later=2;',/E4001/));
+
+test('frontend closure legacy union retains instantiated payload types', () => {
+  const g=check('union<T> U = Some(T)|None;const value:U<number> =U.Some<number>(2);');
+  assert.ok(g.binding.symbols.some((s:any)=>s.name==='T'&&s.kind==='TypeParameter'));
+});
+test('frontend closure legacy union checks payload against its generic specialization', () => error('union<T> U = Some(T)|None;const value:U<number> =U.Some<number>("bad");',/incompatible|argumento|Argumento/));
+
+test('frontend closure value summaries scale wrappers around opaque calls', () => {
+  const helpers=Array.from({length:15},(_,i)=>`function f${i}(n:number):number{return ${i===14?'tick(n)':`f${i+1}(n)+f${i+1}(n)`};}`).join('');
+  check('function tick(n:number):number;'+helpers+'print(f0(1));');
+});
+test('frontend closure value summaries preserve opaque loan obligations', () => error('let n=1;function tick():number;function inner():number{return tick();}function outer():number{return inner();}function run():number{const r=constRef(n);return outer()+r;}run();',/E4104/));
+test('frontend closure value summaries preserve opaque owner obligations', () => error('class B{}let p:ptr<B> =new B();function tick():number;function inner():number{return tick();}function outer():number{return inner();}print(outer());',/E4104/));

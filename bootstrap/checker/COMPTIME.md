@@ -1,7 +1,7 @@
 # Evaluación comptime del frontend nativo
 
 El checker valida tipos, efectos y seguridad antes de evaluar constantes. El
-intérprete `comptime.ets` consume el AST y binding originales; `constant.ets`
+intérprete `comptime.ets` consume el AST expandido y su binding; `constant.ets`
 implementa los valores y operaciones numéricas. El driver no delega esta fase
 al evaluador TypeScript. Esto no conecta todavía las tablas al backend.
 
@@ -51,16 +51,25 @@ movimientos o efectos previos que impidan demostrar su valor; no se interpreta
 todo el prefijo runtime para reconstruir snapshots. La comprobación de fuentes
 sigue activa incluso cuando la evaluación podría borrar una rama.
 
-No se implementan aquí construcción de clases, todos los builtins, aritmética
-entera exponencial, contratos de aliasing para parámetros de memoria, ni todas
-las combinaciones de tipos y contenedores. Los errores de cobertura permanecen
-explícitos. No se implementan expansiones `@etsgen`/`@cppgen` ni ABI externas.
+Se materializan clases por valor, constructores explícitos y por composición,
+campos/defaults, métodos con this, enums y variantes de uniones. Match evalúa el
+sujeto una vez e invoca sólo el caso elegido. Optional admite métodos y helpers,
+incluido optionalOrElse con un Optional alternativo. Los parámetros out aliasan
+la celda mutable del argumento; no se convierten en copias locales.
+
+Los efectos externos, I/O, tareas async y escapes @cppgen se rechazan durante
+la evaluación estricta. Los contratos de memoria que el intérprete no puede
+materializar, los métodos sin implementación de evaluación y la aritmética
+entera exponencial mantienen diagnósticos explícitos de cobertura. La expansión
+@etsgen usa este mismo intérprete y vuelve a pasar su salida por lexer, parser,
+binder y checker; no ejecuta un evaluador TypeScript ni genera C++.
 
 ## Decoradores
 
 La tabla `decorators` conserva módulo, nodo, objetivo, nombre y argumentos.
 Se reconocen `@comptime`, `@deprecated` con mensaje string opcional, `@sealed`
-en clases e include/link de cabecera con un argumento string. Se comprueban
+en clases, include/link de cabecera, @etsgen, @cppgen y metadatos ABI
+cpp_name/cpp_type/cpp_drogon con sus objetivos y argumentos comprobados. Se comprueban
 aridad, objetivo y duplicados no repetibles; los desconocidos se rechazan.
 Estos metadatos no prueban emisión, warnings runtime ni integración ABI/backend.
 

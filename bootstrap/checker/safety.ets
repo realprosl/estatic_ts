@@ -3,10 +3,10 @@ import { resourceType, resourceSubstitution } from "./ownership";
 import { nativeNumericLiteral } from "./numeric";
 import { ModuleGraph } from "../modules/loader";
 import { BindingResult, BindingSymbol, bindingChild, callableBinding } from "../binder/binder";
-import { AstNode } from "../parser/parser";
-import { SourceDiagnostic } from "../frontend/frontend";
+import { AstNode, nodeBegin, nodeEnd } from "../parser/parser";
+import { diagnosticAt, SourceDiagnostic } from "../frontend/frontend";
 import { CheckResult, NativeCapture, BorrowLease, argumentParameter } from "./model";
-import { memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticElement, semanticTuple, splitTypes, functionClose, functionParams, functionReturn, argumentType, fixedArraySize, fixedArrayElement, localBinding, genericBase, genericArguments, replaceType } from "./types";
+import { memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticElement, semanticTuple, splitTypes, functionClose, functionParams, functionReturn, argumentType, fixedArraySize, fixedArrayElement, localBinding, genericBase, genericArguments, replaceType, canonicalSymbol } from "./types";
 
 export class SafetyState {
   slots: number[]; paths: string[]; resources: number[]; exit: string;
@@ -42,24 +42,27 @@ export class SafetyTarget {
 // symbol identity, independent of source order and aliases.
 export class SafetyAnalyzer {
   graph: ModuleGraph; binding: BindingResult; result: CheckResult; effects: EffectAnalyzer; arguments: SafetyArgument[];
-  offsets: number[]; nodes: number; edges: SafetyEdge[]; seeds: number[]; escapes: EscapeSite[];
+  offsets: number[]; nodes: number; edges: SafetyEdge[]; seeds: number[]; escapes: EscapeSite[]; owners: number[]; trace: boolean; resourceTypes: Map<string,boolean>; valueTypes: Map<string,boolean>; carrierTypes: Map<string,boolean>; plainTypes: Map<string,boolean>; defaultReads: Map<number,boolean>; valueDefaults: Map<number,boolean>;
   substitutions: string[]; substitutionTypes: string[]; memoryPath: string[]; borrowSources: number[]; leases: BorrowLease[]; breaks: SafetyState[]; continues: SafetyState[]; returns: SafetyState[]; sites: SafetyCallSite[];
+  visits: number;
   constructor(graph: ModuleGraph, binding: BindingResult, result: CheckResult) {
     this.graph = graph; this.binding = binding; this.result = result; this.effects = new EffectAnalyzer(graph,binding,result); this.arguments = []; this.offsets = []; this.nodes = 0;
     this.substitutions = []; this.substitutionTypes = []; this.edges = []; this.seeds = []; this.escapes = []; this.memoryPath = []; this.borrowSources = []; this.leases = []; this.breaks = []; this.continues = []; this.returns = []; this.sites = []; this.arguments = [];
     for (const m of graph.modules) { this.offsets.push(this.nodes); this.nodes = this.nodes + m.cached.result.ast.nodes.length; }
     for (const s of binding.symbols) this.borrowSources.push(-1);
+    this.owners = []; for (const scope of binding.scopes) this.owners.push(-2); this.trace = false; this.resourceTypes = new Map<string,boolean>(); this.valueTypes = new Map<string,boolean>(); this.carrierTypes = new Map<string,boolean>(); this.plainTypes = new Map<string,boolean>();
+    this.defaultReads = new Map<number,boolean>(); this.valueDefaults = new Map<number,boolean>();
+    this.visits = 0;
   }
   node(module: number, id: number): AstNode { return this.graph.modules[module].cached.result.ast.nodes[id]; }
   report(module: number, id: number, message: string): void {
     const token = this.node(module,id).start;
-    for (const d of this.result.diagnostics) if (d.file == this.graph.modules[module].file && d.token.offset == token.offset && d.message == message) return;
-    this.result.diagnostics.push(new SourceDiagnostic("checker",message,this.graph.modules[module].file,token));
+    for (const d of this.result.diagnostics) if (d.file == this.graph.modules[module].file && d.token.offset == token.offset && d.message == message && d.generatedId == this.node(module,id).generatedId && d.generatedToken.offset == this.node(module,id).generatedStart.offset) return;
+    this.result.diagnostics.push(diagnosticAt("checker",message,this.graph.modules[module].file,this.node(module,id)));
   }
   origin(sid: number): number { let at: number = sid; while (at >= 0 && this.binding.symbols[at].target >= 0) at = this.binding.symbols[at].target; return at; }
   reference(module: number, id: number): number {
-    for (const r of this.binding.references) if (r.module == module && r.node == id && r.space == "value" && !r.deferred) return r.target;
-    return -1;
+    return id < 0 ? -1 : this.binding.files[module].valueTargets[id];
   }
   helper(module: number, id: number): string {
     if (id < 0 || this.node(module,id).kind != "CallExpression") return "";
@@ -67,12 +70,13 @@ export class SafetyAnalyzer {
     return sid >= 0 && (this.binding.symbols[sid].module) < 0 ? this.binding.symbols[sid].name : "";
   }
   owner(scope: number): number {
+    if (scope >= 0 && this.owners[scope] != -2) return this.owners[scope];
     let at: number = scope;
     while (at >= 0) {
       const s = this.binding.scopes[at];
-      if (s.kind == "function" || s.kind == "arrow") return this.offsets[s.module] + s.node;
+      if (s.kind == "function" || s.kind == "arrow") { const result: number = this.offsets[s.module] + s.node; this.owners[scope] = result; return result; }
       at = s.parent;
-    } return -1;
+    } if (scope >= 0) this.owners[scope] = -1; return -1;
   }
   vertex(module: number, id: number): number { return this.offsets[module] + id; }
   symbolVertex(sid: number): number { return this.nodes + this.origin(sid); }
@@ -96,7 +100,7 @@ export class SafetyAnalyzer {
         let sid: number = this.reference(module,at); let remaining: number = this.binding.symbols.length;
         while (sid >= 0 && remaining > 0) {
           let source: number = this.borrowSources[sid];
-          if (borrowedType(this.result.symbolTypes[sid]) || this.binding.symbols[sid].kind == "receiver") for (let a: number = this.arguments.length - 1; a >= 0; a = a - 1) if (this.arguments[a].parameter == sid) { source = this.arguments[a].root; break; }
+          if (this.borrowedSymbol(sid) || this.binding.symbols[sid].kind == "receiver") for (let a: number = this.arguments.length - 1; a >= 0; a = a - 1) if (this.arguments[a].parameter == sid) { source = this.arguments[a].root; break; }
           if (source < 0 || source == sid) break; sid = source; remaining = remaining - 1;
         } return sid;
       }
@@ -113,7 +117,7 @@ export class SafetyAnalyzer {
       const n: AstNode = this.node(currentModule,at);
       if (n.kind == "IdentifierExpression") {
         const sid: number = this.reference(currentModule,at); if (sid < 0) return ""; let substituted: boolean = false;
-        if (borrowedType(this.result.symbolTypes[sid]) || this.binding.symbols[sid].kind == "receiver") {
+        if (this.borrowedSymbol(sid) || this.binding.symbols[sid].kind == "receiver") {
           for (let a: number = this.arguments.length-1; a >= 0; a = a-1) if (this.arguments[a].parameter == sid) {
             const argument = this.arguments[a]; at = argument.node; currentModule = argument.module; substituted = true; break;
           }
@@ -144,17 +148,17 @@ export class SafetyAnalyzer {
     for (let at: number = 0; at < a.length && at < b.length; at = at+1) if (a[at] != b[at] && a[at] != "*" && b[at] != "*") return false;
     return true;
   }
-  pathState(state: SafetyState, projectionKey: string): number { for (let at: number = 0; at < state.paths.length; at = at+1) if (state.paths[at] == projectionKey) return state.resources[at]; return 1; }
+  pathState(state: constRef<SafetyState>, projectionKey: string): number { for (let at: number = 0; at < state.paths.length; at = at+1) if (state.paths[at] == projectionKey) return state.resources[at]; return 1; }
   setPath(out state: SafetyState, projectionKey: string, value: number): void {
     if (projectionKey == "") return;
     for (let at: number = 0; at < state.paths.length; at = at+1) if (state.paths[at] == projectionKey) { state.resources[at] = value; return; }
     state.paths.push(projectionKey); state.resources.push(value);
   }
-  readPaths(module: number, id: number, state: SafetyState): void {
+  readPaths(module: number, id: number, state: constRef<SafetyState>): void {
     const projectionKey: string = this.projectionKey(module,id); if (projectionKey == "") return;
     for (let at: number = 0; at < state.paths.length; at = at+1) if (state.resources[at] != 1 && this.overlaps(projectionKey,state.paths[at])) this.report(module,id,state.resources[at] == 2 ? "E4102: acceso a un agregado o campo movido parcialmente" : "E4103: agregado o campo posiblemente movido parcialmente");
   }
-  writePaths(module: number, id: number, state: SafetyState): void {
+  writePaths(module: number, id: number, state: constRef<SafetyState>): void {
     const projectionKey: string = this.projectionKey(module,id); if (projectionKey == "") return; const depth: number = splitTypes(projectionKey,"/").length;
     for (let at: number = 0; at < state.paths.length; at = at+1) if (state.resources[at] != 1 && (splitTypes(state.paths[at],"/").length) < depth && this.overlaps(projectionKey,state.paths[at])) this.report(module,id,"E4102: escritura a través de un campo padre movido");
   }
@@ -162,12 +166,12 @@ export class SafetyAnalyzer {
     if (projectionKey == "" || projectionKey.indexOf("/*",0) >= 0) return;
     for (let at: number = 0; at < state.paths.length; at = at+1) if (state.paths[at] == projectionKey || state.paths[at].startsWith(projectionKey + "/")) state.resources[at] = 1;
   }
-  restorePaths(out state: SafetyState, saved: SafetyState, sid: number): void {
+  restorePaths(out state: SafetyState, saved: constRef<SafetyState>, sid: number): void {
     const prefix: string = "s" + numberToString(sid);
     this.initializePath(state,prefix);
     for (let at: number = 0; at < saved.paths.length; at = at+1) if (saved.paths[at] == prefix || saved.paths[at].startsWith(prefix + "/")) this.setPath(state,saved.paths[at],saved.resources[at]);
   }
-  samePaths(left: SafetyState, right: SafetyState): boolean {
+  samePaths(left: constRef<SafetyState>, right: constRef<SafetyState>): boolean {
     for (let at: number = 0; at < left.paths.length; at = at+1) if (left.resources[at] != this.pathState(right,left.paths[at])) return false;
     for (let at: number = 0; at < right.paths.length; at = at+1) if (right.resources[at] != this.pathState(left,right.paths[at])) return false;
     return true;
@@ -178,6 +182,12 @@ export class SafetyAnalyzer {
   }
   edge(source: number, target: number): void { if (source >= 0 && target >= 0) this.edges.push(new SafetyEdge(source,target)); }
   carrier(text: string, seen: number[]): boolean {
+    if (seen.length == 0) { if (this.carrierTypes.has(text)) return true; if (this.plainTypes.has(text)) return false; }
+    const result: boolean = this.carrierInner(text,seen);
+    if (seen.length == 0) { if (result) this.carrierTypes.set(text,true); else this.plainTypes.set(text,true); }
+    return result;
+  }
+  carrierInner(text: string, seen: number[]): boolean {
     if (functionClose(text) >= 0) return true;
     if (genericBase(text) == "Promise") return true;
     if (memoryMode(text) != "") return this.carrier(memoryInner(text),seen);
@@ -188,7 +198,8 @@ export class SafetyAnalyzer {
     if (text.endsWith("[]")) return this.carrier(semanticElement(text),seen);
     if (semanticTuple(text)) { for (const item of splitTypes(text.slice(1,text.length-1),",")) if (this.carrier(item,seen)) return true; return false; }
     const unions: string[] = splitTypes(text,"|"); if (unions.length > 1) { for (const item of unions) if (this.carrier(item,seen)) return true; return false; }
-    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (text == "#" + numberToString(sid) || text.startsWith("#" + numberToString(sid) + "<")) {
+    const sid: number = canonicalSymbol(text);
+    if (sid >= 0 && sid < this.binding.symbols.length) {
       if (seen.includes(sid)) return false; let next: number[] = seen; next.push(sid);
       const s: BindingSymbol = this.binding.symbols[sid];
       if (s.kind == "UnionDeclaration") for (const edge of this.node(s.module,s.node).edges) if (edge.role == "variants") {
@@ -204,9 +215,17 @@ export class SafetyAnalyzer {
   resolved(text: string): string {
     let value: string = text;
     for (let at: number = this.substitutions.length-1; at >= 0; at = at-1) value = replaceType(value,this.substitutions[at],this.substitutionTypes[at]);
+    while (genericBase(value) == "pack") { const parts: string[] = genericArguments(value); if (parts.length != 1 || genericBase(parts[0]) != "pack") break; value = parts[0]; }
     return value;
   }
-  transferType(text: string): boolean { return resourceType(this.graph,this.binding,this.result.symbolTypes,this.resolved(text),[]); }
+  borrowedSymbol(sid: number): boolean { return sid >= 0 && (borrowedType(this.resolved(this.result.symbolTypes[sid])) || this.effects.borrowedSymbol(sid)); }
+  borrowMode(sid: number): string { return this.effects.borrowedSymbol(sid) ? this.effects.borrowMode(sid) : memoryMode(this.resolved(this.result.symbolTypes[sid])); }
+  transferType(text: string): boolean {
+    const value: string = this.resolved(text);
+    if (this.resourceTypes.has(value)) return true; if (this.valueTypes.has(value)) return false;
+    const result: boolean = resourceType(this.graph,this.binding,this.result,value,[]);
+    if (result) this.resourceTypes.set(value,true); else this.valueTypes.set(value,true); return result;
+  }
   transferValue(module: number, id: number): void {
     if (id >= 0 && this.transferType(this.result.files[module].types[id]) && !this.freshTransfer(module,id)) this.report(module,id,"E4101: transferir ownership requiere move(lvalue), también tras sustitución genérica");
   }
@@ -241,9 +260,10 @@ export class SafetyAnalyzer {
     if (fixedArraySize(text) >= 0) { this.memoryType(module,id,fixedArrayElement(text),"argument"); return; }
     if (text.endsWith("[]")) { this.memoryType(module,id,semanticElement(text),"argument"); return; }
     if (semanticTuple(text)) { for (const p of splitTypes(text.slice(1,text.length-1),",")) this.memoryType(module,id,p,"argument"); return; }
-    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
+    const sid: number = canonicalSymbol(text);
+    if (sid >= 0 && sid < this.binding.symbols.length) {
       const owner = this.binding.symbols[sid];
-      if (owner.kind == "UnionDeclaration" && (text == "#" + numberToString(sid) || text.startsWith("#" + numberToString(sid) + "<"))) for (const edge of this.node(owner.module,owner.node).edges) if (edge.role == "variants") {
+      if (owner.kind == "UnionDeclaration") for (const edge of this.node(owner.module,owner.node).edges) if (edge.role == "variants") {
         const variant: number = this.binding.files[owner.module].declarations[edge.node];
         if (variant >= 0) for (const payload of functionParams(this.result.symbolTypes[variant])) this.memoryType(module,id,payload,"argument");
       }
@@ -270,8 +290,8 @@ export class SafetyAnalyzer {
         const source: number = bindingChild(n,n.kind == "ForOfStatement" ? "iterable" : "target"); const root: number = this.root(m,source);
         const binding: number = bindingChild(n,"binding"); const bindingSymbol: number = this.binding.files[m].declarations[binding];
         if (root >= 0 && bindingSymbol >= 0) {
-          let lease: BorrowLease = new BorrowLease(m,bindingSymbol,root,this.owner(this.binding.files[m].nodeScopes[id]),this.node(m,bindingChild(n,"body")).start.offset,"constRef");
-          lease.end = this.node(m,bindingChild(n,"body")).end.endOffset; this.leases.push(lease);
+          let lease: BorrowLease = new BorrowLease(m,bindingSymbol,root,this.owner(this.binding.files[m].nodeScopes[id]),nodeBegin(this.node(m,bindingChild(n,"body"))),"constRef");
+          lease.end = nodeEnd(this.node(m,bindingChild(n,"body"))); this.leases.push(lease);
         }
       }
       if (n.kind == "ArrayLiteralExpression" || n.kind == "ObjectProperty" || n.kind == "TernaryExpression") for (const edge of n.edges) if (["elements","value","thenBranch","elseBranch"].includes(edge.role)) {
@@ -280,14 +300,14 @@ export class SafetyAnalyzer {
       if ((n.kind == "VariableDeclaration" || n.kind == "UsingDeclaration" || n.kind == "ClassField") || n.kind == "AssignmentExpression" || n.kind == "ReturnStatement") {
         const value: number = bindingChild(n,n.kind == "ClassField" ? "defaultValue" : (n.kind == "VariableDeclaration" || n.kind == "UsingDeclaration") ? "initializer" : "value");
         if (value >= 0 && this.transferType(this.result.files[m].types[value]) && !this.freshTransfer(m,value)) this.report(m,value,"E4101: transferir ownership requiere move(identifier)");
-        if ((n.kind == "VariableDeclaration" || n.kind == "UsingDeclaration") && sid >= 0 && borrowedType(this.result.symbolTypes[sid])) {
+        if ((n.kind == "VariableDeclaration" || n.kind == "UsingDeclaration") && sid >= 0 && this.borrowedSymbol(sid)) {
           const root: number = this.root(m,value);
           if (root < 0) this.report(m,id,"E4208: no se puede demostrar el origen del préstamo local");
           else {
             this.borrowSources[sid] = root;
-            let lease: BorrowLease = new BorrowLease(m,sid,root,this.owner(this.binding.symbols[sid].scope),n.end.endOffset,memoryMode(this.result.symbolTypes[sid]));
+            let lease: BorrowLease = new BorrowLease(m,sid,root,this.owner(this.binding.symbols[sid].scope),nodeEnd(n),memoryMode(this.result.symbolTypes[sid]));
             for (const r of this.binding.references) if (r.target == sid && r.module == m && this.owner(r.scope) == lease.owner) {
-              const offset: number = this.node(m,r.node).start.offset; if (offset > lease.end) lease.end = offset;
+              const offset: number = nodeBegin(this.node(m,r.node)); if (offset > lease.end) lease.end = offset;
             }
             this.leases.push(lease);
           }
@@ -327,7 +347,8 @@ export class SafetyAnalyzer {
     }
     for (let c: number = 0; c < this.result.captures.length; c = c + 1) {
       const capture: NativeCapture = this.result.captures[c]; const text: string = this.result.symbolTypes[capture.symbol];
-      if (borrowedType(text) || this.transferType(text) || this.binding.symbols[capture.symbol].kind == "receiver") this.report(capture.module,capture.closure,"E4209: captura de préstamo/owner/this sin lifetime demostrado");
+      const receiver: boolean = this.binding.symbols[capture.symbol].kind == "receiver";
+      if (!receiver && (borrowedType(text) || this.transferType(text))) this.report(capture.module,capture.closure,"E4209: captura de préstamo/owner sin lifetime demostrado");
       const closureScope: number = this.binding.files[capture.module].nodeScopes[capture.closure];
       let mutates: boolean = false;
       for (let id: number = 0; id < this.result.files[capture.module].types.length; id = id + 1) {
@@ -339,7 +360,7 @@ export class SafetyAnalyzer {
         else if (n.kind == "MemberCallExpression" && this.mutating(capture.module,id)) target = bindingChild(n,"object");
         if (target >= 0 && this.root(capture.module,target) == capture.symbol) mutates = true;
       }
-      if (mutates) this.seeds.push(this.vertex(capture.module,capture.closure));
+      if (mutates || receiver) this.seeds.push(this.vertex(capture.module,capture.closure));
       this.edge(this.symbolVertex(capture.symbol),this.vertex(capture.module,capture.closure));
     }
     for (let c: number = 0; c < this.result.captures.length; c = c + 1) if (this.seeds.includes(this.vertex(this.result.captures[c].module,this.result.captures[c].closure))) this.result.captures[c].mode = "reference";
@@ -502,6 +523,7 @@ export class SafetyAnalyzer {
     for (const ref of this.binding.references) if (ref.module == module && ref.node == id && ref.space == "type" && ref.target >= 0) {
       const s: BindingSymbol = this.binding.symbols[ref.target];
       if (s.kind == "TypeAliasDeclaration" && !this.isPublic(ref.target)) this.report(module,id,"E4401: la API pública expone el alias privado '" + s.name + "'");
+      if (["ClassDeclaration","InterfaceDeclaration","UnionDeclaration","EnumDeclaration"].includes(s.kind) && !this.isPublic(ref.target)) this.report(module,id,"E4401: la API pública expone el tipo privado '" + s.name + "'");
     }
   }
   publicSurface(module: number, id: number): void {
@@ -521,7 +543,7 @@ export class SafetyAnalyzer {
       if (s.module >= 0 && s.node >= 0 && (s.namespaceModule) < 0) for (const declaration of s.declarations) this.publicSurface(s.module,declaration);
     }
   }
-  join(left: SafetyState, right: SafetyState): SafetyState {
+  join(left: constRef<SafetyState>, right: constRef<SafetyState>): SafetyState {
     if (left.exit != "") return right;
     if (right.exit != "") return left;
     let result: SafetyState = left;
@@ -558,7 +580,7 @@ export class SafetyAnalyzer {
       if (field.kind == "Parameter" || bindingChild(field,"defaultValue") >= 0) state.slots[sid] = 1; else state.slots[sid] = 0;
     }
   }
-  fieldsInitialized(module: number, id: number, state: SafetyState): void {
+  fieldsInitialized(module: number, id: number, state: constRef<SafetyState>): void {
     for (const sid of this.constructorFields(module,id)) if (state.slots[sid] != 1) this.report(module,id,"Campo no inicializado en todas las rutas: '" + this.binding.symbols[sid].name + "'");
   }
   constructorField(module: number, id: number): number {
@@ -569,19 +591,19 @@ export class SafetyAnalyzer {
     return sid >= 0 && this.constructorFields(module,id).includes(sid) ? sid : -1;
   }
   access(module: number, id: number, sid: number, mode: string): void {
-    if (sid < 0) return; const handle: number = this.directRoot(module,id); if (handle >= 0 && (this.borrowSources[handle] >= 0 || borrowedType(this.result.symbolTypes[handle]))) return; const position: number = this.node(module,id).start.offset;
+    if (sid < 0) return; const handle: number = this.directRoot(module,id); if (handle >= 0 && (this.borrowSources[handle] >= 0 || this.borrowedSymbol(handle) || this.binding.symbols[handle].kind == "receiver")) return; const position: number = nodeBegin(this.node(module,id));
     const currentOwner: number = this.owner(this.binding.files[module].nodeScopes[id]);
     for (const c of this.result.captures) if (this.vertex(c.module,c.closure) == currentOwner && c.symbol == sid && c.mode == "value") return;
     for (const lease of this.leases) {
       let live: boolean = lease.module == module && lease.owner == currentOwner && (lease.begin) <= position && position <= lease.end;
       for (const site of this.sites) {
-        const offset: number = this.node(site.module,site.node).start.offset;
+        const offset: number = nodeBegin(this.node(site.module,site.node));
         if (lease.module == site.module && lease.owner == this.owner(this.binding.files[site.module].nodeScopes[site.node]) && (lease.begin) <= offset && offset <= lease.end) live = true;
       }
       if (live && lease.root == sid && lease.end > lease.begin && (lease.mode == "ref" || mode != "read")) this.report(module,id,"E4207: acceso a la fuente durante un préstamo activo");
     }
   }
-  read(module: number, id: number, sid: number, state: SafetyState): void {
+  read(module: number, id: number, sid: number, state: constRef<SafetyState>): void {
     if (sid < 0 || (this.binding.symbols[sid].module) < 0) return;
     const s: BindingSymbol = this.binding.symbols[sid]; if (!localBinding(s.kind) && !["Parameter","receiver"].includes(s.kind)) return;
     if (state.slots[sid] == 0) this.report(module,id,"E4001: uso antes de inicializar '" + s.name + "'");
@@ -596,7 +618,12 @@ export class SafetyAnalyzer {
     for (const edge of n.edges) if (edge.role == "args") {
       const position: number = argumentParameter(this.result.files[module],edge.node,at);
       const arg: number = this.node(module,edge.node).kind == "NamedArgumentExpression" ? bindingChild(this.node(module,edge.node),"value") : edge.node;
-      const actual: string = this.result.files[module].types[arg]; const expected: string = position < params.length ? argumentType(params[position],this.node(module,edge.node).kind == "SpreadElement") : actual;
+      const actual: string = this.resolved(this.result.files[module].types[arg]); let expected: string = this.resolved(position < params.length ? argumentType(params[position],this.node(module,edge.node).kind == "SpreadElement") : actual);
+      if (position < params.length && params[position].startsWith("...") && genericBase(params[position].slice(3,params[position].length)) == "pack") {
+        const bundle: string = this.resolved(params[position].slice(3,params[position].length)); const elements: string[] = genericArguments(bundle); const slot: number = this.result.files[module].argumentElements[edge.node];
+        this.memoryType(module,id,bundle,"argument");
+        expected = (this.node(module,edge.node).kind == "SpreadElement" ? bundle : slot >= 0 && slot < elements.length ? elements[slot] : actual);
+      }
       const root: number = this.root(module,arg); const mode: string = borrowedType(expected) ? memoryMode(expected) : this.helper(module,arg) == "move" ? "move" : (display || comparison) && this.transferType(actual) ? "constRef" : "read";
       if (!display && !comparison && this.transferType(expected) && (borrowedType(actual) || (this.transferType(actual) && !this.freshTransfer(module,arg)))) this.report(module,arg,"E4101: argumento owner requiere move(identifier)");
       if (borrowedType(expected) && root < 0) this.report(module,arg,"E4208: un argumento prestado necesita un lvalue con origen conocido");
@@ -624,7 +651,7 @@ export class SafetyAnalyzer {
   observable(summaryId: number, sid: number, module: number, id: number): number {
     const summary = this.effects.summaries[summaryId];
     for (let at: number = 0; at < summary.parameters.length; at = at + 1) if (sid == summary.parameters[at]) {
-      if (!borrowedType(this.result.symbolTypes[sid])) return -1;
+      if (!this.borrowedSymbol(sid)) return -1;
       return this.root(module,this.effects.actualInput(module,id,at));
     }
     if (this.binding.symbols[sid].kind == "receiver") return this.root(module,bindingChild(this.node(module,id),"object"));
@@ -632,17 +659,71 @@ export class SafetyAnalyzer {
     for (const c of this.result.captures) if (c.module == summary.module && c.closure == summary.node && c.symbol == sid && c.mode == "value") return -1;
     return sid;
   }
+  summaryPosition(summaryId: number, symbol: number, module: number, id: number): number {
+    const summary = this.effects.summaries[summaryId];
+    for (let at: number = 0; at < summary.parameters.length; at = at+1) if (summary.parameters[at] == symbol && this.borrowedSymbol(symbol)) { const argument: number = this.effects.actualInput(module,id,at); return argument >= 0 ? argument : id; }
+    if (this.binding.symbols[symbol].kind == "receiver") { const object: number = bindingChild(this.node(module,id),"object"); if (object >= 0) return object; }
+    return id;
+  }
   summary(summaryId: number, module: number, id: number, out state: SafetyState): void {
     const summary = this.effects.summaries[summaryId];
-    if (summary.unknown || summary.invokes.length > 0) { this.report(module,id,"E4104: resumen recursivo con efectos opacos todavía no demostrados"); return; }
-    for (const sid of summary.reads) { const root: number = this.observable(summaryId,sid,module,id); if (root >= 0) this.read(module,id,root,state); }
-    for (const sid of summary.writes) { const root: number = this.observable(summaryId,sid,module,id); if (root >= 0) this.access(module,id,root,"write"); }
+    if (summary.invokes.length > 0) { this.report(module,id,"E4104: resumen recursivo con callbacks simbólicos todavía no demostrados"); return; }
+    if (summary.unknown) this.unknown(module,id,state);
+    for (const sid of summary.reads) { const root: number = this.observable(summaryId,sid,module,id); if (root >= 0) this.read(module,this.summaryPosition(summaryId,sid,module,id),root,state); }
+    for (const sid of summary.writes) { const root: number = this.observable(summaryId,sid,module,id); if (root >= 0) this.access(module,this.summaryPosition(summaryId,sid,module,id),root,"write"); }
     for (const sid of summary.moves) {
       const root: number = this.observable(summaryId,sid,module,id);
-      if (root >= 0) { this.read(module,id,root,state); this.access(module,id,root,"move"); if (state.slots[root] != 2) state.slots[root] = 3; }
+      if (root >= 0) { const position: number = this.summaryPosition(summaryId,sid,module,id); this.read(module,position,root,state); this.access(module,position,root,"move"); if (state.slots[root] != 2) state.slots[root] = 3; }
     }
   }
-  unknown(module: number, id: number, state: SafetyState): void {
+  defaultsNeedFlow(summaryId: number): boolean {
+    if (this.defaultReads.has(summaryId)) return true; if (this.valueDefaults.has(summaryId)) return false;
+    let declarations: number[] = [summaryId];
+    for (let at: number = 0; at < declarations.length; at = at+1) {
+      const target: number = declarations[at]; if (this.defaultReads.has(target)) { this.defaultReads.set(summaryId,true); return true; }
+      if (this.valueDefaults.has(target)) continue;
+      const declaration = this.effects.summaries[target];
+      for (const edge of this.node(declaration.module,declaration.node).edges) if (edge.role == "params") {
+        const value: number = bindingChild(this.node(declaration.module,edge.node),"defaultValue");
+        if (value >= 0) { const expression: AstNode = this.node(declaration.module,value);
+          const unary: number = expression.kind == "UnaryExpression" ? bindingChild(expression,"operand") : -1;
+          if (expression.kind != "LiteralExpression" && !(expression.kind == "ArrayLiteralExpression" && expression.edges.length == 0) && !(unary >= 0 && this.node(declaration.module,unary).kind == "LiteralExpression")) { this.defaultReads.set(summaryId,true); return true; }
+        }
+      }
+      for (const callee of declaration.callees) if (!declarations.includes(callee)) declarations.push(callee);
+    }
+    this.valueDefaults.set(summaryId,true); return false;
+  }
+  summaryReason(summaryId: number, reason: string): boolean {
+    if (this.trace && (this.visits) < 40) { const summary = this.effects.summaries[summaryId]; printError("frontend: precise "+this.graph.modules[summary.module].file+":"+this.node(summary.module,summary.node).get("name")+" "+reason); }
+    return false;
+  }
+  valueSummary(summaryId: number, module: number, id: number, state: constRef<SafetyState>): boolean {
+    const summary = this.effects.summaries[summaryId]; const call: AstNode = this.node(module,id);
+    // Opaque calls still run unknown() through summary(); replaying a value-only
+    // body cannot expose additional caller storage. Borrowed/resource inputs,
+    // captures and defaults remain on the precise path below.
+    if (summary.invokes.length > 0 || summary.moves.length > 0 || call.kind == "NewExpression") return this.summaryReason(summaryId,"effects invokes="+numberToString(summary.invokes.length)+" moves="+numberToString(summary.moves.length));
+    const frame: number = this.owner(this.binding.files[module].nodeScopes[id]);
+    if (frame >= 0 && this.node(module,frame-this.offsets[module]).get("name") == "constructor") return this.summaryReason(summaryId,"constructor frame");
+    for (const input of functionParams(this.result.files[module].signatures[id])) {
+      const value: string = input.startsWith("...") ? input.slice(3,input.length) : input;
+      if (borrowedType(value) || this.transferType(value) || this.carrier(value,[])) return this.summaryReason(summaryId,"parameter "+value);
+    }
+    const returns: string = this.result.files[module].types[id]; if (this.transferType(returns) || this.carrier(returns,[])) return this.summaryReason(summaryId,"result "+returns);
+    if (call.kind == "MemberCallExpression") { const receiver: string = this.effects.receiver(module,id); if (borrowedType(receiver) || this.transferType(receiver) || this.carrier(receiver,[])) return this.summaryReason(summaryId,"receiver "+receiver); }
+    // Defaults with runtime reads/effects require the precise supplied-argument path.
+    if (this.defaultsNeedFlow(summaryId)) return this.summaryReason(summaryId,"defaults");
+    for (const group of [summary.reads,summary.writes]) for (const symbol of group) {
+      const root: number = this.observable(summaryId,symbol,module,id); if (root < 0) continue;
+      const value: string = this.result.symbolTypes[root]; if (this.borrowedSymbol(root) || this.transferType(value) || this.carrier(value,[])) return this.summaryReason(summaryId,"root "+value);
+      // summary() checks each projected read/write against live caller leases.
+      // A lexical lease elsewhere is not a reason to replay the whole body.
+    }
+    for (const symbol of summary.writes) { const root: number = this.observable(summaryId,symbol,module,id); if (root >= 0 && state.slots[root] != 1) return this.summaryReason(summaryId,"uninitialized write"); }
+    return true;
+  }
+  unknown(module: number, id: number, state: constRef<SafetyState>): void {
     // A symbolic callback parameter is an obligation on callers. Definitions
     // with no concrete caller keep that obligation in their effect summary.
     const callback: number = this.effects.arrayCallback(module,id);
@@ -655,21 +736,29 @@ export class SafetyAnalyzer {
       if (next == symbolic) break; symbolic = next; remaining = remaining - 1;
     }
     for (const lease of this.leases) if (lease.end > lease.begin) {
-      let live: boolean = lease.module == module && lease.owner == this.owner(this.binding.files[module].nodeScopes[id]) && (lease.begin) <= this.node(module,id).start.offset && (this.node(module,id).start.offset) <= lease.end;
-      for (const site of this.sites) if (lease.module == site.module && lease.owner == this.owner(this.binding.files[site.module].nodeScopes[site.node]) && (lease.begin) <= this.node(site.module,site.node).start.offset && (this.node(site.module,site.node).start.offset) <= lease.end) live = true;
-      if (live) this.report(module,id,"E4104: efectos opacos durante un préstamo activo no demostrados");
+      let live: boolean = lease.module == module && lease.owner == this.owner(this.binding.files[module].nodeScopes[id]) && (lease.begin) <= nodeBegin(this.node(module,id)) && (nodeBegin(this.node(module,id))) <= lease.end;
+      for (const site of this.sites) if (lease.module == site.module && lease.owner == this.owner(this.binding.files[site.module].nodeScopes[site.node]) && (lease.begin) <= nodeBegin(this.node(site.module,site.node)) && (nodeBegin(this.node(site.module,site.node))) <= lease.end) live = true;
+      if (live) {
+        const current: number = this.owner(this.binding.files[module].nodeScopes[id]); let reachable: boolean = this.owner(this.binding.symbols[lease.root].scope) < 0;
+        for (const edge of this.node(module,id).edges) if (edge.role == "args" && this.root(module,edge.node) == lease.root) reachable = true;
+        for (const target of this.effects.callTargets(module,id)) if (this.effects.opaque(this.effects.summaries[target].module,this.effects.summaries[target].node)) {
+          if (this.owner(this.binding.symbols[lease.root].scope) == current) reachable = true;
+          for (const argument of this.arguments) if (argument.root == lease.root && this.owner(this.binding.symbols[argument.parameter].scope) == current && this.borrowedSymbol(argument.parameter)) reachable = true;
+        }
+        if (reachable) this.report(module,id,"E4104: efectos opacos durante un préstamo activo no demostrados");
+      }
     }
     for (let global: number = 0; global < this.binding.symbols.length; global = global + 1) {
       const s = this.binding.symbols[global];
-      if (localBinding(s.kind) && this.owner(s.scope) < 0 && (this.transferType(this.result.symbolTypes[global]) || state.slots[global] != 1)) this.report(module,id,"E4104: efectos opacos sobre globals no demostrados");
+      if (localBinding(s.kind) && this.owner(s.scope) < 0 && (this.transferType(this.result.symbolTypes[global]) || state.slots[global] == 2 || state.slots[global] == 3)) this.report(module,id,"E4104: efectos opacos sobre globals no demostrados");
     }
   }
   suspension(module: number, id: number): void {
-    const offset: number = this.node(module,id).kind == "AwaitExpression" ? this.node(module,id).end.endOffset : this.node(module,id).start.offset; const owner: number = this.owner(this.binding.files[module].nodeScopes[id]);
+    const offset: number = this.node(module,id).kind == "AwaitExpression" ? nodeEnd(this.node(module,id)) : nodeBegin(this.node(module,id)); const owner: number = this.owner(this.binding.files[module].nodeScopes[id]);
     for (const lease of this.leases) if (lease.end > lease.begin) {
       let live: boolean = lease.module == module && lease.owner == owner && lease.begin <= offset && offset < lease.end;
       for (const site of this.sites) {
-        const use: number = this.node(site.module,site.node).kind == "AwaitExpression" ? this.node(site.module,site.node).end.endOffset : this.node(site.module,site.node).start.offset;
+        const use: number = this.node(site.module,site.node).kind == "AwaitExpression" ? nodeEnd(this.node(site.module,site.node)) : nodeBegin(this.node(site.module,site.node));
         if (lease.module == site.module && lease.owner == this.owner(this.binding.files[site.module].nodeScopes[site.node]) && lease.begin <= use && use < lease.end) live = true;
       }
       if (live) this.report(module,id,"E4204: un préstamo vivo no puede atravesar una suspensión");
@@ -709,11 +798,17 @@ export class SafetyAnalyzer {
   invoke(module: number, id: number, out state: SafetyState, active: number[], repeat: boolean = true): void {
     if (this.effects.builtin(module,id)) return;
     if (repeat && this.effects.arrayCallback(module,id) >= 0) {
-      const n: AstNode = this.node(module,id); const object: number = bindingChild(n,"object"); const root: number = this.root(module,object);
+      const n: AstNode = this.node(module,id); let object: number = bindingChild(n,"object");
+      if (object < 0 && this.effects.callbackInputs(module,id).length > 0) object = this.effects.callbackInputs(module,id)[0];
+      const root: number = this.root(module,object);
       const leaseStart: number = this.leases.length;
       if (root >= 0) {
         const owner: number = this.owner(this.binding.files[module].nodeScopes[id]);
-        let lease: BorrowLease = new BorrowLease(module,-1,root,owner,n.start.offset,"constRef"); lease.end = n.end.offset; this.leases.push(lease);
+        let lease: BorrowLease = new BorrowLease(module,-1,root,owner,nodeBegin(n),"constRef"); lease.end = nodeEnd(n); this.leases.push(lease);
+      }
+      if (genericBase(memoryValue(this.result.files[module].types[object])) == "Optional") {
+        let choice: SafetyState = state; this.invoke(module,id,choice,active,false); state = this.join(state,choice);
+        while (this.leases.length > leaseStart) this.leases.pop(); return;
       }
       let head: SafetyState = state;
       while (true) {
@@ -727,7 +822,7 @@ export class SafetyAnalyzer {
     const targets: number[] = this.targets(module,id);
     if (targets.length == 0) { this.unknown(module,id,state); return; }
     const before: SafetyState = state; let joined: SafetyState = state;
-    if (this.helper(module,id) != "match") joined.exit = "unreachable";
+    joined.exit = "unreachable";
     for (const summaryId of targets) {
       const summary = this.effects.summaries[summaryId]; let choice: SafetyState = before;
       const target: SafetyTarget = new SafetyTarget(summary.module,summary.node); const owner: number = this.vertex(target.module,target.node);
@@ -736,20 +831,22 @@ export class SafetyAnalyzer {
         if (active.includes(owner) || active.length >= 64) this.summary(summary.creation,module,id,choice);
         else this.invokeTarget(module,id,target,choice,active,"creation");
       }
-      else if (active.includes(owner) || active.length >= 64) this.summary(summaryId,module,id,choice);
+      else if (active.includes(owner) || active.length >= 64 || this.valueSummary(summaryId,module,id,choice)) this.summary(summaryId,module,id,choice);
       else this.invokeTarget(module,id,target,choice,active);
       joined = this.join(joined,choice);
     }
     state = joined;
   }
   invokeTarget(module: number, id: number, target: SafetyTarget, out state: SafetyState, active: number[], phase: string = "body"): void {
+    this.visits = this.visits+1;
+    if (this.trace && this.visits % 10000 == 0) printError("frontend: flow calls "+numberToString(this.visits)+" "+this.graph.modules[target.module].file+":"+this.node(target.module,target.node).get("name")+" depth "+numberToString(active.length));
     const owner: number = this.vertex(target.module,target.node);
     const substitutionStart: number = this.substitutions.length;
     let classScope: number = this.binding.files[target.module].nodeScopes[target.node];
     while (classScope >= 0 && this.binding.scopes[classScope].kind != "ClassDeclaration") classScope = this.binding.scopes[classScope].parent;
     if (classScope >= 0) {
       const scope = this.binding.scopes[classScope]; const declaration: AstNode = this.node(scope.module,scope.node); const object: number = bindingChild(this.node(module,id),"object");
-      const receiver: string = this.resolved(memoryValue(this.result.files[module].types[object >= 0 ? object : id])); const inputs: string[] = genericArguments(receiver); let at: number = 0;
+      const receiver: string = this.resolved(memoryValue(object >= 0 ? this.effects.receiver(module,id) : this.result.files[module].types[id])); const inputs: string[] = genericArguments(receiver); let at: number = 0;
       for (const edge of declaration.edges) if (edge.role == "typeParameters") { if (at < inputs.length) { this.substitutions.push("@" + numberToString(this.binding.files[scope.module].declarations[edge.node])); this.substitutionTypes.push(inputs[at]); } at = at+1; }
     }
     const patterns: string[] = functionParams(this.result.files[target.module].types[target.node]); const values: string[] = functionParams(this.result.files[module].signatures[id]);
@@ -789,10 +886,10 @@ export class SafetyAnalyzer {
       const valueModule: number = actualNodes[parameterIndex] >= 0 ? module : target.module;
       if (value >= 0) {
         const root: number = this.root(valueModule,value); this.arguments.push(new SafetyArgument(parameter,valueModule,value,root));
-        if (root >= 0 && borrowedType(this.result.symbolTypes[parameter])) {
+        if (root >= 0 && this.borrowedSymbol(parameter)) {
           const bodyNode: number = bindingChild(this.node(target.module,target.node),"body");
-          let lease: BorrowLease = new BorrowLease(target.module,parameter,root,owner,this.node(target.module,bodyNode).start.offset,memoryMode(this.result.symbolTypes[parameter]));
-          lease.end = this.node(target.module,bodyNode).end.offset; this.leases.push(lease);
+          let lease: BorrowLease = new BorrowLease(target.module,parameter,root,owner,nodeBegin(this.node(target.module,bodyNode)),this.borrowMode(parameter));
+          lease.end = nodeEnd(this.node(target.module,bodyNode)); this.leases.push(lease);
         }
       }
       if (parameter >= 0 && this.parameterProperty(target.module,edge.node) && this.transferType(this.result.symbolTypes[parameter])) state.slots[parameter] = 2;
@@ -828,15 +925,26 @@ export class SafetyAnalyzer {
         const source: string = this.result.files[module].types[bindingChild(n,"expression")]; const target: string = this.result.files[module].types[id];
         if (this.transferType(source) != this.transferType(target)) this.report(module,id,"E4101: un cast genérico no puede borrar ni fabricar ownership");
       }
-      if (n.kind == "AssignmentExpression") this.transferValue(module,bindingChild(n,"value"));
+      if (n.kind == "AssignmentExpression" || n.kind == "CompoundAssignmentExpression") {
+        let target: number = bindingChild(n,"target");
+        while (target >= 0) {
+          const current: AstNode = this.node(module,target); if (!["MemberExpression","IndexExpression"].includes(current.kind)) break;
+          const object: number = bindingChild(current,"object");
+          if (readonlyType(this.resolved(this.result.files[module].types[object]))) this.report(module,target,"E4300: escritura genérica a través de una vista readonly"); target = object;
+        }
+        if (n.kind == "AssignmentExpression") this.transferValue(module,bindingChild(n,"value"));
+      }
       if (n.kind == "ArrayLiteralExpression" || n.kind == "ObjectProperty" || n.kind == "TernaryExpression") for (const edge of n.edges) if (["elements","value","thenBranch","elseBranch"].includes(edge.role)) this.transferValue(module,edge.node);
     }
+    if (n.kind == "SpreadElement" && genericBase(this.result.files[module].types[id]) == "pack") this.transferValue(module,bindingChild(n,"expression"));
     if (n.kind == "AwaitExpression") {
       const input: number = bindingChild(n,"operand"); this.expression(module,input,state,active);
       this.suspension(module,id); this.consumeTask(module,input,state); this.awaitTasks(module,id,input,state,active); return;
     }
     if (n.kind == "IdentifierExpression") {
       this.read(module,id,this.reference(module,id),state);
+      const alias: number = this.reference(module,id); const aliasRoot: number = this.root(module,id);
+      if (alias >= 0) { const symbol = this.binding.symbols[alias]; if (symbol.kind == "Parameter" && this.node(symbol.module,symbol.node).get("out") == "true" && aliasRoot != alias) this.read(module,id,aliasRoot,state); }
       if (!this.projection(module,id)) this.readPaths(module,id,state);
       if (n.get("name") == "this") {
         const parent: number = this.binding.files[module].parents[id];
@@ -850,7 +958,7 @@ export class SafetyAnalyzer {
     }
     if (n.kind == "ArrowFunctionExpression") { for (const c of this.result.captures) if (c.module == module && c.closure == id) {
       this.read(module,id,c.symbol,state);
-      if (this.substitutions.length > 0 && this.transferType(this.result.symbolTypes[c.symbol])) this.report(module,id,"E4209: una instancia genérica no puede ocultar captura de ownership");
+      if (this.substitutions.length > 0 && (this.transferType(this.result.symbolTypes[c.symbol]) || borrowedType(this.resolved(this.result.symbolTypes[c.symbol])))) this.report(module,id,"E4209: una instancia genérica no puede ocultar captura de ownership");
     } return; }
     if (n.kind == "AssignmentExpression" || n.kind == "CompoundAssignmentExpression") {
       const target: number = bindingChild(n,"target"); const value: number = bindingChild(n,"value");
@@ -897,6 +1005,10 @@ export class SafetyAnalyzer {
     if (n.kind == "CallExpression" || n.kind == "MemberCallExpression" || n.kind == "NewExpression") {
       if (n.kind == "CallExpression") this.read(module,id,this.reference(module,id),state);
       const object: number = bindingChild(n,"object"); if (object >= 0) this.expression(module,object,state,active);
+      const conditional: boolean = n.kind == "MemberCallExpression" && n.get("optional") == "true";
+      const present: string = conditional ? this.presence(module,object) : "true";
+      if (conditional && present == "false") return;
+      const skipped: SafetyState = state;
       if (n.kind == "NewExpression") for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
         const s: BindingSymbol = this.binding.symbols[sid];
         if ((this.result.files[module].types[id] == "#" + numberToString(sid) || this.result.files[module].types[id].startsWith("#" + numberToString(sid) + "<")) && s.kind == "ClassDeclaration") for (const edge of this.node(s.module,s.node).edges) if (edge.role == "fields" && this.node(s.module,edge.node).get("isStatic") != "true") this.expression(s.module,bindingChild(this.node(s.module,edge.node),"defaultValue"),state,active);
@@ -908,7 +1020,7 @@ export class SafetyAnalyzer {
         else { const projectionKey: string = this.projectionKey(module,arg); if (projectionKey == "") this.report(module,arg,"E4104: move requiere una procedencia de campo demostrada"); else this.setPath(state,projectionKey,2); }
       } else if (this.helper(module,id) != "ref" && this.helper(module,id) != "constRef") {
         this.callBorrows(module,id);
-        if (this.mutating(module,id) && object >= 0) this.access(module,object,this.root(module,object),"write");
+        if (this.mutating(module,id) && object >= 0) { if (readonlyType(this.resolved(this.effects.receiver(module,id)))) this.report(module,id,"E4300: método mutante sobre una vista readonly"); this.access(module,object,this.root(module,object),"write"); }
         if (this.effects.taskCollection(module,id)) {
           this.suspension(module,id); let head: SafetyState = state;
           while (true) {
@@ -920,7 +1032,9 @@ export class SafetyAnalyzer {
         }
         if (this.helper(module,id) == "spawn") this.awaitTasks(module,id,bindingChild(n,"args"),state,active,true);
         if (this.helper(module,id) == "" || this.helper(module,id) == "match") this.invoke(module,id,state,active);
-      } return;
+      }
+      if (conditional && present == "") state = this.join(skipped,state);
+      return;
     }
     for (const edge of n.edges) this.expression(module,edge.node,state,active);
   }
@@ -938,7 +1052,7 @@ export class SafetyAnalyzer {
       let body: SafetyState = head; this.expression(module,condition,body,active);
       if (known != "true") exits = this.join(exits,body);
       if (known == "false") break;
-      if (iteration) { const sid: number = this.binding.files[module].declarations[bindingChild(n,"binding")]; if (sid >= 0) body.slots[sid] = 1; }
+      if (iteration) { const sid: number = this.binding.files[module].declarations[bindingChild(n,"binding")]; if (sid >= 0) { body.slots[sid] = 1; this.initializePath(body,"s"+numberToString(sid)); } }
       if (n.kind == "ForOfStatement" && n.get("await") == "true") this.awaitTasks(module,id,bindingChild(n,"iterable"),body,active);
       this.walk(module,bindingChild(n,"body"),body,active);
       for (let at: number = breakStart; at < this.breaks.length; at = at + 1) exits = this.join(exits,this.breaks[at]);
@@ -1013,7 +1127,7 @@ export class SafetyAnalyzer {
   flow(): void {
     let globals: SafetyState = new SafetyState(this.binding.symbols.length);
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (localBinding(this.binding.symbols[sid].kind)) globals.slots[sid] = 0;
-    for (let m: number = 0; m < this.graph.modules.length; m = m + 1) this.walk(m,this.graph.modules[m].cached.result.ast.root,globals,[]);
+    for (let m: number = 0; m < this.graph.modules.length; m = m + 1) { if (this.trace) printError("frontend: global flow "+numberToString(m)); this.walk(m,this.graph.modules[m].cached.result.ast.root,globals,[]); }
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.result.files[m].types.length; id = id + 1) {
       const n: AstNode = this.node(m,id); if (!callableBinding(n.kind) || this.binding.files[m].nodeScopes[id] < 0) continue;
       const owner: number = this.vertex(m,id); let state: SafetyState = new SafetyState(this.binding.symbols.length);
@@ -1033,11 +1147,14 @@ export class SafetyAnalyzer {
     }
   }
   run(): CheckResult {
+    if (this.trace) printError("frontend: memory and captures");
     this.memoryContracts(); this.captures(); this.result.borrows = this.leases;
-    this.effects = new EffectAnalyzer(this.graph,this.binding,this.result); this.effects.analyze(); this.result.files = this.effects.checked.files; this.result.effects = this.effects.summaries;
-    this.provenance(); this.visibility(); this.flow(); this.result.borrows = this.leases; return this.result;
+    if (this.trace) printError("frontend: effects");
+    this.effects = new EffectAnalyzer(this.graph,this.binding,this.result); this.effects.trace = this.trace; this.effects.analyze(); this.result.files = this.effects.checked.files; this.result.effects = this.effects.summaries;
+    if (this.trace) printError("frontend: provenance and visibility");
+    this.provenance(); this.visibility(); if (this.trace) printError("frontend: flow"); this.flow(); this.result.borrows = this.leases; return this.result;
   }
 }
-export function validateSafety(graph: ModuleGraph, binding: BindingResult, out result: CheckResult): void {
-  let analyzer: SafetyAnalyzer = new SafetyAnalyzer(graph,binding,result); result = analyzer.run();
+export function validateSafety(graph: ModuleGraph, binding: BindingResult, out result: CheckResult, trace: boolean = false): void {
+  let analyzer: SafetyAnalyzer = new SafetyAnalyzer(graph,binding,result); analyzer.trace = trace; result = analyzer.run();
 }

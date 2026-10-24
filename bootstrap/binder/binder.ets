@@ -1,6 +1,7 @@
+import { nativeBuiltinNames, nativeBuiltinTypes } from "../frontend/builtins";
 import { ModuleGraph } from "../modules/loader";
 import { AstNode, ParserToken } from "../parser/parser";
-import { SourceDiagnostic, quoteSource } from "../frontend/frontend";
+import { diagnosticAt, SourceDiagnostic, quoteSource } from "../frontend/frontend";
 
 export class BindingScope {
   parent: number; module: number; node: number; kind: string; symbols: number[];
@@ -31,10 +32,10 @@ export class BoundExport {
   }
 }
 export class BoundFile {
-  scope: number; nodeScopes: number[]; declarations: number[]; parents: number[];
+  scope: number; nodeScopes: number[]; declarations: number[]; parents: number[]; valueTargets: number[];
   constructor(scope: number, count: number) {
-    this.scope = scope; this.nodeScopes = []; this.declarations = []; this.parents = [];
-    for (let i: number = 0; i < count; i = i + 1) { this.nodeScopes.push(-1); this.declarations.push(-1); this.parents.push(-1); }
+    this.scope = scope; this.nodeScopes = []; this.declarations = []; this.parents = []; this.valueTargets = [];
+    for (let i: number = 0; i < count; i = i + 1) { this.nodeScopes.push(-1); this.declarations.push(-1); this.parents.push(-1); this.valueTargets.push(-1); }
   }
 }
 export class BindingResult {
@@ -60,7 +61,7 @@ export class Binder {
   constructor(graph: ModuleGraph) { this.graph = graph; this.result = new BindingResult(); }
   report(module: number, node: number, message: string): void {
     const token: ParserToken = this.graph.modules[module].cached.result.ast.nodes[node].start;
-    this.result.diagnostics.push(new SourceDiagnostic("binder", message, this.graph.modules[module].file, token));
+    this.result.diagnostics.push(diagnosticAt("binder", message, this.graph.modules[module].file,this.graph.modules[module].cached.result.ast.nodes[node]));
   }
   scope(parent: number, module: number, node: number, kind: string): number {
     this.result.scopes.push(new BindingScope(parent, module, node, kind)); return this.result.scopes.length - 1;
@@ -282,7 +283,10 @@ export class Binder {
     }
   }
   reference(module: number, node: number, name: string, space: string): number {
-    const scope: number = this.result.files[module].nodeScopes[node]; const sid: number = this.lookup(scope, name, space);
+    let scope: number = this.result.files[module].nodeScopes[node];
+    const definition: string = this.graph.modules[module].cached.result.ast.nodes[node].get("generatedDefinition");
+    if (definition != "") for (let m: number = 0; m < this.graph.modules.length; m = m+1) if (this.graph.modules[m].file == definition) scope = this.result.files[m].scope;
+    const sid: number = this.lookup(scope, name, space);
     if (sid < 0) {
       const other: number = this.lookup(scope, name, "any");
       this.report(module, node, other >= 0 ? "El nombre '" + name + "' no está disponible como " + space : "Nombre no declarado '" + name + "'");
@@ -360,7 +364,10 @@ export class Binder {
       const scope: number = this.result.files[module].nodeScopes[id]; if (scope < 0) continue;
       const node: AstNode = arena[id];
       if (node.kind == "IdentifierExpression" || node.kind == "GenericIdentifierExpression") {
-        const symbol: number = this.reference(module, id, node.get("name"), "value"); this.namespaceValue(module, id, symbol);
+        const parent: number = this.result.files[module].parents[id]; let typeOperand: boolean = false;
+        if (parent >= 0) { const expression: AstNode = arena[parent]; typeOperand = expression.kind == "BinaryExpression" && expression.get("operator") == "instanceof" && bindingChild(expression,"right") == id; }
+        if (typeOperand) this.typeReferences(module,id,node.get("name"),false);
+        else { const symbol: number = this.reference(module, id, node.get("name"), "value"); this.namespaceValue(module, id, symbol); }
       } else if (node.kind == "CallExpression") {
         const symbol: number = this.reference(module, id, node.get("callee"), "value"); this.namespaceValue(module, id, symbol);
       }
@@ -400,6 +407,7 @@ export class Binder {
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) { this.imports(m); this.moduleExports(m); }
     this.duplicates();
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) this.uses(m);
+    for (const ref of this.result.references) if (ref.space == "value" && !ref.deferred && this.result.files[ref.module].valueTargets[ref.node] < 0) this.result.files[ref.module].valueTargets[ref.node] = ref.target;
     this.result.success = this.result.diagnostics.length == 0; return this.result;
   }
 }
@@ -407,6 +415,6 @@ export function bindProject(graph: ModuleGraph): BindingResult {
   let binder: Binder = new Binder(graph); return binder.bind();
 }
 
-export function bindingBuiltinValues(): string[] { return ["i8", "u8", "i16", "u16", "i32", "u32", "i64", "u64", "f32", "f64", "optionalIsPresent", "optionalValueOr", "optionalOrElse", "resultOk", "resultErr", "resultIsOk", "resultValueOr", "Date", "FileReader", "JSON", "Map", "Math", "Optional", "Promise", "Result", "Server", "Set", "__noExtend", "__noThrow", "acceptTcp", "acceptTcpUntil", "acceptTls", "all", "appendFile", "appendFileAsync", "appendFileUntil", "argument", "argumentCount", "asyncIoUringRead", "asyncIoUringWrite", "cancel", "cancelTimer", "cancellationToken", "charAt", "clearError", "closeTcp", "closeTls", "compileCpp", "compilerRoot", "comptime", "console", "constRef", "copyFile", "copyFileAsync", "copyFileUntil", "createCancellation", "createTlsServer", "ensureParentDirectory", "err", "estaticAstRecords", "estaticTypedAstJson", "estaticTypedAstRecords", "exitProcess", "fail", "fileAppend", "fileCopy", "fileExists", "fileExistsAsync", "fileMove", "fileRead", "fileRemove", "fileWrite", "fs", "hasError", "http", "indexOf", "ioUringAvailable", "ioUringRead", "ioUringWrite", "isCancelled", "jsonArrayGet", "jsonArrayLength", "jsonAsBool", "jsonAsNumber", "jsonAsString", "jsonEscape", "jsonIsArray", "jsonIsBool", "jsonIsNull", "jsonIsNumber", "jsonIsObject", "jsonIsString", "jsonObjectGet", "length", "lineAt", "lineCount", "listenTcp", "match", "move", "moveFile", "moveFileAsync", "moveFileUntil", "normalizePath", "numberToString", "ok", "openFileReader", "optionalNone", "optionalSome", "otherwise", "path", "pathDirectory", "print", "printError", "process", "promiseAll", "promiseRace", "race", "readFile", "readFileAsync", "readFileUntil", "readTcp", "readTcpUntil", "readTls", "ref", "removeFile", "removeFileAsync", "removeFileUntil", "resolveDns", "resolveImportPath", "resolveProjectPath", "retry", "setInterval", "setTimeout", "sleep", "spawn", "startsWith", "stopLoop", "substring", "syntaxTreeJson", "syntaxTreeRecords", "tcpAccept", "tcpClose", "tcpConnect", "tcpListen", "tcpRead", "tcpWrite", "timeout", "trim", "unwatchFs", "validateSyntax", "watchFs", "when", "whenType", "write", "writeError", "writeFile", "writeFileAsync", "writeFileUntil", "writeTcp", "writeTcpUntil", "writeTls"]; }
+export function bindingBuiltinValues(): string[] { let names: string[] = ["i8", "u8", "i16", "u16", "i32", "u32", "i64", "u64", "f32", "f64", "optionalIsPresent", "optionalValueOr", "optionalOrElse", "resultOk", "resultErr", "resultIsOk", "resultValueOr", "Date", "FileReader", "JSON", "Map", "Math", "Optional", "Promise", "Result", "Server", "Set", "__noExtend", "__noThrow", "acceptTcp", "acceptTcpUntil", "acceptTls", "all", "appendFile", "appendFileAsync", "appendFileUntil", "argument", "argumentCount", "asyncIoUringRead", "asyncIoUringWrite", "cancel", "cancelTimer", "cancellationToken", "charAt", "clearError", "closeTcp", "closeTls", "compileCpp", "compilerRoot", "comptime", "console", "constRef", "copyFile", "copyFileAsync", "copyFileUntil", "createCancellation", "createTlsServer", "ensureParentDirectory", "err", "estaticAstRecords", "estaticTypedAstJson", "estaticTypedAstRecords", "exitProcess", "fail", "fileAppend", "fileCopy", "fileExists", "fileExistsAsync", "fileMove", "fileRead", "fileRemove", "fileWrite", "fs", "hasError", "http", "indexOf", "ioUringAvailable", "ioUringRead", "ioUringWrite", "isCancelled", "jsonArrayGet", "jsonArrayLength", "jsonAsBool", "jsonAsNumber", "jsonAsString", "jsonEscape", "jsonIsArray", "jsonIsBool", "jsonIsNull", "jsonIsNumber", "jsonIsObject", "jsonIsString", "jsonObjectGet", "length", "lineAt", "lineCount", "listenTcp", "match", "move", "moveFile", "moveFileAsync", "moveFileUntil", "normalizePath", "numberToString", "ok", "openFileReader", "optionalNone", "optionalSome", "otherwise", "path", "pathDirectory", "print", "printError", "process", "promiseAll", "promiseRace", "race", "readFile", "readFileAsync", "readFileUntil", "readTcp", "readTcpUntil", "readTls", "ref", "removeFile", "removeFileAsync", "removeFileUntil", "resolveDns", "resolveImportPath", "resolveProjectPath", "retry", "setInterval", "setTimeout", "sleep", "spawn", "startsWith", "stopLoop", "substring", "syntaxTreeJson", "syntaxTreeRecords", "tcpAccept", "tcpClose", "tcpConnect", "tcpListen", "tcpRead", "tcpWrite", "timeout", "trim", "unwatchFs", "validateSyntax", "watchFs", "when", "whenType", "write", "writeError", "writeFile", "writeFileAsync", "writeFileUntil", "writeTcp", "writeTcpUntil", "writeTls"]; for (const name of nativeBuiltinNames()) if (!names.includes(name)) names.push(name); return names; }
 
-export function bindingBuiltinTypes(): string[] { return ["Array", "ArrayLike", "CancellationSource", "CancellationToken", "Console", "Error", "FileReader", "FsEvent", "FsWatcher", "HttpClientResponse", "JsonValue", "Map", "MatchCase", "MatchCaseResult", "MatchDefaultCase", "MatchResult", "MatchTypeCase", "MatchValueCase", "NonThrowable", "Optional", "Phantom", "Promise", "Request", "Response", "Result", "Sealed", "Server", "Set", "StringInstance", "TcpConnection", "TcpListener", "Timer", "TlsConnection", "TlsContext", "boolean", "constPtr", "constRef", "f32", "f64", "i16", "i32", "i64", "i8", "number", "ptr", "readonly", "ref", "string", "u16", "u32", "u64", "u8", "void"]; }
+export function bindingBuiltinTypes(): string[] { let names: string[] = ["Array", "ArrayLike", "CancellationSource", "CancellationToken", "Console", "Error", "FileReader", "FsEvent", "FsWatcher", "HttpClientResponse", "JsonValue", "Map", "MatchCase", "MatchCaseResult", "MatchDefaultCase", "MatchResult", "MatchTypeCase", "MatchValueCase", "NonThrowable", "Optional", "Phantom", "Promise", "Request", "Response", "Result", "Sealed", "Server", "Set", "StringInstance", "TcpConnection", "TcpListener", "Timer", "TlsConnection", "TlsContext", "boolean", "constPtr", "constRef", "f32", "f64", "i16", "i32", "i64", "i8", "number", "ptr", "readonly", "ref", "string", "u16", "u32", "u64", "u8", "void"]; for (const name of nativeBuiltinTypes()) if (!names.includes(name)) names.push(name); return names; }

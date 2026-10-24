@@ -188,3 +188,8 @@ frontend nativo. El [registro de pendientes](./PENDING.md) define las obligacion
 de cierre; `npm run audit:bootstrap` ejecuta la primera matriz de aceptación y
 rechazo. El IR sigue como diseño y su implementación queda bloqueada hasta
 cerrar ese registro.
+
+La [comparación de sintaxis con stage 0](./SYNTAX-PARITY.md) se reproduce con
+`npm run audit:bootstrap:syntax`. Distingue aceptación del parser, comprobación
+de tipos y seguridad de memoria; conserva también los resultados por caso en
+`audit/syntax-parity.json`.

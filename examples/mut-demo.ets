@@ -20,6 +20,6 @@ function bump(p: ref<Counter>): void {
   print(numberToString(p.value));
 }
 
-const c: Counter = new Counter(7);
+let c: Counter = new Counter(7);
 bump(c);
 print(numberToString(c.value));  // 8 (mutado a través de la referencia)

@@ -55,7 +55,7 @@ esos helpers. Los nombres locales homónimos conservan su comportamiento normal.
   raíz: dos préstamos mutables, mutable+compartido o préstamo+move no pueden
   coexistir durante la llamada. El acceso por un handle `ref<T>` permite
   modificar su referente; `constRef<T>`/`constPtr<T>`/readonly lo impiden.
-- Cada préstamo local conserva raíz, principio y último uso por **offset**,
+- Cada préstamo local conserva raíz, principio y último uso por offset o por orden léxico expandido,
   incluidos usos de aliases. Dos usos en una misma línea no comparten por eso
   una duración artificial. Los préstamos sin usos no mantienen un intervalo vivo.
 - Se rechazan intervalos solapados cuando alguno es mutable, acceso directo a
@@ -65,8 +65,8 @@ esos helpers. Los nombres locales homónimos conservan su comportamiento normal.
   no una lectura tardía de su fuente original.
 - Un cast no puede introducir o borrar un contrato de memoria. Las
   instanciaciones de agregados genéricos revalidan transferencias y capturas
-  después de sustituir tipos. Los argumentos genéricos directamente ptr/ref
-  y los packs de owners o préstamos conservan restricciones explícitas.
+  después de sustituir tipos. Los packs con owners exigen move y conservan la
+  correspondencia de elementos; los packs con préstamos requieren lifetimes.
 
 `borrows` entrega `{module,symbol,root,begin,end,mode}`. Los intervalos son
 metadatos conservadores, no lifetimes persistentes ni una prueba general de
@@ -86,8 +86,9 @@ los arrows exteriores necesarios.
 `captures` contiene `{module,closure,symbol,mode}`. Un lector captura por valor.
 Si un arrow modifica estado capturado, todas sus capturas se clasifican por
 referencia, siguiendo la política del backend actual. Se permite su uso local.
-Capturar préstamos, owners o `this` sin lifetime demostrado produce E4209. La
-captura de una función nombrada anidada queda pendiente de su lowering.
+Capturar préstamos u owners sin lifetime demostrado produce E4209. Las funciones
+nombradas anidadas conservan su entorno por identidad de símbolo. This se captura
+por referencia para uso local; su transporte fuera del ámbito produce E4210.
 
 Un grafo de procedencia separado enlaza variables, aliases, asignaciones,
 condicionales, capturas transitivas, literales de arrays/tuplas/objetos, push,
@@ -146,9 +147,16 @@ diferencias de v62 se añaden dos casos de préstamos en una sola línea que el
 checker TS directo rechaza por su granularidad de líneas y el nativo acepta
 usando offsets. Los callables reasignados usan conjuntos conservadores de destinos y la
 recursión consulta resúmenes; los casos opacos siguen restringidos. Permanecen
-las restricciones a callbacks retenidos, owners capturados y transferencias
-polimórficas de owners/préstamos en packs.
+las restricciones a callbacks retenidos, owners capturados y almacenamiento de
+préstamos en packs sin contrato de lifetime. Los owners se transfieren mediante move.
 No se anuncia paridad general ni se cambia el checker TS para ocultar diferencias.
+
+Los resúmenes de llamadas recursivas conservan la autorización del parámetro
+prestado o receptor que origina el acceso. Reenviar un parámetro out/ref permite
+seguir usando ese handle; escribir directamente en la fuente global durante el
+mismo préstamo sigue rechazándose. Los packs se validan después de seleccionar
+la sobrecarga: un candidato descartado no añade errores de lifetime y un tipo
+callable con parámetros prestados no se confunde con almacenar un préstamo.
 
 El CLI principal y el codegen conservan su cadena. Estos resultados semánticos
 nativos todavía no se traducen a C++ del programa solicitado. No hay caché
@@ -164,7 +172,7 @@ inicializaciones.
 
 Los callbacks de arrays se recorren hasta un punto fijo con préstamo temporal
 del iterable. Match une las alternativas de callbacks sin ejecutarlas como una
-secuencia; conserva también la posibilidad de no ejecutar ninguno. Los valores
+secuencia. La ruta sin coincidencia termina en trap y no alcanza la continuación. Los valores
 retornados por callbacks conservan su procedencia para comprobar escapes.
 
 
@@ -197,3 +205,29 @@ multiplicidad exacta ni un orden arbitrario de tareas que comparten owners. Las
 tareas opacas conservan obligaciones de efectos; las restricciones de captura de
 owners y receptores no desaparecen al envolver una función en async. El soporte
 nativo de estas reglas no conecta todavía sus tablas al codegen.
+
+Los callbacks funcionales observan los elementos y payloads por valor o constRef;
+no reciben ref mutable del elemento de arrays/Optional. El acumulador de reduce
+es un valor local del consumidor. Las firmas publicadas conservan los modos de
+préstamo del callback. Los argumentos ref de llamadas directas e indirectas
+comprueban también los modificadores readonly de sus campos de origen.
+
+Un efecto externo invalida préstamos de globals y de argumentos accesibles;
+un objeto local de un caller que no se pasa al callee no es alcanzable sólo por
+existir un préstamo. Un escape @cppgen también puede alcanzar su frame léxico.
+
+Las capturas locales de this usan modo reference y el mismo grafo de escapes.
+Se admiten llamadas locales y consumidores síncronos que no retienen el callback;
+devolverlo o almacenarlo en timers produce E4210. Un método llamado a través de
+un préstamo conserva ese origen autorizado; las llamadas directas al propietario
+siguen respetando préstamos activos.
+
+For-await consume el conjunto de tareas y recibe cada resultado por valor. Un
+resultado con ownership puede transferirse dentro de la iteración; la siguiente
+iteración inicializa un recurso nuevo, incluidas sus rutas parcialmente movidas.
+El binding prestado de un resultado temporal se rechaza sin almacenamiento local.
+
+Match presta un subject con ownership cuando sus callbacks observan por préstamo
+o no reciben parámetro. Una callback que recibe ownership por valor exige
+transferir el subject. Los argumentos prestados no permiten copiar el owner a
+un callback; los préstamos temporales comprueban las escrituras por otros aliases.

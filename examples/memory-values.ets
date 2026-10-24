@@ -24,7 +24,7 @@ function mutateRef(b: ref<Box>): void {
   b.value = 999;
 }
 
-const original: Box = new Box(42);
+let original: Box = new Box(42);
 
 mutateCopy(original);
 print(numberToString(original.value));  // 42 (sin cambio)

@@ -21,7 +21,7 @@ interface ClosureContext {
 // devuelven `Result<T>` o `boolean`; las versiones sin sufijo son asíncronas y
 // devuelven `Promise<Result<T>>`. El runtime mapea cada llamada al overload
 // correspondiente de `readFile`/`writeFile`/.../`*Async`.
-const FILESYSTEM_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
+export const FILESYSTEM_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
   readFileSync:   { params: ["string"], returnType: "Result<string>" },
   writeFileSync:  { params: ["string", "string"], returnType: "Result<boolean>" },
   appendFileSync: { params: ["string", "string"], returnType: "Result<boolean>" },
@@ -40,7 +40,7 @@ const FILESYSTEM_METHODS: Record<string, { params: TypeName[]; returnType: TypeN
 // Tabla de métodos del built-in `path`. Delega en `std::filesystem`. Las
 // funciones que en Node reciben rest args (`join`, `resolve`) aquí toman un
 // `string[]` para mantener tipos concretos.
-const PATH_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
+export const PATH_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
   dirname:    { params: ["string"], returnType: "string" },
   basename:   { params: ["string"], returnType: "string" },
   extname:    { params: ["string"], returnType: "string" },
@@ -52,7 +52,7 @@ const PATH_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }>
 
 // Tabla de métodos del built-in `process`. Mapea a `argument`, `argumentCount`,
 // `exitProcess` y `std::filesystem::current_path`.
-const PROCESS_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
+export const PROCESS_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
   argc: { params: [], returnType: "number" },
   argv: { params: [], returnType: "string[]" },
   cwd:  { params: [], returnType: "string" },
@@ -65,7 +65,7 @@ const PROCESS_METHODS: Record<string, { params: TypeName[]; returnType: TypeName
 // (jsonIsString, jsonAsString, jsonArrayGet, etc.). Ambos coexisten para
 // mantener compatibilidad: código existente con `JSON.parse(s): string`
 // sigue funcionando.
-const JSON_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
+export const JSON_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
   stringify: { params: ["string"], returnType: "string" },
   stringifyNumber: { params: ["number"], returnType: "string" },
   stringifyBool: { params: ["boolean"], returnType: "string" },
@@ -81,7 +81,7 @@ const JSON_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }>
 // `Object`/`any`/`unknown`, así que se accede a campos vía funciones libres.
 // Todas devuelven tipos primitivos (string/number/boolean) excepto las que
 // devuelven JsonValue (array/object get).
-const JSON_HELPERS: Record<string, { params: TypeName[]; returnType: TypeName }> = Object.assign(Object.create(null), {
+export const JSON_HELPERS: Record<string, { params: TypeName[]; returnType: TypeName }> = Object.assign(Object.create(null), {
   jsonIsString: { params: ["JsonValue"], returnType: "boolean" },
   jsonIsNumber: { params: ["JsonValue"], returnType: "boolean" },
   jsonIsBool: { params: ["JsonValue"], returnType: "boolean" },
@@ -100,7 +100,7 @@ const JSON_HELPERS: Record<string, { params: TypeName[]; returnType: TypeName }>
 // funciones globales del dialecto. Sin tipos ricos (Result<FileContent,
 // FileError>) — eso llega en V1 (tagged unions). Por ahora devuelven
 // primitivos: string/boolean.
-const FILE_HELPERS: Record<string, { minParams: number; paramTypes?: TypeName[]; returnType: TypeName }> = Object.assign(Object.create(null), {
+export const FILE_HELPERS: Record<string, { minParams: number; paramTypes?: TypeName[]; returnType: TypeName }> = Object.assign(Object.create(null), {
   fileRead:    { minParams: 1, paramTypes: ["string"],         returnType: "string"  },  // (path) -> string
   fileWrite:   { minParams: 2, paramTypes: ["string", "string"], returnType: "boolean" },  // (path, content) -> boolean
   fileAppend:  { minParams: 2, paramTypes: ["string", "string"], returnType: "boolean" },
@@ -118,7 +118,7 @@ const FILE_HELPERS: Record<string, { minParams: number; paramTypes?: TypeName[];
 // Helpers para networking (Issue #14). Wrappers síncronos sobre POSIX sockets
 // (runtime/ets_net_sync.hpp). Devuelven fd numéricos o string vacío en error.
 // V1 (tagged unions) reemplazará estos por `Result<TcpConn, NetError>`.
-const NET_HELPERS: Record<string, { minParams: number; paramTypes?: TypeName[]; returnType: TypeName }> = Object.assign(Object.create(null), {
+export const NET_HELPERS: Record<string, { minParams: number; paramTypes?: TypeName[]; returnType: TypeName }> = Object.assign(Object.create(null), {
   tcpListen:        { minParams: 2, paramTypes: ["string", "number"], returnType: "number"  },  // (host, port) -> fd
   tcpAccept:        { minParams: 1, paramTypes: ["number"],          returnType: "number"  },  // (listenerFd) -> clientFd
   tcpConnect:       { minParams: 2, paramTypes: ["string", "number"], returnType: "number"  },  // (host, port) -> fd
@@ -192,7 +192,7 @@ const ASYNC_PRIMITIVE_HELPERS: Record<string, { params: TypeName[]; returnType: 
 // (mapeado a `double` en C++). Las funciones que en JavaScript aceptan
 // número variable de argumentos (`Math.max(...args)`) se limitan a dos
 // argumentos aquí por la restricción del dialecto (variadics no uniformes).
-const MATH_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
+export const MATH_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
   floor: { params: ["number"], returnType: "number" },
   ceil:  { params: ["number"], returnType: "number" },
   round: { params: ["number"], returnType: "number" },
@@ -209,7 +209,7 @@ const MATH_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }>
 // V30.22.2: propiedades de `Math` (constantes). `PI` y `E` son las mas
 // comunes. Se accede como `Math.PI` (no `Math.PI()`) y el codegen
 // emite `ets::math_pi()` directamente.
-const MATH_PROPERTIES: Record<string, TypeName> = {
+export const MATH_PROPERTIES: Record<string, TypeName> = {
   PI: "number",
   E: "number",
 };
@@ -217,7 +217,7 @@ const MATH_PROPERTIES: Record<string, TypeName> = {
 // Bloque E: tabla de métodos de `Date`. La API es mínima: solo timestamps.
 // Fechas estructuradas (year/month/day getters, formatos) requieren tipos
 // compuestos que este dialecto evita por ahora.
-const DATE_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
+export const DATE_METHODS: Record<string, { params: TypeName[]; returnType: TypeName }> = {
   now: { params: [], returnType: "number" },
   utc: { params: ["number", "number", "number"], returnType: "number" },
 };
@@ -298,7 +298,7 @@ const ARRAY_METHODS: Record<string, { arity: number; paramKinds: ("array" | "fn"
 // expone como llamadas tipo metodo (`s.charAt(i)`) y el codegen los
 // traduce 1:1 a `ets::string_*` (byte-level, ver runtime/ets_string.hpp).
 // `arity` es el numero de argumentos; el receptor `s` no cuenta.
-const STRING_METHODS: Record<string, { arity: number; paramTypes: TypeName[]; returnType: TypeName }> = {
+export const STRING_METHODS: Record<string, { arity: number; paramTypes: TypeName[]; returnType: TypeName }> = {
   charAt:        { arity: 1, paramTypes: ["number"],  returnType: "string" },
   charCodeAt:    { arity: 1, paramTypes: ["number"],  returnType: "number" },
   indexOf:       { arity: 2, paramTypes: ["string", "number"], returnType: "number" },

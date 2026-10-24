@@ -6,6 +6,10 @@
 
 declare global {
 
+  /** Helpers internos de pruebas de transporte síncrono. */
+  function etsNetSyncEcho(host: string, port: number, request: string, maxBytes: number): string;
+  function etsNetSyncLarge(host: string, port: number, payloadBytes: number): string;
+
   // ─── Tipos numéricos concretos (V3) ──────────────────────────────────
   // El dialecto distingue anchos de bits. Para el editor son alias de
   // 'number'; el transpilador enforce los rangos al compilar.
@@ -143,8 +147,13 @@ declare global {
     isEmpty(): boolean;
     value(): T;
     valueOr(defaultValue: T): T;
+    map<U>(callback: (value: T) => U): Optional<U>;
+    andThen<U>(callback: (value: T) => Optional<U>): Optional<U>;
+    orElse(other: Optional<T>): Optional<T>;
   }
   class Result<T, E = string> extends Sealed {
+    readonly kind: "Ok" | "Err";
+    readonly ok: boolean;
     private readonly _brand: symbol;
     // El dialecto trata Result<T, E> como tagged union sintética; los
     // métodos isOk/value/error se infieren desde el tag 'ok'. Ver
@@ -406,6 +415,8 @@ declare global {
   function optionalSome<T>(value: T): Optional<T>;
   function optionalNone<T>(): Optional<T>;
   function optionalIsPresent<T>(value: Optional<T>): boolean;
+  function optionalMap<T, U>(value: Optional<T>, callback: (value: T) => U): Optional<U>;
+  function optionalAndThen<T, U>(value: Optional<T>, callback: (value: T) => Optional<U>): Optional<U>;
   function optionalValueOr<T>(value: Optional<T>, fallback: T): T;
   function optionalOrElse<T>(value: Optional<T>, fallback: Optional<T>): Optional<T>;
   function resultOk<T, E = string>(value: T): Result<T, E>;

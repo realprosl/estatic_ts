@@ -39,5 +39,5 @@ class Svg {
   }
 }
 
-const s: Svg = new Svg()
+let s: Svg = new Svg()
 s.run()

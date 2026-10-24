@@ -26,6 +26,6 @@ function inspect(counter: constRef<Counter>): number {
   return counter.value;
 }
 
-const counter: Counter = new Counter(10);
+let counter: Counter = new Counter(10);
 increment(counter);
 print(numberToString(inspect(counter)));  // 11

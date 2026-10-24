@@ -1,0 +1,1069 @@
+{
+  "cases": 75,
+  "passed": 75,
+  "results": [
+    {
+      "id": "declarations",
+      "area": "Básicos",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "newlines",
+      "area": "Básicos",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "unicode-comments",
+      "area": "Básicos",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "numeric-bases",
+      "area": "Literales",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "numeric-types",
+      "area": "Tipos",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "arrays-tuples",
+      "area": "Tipos",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "aliases-union-intersection",
+      "area": "Tipos",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "readonly",
+      "area": "Tipos",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "function-types",
+      "area": "Tipos",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "grouped-types",
+      "area": "Tipos",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": true,
+      "status": "adición nativa",
+      "passed": true,
+      "oldDiagnostics": [
+        "El tipo de función necesita nombres de parámetros",
+        "Se esperaba ':' en el parámetro del tipo de función",
+        "Se esperaba un tipo primitivo, clase, interfaz, array o tupla",
+        "Se esperaba ')' en el tipo de función",
+        "Se esperaba '=>' en el tipo de función",
+        "Se esperaba un tipo primitivo, clase, interfaz, array o tupla",
+        "Se esperaba ';' después del alias de tipo",
+        "Se esperaba el nombre del alias de tipo",
+        "Se esperaba '=' en la declaración de alias de tipo",
+        "El tipo de función necesita nombres de parámetros",
+        "Se esperaba ':' en el parámetro del tipo de función",
+        "Se esperaba un tipo primitivo, clase, interfaz, array o tupla",
+        "Se esperaba ')' en el tipo de función",
+        "Se esperaba '=>' en el tipo de función",
+        "Se esperaba un tipo primitivo, clase, interfaz, array o tupla",
+        "Se esperaba ';' después del alias de tipo",
+        "Se esperaba el nombre del alias de tipo",
+        "Se esperaba '=' en la declaración de alias de tipo",
+        "Se esperaba ';' después del alias de tipo",
+        "Se esperaba una expresión",
+        "Se esperaba una expresión",
+        "Se esperaba una expresión",
+        "Se esperaba ']' después del índice"
+      ],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "typeof-simple",
+      "area": "Consultas",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "typeof-qualified",
+      "area": "Consultas",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": true,
+      "status": "adición nativa",
+      "passed": true,
+      "oldDiagnostics": [
+        "Se esperaba ';' después del alias de tipo",
+        "Se esperaba una expresión",
+        "Se esperaba ';' después de la expresión"
+      ],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "typeof-suffixes",
+      "area": "Consultas",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": true,
+      "status": "adición nativa",
+      "passed": true,
+      "oldDiagnostics": [
+        "Se esperaba ';' después del alias de tipo",
+        "Se esperaba una expresión",
+        "Se esperaba ';' después de la expresión",
+        "Se esperaba una expresión",
+        "Se esperaba ']' después del índice",
+        "Se esperaba ';' después de la expresión"
+      ],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "typeof-static",
+      "area": "Consultas",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": true,
+      "status": "adición nativa",
+      "passed": true,
+      "oldDiagnostics": [
+        "Se esperaba ';' después del alias de tipo",
+        "Se esperaba una expresión",
+        "Se esperaba ';' después de la expresión"
+      ],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "interfaces",
+      "area": "Declaraciones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "classes",
+      "area": "Declaraciones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "parameter-properties",
+      "area": "Declaraciones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "composition",
+      "area": "Declaraciones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "generic-classes",
+      "area": "Genéricos",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "generic-functions",
+      "area": "Genéricos",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "generic-aliases",
+      "area": "Genéricos",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "function-packs",
+      "area": "Genéricos",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "class-pack-grammar",
+      "area": "Genéricos",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "functions-arrows",
+      "area": "Funciones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "nested-functions",
+      "area": "Funciones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "optional-default-parameters",
+      "area": "Funciones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "out-parameters",
+      "area": "Funciones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "overloads",
+      "area": "Funciones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "named-arguments",
+      "area": "Funciones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "rest-spread",
+      "area": "Funciones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "destructuring-arrays",
+      "area": "Bindings",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "destructuring-objects",
+      "area": "Bindings",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "using",
+      "area": "Bindings",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "if-while-for",
+      "area": "Control",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "for-of-in",
+      "area": "Control",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "switch",
+      "area": "Control",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": true,
+      "status": "adición nativa",
+      "passed": true,
+      "oldDiagnostics": [
+        "Se esperaba una expresión",
+        "Solo se pueden invocar funciones por nombre",
+        "Se esperaba ';' después de la expresión",
+        "Se esperaba una expresión",
+        "Se esperaba ';' después de la expresión",
+        "Se esperaba ';' después de la expresión",
+        "Se esperaba una expresión",
+        "Se esperaba ';' después de la expresión",
+        "Se esperaba una expresión",
+        "Se esperaba ';' después de la expresión",
+        "Se esperaba una expresión",
+        "Se esperaba ';' después de la expresión"
+      ],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "enum-numeric-string",
+      "area": "Uniones y enums",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "enum-newline",
+      "area": "Uniones y enums",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": true,
+      "status": "adición nativa",
+      "passed": true,
+      "oldDiagnostics": [
+        "Se esperaba el nombre del miembro del enum",
+        "Se esperaba ',' o '}' entre miembros del enum",
+        "Se esperaba el nombre del miembro del enum",
+        "Se esperaba ',' o '}' entre miembros del enum",
+        "Se esperaba el nombre del miembro del enum"
+      ],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "union-canonical",
+      "area": "Uniones y enums",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "union-named-payload",
+      "area": "Uniones y enums",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "union-object",
+      "area": "Uniones y enums",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "union-trailing-separator",
+      "area": "Uniones y enums",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": true,
+      "status": "adición nativa",
+      "passed": true,
+      "oldDiagnostics": [
+        "Se esperaba un identificador como binding",
+        "Se esperaba ':' tras el binding",
+        "Se esperaba un tipo primitivo, clase, interfaz, array o tupla",
+        "Se esperaba '}' cerrando la object-variant",
+        "Se esperaba ';' después de la unión",
+        "Se esperaba una expresión",
+        "Se esperaba ';' después de la expresión",
+        "Se esperaba una expresión"
+      ],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "union-legacy",
+      "area": "Uniones y enums",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": "Se conserva la forma histórica y sus parámetros; el parser TS descartaba los parámetros anteriores al nombre."
+    },
+    {
+      "id": "match",
+      "area": "Expresiones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "match-type",
+      "area": "Expresiones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "optional-nullish",
+      "area": "Expresiones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "as-satisfies",
+      "area": "Expresiones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "typeof-instanceof",
+      "area": "Expresiones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "template",
+      "area": "Expresiones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "array-spread",
+      "area": "Expresiones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "object-spread",
+      "area": "Fuera del dialecto",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": false,
+      "status": "rechazada en ambos",
+      "passed": true,
+      "oldDiagnostics": [
+        "Se esperaba el nombre de la propiedad",
+        "Se esperaba '}' para cerrar el object literal",
+        "Se esperaba una expresión"
+      ],
+      "nativeDiagnostics": [
+        "Se esperaba 'identifier'",
+        "Se esperaba '}'",
+        "Se esperaba un terminador de sentencia",
+        "Se esperaba una expresión",
+        "Se esperaba un terminador de sentencia",
+        "Se esperaba una expresión"
+      ],
+      "note": ""
+    },
+    {
+      "id": "numeric-exponent",
+      "area": "Fuera del dialecto",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": false,
+      "status": "rechazada en ambos",
+      "passed": true,
+      "oldDiagnostics": [
+        "Se esperaba ';' después de la declaración"
+      ],
+      "nativeDiagnostics": [
+        "Se esperaba un terminador de sentencia"
+      ],
+      "note": ""
+    },
+    {
+      "id": "delete",
+      "area": "Expresiones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "async-await",
+      "area": "Async",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "async-arrow",
+      "area": "Async",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "for-await",
+      "area": "Async",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "imports-exports",
+      "area": "Módulos",
+      "stage0Direct": false,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "namespace-import",
+      "area": "Módulos",
+      "stage0Direct": false,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "type-only-import",
+      "area": "Módulos",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "type-only-namespace",
+      "area": "Módulos",
+      "stage0Direct": false,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "default-reexport",
+      "area": "Módulos",
+      "stage0Direct": false,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "export-namespace",
+      "area": "Módulos",
+      "stage0Direct": false,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "decorators",
+      "area": "Metaprogramación",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "etsgen",
+      "area": "Metaprogramación",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "cppgen",
+      "area": "Metaprogramación",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "abi-decorators",
+      "area": "Metaprogramación",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": ""
+    },
+    {
+      "id": "inheritance",
+      "area": "Fuera del dialecto",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": false,
+      "status": "rechazada en ambos",
+      "passed": true,
+      "oldDiagnostics": [
+        "Las clases no admiten herencia; se esperaba '{'",
+        "Se esperaba '(' en el método",
+        "Se esperaba el nombre del parámetro",
+        "El parámetro necesita un tipo",
+        "Se esperaba un tipo primitivo, clase, interfaz, array o tupla",
+        "Se esperaba ')' después de los parámetros",
+        "El método necesita un tipo de retorno",
+        "Se esperaba el cuerpo del método",
+        "Se esperaba '}'",
+        "Se esperaba '}' después de la clase"
+      ],
+      "nativeDiagnostics": [
+        "Se esperaba '{'",
+        "Se esperaba 'identifier'",
+        "Se esperaba ':'",
+        "Se esperaba un tipo",
+        "Se esperaba un terminador de sentencia",
+        "Se esperaba ':'",
+        "Se esperaba un tipo"
+      ],
+      "note": ""
+    },
+    {
+      "id": "exceptions",
+      "area": "Fuera del dialecto",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": false,
+      "status": "rechazada en ambos",
+      "passed": true,
+      "oldDiagnostics": [
+        "Se esperaba ';' después de la expresión",
+        "Se esperaba ';' después de la expresión",
+        "Se esperaba ';' después de la expresión"
+      ],
+      "nativeDiagnostics": [
+        "Se esperaba un terminador de sentencia",
+        "Se esperaba un terminador de sentencia",
+        "Se esperaba un terminador de sentencia"
+      ],
+      "note": ""
+    },
+    {
+      "id": "dynamic-import",
+      "area": "Fuera del dialecto",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": false,
+      "status": "rechazada en ambos",
+      "passed": true,
+      "oldDiagnostics": [
+        "Import no válido: se esperaba un binding, namespace o lista de nombres"
+      ],
+      "nativeDiagnostics": [
+        "Se esperaba una expresión",
+        "Solo se pueden invocar funciones por nombre"
+      ],
+      "note": ""
+    },
+    {
+      "id": "regex",
+      "area": "Fuera del dialecto",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": false,
+      "status": "rechazada en ambos",
+      "passed": true,
+      "oldDiagnostics": [
+        "Se esperaba una expresión",
+        "Se esperaba ';' después de la declaración",
+        "Se esperaba una expresión"
+      ],
+      "nativeDiagnostics": [
+        "Se esperaba una expresión",
+        "Se esperaba un terminador de sentencia",
+        "Se esperaba una expresión"
+      ],
+      "note": ""
+    },
+    {
+      "id": "tagged-template",
+      "area": "Fuera del dialecto",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": false,
+      "status": "rechazada en ambos",
+      "passed": true,
+      "oldDiagnostics": [
+        "Se esperaba ';' después de la declaración"
+      ],
+      "nativeDiagnostics": [
+        "Se esperaba un terminador de sentencia"
+      ],
+      "note": ""
+    },
+    {
+      "id": "strict-equality",
+      "area": "Fuera del dialecto",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": false,
+      "status": "rechazada en ambos",
+      "passed": true,
+      "oldDiagnostics": [
+        "Se esperaba una expresión",
+        "Se esperaba ';' después de la declaración"
+      ],
+      "nativeDiagnostics": [
+        "Se esperaba una expresión",
+        "Se esperaba un terminador de sentencia"
+      ],
+      "note": ""
+    },
+    {
+      "id": "unsigned-shift",
+      "area": "Fuera del dialecto",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": false,
+      "status": "rechazada en ambos",
+      "passed": true,
+      "oldDiagnostics": [
+        "Se esperaba una expresión",
+        "Se esperaba ';' después de la declaración"
+      ],
+      "nativeDiagnostics": [
+        "Se esperaba una expresión",
+        "Se esperaba un terminador de sentencia"
+      ],
+      "note": ""
+    },
+    {
+      "id": "nested-destructuring",
+      "area": "Fuera del dialecto",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": false,
+      "status": "rechazada en ambos",
+      "passed": true,
+      "oldDiagnostics": [
+        "Se esperaba un identificador en el patrón de destructuring",
+        "Se esperaba ']' después del patrón de destructuring",
+        "Toda variable debe tener un inicializador",
+        "Se esperaba una expresión",
+        "El lado izquierdo de una asignación debe ser una variable, campo o índice"
+      ],
+      "nativeDiagnostics": [
+        "Se esperaba un identificador: patrones anidados, rest y huecos no están soportados"
+      ],
+      "note": ""
+    },
+    {
+      "id": "rest-destructuring",
+      "area": "Fuera del dialecto",
+      "stage0Direct": false,
+      "stage0": false,
+      "native": false,
+      "status": "rechazada en ambos",
+      "passed": true,
+      "oldDiagnostics": [
+        "Se esperaba un identificador en el patrón de destructuring",
+        "Se esperaba ']' después del patrón de destructuring",
+        "Toda variable debe tener un inicializador",
+        "Se esperaba una expresión",
+        "Se esperaba ']' después del índice",
+        "Se esperaba ';' después de la declaración",
+        "Se esperaba ';' después de la expresión",
+        "Se esperaba una expresión"
+      ],
+      "nativeDiagnostics": [
+        "Se esperaba un identificador: patrones anidados, rest y huecos no están soportados"
+      ],
+      "note": ""
+    }
+  ],
+  "examples": {
+    "files": 131,
+    "stage0": 131,
+    "native": 131,
+    "removed": []
+  }
+}
