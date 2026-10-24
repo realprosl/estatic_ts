@@ -41,12 +41,10 @@ no se relajan las reglas de const para copiar aceptaciones inseguras de stage 0.
 El audit de referencia pasa **83/83** obligaciones; no certifica por sí solo el
 cierre de las filas restantes.
 
-La ejecución completa de npm test pasó **3431/3431**, sin fallos, cancelaciones
-ni skips. La suite posterior de las seis capas del frontend pasó **2119/2119**.
-Después se verificaron 34 casos de API pública/genéricos, narrowing y for-await;
-37 de match y ownership; y 203 de efectos, async y composición con los conjuntos
-y propagación incremental del análisis. Estas cifras describen ejecuciones,
-no un recuento de pruebas únicas ni una certificación de cierre.
+La última ejecución completa de npm test pasa **3489/3489**, sin fallos,
+cancelaciones ni skips. La validación de las seis capas del frontend pasa
+**2162/2162**. Estas cifras describen ejecuciones, no una certificación de
+cierre de las filas restantes del inventario.
 
 La auditoría completa `npm run audit:bootstrap:self` ya termina correctamente:
 **22 módulos, 6335 símbolos, 71655 nodos tipados y cero diagnósticos**. La
@@ -76,7 +74,7 @@ El cierre de rendimiento no cierra automáticamente las demás filas del inventa
 La comparación de gramática está en [SYNTAX-PARITY.md](SYNTAX-PARITY.md):
 **75/75** contratos y **131/131** archivos parseados por ambos pipelines,
 sin formas eliminadas en esas muestras. Se conserva además la forma histórica
-union<T> Nombre con sus parámetros, que stage 0 descartaba. El informe enumera
+`union<T> Nombre` con sus parámetros, que stage 0 descartaba. El informe enumera
 las adiciones observadas y separa sintaxis de tipado y seguridad.
 
 La procedencia por módulo, identidades persistentes, huellas semánticas y fuentes

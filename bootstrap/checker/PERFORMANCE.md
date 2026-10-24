@@ -58,6 +58,12 @@ alias oculto durante un préstamo exclusivo y una escritura mediante constRef.
 Se conservan las regresiones de movimientos, inicialización, defaults, capturas,
 llamadas opacas, suspensión y préstamos de parámetros.
 
+La validación final pasa **3489/3489** pruebas de `npm test`, sin fallos,
+cancelaciones ni skips. Las seis capas del frontend pasan **2162/2162**;
+el checker, **1373/1373**. También pasan las 83 obligaciones de referencia,
+75 contratos de sintaxis, 131 archivos del corpus de gramática y la verificación
+de 216 contratos de builtins.
+
 Este cierre corresponde al bloqueo de rendimiento. No certifica por sí solo
 el inventario completo del lenguaje de [PENDING.md](../PENDING.md), ni introduce
 IR o un backend.
