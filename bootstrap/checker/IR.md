@@ -1,15 +1,15 @@
 # Contrato del IR común
 
-La primera implementación ejecutable vive en [`../ir/`](../ir/README.md):
-modelo, lowering, verificador y salida `ets-ir-1`, escritos en ETS. Cubre el
-núcleo escalar, funciones libres y control de flujo; las partes de recursos,
-préstamos, agregados y closures descritas abajo siguen siendo diseño pendiente.
+La implementación ejecutable vive en [`../ir/`](../ir/README.md): modelo,
+lowering, verificador y salida `ets-ir-2`, escritos en ETS. Incluye agregados,
+clases, instancias genéricas, closures, variantes, recursos, préstamos por CFG
+y continuaciones async. El documento del directorio IR define las operaciones
+implementadas y sus límites; las secciones siguientes conservan los requisitos
+arquitectónicos del consumidor y de futuros backends.
 
-El lowering exige un proyecto sin diagnósticos de una misma carga y rechaza
-operaciones fuera de sus capacidades. No certifica el cierre global de
-[PENDING.md](../PENDING.md), no cuenta `COMPTIME_UNSUPPORTED` como soporte y
-no conecta todavía el backend C++ del CLI productivo. Los contratos X02 y
-B02/M01/M05 permanecen abiertos para ampliar esa cobertura.
+El lowering exige un proyecto nativo comprobado sin diagnósticos. No cuenta
+`COMPTIME_UNSUPPORTED` como soporte, no conecta todavía el backend C++ del CLI
+productivo y no certifica por sí solo el cierre global de [PENDING.md](../PENDING.md).
 
 El AST de entrada seguirá pudiendo ser la arena actual `nodes[]`: no hace falta
 convertirlo primero en un árbol de objetos propietarios. El IR tendrá sus propias

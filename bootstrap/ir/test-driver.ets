@@ -17,6 +17,10 @@ function testIr(): void {
     if (formatIr(ir) != formatIr(again)) { printError("Non deterministic lowering"); exitProcess(3); }
   }
   if (ir.success && mode != "") {
+    if (mode == "numeric-bits") for (let at: number = 0; at < ir.types.length; at = at+1) if (ir.types[at] == "i8") ir.typeDefinitions[at].bits = 64;
+    if (mode == "no-end" || mode == "no-drop" || mode == "no-frame-drop") for (let f: number = 0; f < ir.functions.length; f = f+1) for (let b: number = 0; b < ir.functions[f].blocks.length; b = b+1) {
+      let retained: IrInstruction[] = []; for (const i of ir.functions[f].blocks[b].instructions) if (!(mode == "no-end" && i.op == "endBorrow") && !(mode == "no-drop" && i.op == "dropRemaining") && !(mode == "no-frame-drop" && i.op == "dropFrame")) retained.push(i); ir.functions[f].blocks[b].instructions = retained;
+    }
     if (mode == "entry") ir.entry = 999;
     if (mode == "order") ir.initializationOrder = [];
     if (mode == "constant") ir.functions[0].blocks[0].instructions[0].text = "invalid-number";
