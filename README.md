@@ -1027,11 +1027,13 @@ Estas muestras no certifican por sí solas cierre completo ni equivalencia forma
 La salida actual contiene un AST por archivo y tablas semánticas laterales.
 Los enums internos del AST conservan nombres legibles en JSON. Los tipos del
 checker siguen siendo strings canónicos; la caché persistente nativa almacena
-sintaxis, no resultados semánticos. No hay IR, verificador ni codegen conectado
-a estas tablas, scheduler concurrente o compilación completa del compilador por sí mismo.
+sintaxis, no resultados semánticos. El [IR nativo `ets-ir-2`](./bootstrap/ir/README.md)
+consume estas tablas y añade lowering/verificación de agregados, clases,
+genéricos, closures, variantes, recursos, préstamos y async. Aún no hay backend
+conectado a este IR, scheduler concurrente o compilación completa del compilador por sí mismo.
 
 El [inventario vigente](./bootstrap/PENDING.md) separa implementación ejercitada,
-restricciones explícitas y obligaciones antes del [IR propuesto](./bootstrap/checker/IR.md).
+restricciones explícitas y obligaciones y límites del [IR común](./bootstrap/checker/IR.md).
 Los checkpoints anteriores están archivados; los límites de stage 0 no se
 atribuyen automáticamente al frontend ETS. La arena actual del parser puede
 alimentar el IR sin un rediseño previo del almacenamiento de nodos.
