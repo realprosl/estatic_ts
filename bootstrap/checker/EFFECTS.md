@@ -49,8 +49,9 @@ ni callbacks, puede aplicar el resumen en lugar de repetir el cuerpo. Comprueba
 antes los defaults transitivos, raíces observables, préstamos activos y estado
 de inicialización. Cada cuerpo sigue comprobándose por separado. Los accesos
 opacos ejecutan las mismas obligaciones de alcanzabilidad mediante `unknown`;
-el resumen no los convierte en operaciones puras. Los constructores y llamadas
-desde constructores conservan el recorrido preciso de sus campos.
+el resumen no los convierte en operaciones puras. Los constructores conservan
+el recorrido preciso de sus campos; sus llamadas sólo pueden usar el resumen
+cuando todos los campos requeridos están inicializados en la ruta actual.
 Para callables reasignados combina los estados de todos los destinos posibles.
 Conserva préstamos del llamador y añade préstamos temporales de parámetros,
 por lo que un callback no puede escribir a una fuente prestada a su consumidor.

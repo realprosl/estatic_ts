@@ -48,13 +48,20 @@ Después se verificaron 34 casos de API pública/genéricos, narrowing y for-awa
 y propagación incremental del análisis. Estas cifras describen ejecuciones,
 no un recuento de pruebas únicas ni una certificación de cierre.
 
-La comprobación de tipos recorre todas las fuentes del frontend sin diagnósticos.
-Sigue abierta la auditoría completa `npm run audit:bootstrap:self`: la primera
-ejecución superó 600 segundos y se está corrigiendo el coste de memoria/efectos.
-No se acepta aumentar el timeout o omitir las pasadas como prueba de cierre.
-Se evitan copias del grafo con constRef, se indexan referencias y tipos nominales,
-y los conjuntos de efectos usan pertenencia indexada y propagación de entradas
-nuevas por arista, manteniendo el mismo punto fijo.
+La auditoría completa `npm run audit:bootstrap:self` ya termina correctamente:
+**22 módulos, 6335 símbolos, 71655 nodos tipados y cero diagnósticos**. La
+medición completa registra **47301 ms de análisis** y 36707 ms de construcción
+del ejecutable de auditoría. Incluye tipos, memoria,
+capturas, efectos, procedencia, flujo, comptime y huellas por módulo. Las primeras
+ejecuciones superaban 600 segundos; no se aumenta ese límite ni se omite ninguna
+pasada para obtener el resultado.
+
+La consulta del receptor lee directamente la entrada necesaria, en lugar de
+copiar todas las tablas tipadas del módulo. Las consultas de propiedades de un
+resumen tampoco copian sus vectores completos. Se conservan los índices y la
+propagación incremental del punto fijo, así como los controles de cada acceso
+contra préstamos vivos. Las llamadas a métodos sobre handles autorizados pueden
+usar resúmenes de valores, conservando el rechazo de aliases ocultos y readonly.
 
 La revisión posterior verifica **1367/1367** pruebas del checker y **101/101**
 regresiones focalizadas de efectos/préstamos tras corregir la proyección de
@@ -62,8 +69,9 @@ handles en resúmenes recursivos, la selección de packs y las consultas por
 constRef. Se añaden wrappers con efectos externos sobre valores aislados;
 los efectos opacos siguen comprobando préstamos y owners alcanzables. Las
 actualizaciones de conjuntos de efectos evitan copiar el resumen completo
-por cada símbolo propagado. Estos resultados no cierran el audit de las propias
-fuentes ni sustituyen la ejecución completa de npm test posterior.
+por cada símbolo propagado. La revisión posterior pasa **1373/1373** pruebas del
+checker, incluida una regresión de 18 niveles de métodos sobre un receptor out.
+El cierre de rendimiento no cierra automáticamente las demás filas del inventario.
 
 La comparación de gramática está en [SYNTAX-PARITY.md](SYNTAX-PARITY.md):
 **75/75** contratos y **131/131** archivos parseados por ambos pipelines,

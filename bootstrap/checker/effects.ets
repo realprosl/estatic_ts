@@ -55,7 +55,7 @@ export class EffectAnalyzer {
   }
   implemented(module: number, id: number): boolean { if (this.opaque(module,id)) return false; const body: number = bindingChild(this.node(module,id),"body"); return body >= 0 && this.node(module,body).start.kind != ";"; }
   asynchronous(target: number): boolean {
-    const s = this.summaries[target]; const n: AstNode = this.node(s.module,s.node);
+    const n: AstNode = this.node(this.summaries[target].module,this.summaries[target].node);
     return n.get("async") == "true" || n.get("isAsync") == "true";
   }
   executionOwner(module: number, id: number): number {
@@ -159,8 +159,10 @@ export class EffectAnalyzer {
     return s.kind == "Parameter" && s.module >= 0 && this.node(s.module,s.node).get("out") == "true" ? "ref" : memoryMode(this.checked.symbolTypes[sid]);
   }
   receiver(module: number, id: number): string {
-    const typed = this.checked.files[module];
-    return typed.receivers[id] != "" ? typed.receivers[id] : typed.types[bindingChild(this.node(module,id),"object")];
+    // TypedFile owns every semantic table for the module. Read the required
+    // entries directly rather than copying all tables on each graph query.
+    const receiver: string = this.checked.files[module].receivers[id];
+    return receiver != "" ? receiver : this.checked.files[module].types[bindingChild(this.node(module,id),"object")];
   }
   builtin(module: number, id: number): boolean {
     if (this.suspensionNode(module,id)) {
@@ -424,9 +426,8 @@ export class EffectAnalyzer {
     for (const e of this.node(module,id).edges) if (e.role == "args") { if (sourcePosition == position) { position = argumentParameter(this.checked.files[module],e.node,position); break; } sourcePosition = sourcePosition + 1; }
     const targets: number[] = this.callTargets(module,id); if (targets.length == 0) return true;
     for (const target of targets) {
-      const s = this.summaries[target];
-      if (this.asynchronous(target) && !s.unknown) continue;
-      if ((s.unknown && !this.implemented(s.module,s.node)) || (position < s.parameters.length && s.retains.includes(s.parameters[position]))) return true;
+      if (this.asynchronous(target) && !this.summaries[target].unknown) continue;
+      if ((this.summaries[target].unknown && !this.implemented(this.summaries[target].module,this.summaries[target].node)) || (position < this.summaries[target].parameters.length && this.summaries[target].retains.includes(this.summaries[target].parameters[position]))) return true;
     } return false;
   }
   analyze(): void {

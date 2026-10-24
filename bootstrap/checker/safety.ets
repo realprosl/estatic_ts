@@ -595,12 +595,13 @@ export class SafetyAnalyzer {
     const currentOwner: number = this.owner(this.binding.files[module].nodeScopes[id]);
     for (const c of this.result.captures) if (this.vertex(c.module,c.closure) == currentOwner && c.symbol == sid && c.mode == "value") return;
     for (const lease of this.leases) {
+      if (lease.root != sid || lease.end <= lease.begin || (lease.mode != "ref" && mode == "read")) continue;
       let live: boolean = lease.module == module && lease.owner == currentOwner && (lease.begin) <= position && position <= lease.end;
       for (const site of this.sites) {
         const offset: number = nodeBegin(this.node(site.module,site.node));
         if (lease.module == site.module && lease.owner == this.owner(this.binding.files[site.module].nodeScopes[site.node]) && (lease.begin) <= offset && offset <= lease.end) live = true;
       }
-      if (live && lease.root == sid && lease.end > lease.begin && (lease.mode == "ref" || mode != "read")) this.report(module,id,"E4207: acceso a la fuente durante un préstamo activo");
+      if (live) this.report(module,id,"E4207: acceso a la fuente durante un préstamo activo");
     }
   }
   read(module: number, id: number, sid: number, state: constRef<SafetyState>): void {
@@ -649,19 +650,19 @@ export class SafetyAnalyzer {
     return this.effects.callTargets(module,id);
   }
   observable(summaryId: number, sid: number, module: number, id: number): number {
-    const summary = this.effects.summaries[summaryId];
-    for (let at: number = 0; at < summary.parameters.length; at = at + 1) if (sid == summary.parameters[at]) {
+    const parameters: number[] = this.effects.summaries[summaryId].parameters;
+    for (let at: number = 0; at < parameters.length; at = at + 1) if (sid == parameters[at]) {
       if (!this.borrowedSymbol(sid)) return -1;
       return this.root(module,this.effects.actualInput(module,id,at));
     }
     if (this.binding.symbols[sid].kind == "receiver") return this.root(module,bindingChild(this.node(module,id),"object"));
-    if (this.owner(this.binding.symbols[sid].scope) == this.vertex(summary.module,summary.node)) return -1;
-    for (const c of this.result.captures) if (c.module == summary.module && c.closure == summary.node && c.symbol == sid && c.mode == "value") return -1;
+    if (this.owner(this.binding.symbols[sid].scope) == this.vertex(this.effects.summaries[summaryId].module,this.effects.summaries[summaryId].node)) return -1;
+    for (const c of this.result.captures) if (c.module == this.effects.summaries[summaryId].module && c.closure == this.effects.summaries[summaryId].node && c.symbol == sid && c.mode == "value") return -1;
     return sid;
   }
   summaryPosition(summaryId: number, symbol: number, module: number, id: number): number {
-    const summary = this.effects.summaries[summaryId];
-    for (let at: number = 0; at < summary.parameters.length; at = at+1) if (summary.parameters[at] == symbol && this.borrowedSymbol(symbol)) { const argument: number = this.effects.actualInput(module,id,at); return argument >= 0 ? argument : id; }
+    const parameters: number[] = this.effects.summaries[summaryId].parameters;
+    for (let at: number = 0; at < parameters.length; at = at+1) if (parameters[at] == symbol && this.borrowedSymbol(symbol)) { const argument: number = this.effects.actualInput(module,id,at); return argument >= 0 ? argument : id; }
     if (this.binding.symbols[symbol].kind == "receiver") { const object: number = bindingChild(this.node(module,id),"object"); if (object >= 0) return object; }
     return id;
   }
@@ -705,18 +706,27 @@ export class SafetyAnalyzer {
     // captures and defaults remain on the precise path below.
     if (summary.invokes.length > 0 || summary.moves.length > 0 || call.kind == "NewExpression") return this.summaryReason(summaryId,"effects invokes="+numberToString(summary.invokes.length)+" moves="+numberToString(summary.moves.length));
     const frame: number = this.owner(this.binding.files[module].nodeScopes[id]);
-    if (frame >= 0 && this.node(module,frame-this.offsets[module]).get("name") == "constructor") return this.summaryReason(summaryId,"constructor frame");
+    if (frame >= 0 && this.node(module,frame-this.offsets[module]).get("name") == "constructor") {
+      for (const field of this.constructorFields(module,id)) if (state.slots[field] != 1) return this.summaryReason(summaryId,"constructor fields pending");
+    }
     for (const input of functionParams(this.result.files[module].signatures[id])) {
       const value: string = input.startsWith("...") ? input.slice(3,input.length) : input;
       if (borrowedType(value) || this.transferType(value) || this.carrier(value,[])) return this.summaryReason(summaryId,"parameter "+value);
     }
     const returns: string = this.result.files[module].types[id]; if (this.transferType(returns) || this.carrier(returns,[])) return this.summaryReason(summaryId,"result "+returns);
-    if (call.kind == "MemberCallExpression") { const receiver: string = this.effects.receiver(module,id); if (borrowedType(receiver) || this.transferType(receiver) || this.carrier(receiver,[])) return this.summaryReason(summaryId,"receiver "+receiver); }
+    if (call.kind == "MemberCallExpression") {
+      const receiver: string = this.effects.receiver(module,id);
+      if ((borrowedType(receiver) && summary.unknown) || this.transferType(receiver) || this.carrier(receiver,[])) return this.summaryReason(summaryId,"receiver "+receiver);
+    }
     // Defaults with runtime reads/effects require the precise supplied-argument path.
     if (this.defaultsNeedFlow(summaryId)) return this.summaryReason(summaryId,"defaults");
     for (const group of [summary.reads,summary.writes]) for (const symbol of group) {
       const root: number = this.observable(summaryId,symbol,module,id); if (root < 0) continue;
-      const value: string = this.result.symbolTypes[root]; if (this.borrowedSymbol(root) || this.transferType(value) || this.carrier(value,[])) return this.summaryReason(summaryId,"root "+value);
+      const value: string = this.result.symbolTypes[root];
+      // A method's receiver already denotes the caller's authorized handle.
+      // summaryPosition preserves that expression, and summary() checks every
+      // projected access. Other borrowed roots still require precise replay.
+      if ((this.borrowedSymbol(root) && (this.binding.symbols[symbol].kind != "receiver" || summary.unknown)) || this.transferType(value) || this.carrier(value,[])) return this.summaryReason(summaryId,"root "+value);
       // summary() checks each projected read/write against live caller leases.
       // A lexical lease elsewhere is not a reason to replay the whole body.
     }
@@ -1129,6 +1139,7 @@ export class SafetyAnalyzer {
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (localBinding(this.binding.symbols[sid].kind)) globals.slots[sid] = 0;
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) { if (this.trace) printError("frontend: global flow "+numberToString(m)); this.walk(m,this.graph.modules[m].cached.result.ast.root,globals,[]); }
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.result.files[m].types.length; id = id + 1) {
+      if (id == 0 && this.trace) printError("frontend: definitions flow "+numberToString(m));
       const n: AstNode = this.node(m,id); if (!callableBinding(n.kind) || this.binding.files[m].nodeScopes[id] < 0) continue;
       const owner: number = this.vertex(m,id); let state: SafetyState = new SafetyState(this.binding.symbols.length);
       this.initializeFields(m,id,state);
@@ -1145,6 +1156,7 @@ export class SafetyAnalyzer {
         if (this.node(m,body).start.kind != ";" && (functionReturn(this.result.files[m].types[id]) != "void" && !((n.get("async") == "true" || n.get("isAsync") == "true") && functionReturn(this.result.files[m].types[id]) == "Promise<void>")) && state.exit != "return") this.report(m,id,"No todas las rutas devuelven un valor");
       } else this.expression(m,body,state,[owner]);
     }
+    if (this.trace) printError("frontend: flow complete, "+numberToString(this.visits)+" precise calls");
   }
   run(): CheckResult {
     if (this.trace) printError("frontend: memory and captures");

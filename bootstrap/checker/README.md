@@ -302,3 +302,5 @@ El adaptador permite construir la auditoría con optimización O2; las pruebas
 funcionales conservan O0. Las consultas de argumentos y estados inmutables usan
 constRef para evitar copiar tablas completas en cada acceso. La comparación de
 gramática está en [SYNTAX-PARITY.md](../SYNTAX-PARITY.md).
+La auditoría completa ya termina sin diagnósticos: ver las medidas, causas y
+regresiones en [PERFORMANCE.md](PERFORMANCE.md).

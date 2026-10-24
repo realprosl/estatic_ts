@@ -1939,3 +1939,12 @@ test('frontend closure value summaries scale wrappers around opaque calls', () =
 });
 test('frontend closure value summaries preserve opaque loan obligations', () => error('let n=1;function tick():number;function inner():number{return tick();}function outer():number{return inner();}function run():number{const r=constRef(n);return outer()+r;}run();',/E4104/));
 test('frontend closure value summaries preserve opaque owner obligations', () => error('class B{}let p:ptr<B> =new B();function tick():number;function inner():number{return tick();}function outer():number{return inner();}print(outer());',/E4104/));
+
+test('frontend performance summarizes a deep method tree through an out receiver', t => {
+ const methods=Array.from({length:18},(_,i)=>`read${i}():number{return ${i===17?'this.value':`this.read${i+1}()+this.read${i+1}()`};}`).join('');
+ const begin=Date.now();
+ check('class Counter{value:number=1;'+methods+'}function use(out c:Counter):number{return c.read0();}let c=new Counter();print(use(c));');
+ t.diagnostic(`18-level out receiver analysis, including repeat/determinism checks: ${Date.now()-begin} ms`);
+});
+test('frontend performance receiver summaries preserve hidden global alias checks', () => error('class B{x:number=1;read():number{return source.x;}}let source=new B();function run():number{const loan=ref(source);return loan.read();}run();',/E4207/));
+test('frontend performance receiver summaries preserve readonly checks', () => error('class B{x:number=1;write():void{this.x=2;}}let b=new B();const loan=constRef(b);loan.write();',/E4300|readonly/));
