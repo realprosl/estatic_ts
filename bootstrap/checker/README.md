@@ -160,7 +160,7 @@ Cada archivo del resultado conserva su AST, ruta canónica, ID persistente y has
 de contenido. `symbolIds` normaliza identidades entre cargas; `moduleRecords`
 publica interfaces, cuerpos y dependencias para invalidación futura. Los IDs
 numéricos de nodos y símbolos siguen siendo locales a la carga. El contrato y
-sus límites están en [MODULES.md](./MODULES.md). No se implementa backend ni IR.
+sus límites están en [MODULES.md](./MODULES.md). No se implementa backend. El [IR escalar](../ir/README.md) consume estas tablas.
 
 ## Consultas y composición de tipos
 
@@ -276,8 +276,8 @@ produce la misma salida completa y conserva los tres registros de sintaxis
 sin reescribirlos. Es una demostración del frontend; no ejecuta el programa.
 
 Antes del IR común descrito en [IR.md](./IR.md) se debe cerrar el
-[registro del lenguaje](../PENDING.md). El IR sigue siendo un contrato de
-diseño: esta entrega no implementa el IR ni sus codegens.
+[registro del lenguaje](../PENDING.md). El [IR escalar](../ir/README.md) ya implementa una capacidad restringida del
+contrato; el resto del diseño y sus codegens siguen pendientes.
 
 Los constructores implícitos por composición publican `constructionFields[node]`
 con los símbolos de campos en orden de declaración y `argumentParameters[arg]`
