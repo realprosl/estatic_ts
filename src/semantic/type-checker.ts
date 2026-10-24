@@ -360,9 +360,10 @@ export class TypeChecker {
   // `maybe-moved`). Cualquier uso posterior genera un diagnóstico E4102 o
   // E4103. El mapa se rellena al procesar `move(x)` y se consulta en
   // `expression()` cuando se referencia un identificador. El mapa es
-  // mutable (no readonly) porque IfStatement hace snapshots y los restaura
+  // Se indexa por identidad de símbolo: dos parámetros/locales con el mismo
+  // nombre no comparten estado. Es mutable porque IfStatement hace snapshots y los restaura
   // para implementar el join de estados entre ramas.
-  private moved = new Map<string, "moved" | "maybe-moved">();
+  private moved = new Map<SymbolInfo, "moved" | "maybe-moved">();
   // V22 PR#134 + V30.7 NLL: stack de borrows activos por scope. La clave
   // es el NOMBRE DEL BORROW (e.g. `a` en `const a: ref<User> = ref(u)`),
   // no la fuente. Esto permite actualizar el `lastUseLine` de la fuente
@@ -1544,7 +1545,7 @@ export class TypeChecker {
         const isPtrImplicit = expected && isGenericType(expected)
           && (genericBase(expected) === "ptr" || genericBase(expected) === "constPtr")
           && genericArguments(expected)[0] === actual
-          && this.classes.has(actual)
+          && !!this.resolveClass(actual)
           && actual !== "void";
         if (!typeMatches(actual, expected) && !isPtrImplicit) this.report(node, `Se esperaba ${expected}, pero se obtuvo ${actual}`);
         // V22 PR#134: detectar borrow conflicts. Si el tipo declarado es
@@ -1896,7 +1897,7 @@ export class TypeChecker {
         // `unSome<T>` / `rcShare<T>`. La inferencia es intraprocedural.
         const v8ImplicitWrap = node.value && this.currentReturn && isGenericType(this.currentReturn)
           && (genericBase(this.currentReturn) === "Unq" || genericBase(this.currentReturn) === "Rc")
-          && this.classes.has(actual)
+          && !!this.resolveClass(actual)
           && actual !== "void";
         // V22: si el retorno es `ptr<T>` o `constPtr<T>` y el valor es `T`
         // (por ejemplo `new T(...)` o un identificador de tipo T), aceptamos
@@ -1907,7 +1908,7 @@ export class TypeChecker {
         const v22PtrImplicitWrap = node.value && this.currentReturn && isGenericType(this.currentReturn)
           && (genericBase(this.currentReturn) === "ptr" || genericBase(this.currentReturn) === "constPtr")
           && genericArguments(this.currentReturn)[0] === actual
-          && this.classes.has(actual)
+          && !!this.resolveClass(actual)
           && actual !== "void";
         if (this.currentReturn && !typeMatches(actual, this.currentReturn) && !flattenedAsyncReturn && !v8ImplicitWrap && !v22PtrImplicitWrap) this.report(node, `La función retorna ${this.currentReturn}, no ${actual}`);
         break;
@@ -2280,8 +2281,8 @@ export class TypeChecker {
           else {
             // V22 (Memory Model v2): si la variable fue movida con move(x),
             // cualquier lectura posterior es diagnóstico E4102 o E4103.
-            if (this.moved.has(node.name)) {
-              const state = this.moved.get(node.name);
+            if (this.moved.has(symbol)) {
+              const state = this.moved.get(symbol);
               this.report(node, `E410${state === "moved" ? "2" : "3"}: use of ${state} value '${node.name}'`);
             }
             result = this.expandType(symbol.type); if (symbol.variadic) this.variadicExpressions.add(node);
@@ -2509,7 +2510,7 @@ export class TypeChecker {
                       this.report(innerExpr, `E4100: copy of non-move-only value '${innerExpr.name}'. move(x) is only valid on ptr<T> or constPtr<T>.`);
                     } else {
                       this.expression(innerExpr, scope, symbol.type);
-                      this.moved.set(innerExpr.name, "moved");
+                      this.moved.set(symbol, "moved");
                       result = symbol.type;
                     }
                   } else {
@@ -2923,7 +2924,14 @@ export class TypeChecker {
         // emite el array como arg unico. Para firmas multi-param, el
         // overload matching fallara (limitación documentada: el
         // dialecto no tiene variadics de runtime).
-        const argumentTypes = node.args.map((arg, index) => this.expression(arg, scope, contextualArgTypes[index]));
+        const argumentTypes = node.args.map((arg, index) => {
+          const context = contextualArgTypes[index];
+          const actual = this.expression(arg, scope, context);
+          // A fresh allocation can initialize an owning parameter;
+          // existing owners still need an explicit move.
+          if (arg.kind === "NewExpression" && context && isGenericType(context) && ["ptr", "constPtr"].includes(genericBase(context)) && genericArguments(context)[0] === actual) return context;
+          return actual;
+        });
         const matches = symbol.overloads.map(signature => this.matchOverload(signature, argumentTypes, node.typeArguments, expected)).filter(match => !!match).sort((a, b) => b.score - a.score);
         if (!matches.length) { this.report(node, `Ninguna sobrecarga de '${node.callee}' acepta (${argumentTypes.join(", ")})`); break; }
         if (matches.length > 1 && matches[0].score === matches[1].score) this.report(node, `Llamada ambigua a '${node.callee}'`);
@@ -2990,7 +2998,9 @@ export class TypeChecker {
             break;
           }
         }
-        const objectType = this.expression(node.object, scope);
+        const receiverType = this.expression(node.object, scope);
+        const receiverInner = isGenericType(receiverType) && ["ptr", "constPtr", "ref", "constRef"].includes(genericBase(receiverType)) ? genericArguments(receiverType)[0] : undefined;
+        const objectType = receiverInner && this.resolveClass(receiverInner) ? receiverInner : receiverType;
         // V1.2: `Union<T1, T2>.Variant(args)` o `Union.Variant(args)`. Si la
         // unión existe y la variante está declarada, el resultado es el tipo
         // de la unión instanciado (o simple si no hay genéricos).
@@ -3526,7 +3536,14 @@ export class TypeChecker {
           if (candidates.every(type => type === candidates[0])) return candidates[0];
           return undefined;
         });
-        const argumentTypes = node.args.map((arg, index) => this.expression(arg, scope, contextualArgTypes[index]));
+        const argumentTypes = node.args.map((arg, index) => {
+          const context = contextualArgTypes[index];
+          const actual = this.expression(arg, scope, context);
+          // A fresh allocation can initialize an owning parameter;
+          // existing owners still need an explicit move.
+          if (arg.kind === "NewExpression" && context && isGenericType(context) && ["ptr", "constPtr"].includes(genericBase(context)) && genericArguments(context)[0] === actual) return context;
+          return actual;
+        });
         const matches = methods.map(method => {
           const signature: FunctionSignature = {
             typeParameters: TypeChecker.namesOf(method.typeParameters ?? []), variadicTypeParameters: [], typeConstraints: TypeChecker.constraintsOf(method.typeParameters ?? []), defaults: TypeChecker.defaultsOf(method.typeParameters ?? []),
@@ -3554,7 +3571,9 @@ export class TypeChecker {
             const className = resolvedClass.owner.name;
             const methodReturnType = selected.signature.returnType;
             const returnsOwnType = methodReturnType === className;
-            if (!this.mutableTarget(node.object, scope) && !returnsOwnType) this.report(node.object, `El método '${node.method}' modifica el objeto y necesita un receptor mutable`);
+            const readonlyReceiver = isGenericType(receiverType) && ["constPtr", "constRef"].includes(genericBase(receiverType));
+            if (readonlyReceiver) this.report(node.object, `El método '${node.method}' modifica un receptor readonly`);
+            else if (!this.mutableTarget(node.object, scope) && !returnsOwnType) this.report(node.object, `El método '${node.method}' modifica el objeto y necesita un receptor mutable`);
             else if (returnsOwnType && !this.mutableTarget(node.object, scope)) {
               // V30.29: el receptor rvalue + metodo que muta + devuelve
               // `T` se permite. Marcamos la expresion como
@@ -4119,6 +4138,7 @@ export class TypeChecker {
       return true;
     }
     if (symbol.kind !== "variable") return false;
+    if (isGenericType(symbol.type) && ["constPtr", "constRef"].includes(genericBase(symbol.type))) return false;
     // V22 (Memory Model v2): los parámetros `out T` o con modifier `ref<T>`
     // son mutables (T&). Esto se marca con `mutableReference: true` en el
     // FunctionParameterSymbol. Variables `let` ya tienen `mutable: true`.
