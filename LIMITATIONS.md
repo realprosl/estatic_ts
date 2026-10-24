@@ -7,6 +7,14 @@ sin herencia y sin tipos dinámicos generales). Algunos nodos internos usan
 `any` como recurso de implementación, pero no equivale al `any` abierto de
 TypeScript.
 
+Las secciones generales de CLI/emisión y evaluador principal describen stage 0
+(`src/`), salvo indicación contraria. El frontend ETS tiene su propio
+[inventario auditado](./bootstrap/PENDING.md) y
+[revisión reproducible](./bootstrap/audit/FRONTEND-REVIEW.md): incluye switch,
+consultas typeof cualificadas, expansión higiénica y un único evaluador nativo
+para comptime/@etsgen. No se deduce la cobertura ETS de los límites del backend TS.
+IR y emisión desde las tablas nativas aún no están implementados.
+
 Este documento está dividido en tres secciones:
 
 - **✅ Implementado** — features de TS soportadas. Para uso y ejemplos ver `README.md`.
@@ -255,12 +263,13 @@ Siguen pendientes:
   todavía. El estado vacío se obtiene únicamente vía `move()`.
 - **Lifetime parameters** (`<'a>`): no soportados.
 
-> Diagnósticos actualmente en uso por el checker: **E4102** (use of moved
-> value), **E4103** (use of maybe-moved value), **E4203** (ref/constRef
-> en campo), **E4204** (ref/constRef en async), **E4205** (ref/constRef
-> como argumento de tipo genérico), **E42xx** (ref/constRef como
-> retorno), **E4400-E4406** (APIs legacy `mut`/`Mut`/`MutRef`/`Unq`/
-> `Rc`/`out`).
+> Los códigos se interpretan junto con la fase y el contrato del frontend.
+> En bootstrap, E4102/E4103 cubren usos movidos/posiblemente movidos, E4203
+> almacenamiento de préstamos y E4204 restricciones de suspensión. E4401
+> identifica exposición de tipos privados; no se agrupa E4400–E4406 como una
+> familia común de APIs legacy. `out` conserva en el frontend nativo su contrato
+> vigente de referencia mutable de entrada/salida, descrito en
+> [checker/README.md](./bootstrap/checker/README.md).
 
 ### Módulos y tooling
 

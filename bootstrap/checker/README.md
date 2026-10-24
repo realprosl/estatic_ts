@@ -1,9 +1,15 @@
 # Checker nativo con flujo y memoria (v64)
 
-El lenguaje completo sigue pendiente. El [registro de cierre](../PENDING.md)
-es la referencia para completar este núcleo antes de empezar el IR.
-`npm run audit:bootstrap` es una puerta de cobertura separada de las regresiones:
-pasa 83/83 obligaciones de referencia y no certifica por sí sola el cierre del lenguaje.
+Revisión de estado: **2026-10-24**, sobre `24e32ac`. El frontend nativo
+implementa las capas de análisis descritas aquí; el cierre para consumirlas en IR
+sigue sujeto al [inventario vigente](../PENDING.md). La
+[revisión reproducible](../audit/FRONTEND-REVIEW.md) distingue cobertura implementada,
+restricciones del dialecto y obligaciones pendientes.
+
+La validación focalizada del frontend pasa **2182/2182**; el audit de referencia
+pasa **83/83**. El autoanálisis nativo del checker termina con **23 módulos,
+6594 símbolos, 75596 nodos tipados y cero diagnósticos**. Estas comprobaciones
+no certifican por sí solas todas las composiciones del lenguaje ni un backend.
 
 ```bash
 npm run bootstrap:checker -- examples/hello.ets --cache build/project-cache
@@ -17,10 +23,11 @@ expande los generadores ETS, enlaza y comprueba el grafo resultante.
 No consulta el checker TypeScript para analizar el proyecto solicitado. Los tests
 sí lo usan como referencia diferencial para un conjunto acotado de casos.
 
-Este frontend sigue siendo una **migración parcial de comprobación**, no la paridad con stage 0
-ni una autorización para generar código nativo de cualquier proyecto. El CLI
-principal conserva su cadena actual. El nuevo driver entrega sintaxis, binding
-y tablas tipadas; no conecta todavía esos datos al codegen.
+Este frontend entrega sintaxis, binding, tipos, seguridad, efectos, constantes
+y procedencia por módulo. Conserva restricciones documentadas y cobertura
+pendiente; no se anuncia paridad general con stage 0 ni cierre del inventario.
+El CLI principal conserva su cadena: las tablas ETS todavía no se conectan a
+un lowering de IR o al codegen del programa solicitado.
 
 ## Contrato
 
@@ -74,18 +81,19 @@ cada SourceResult y la serialización del binding antes/después (exit 3 si camb
 La caché persistente continúa almacenando exclusivamente sintaxis. No hay caché
 semántica ni ejecución concurrente del checker.
 
-## Cobertura inicial
+## Cobertura implementada
 
 - Inferencia de literales, variables, expresiones numéricas/lógicas, templates,
   arrays homogéneos y tuplas heterogéneas; arrays/objetos con contexto en una
   anotación o firma. Los arrays vacíos requieren contexto.
 - Anotaciones primitivas, numéricos concretos hasta 64 bits, f32/f64, aliases
-  simples, consultas `typeof` de valores y rutas cualificadas, tipos callable y uniones sin narrowing.
+  simples, consultas `typeof` de valores y rutas cualificadas, tipos callable y uniones con narrowing según las formas descritas abajo.
   Los nombres de clases/interfaces conservan su identidad entre archivos y
   namespaces; dos nombres iguales no colapsan en el mismo tipo.
 - Funciones, métodos y arrows, recursión con firma, parámetros opcionales y
   valores por defecto, aridad y selección no ambigua de sobrecargas. Inferencia
-  genérica simple desde parámetros `T`/`T[]`, y argumentos de tipo explícitos.
+  genérica soportada desde argumentos/contexto, sustitución en miembros y
+  argumentos de tipo explícitos; la extracción genérica sin instanciar requiere un arrow.
   Se conserva la firma instanciada. No se elige silenciosamente la primera
   sobrecarga cuando hay varias candidatas.
 - Retornos y comprobación conservadora de rutas en bloques e if/else; condiciones
@@ -242,11 +250,11 @@ mejora de rendimiento.
 
 ## Validación
 
-La revisión de consultas y composición pasa **3154/3154** pruebas de npm test,
-sin fallos, cancelaciones ni skips, con ejemplos/libuv incluidos. Se añaden 53
-pruebas netas de checker/parser/binder y se amplía el audit a **83/83**, sin
-interpretar ese muestreo como paridad completa del lenguaje. Se comprueban tipos,
-identidades originales, precedencia, metadatos y errores de acceso/receptor.
+La [revisión de 2026-10-24](../audit/FRONTEND-REVIEW.md) repite las capas del
+frontend, el audit de referencia, la gramática, el corpus y el autoanálisis.
+`npm test` global no se repitió en esa revisión. Las cifras globales de
+checkpoints anteriores están en el [historial](../../docs/historical/bootstrap-closure-v64.md),
+no se presentan como resultados actuales.
 
 La suite compila obligatoriamente el ejecutable C++20. Comprueba éxitos y errores
 de las formas descritas, identidades entre módulos, reexports/default/namespaces,

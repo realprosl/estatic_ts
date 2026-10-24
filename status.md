@@ -1,6 +1,6 @@
 # Ts2cpp — Estado actual
 
-Última revisión documental: **2026-10-23**. Este archivo es una fotografía
+Última revisión documental: **2026-10-24**. Este archivo es una fotografía
 del repositorio, no un historial de sesiones. El historial vive en
 [`CHANGELOG.md`](./CHANGELOG.md) y en [`docs/historical/`](./docs/historical/).
 
@@ -8,8 +8,10 @@ del repositorio, no un historial de sesiones. El historial vive en
 
 La siguiente etapa del bootstrap es **completar el lenguaje antes del IR**.
 [`bootstrap/PENDING.md`](./bootstrap/PENDING.md) registra el trabajo abierto y
-sus criterios de cierre. La matriz `audit:bootstrap` mide obligaciones todavía
-pendientes; no sustituye la suite estable ni certifica paridad semántica.
+sus criterios de cierre. La [revisión reproducible](./bootstrap/audit/FRONTEND-REVIEW.md)
+actualiza las 49 filas y separa implementación, restricciones y obligaciones.
+La matriz `audit:bootstrap` pasa 83/83 muestras; no sustituye la suite estable
+ni certifica por sí sola cierre o paridad semántica.
 
 Ts2cpp transpila el dialecto Estatic a C++20. El frontend, el checker, el
 codegen y el flujo modular son utilizables para proyectos y ejemplos. El
@@ -20,7 +22,7 @@ producción concurrente.
 | Área | Estado | Observación |
 |---|---|---|
 | Lexer, parser y diagnósticos | Estable para el dialecto documentado | No pretende aceptar TypeScript completo |
-| Autoalojamiento | Checker nativo parcial con flujo/memoria | Lexer/parser/cargador/binder/checker ejecutados como C++; paridad completa, codegen desde estas tablas y scheduler pendientes |
+| Autoalojamiento | Frontend nativo con tipos, memoria, efectos, comptime y expansión | 2182 pruebas focalizadas y autoanálisis verdes; cierre de contratos, IR, backend y scheduler pendientes |
 | Tipos, genéricos, unions y clases | Funcional | Checker y codegen siguen muy acoplados |
 | Módulos | Funcional con límites | Default, reexports y multilínea; análisis mediante AST combinado |
 | Ownership y borrow checking | Funcional, conservador | Hay moves, conflictos y NLL; no hay lifetime parameters |
@@ -44,7 +46,23 @@ El codegen continúa siendo global. Ver `docs/semantic-cache.md`.
 Retirado el PCH no utilizado y preservados los artefactos idénticos, incluida
 la cabecera común en hits completos. Ver `docs/transpilation-cache.md`.
 
-## Verificación conocida
+## Verificación actual del frontend
+
+Sobre `24e32ac`, el 2026-10-24: **2182/2182** pruebas focalizadas, **83/83**
+obligaciones, **75/75** contratos de sintaxis y **132/132** archivos parseados por
+ambos pipelines. El checker nativo acepta 131 y rechaza el ejemplo privado inválido
+esperado. El autoanálisis termina con **23 módulos, 6594 símbolos, 75596 nodos
+tipados y cero diagnósticos**; 216 contratos de builtins están sincronizados.
+
+`npm test` global no se repitió en esta revisión. Los comandos, la carencia de
+comptime con parámetros prestados y los límites de la evidencia están en
+[FRONTEND-REVIEW.md](./bootstrap/audit/FRONTEND-REVIEW.md). No se marca el frontend
+como cerrado ni se introduce IR por actualizar documentos.
+
+## Verificación histórica por revisión
+
+Las cifras y pendientes siguientes pertenecen a sus checkpoints. No describen
+la última ejecución; para el estado de las filas se usa `bootstrap/PENDING.md`.
 
 - Tras PR #25 se añaden consultas typeof cualificadas con identidades originales,
   metadatos por ruta y precedencia correcta en arrays de unions/callables.

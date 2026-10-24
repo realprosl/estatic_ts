@@ -40,6 +40,17 @@ diagnóstico conservador. Un callable reasignado también necesita un resumen
 (E4104). Los callbacks/métodos opacos que podrían afectar globals con ownership
 o todavía no inicializados, o atravesar un préstamo activo, se rechazan en lugar de omitir esos efectos.
 
+## Using y obligaciones de limpieza
+
+`using` crea un binding inmutable y conserva las reglas de transferencia de
+ownership; puede aplicarse también a valores escalares. El checker no ejecuta
+ni publica instrucciones de destrucción. El codegen actual de stage 0 usa el
+RAII ordinario del tipo C++: no invoca automáticamente un método llamado
+`dispose`. El contrato de limpieza por return/break/continue/suspensión para
+el consumidor IR sigue pendiente en B02/M01/M05 de [PENDING.md](../PENDING.md).
+Generar esas instrucciones será responsabilidad del lowering; no se presenta
+una tabla de offsets de préstamos como prueba de limpieza de todas las rutas.
+
 ## Préstamos y readonly
 
 Se resuelven `ref<T>`, `constRef<T>`, `ptr<T>`, `constPtr<T>` y el modificador

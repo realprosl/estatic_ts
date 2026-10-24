@@ -1,9 +1,21 @@
 # Contrato propuesto para el IR común
 
-Este documento define la siguiente etapa; v64 todavía no implementa el IR.
-La entrada será un proyecto sin diagnósticos, con sus AST, binding, tipos,
-firmas instanciadas, capturas y resúmenes de efectos de una misma carga.
-El lowering rechazará cualquier operación cuyo contrato siga pendiente.
+Este documento es un **diseño, no una implementación**. Estado revisado el
+2026-10-24 sobre `24e32ac`: bootstrap ya produce ASTs, binding, tipos,
+firmas instanciadas, capturas, efectos y constantes. La
+[revisión de evidencia](../audit/FRONTEND-REVIEW.md) corrige pendientes históricos,
+pero no satisface por sí sola la puerta de cierre de [PENDING.md](../PENDING.md).
+
+La entrada del lowering será un proyecto sin diagnósticos y con resultados de
+una misma carga. El lowering rechazará cualquier operación cuyo contrato siga
+pendiente; no reinterpretará `COMPTIME_UNSUPPORTED`, efectos opacos o metadatos
+incompletos como soporte. Antes de implementarlo hay que cerrar/delimitar X02,
+fijar los contratos de recursos y entrada y revisar la evidencia de cierre.
+
+El AST de entrada seguirá pudiendo ser la arena actual `nodes[]`: no hace falta
+convertirlo primero en un árbol de objetos propietarios. El IR tendrá sus propias
+identidades y representación. Tampoco se exige que el frontend ya genere un CFG
+o instrucciones de limpieza: producirlas es trabajo del lowering descrito aquí.
 
 El IR debe expresar la semántica de Estatic que compartan todos los backends.
 Cada codegen consumirá ese IR y hará su propio lowering de representación,
@@ -50,6 +62,12 @@ closures y dispatch pertenecen al lowering del backend. Una capa de capacidades
 rechazará operaciones no soportadas antes de emitir código. La primera conexión
 será C++20, manteniendo el CLI actual hasta validar el recorrido completo.
 Otros backends se incorporarán con un codegen propio sobre el mismo contrato.
+
+El contrato de entrada deberá distinguir nodos sintácticos sin tipo de valor,
+nodos huérfanos y operaciones que sí requieren tipos, firmas o conversiones.
+No se exige que todas las celdas de `types[]` sean no vacías. La identidad de
+entrada es módulo/nodo de una carga; la procedencia persistente conserva además
+`moduleId` y `sourceHash`, según [MODULES.md](./MODULES.md).
 
 Antes del primer codegen habrá un verificador del IR: tipos de operandos y
 terminadores, destinos existentes, definición/uso de temporales, accesos a places

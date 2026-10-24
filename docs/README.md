@@ -2,10 +2,12 @@
 
 Esta carpeta contiene la documentación técnica de Ts2cpp.
 
-## Estado actual (V30.6.0+)
+## Estado actual
 
 | Doc | Para qué |
 |---|---|
+| [`../bootstrap/audit/FRONTEND-REVIEW.md`](../bootstrap/audit/FRONTEND-REVIEW.md) | Auditoría reproducible del frontend nativo y diferencias con stage 0. |
+| [`../bootstrap/PENDING.md`](../bootstrap/PENDING.md) | Inventario vigente antes del IR: implementación, restricciones y obligaciones. |
 | [`../status.md`](../status.md) | Estado verificable, riesgos y prioridades actuales. |
 | [`../PROJECT.md`](../PROJECT.md) | Guía de arquitectura, desarrollo y pruebas. |
 | [`../LIMITATIONS.md`](../LIMITATIONS.md) | Matriz de soporte y límites conocidos. |

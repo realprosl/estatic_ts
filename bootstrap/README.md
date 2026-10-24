@@ -1,12 +1,25 @@
 # Autoalojamiento: módulos aislados
 
-Este directorio se ha reiniciado. Los ocho archivos del intento anterior se
-han retirado; siguen recuperables en el historial de Git. La implementación
-TypeScript de `src/` continúa siendo el compilador de arranque (stage 0).
+Estado revisado: **2026-10-24**, base `24e32ac`. El recorrido nativo implementado
+es lexer/parser por archivo, cargador, expansión @etsgen, binder, checker,
+seguridad/efectos, comptime y registros semánticos por módulo. Stage 0 (`src/`)
+construye sus ejecutables C++20; el análisis del proyecto solicitado se hace
+nativamente. No existe todavía IR ni codegen del programa desde las tablas ETS.
 
-Trabajaremos un módulo cada vez: implementar en Estatic, darle una función de
-entrada observable, transpilarlo con stage 0, compilar su C++ y ejecutarlo.
-No se añadirá el siguiente módulo hasta validar el anterior por separado.
+La validación actual pasa **2182/2182** pruebas de frontend, **83/83** obligaciones
+de referencia y **75/75** contratos de sintaxis. El autoanálisis pasa con 23
+módulos y cero diagnósticos. Los comandos, el corpus y los límites de esa evidencia
+están en [audit/FRONTEND-REVIEW.md](./audit/FRONTEND-REVIEW.md).
+
+El [inventario vigente](./PENDING.md) separa implementación comprobada, contratos
+restringidos y obligaciones antes del IR. Los apartados «Paso» siguientes
+explican la incorporación de cada capa, no significan que checker/seguridad
+sigan esperando su primera implementación.
+
+Los AST siguen almacenados por archivo en arenas `nodes[]`, con enums para
+clases de nodo, roles y nombres de atributo. Binder y checker usan tablas
+laterales; no se ha migrado el AST a hijos propietarios. El lexer conserva
+lexemas y posiciones; no almacena slices hacia un buffer ajeno.
 
 ## Paso 1: lexer
 
@@ -119,16 +132,12 @@ del checker: descubrir imports/reexports, resolver rutas e identidad, construir
 el grafo y detectar dependencias ausentes/ciclos. Ese grafo permitirá organizar
 trabajos independientes por archivo y añadir paralelismo acotado. El puente ya
 devuelve resultados por archivo, pero no implementa todavía esa planificación.
-El cargador deberá incorporar un helper `getOrParseModule` que consulte una caché
-por hash de contenido y versión/opciones del frontend antes de ejecutar lexer y
-parser. Reutilizará AST/imports sin cambios y compartirá trabajos en curso entre
-solicitantes concurrentes. La invalidación de rutas/símbolos será independiente
-de la caché sintáctica; el [plan detallado](./frontend/README.md) registra ese requisito.
-La unidad mínima de ese registro será cada archivo de un módulo lógico: tamaño,
-mtime y otros metadatos, hash, dependencias y referencias a AST/C++/`.o`. Se
-consultará antes del trabajo costoso para reutilizar desde frontend hasta objeto
-nativo, propagando cambios de interfaz y respetando cabeceras/flags del backend.
-Editar un archivo no deberá invalidar indiscriminadamente el módulo completo.
+El cargador de la capa siguiente ya implementa `SyntaxCache.getOrParseModule`:
+consulta el hash del contenido y la identidad/opciones del frontend antes de
+repetir lexer/parser, y reconstruye arenas independientes en cada hit. Sus
+registros conservan metadatos y dependencias por archivo. No implementa aún
+scheduler concurrente, caché semántica ni artefactos C++/objetos del nuevo backend.
+La [documentación del cargador](./modules/README.md) describe el contrato vigente.
 
 ## Paso 4: cargador y registro por archivo (v60)
 
@@ -142,7 +151,8 @@ npm run test:bootstrap:modules
 
 Node construye el binario. Ese binario abre los fuentes del proyecto, ejecuta
 el frontend ETS, resuelve sus dependencias y publica registros por archivo.
-El checker ETS sigue siendo el siguiente bloque funcional.
+El checker ETS está implementado en la capa siguiente; este apartado describe
+el contrato aislado del cargador.
 
 ## Paso 5: binding del proyecto (v61)
 
@@ -154,7 +164,8 @@ npm run bootstrap:binder -- examples/todo-project/main.ets
 npm run test:bootstrap:binder
 ```
 
-El checker y su inferencia se implementarán después, en otro módulo.
+El checker y la inferencia están implementados en `checker/`, con tablas
+independientes de este binding.
 
 ## Paso 6: checker inicial del proyecto (v62)
 
@@ -165,8 +176,9 @@ llamadas, retornos, miembros y compatibilidades entre módulos. La demo
 entrega tipos, símbolos de miembros y firmas seleccionadas/instanciadas. Se
 construye el ejecutable con stage 0; el análisis solicitado se ejecuta en C++.
 
-Es una cobertura inicial con límites explícitos, no paridad con stage 0 ni
-codegen nativo desde esas tablas. Ver el [contrato y cobertura](./checker/README.md).
+La cobertura actual incorpora las extensiones documentadas en las capas
+siguientes y conserva límites explícitos; no anuncia paridad general con stage 0
+ni codegen nativo desde esas tablas. Ver el [contrato y cobertura](./checker/README.md).
 
 ## Paso 7: flujo, memoria y superficies públicas (v63)
 
