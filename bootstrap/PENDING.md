@@ -2,7 +2,9 @@
 
 Revisión documental: **2026-10-24**. Base de código inspeccionada y ejecutada:
 [`24e32ac`](https://github.com/realprosl/estatic_ts/commit/24e32ac005586e738c179472d41f031d265a8b47).
-La revisión no cambia la revisión pública v64 ni implementa IR.
+La revisión no cambia la revisión pública v64. Actualización de implementación:
+el [IR escalar nativo](./ir/README.md) ya tiene lowering y verificador;
+los contratos del lenguaje completo siguen pendientes.
 
 El frontend nativo ejecuta lexer, parser, cargador, expansión, binder, checker,
 seguridad, efectos y evaluación comptime. Devuelve `ets-checked-2`, con ASTs por
@@ -10,7 +12,8 @@ archivo y tablas laterales. El CLI/codegen de `src/` sigue siendo stage 0;
 sus límites de emisión no se atribuyen automáticamente al frontend ETS.
 
 **La puerta de cierre anterior no se da por satisfecha con esta actualización.**
-El IR sigue sin implementación. La revisión corrige un inventario desactualizado:
+Existe una primera capacidad de IR escalar, sin backend ni lowering de recursos.
+La revisión de frontend corrige un inventario desactualizado:
 no es correcto describir todo lo listado aquí como funcionalidad ausente.
 
 ## Evidencia actual
@@ -89,7 +92,7 @@ La revisión clasifica las 49 filas en **29 I, 13 R y 7 P**.
 | M04 | R | Resúmenes, callbacks y efectos recursivos implementados; callbacks simbólicos recursivos no demostrados conservan E4104. La precisión general no se declara resuelta. | `effects.ets, safety.ets`; [native effects rejects a recursive wrapper around a symbolic callback](./checker/checker.test.ts#L364) |
 | M05 | P | Flujo por estabilización y canales de salida implementados. Los intervalos de borrows no sustituyen un contrato de endBorrow/cleanup en un CFG de IR. | `loop, returns, breaks, continues, borrows`; [native safety; IR.md](./checker/checker.test.ts#L165) |
 | P01 | I | Superficies públicas, aliases, genéricos y declaraciones generadas comprobados. | `publicSurface, publicType`; [native public surface; frontend closure](./checker/checker.test.ts#L1356) |
-| P02 | P | AST/tablas, IDs, hashes, firmas, conversiones y correspondencias implementados. Falta el verificador del contrato de entrada para el lowering y un criterio explícito para operaciones opacas. | `model.ets, format.ets, module-records.ets`; [frontend provenance](./checker/checker.test.ts#L1435) |
+| P02 | P | AST/tablas, IDs, hashes, firmas, conversiones y correspondencias implementados. El IR escalar valida su entrada y rechaza operaciones opacas; falta extender ese contrato al resto del lenguaje. | `model.ets, format.ets, module-records.ets`; [frontend provenance](./checker/checker.test.ts#L1435) |
 | V01 | P | Suites, audit, corpus y autoanálisis pasan. Son muestras y regresiones; no constituyen una certificación de todas las composiciones del inventario. | `audit/, checker.test.ts`; [validación reproducida en esta revisión](./checker/checker.test.ts#L1818) |
 | V02 | I | Se separa estado actual de historial y de límites de stage 0; se registra evidencia y alcance de cada fila. | `PENDING.md, FRONTEND-REVIEW.md`; [revisión documental 2026-10-24](./audit/FRONTEND-REVIEW.md) |
 | V03 | P | Validación focalizada actualizada y verde. npm test completo no se ha repetido en esta revisión; las cifras globales anteriores se archivan. | `package.json`; [comandos y resultados de esta revisión](./audit/FRONTEND-REVIEW.md) |
@@ -123,5 +126,6 @@ actual de un callback genérico puede exigir un arrow que instancie la llamada.
 Los efectos externos desconocidos y los rechazos conservadores se conservan;
 no se transforman en operaciones puras ni en promesas de ejecución.
 
-No se implementan en esta revisión IR, codegen nativo desde las tablas ETS,
-scheduler paralelo, caché semántica nativa ni cambios al almacenamiento del lexer.
+La revisión documental original no implementaba IR. La implementación escalar
+actual se documenta en [ir/README.md](./ir/README.md); siguen pendientes codegen nativo desde las tablas ETS,
+scheduler paralelo, caché semántica nativa y cambios al almacenamiento del lexer.

@@ -1,16 +1,15 @@
-# Contrato propuesto para el IR común
+# Contrato del IR común
 
-Este documento es un **diseño, no una implementación**. Estado revisado el
-2026-10-24 sobre `24e32ac`: bootstrap ya produce ASTs, binding, tipos,
-firmas instanciadas, capturas, efectos y constantes. La
-[revisión de evidencia](../audit/FRONTEND-REVIEW.md) corrige pendientes históricos,
-pero no satisface por sí sola la puerta de cierre de [PENDING.md](../PENDING.md).
+La primera implementación ejecutable vive en [`../ir/`](../ir/README.md):
+modelo, lowering, verificador y salida `ets-ir-1`, escritos en ETS. Cubre el
+núcleo escalar, funciones libres y control de flujo; las partes de recursos,
+préstamos, agregados y closures descritas abajo siguen siendo diseño pendiente.
 
-La entrada del lowering será un proyecto sin diagnósticos y con resultados de
-una misma carga. El lowering rechazará cualquier operación cuyo contrato siga
-pendiente; no reinterpretará `COMPTIME_UNSUPPORTED`, efectos opacos o metadatos
-incompletos como soporte. Antes de implementarlo hay que cerrar/delimitar X02,
-fijar los contratos de recursos y entrada y revisar la evidencia de cierre.
+El lowering exige un proyecto sin diagnósticos de una misma carga y rechaza
+operaciones fuera de sus capacidades. No certifica el cierre global de
+[PENDING.md](../PENDING.md), no cuenta `COMPTIME_UNSUPPORTED` como soporte y
+no conecta todavía el backend C++ del CLI productivo. Los contratos X02 y
+B02/M01/M05 permanecen abiertos para ampliar esa cobertura.
 
 El AST de entrada seguirá pudiendo ser la arena actual `nodes[]`: no hace falta
 convertirlo primero en un árbol de objetos propietarios. El IR tendrá sus propias

@@ -4,7 +4,8 @@ Estado revisado: **2026-10-24**, base `24e32ac`. El recorrido nativo implementad
 es lexer/parser por archivo, cargador, expansión @etsgen, binder, checker,
 seguridad/efectos, comptime y registros semánticos por módulo. Stage 0 (`src/`)
 construye sus ejecutables C++20; el análisis del proyecto solicitado se hace
-nativamente. No existe todavía IR ni codegen del programa desde las tablas ETS.
+nativamente. Existe un [IR escalar nativo](./ir/README.md) con lowering y verificador.
+Todavía no hay codegen del programa desde las tablas ETS.
 
 La validación actual pasa **2182/2182** pruebas de frontend, **83/83** obligaciones
 de referencia y **75/75** contratos de sintaxis. El autoanálisis pasa con 23
@@ -198,7 +199,8 @@ La pasada de seguridad los consume para llamadas indirectas y recursivas. Ver
 [IR común para los codegens](./checker/IR.md) se completará el lenguaje en el
 frontend nativo. El [registro de pendientes](./PENDING.md) define las obligaciones
 de cierre; `npm run audit:bootstrap` ejecuta la primera matriz de aceptación y
-rechazo. El IR sigue como diseño y su implementación queda bloqueada hasta
+rechazo. El contrato completo de IR sigue parcialmente como diseño. La capacidad escalar
+se implementa de forma restringida; su extensión a recursos requiere
 cerrar ese registro.
 
 La [comparación de sintaxis con stage 0](./SYNTAX-PARITY.md) se reproduce con

@@ -7,6 +7,7 @@ Esta carpeta contiene la documentación técnica de Ts2cpp.
 | Doc | Para qué |
 |---|---|
 | [`../bootstrap/audit/FRONTEND-REVIEW.md`](../bootstrap/audit/FRONTEND-REVIEW.md) | Auditoría reproducible del frontend nativo y diferencias con stage 0. |
+| [`../bootstrap/ir/README.md`](../bootstrap/ir/README.md) | IR escalar nativo: contrato, lowering, verificador y CLI. |
 | [`../bootstrap/PENDING.md`](../bootstrap/PENDING.md) | Inventario vigente antes del IR: implementación, restricciones y obligaciones. |
 | [`../status.md`](../status.md) | Estado verificable, riesgos y prioridades actuales. |
 | [`../PROJECT.md`](../PROJECT.md) | Guía de arquitectura, desarrollo y pruebas. |

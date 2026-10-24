@@ -6,7 +6,9 @@ del repositorio, no un historial de sesiones. El historial vive en
 
 ## Resumen
 
-La siguiente etapa del bootstrap es **completar el lenguaje antes del IR**.
+Bootstrap ya dispone de un [IR escalar nativo](./bootstrap/ir/README.md)
+con lowering y verificador. Su extensión al resto del lenguaje y los contratos
+de recursos siguen pendientes.
 [`bootstrap/PENDING.md`](./bootstrap/PENDING.md) registra el trabajo abierto y
 sus criterios de cierre. La [revisión reproducible](./bootstrap/audit/FRONTEND-REVIEW.md)
 actualiza las 49 filas y separa implementación, restricciones y obligaciones.
@@ -22,7 +24,7 @@ producción concurrente.
 | Área | Estado | Observación |
 |---|---|---|
 | Lexer, parser y diagnósticos | Estable para el dialecto documentado | No pretende aceptar TypeScript completo |
-| Autoalojamiento | Frontend nativo con tipos, memoria, efectos, comptime y expansión | 2182 pruebas focalizadas y autoanálisis verdes; cierre de contratos, IR, backend y scheduler pendientes |
+| Autoalojamiento | Frontend nativo con tipos, memoria, efectos, comptime y expansión | 2182 pruebas focalizadas y autoanálisis verdes; IR escalar implementado; cierre de contratos, IR de recursos, backend y scheduler pendientes |
 | Tipos, genéricos, unions y clases | Funcional | Checker y codegen siguen muy acoplados |
 | Módulos | Funcional con límites | Default, reexports y multilínea; análisis mediante AST combinado |
 | Ownership y borrow checking | Funcional, conservador | Hay moves, conflictos y NLL; no hay lifetime parameters |
