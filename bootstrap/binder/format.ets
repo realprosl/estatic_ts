@@ -1,3 +1,4 @@
+import { AttributeKind, nodeKindName } from "../parser/ast-schema";
 import { BindingResult } from "./binder";
 import { ModuleGraph } from "../modules/loader";
 import { quoteSource, formatDiagnostic } from "../frontend/frontend";
@@ -12,7 +13,7 @@ export function formatBinding(result: BindingResult, graph: ModuleGraph): string
     if (m < result.files.length) output.push(",\"scope\":" + numberToString(result.files[m].scope) + ",\"nodeScopes\":" + bindingNumbers(result.files[m].nodeScopes) + ",\"declarations\":" + bindingNumbers(result.files[m].declarations));
     output.push(",\"nodes\":["); let separator: string = "";
     for (const node of graph.modules[m].cached.result.ast.nodes) {
-      output.push(separator + "{\"kind\":" + quoteSource(node.kind) + ",\"name\":" + quoteSource(node.get("name")) + ",\"offset\":" + numberToString(node.start.offset) + "}"); separator = ",";
+      output.push(separator + "{\"kind\":" + quoteSource(nodeKindName(node.kind)) + ",\"name\":" + quoteSource(node.get(AttributeKind.Name)) + ",\"offset\":" + numberToString(node.start.offset) + "}"); separator = ",";
     }
     output.push("]}"); comma = ",";
   }

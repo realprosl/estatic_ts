@@ -1,3 +1,4 @@
+import { AttributeKind, EdgeRole, NodeKind, attributeKindName, edgeRoleName, nodeKindName, parseAttributeKind, parseEdgeRole, parseNodeKind } from "../parser/ast-schema";
 import { ParserToken, AstNode, AstAttribute, AstEdge, ParseResult } from "../parser/parser";
 import { SourceResult, parseSource } from "../frontend/frontend";
 import { contentHash, readSnapshot, publishRecord, syntaxIdentity } from "./platform";
@@ -54,10 +55,10 @@ export function encodeSyntax(result: SourceResult): string {
   for (const token of result.tokens) parts.push(encodeToken(token));
   parts.push(integer(result.ast.root) + integer(result.ast.nodes.length));
   for (const node of result.ast.nodes) {
-    parts.push(field(node.kind) + encodeToken(node.start) + encodeToken(node.end) + integer(node.attributes.length));
-    for (const attribute of node.attributes) parts.push(field(attribute.name) + field(attribute.value));
+    parts.push(field(nodeKindName(node.kind)) + encodeToken(node.start) + encodeToken(node.end) + integer(node.attributes.length));
+    for (const attribute of node.attributes) parts.push(field(attributeKindName(attribute.name)) + field(attribute.value));
     parts.push(integer(node.edges.length));
-    for (const edge of node.edges) parts.push(field(edge.role) + integer(edge.node));
+    for (const edge of node.edges) parts.push(field(edgeRoleName(edge.role)) + integer(edge.node));
   }
   return parts.join("");
 }
@@ -78,23 +79,24 @@ export function decodeSyntax(text: string, file: string, length: number): Source
   }
   const root: number = reader.natural(); const count: number = reader.count();
   for (let i: number = 0; i < count && reader.valid; i = i + 1) {
-    const kind: string = reader.take(); const start: ParserToken = decodeToken(reader, length); const end: ParserToken = decodeToken(reader, length);
-    if (kind == "" || (end.endOffset) < start.offset) reader.valid = false;
+    const kind: NodeKind = parseNodeKind(reader.take()); const start: ParserToken = decodeToken(reader, length); const end: ParserToken = decodeToken(reader, length);
+    if (kind == NodeKind.Invalid || (end.endOffset) < start.offset) reader.valid = false;
     let node: AstNode = new AstNode(kind, start, end); const attributes: number = reader.count();
     for (let a: number = 0; a < attributes && reader.valid; a = a + 1) {
-      const name: string = reader.take(); const value: string = reader.take();
+      const name: AttributeKind = parseAttributeKind(reader.take()); const value: string = reader.take();
+      if (name == AttributeKind.Invalid) reader.valid = false;
       node.attributes.push(new AstAttribute(name, value));
     }
     const edges: number = reader.count();
     for (let e: number = 0; e < edges && reader.valid; e = e + 1) {
-      const role: string = reader.take(); const index: number = reader.natural();
-      if (role == "" || index >= count || index == i) reader.valid = false;
+      const role: EdgeRole = parseEdgeRole(reader.take()); const index: number = reader.natural();
+      if (role == EdgeRole.Invalid || index >= count || index == i) reader.valid = false;
       node.edges.push(new AstEdge(role, index));
     }
     nodes.push(node);
   }
   if (!reader.done() || root >= nodes.length) return emptySyntax(file);
-  if (nodes[root].kind != "Program") return emptySyntax(file);
+  if (nodes[root].kind != NodeKind.Program) return emptySyntax(file);
   // The parser allocates parents before or after children. Validate acyclicity
   // iteratively, including unattached nodes, before returning any cached arena.
   let states: number[] = []; for (const node of nodes) states.push(0);

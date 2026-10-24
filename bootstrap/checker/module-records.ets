@@ -1,3 +1,4 @@
+import { AttributeKind, EdgeRole, NodeKind, attributeKindName, edgeRoleName, isCallableNodeKind, nodeKindName } from "../parser/ast-schema";
 import { ModuleGraph } from "../modules/loader";
 import { contentHash, syntaxIdentity } from "../modules/platform";
 import { BindingResult, callableBinding } from "../binder/binder";
@@ -29,9 +30,9 @@ export class ModuleRecordBuilder {
         const n = this.graph.modules[item.module].cached.result.ast.nodes[item.node]; let ordinal: number = 0;
         for (let at: number = 0; at < scope; at = at+1) if (this.binding.scopes[at].parent == item.parent && this.binding.scopes[at].module == item.module && this.binding.scopes[at].kind == item.kind && this.binding.scopes[at].node >= 0) {
           const candidate = this.graph.modules[item.module].cached.result.ast.nodes[this.binding.scopes[at].node];
-          if (candidate.kind == n.kind && candidate.get("name") == n.get("name")) ordinal = ordinal+1;
+          if (candidate.kind == n.kind && candidate.get(AttributeKind.Name) == n.get(AttributeKind.Name)) ordinal = ordinal+1;
         }
-        key = key + framed(item.kind) + framed(n.kind) + framed(n.get("name")) + framed(numberToString(ordinal));
+        key = key + framed(item.kind) + framed(nodeKindName(n.kind)) + framed(n.get(AttributeKind.Name)) + framed(numberToString(ordinal));
       }
       this.scopeKeys.push(key);
     }
@@ -69,7 +70,7 @@ export class ModuleRecordBuilder {
       if (base == "variant" && args.length == 2 && args[0].startsWith("#")) {
         let sid: number = 0; for (let at: number = 1; at < args[0].length; at = at+1) sid = sid*10+args[0].charCodeAt(at)-48;
         let node: number = 0; for (let at: number = 0; at < args[1].length; at = at+1) node = node*10+args[1].charCodeAt(at)-48;
-        if (sid < this.binding.symbols.length && this.binding.symbols[sid].module >= 0) { const nodes = this.graph.modules[this.binding.symbols[sid].module].cached.result.ast.nodes; if (node < nodes.length) return "variant:" + framed(this.stableType(args[0])) + framed(nodes[node].get("name")); }
+        if (sid < this.binding.symbols.length && this.binding.symbols[sid].module >= 0) { const nodes = this.graph.modules[this.binding.symbols[sid].module].cached.result.ast.nodes; if (node < nodes.length) return "variant:" + framed(this.stableType(args[0])) + framed(nodes[node].get(AttributeKind.Name)); }
       }
       for (const part of args) values.push(framed(this.stableType(part))); return this.typeTokens(base) + "<" + values.join("") + ">";
     }
@@ -83,7 +84,7 @@ export class ModuleRecordBuilder {
         let symbols: string[] = [];
         for (const sid of group) {
           const s = this.binding.symbols[sid]; let local: boolean = false; let scope: number = s.scope;
-          if (["VariableDeclaration","UsingDeclaration","ArrayBinding","ObjectBinding"].includes(s.kind)) while (scope >= 0) { const owner = this.binding.scopes[scope]; if (owner.module >= 0 && owner.node >= 0 && callableBinding(this.graph.modules[owner.module].cached.result.ast.nodes[owner.node].kind)) local = true; scope = owner.parent; }
+          if (["VariableDeclaration","UsingDeclaration","ArrayBinding","ObjectBinding"].includes(s.kind)) while (scope >= 0) { const owner = this.binding.scopes[scope]; if (owner.module >= 0 && owner.node >= 0 && isCallableNodeKind(this.graph.modules[owner.module].cached.result.ast.nodes[owner.node].kind)) local = true; scope = owner.parent; }
           if (!local) symbols.push(this.checked.symbolIds[sid]);
         }
         symbols.sort(compareKeys); parts.push(framedList(symbols));
@@ -96,21 +97,21 @@ export class ModuleRecordBuilder {
   contract(module: number, node: number, depth: number): string {
     if (depth > 128) return "deep:" + this.checked.moduleRecords[module].sourceHash;
     const n = this.graph.modules[module].cached.result.ast.nodes[node];
-    let parts: string[] = [n.kind, this.stableType(this.checked.files[module].types[node])];
-    for (const attr of n.attributes) if (!["generatedSource","generatedOffset","generatedEndOffset","generatedLine","generatedColumn","generatedOriginalName"].includes(attr.name)) {
+    let parts: string[] = [nodeKindName(n.kind), this.stableType(this.checked.files[module].types[node])];
+    for (const attr of n.attributes) if (![AttributeKind.GeneratedSource,AttributeKind.GeneratedOffset,AttributeKind.GeneratedEndOffset,AttributeKind.GeneratedLine,AttributeKind.GeneratedColumn,AttributeKind.GeneratedOriginalName].includes(attr.name)) {
       let value: string = attr.value;
-      if (attr.name == "generatedDefinition") for (let m: number = 0; m < this.checked.moduleRecords.length; m = m+1) if (attr.value == numberToString(m)) value = this.checked.moduleRecords[m].id;
-      parts.push(framed(attr.name) + framed(value));
+      if (attr.name == AttributeKind.GeneratedDefinition) for (let m: number = 0; m < this.checked.moduleRecords.length; m = m+1) if (attr.value == numberToString(m)) value = this.checked.moduleRecords[m].id;
+      parts.push(framed(attributeKindName(attr.name)) + framed(value));
     }
     parts.push(this.effects(module,node));
-    for (const edge of n.edges) if (edge.role != "body") parts.push(framed(edge.role) + this.contract(module,edge.node,depth+1));
+    for (const edge of n.edges) if (edge.role != EdgeRole.Body) parts.push(framed(edgeRoleName(edge.role)) + this.contract(module,edge.node,depth+1));
     return framedList(parts);
   }
   needsBody(module: number, node: number, depth: number): boolean {
     if (depth > 128) return true;
     const n = this.graph.modules[module].cached.result.ast.nodes[node];
-    if ((n.kind == "VariableDeclaration" || n.kind == "UsingDeclaration") && n.get("mutable") != "true") return true;
-    for (const edge of n.edges) { if (["typeParameters","defaultValue"].includes(edge.role)) return true; if (edge.role != "body" && this.needsBody(module,edge.node,depth+1)) return true; }
+    if ((n.kind == NodeKind.VariableDeclaration || n.kind == NodeKind.UsingDeclaration) && n.get(AttributeKind.Mutable) != "true") return true;
+    for (const edge of n.edges) { if ([EdgeRole.TypeParameters,EdgeRole.DefaultValue].includes(edge.role)) return true; if (edge.role != EdgeRole.Body && this.needsBody(module,edge.node,depth+1)) return true; }
     return false;
   }
   run(): CheckResult {

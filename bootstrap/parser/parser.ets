@@ -1,3 +1,4 @@
+import { AttributeKind, EdgeRole, NodeKind, attributeKindName, edgeRoleName, nodeKindName } from "./ast-schema";
 // Bootstrap parser. Tokens are supplied by the caller; no lexer/checker imports.
 // An arena owns all nodes. Edges are indices, so recursive ASTs need no cycles.
 export class ParserToken {
@@ -11,22 +12,22 @@ export class ParserToken {
   }
 }
 export class AstAttribute {
-  name: string; value: string;
-  constructor(name: string, value: string) { this.name = name; this.value = value; }
+  name: AttributeKind; value: string;
+  constructor(name: AttributeKind, value: string) { this.name = name; this.value = value; }
 }
 export class AstEdge {
-  role: string; node: number;
-  constructor(role: string, node: number) { this.role = role; this.node = node; }
+  role: EdgeRole; node: number;
+  constructor(role: EdgeRole, node: number) { this.role = role; this.node = node; }
 }
 export class AstNode {
-  kind: string; start: ParserToken; end: ParserToken; analysisStart: number; analysisEnd: number; generatedId: string; generatedStart: ParserToken; generatedEnd: ParserToken;
+  kind: NodeKind; start: ParserToken; end: ParserToken; analysisStart: number; analysisEnd: number; generatedId: string; generatedStart: ParserToken; generatedEnd: ParserToken;
   attributes: AstAttribute[]; edges: AstEdge[];
-  constructor(kind: string, start: ParserToken, end: ParserToken) {
+  constructor(kind: NodeKind, start: ParserToken, end: ParserToken) {
     this.kind = kind; this.start = start; this.end = end; this.attributes = []; this.edges = []; this.analysisStart = -1; this.analysisEnd = -1; this.generatedId = ""; this.generatedStart = start; this.generatedEnd = end;
   }
-  attr(name: string, value: string): void { this.attributes.push(new AstAttribute(name, value)); }
-  edge(role: string, node: number): void { this.edges.push(new AstEdge(role, node)); }
-  get(name: string): string {
+  attr(name: AttributeKind, value: string): void { this.attributes.push(new AstAttribute(name, value)); }
+  edge(role: EdgeRole, node: number): void { this.edges.push(new AstEdge(role, node)); }
+  get(name: AttributeKind): string {
     for (const field of this.attributes) { if (field.name == name) return field.value; }
     return "";
   }
@@ -119,15 +120,15 @@ export class Parser {
     this.nesting = this.nesting + 1; return true;
   }
   leave(): void { this.nesting = this.nesting - 1; }
-  add(kind: string, start: ParserToken, end: ParserToken): number {
+  add(kind: NodeKind, start: ParserToken, end: ParserToken): number {
     this.nodes.push(new AstNode(kind, start, end)); return this.nodes.length - 1;
   }
   node(cursor: number): AstNode { return this.nodes[cursor]; }
-  attr(cursor: number, name: string, value: string): void { this.nodes[cursor].attributes.push(new AstAttribute(name, value)); }
-  edge(cursor: number, role: string, child: number): void { this.nodes[cursor].edges.push(new AstEdge(role, child)); }
-  get(cursor: number, name: string): string { return this.nodes[cursor].get(name); }
+  attr(cursor: number, name: AttributeKind, value: string): void { this.nodes[cursor].attributes.push(new AstAttribute(name, value)); }
+  edge(cursor: number, role: EdgeRole, child: number): void { this.nodes[cursor].edges.push(new AstEdge(role, child)); }
+  get(cursor: number, name: AttributeKind): string { return this.nodes[cursor].get(name); }
   setEnd(cursor: number, end: ParserToken): void { this.nodes[cursor].end = end; }
-  setKind(cursor: number, kind: string): void { this.nodes[cursor].kind = kind; }
+  setKind(cursor: number, kind: NodeKind): void { this.nodes[cursor].kind = kind; }
   skipNewlines(): void { while (this.accept("newline")) {} }
   terminator(): ParserToken {
     if (this.check(";") || this.check("newline")) return this.take();
@@ -136,16 +137,16 @@ export class Parser {
   }
   parseProgram(): ParseResult {
     const start: ParserToken = this.peek(0);
-    const program: number = this.add("Program", start, start);
+    const program: number = this.add(NodeKind.Program, start, start);
     this.skipNewlines();
     if (this.headerAhead()) {
-      const header: number = this.add("ModuleHeaderDeclaration", this.peek(0), this.peek(0));
+      const header: number = this.add(NodeKind.ModuleHeaderDeclaration, this.peek(0), this.peek(0));
       while (this.headerAhead()) {
         const decorator: number = this.singleDecorator();
-        this.edge(header, "decorators", decorator); this.setEnd(header, this.node(decorator).end);
+        this.edge(header, EdgeRole.Decorators, decorator); this.setEnd(header, this.node(decorator).end);
         this.skipNewlines();
       }
-      this.edge(program, "statements", header);
+      this.edge(program, EdgeRole.Statements, header);
     }
     while (!this.check("eof")) {
       this.skipNewlines();
@@ -153,7 +154,7 @@ export class Parser {
       if (!this.accept(";")) {
         const before: number = this.current;
         const child: number = this.statement(true);
-        this.edge(program, "statements", child);
+        this.edge(program, EdgeRole.Statements, child);
         if (this.current == before && !this.check("eof")) { this.report("Token inesperado en el programa"); this.take(); }
       }
     }
@@ -166,8 +167,8 @@ export class Parser {
   singleDecorator(): number {
     const at: ParserToken = this.expect("@");
     const name: ParserToken = this.expect("identifier");
-    const result: number = this.add("Decorator", at, name); this.attr(result, "name", name.lexeme);
-    if (this.accept("(")) { this.argumentsInto(result, "args", ")"); this.setEnd(result, this.previous()); }
+    const result: number = this.add(NodeKind.Decorator, at, name); this.attr(result, AttributeKind.Name, name.lexeme);
+    if (this.accept("(")) { this.argumentsInto(result, EdgeRole.Args, ")"); this.setEnd(result, this.previous()); }
     return result;
   }
   decorators(): number[] {
@@ -178,13 +179,13 @@ export class Parser {
   prependDecorators(owner: number, decorators: number[]): void {
     if (decorators.length == 0) return;
     let edges: AstEdge[] = [];
-    for (const decorator of decorators) edges.push(new AstEdge("decorators", decorator));
+    for (const decorator of decorators) edges.push(new AstEdge(EdgeRole.Decorators, decorator));
     for (const edge of this.nodes[owner].edges) edges.push(edge);
     this.nodes[owner].edges = edges;
   }
   statement(topLevel: boolean): number {
     const start: ParserToken = this.peek(0);
-    if (!this.enter()) return this.add("ErrorNode", start, start);
+    if (!this.enter()) return this.add(NodeKind.ErrorNode, start, start);
     const result: number = this.statementInner(topLevel);
     this.leave(); return result;
   }
@@ -217,56 +218,56 @@ export class Parser {
     else if (this.check("type") && this.peek(0).lexeme == "type") {
       const keyword: ParserToken = this.take();
       const name: ParserToken = this.expect("identifier");
-      result = this.add("TypeAliasDeclaration", keyword, name); this.attr(result, "name", name.lexeme);
+      result = this.add(NodeKind.TypeAliasDeclaration, keyword, name); this.attr(result, AttributeKind.Name, name.lexeme);
       this.typeParameters(result, false); this.expect("=");
-      this.attr(result, "type", this.typeName()); this.setEnd(result, this.terminator());
+      this.attr(result, AttributeKind.Type, this.typeName()); this.setEnd(result, this.terminator());
     } else if (this.accept("if")) {
       const keyword: ParserToken = this.previous();
       this.expect("("); const condition: number = this.expression(); this.expect(")");
       const thenBranch: number = this.statement(false); this.skipNewlines();
-      result = this.add("IfStatement", keyword, this.node(thenBranch).end);
-      this.edge(result, "condition", condition); this.edge(result, "thenBranch", thenBranch);
-      if (this.accept("else")) { const branch: number = this.statement(false); this.edge(result, "elseBranch", branch); this.setEnd(result, this.node(branch).end); }
+      result = this.add(NodeKind.IfStatement, keyword, this.node(thenBranch).end);
+      this.edge(result, EdgeRole.Condition, condition); this.edge(result, EdgeRole.ThenBranch, thenBranch);
+      if (this.accept("else")) { const branch: number = this.statement(false); this.edge(result, EdgeRole.ElseBranch, branch); this.setEnd(result, this.node(branch).end); }
     } else if (this.accept("while")) {
       const keyword: ParserToken = this.previous(); this.expect("("); const condition: number = this.expression(); this.expect(")");
-      const body: number = this.statement(false); result = this.add("WhileStatement", keyword, this.node(body).end);
-      this.edge(result, "condition", condition); this.edge(result, "body", body);
+      const body: number = this.statement(false); result = this.add(NodeKind.WhileStatement, keyword, this.node(body).end);
+      this.edge(result, EdgeRole.Condition, condition); this.edge(result, EdgeRole.Body, body);
     } else if (this.accept("for")) result = this.forStatement(this.previous());
     else if (this.accept("{")) result = this.block(this.previous());
     else if (this.check("return") || this.check("break") || this.check("continue") || this.check("delete")) {
       const keyword: ParserToken = this.take();
-      let kind: string = "ReturnStatement";
-      if (keyword.kind == "break") kind = "BreakStatement";
-      else if (keyword.kind == "continue") kind = "ContinueStatement";
-      else if (keyword.kind == "delete") kind = "DeleteStatement";
+      let kind: NodeKind = NodeKind.ReturnStatement;
+      if (keyword.kind == "break") kind = NodeKind.BreakStatement;
+      else if (keyword.kind == "continue") kind = NodeKind.ContinueStatement;
+      else if (keyword.kind == "delete") kind = NodeKind.DeleteStatement;
       result = this.add(kind, keyword, keyword);
       if (keyword.kind == "delete") {
-        const target: number = this.expression(); this.edge(result, "target", target);
-        if (this.node(target).kind != "IndexExpression") this.report("delete requiere un acceso por índice");
+        const target: number = this.expression(); this.edge(result, EdgeRole.Target, target);
+        if (this.node(target).kind != NodeKind.IndexExpression) this.report("delete requiere un acceso por índice");
       } else if (keyword.kind == "return" && !this.check(";") && !this.check("newline") && !this.check("}") && !this.check("eof")) {
-        this.edge(result, "value", this.expression());
+        this.edge(result, EdgeRole.Value, this.expression());
       }
       this.setEnd(result, this.terminator());
     } else if (this.check("case") || this.check("default")) {
-      this.report("case/default requiere un switch"); result = this.add("ErrorNode", start, this.take());
+      this.report("case/default requiere un switch"); result = this.add(NodeKind.ErrorNode, start, this.take());
     } else {
       const value: number = this.expression();
-      result = this.add("ExpressionStatement", this.node(value).start, this.terminator()); this.edge(result, "expression", value);
+      result = this.add(NodeKind.ExpressionStatement, this.node(value).start, this.terminator()); this.edge(result, EdgeRole.Expression, value);
       if (exported || decorators.length > 0) this.report("El modificador necesita una declaración compatible");
     }
-    const declarationKind: string = this.node(result).kind;
-    const moduleExport: boolean = declarationKind == "ExportDefaultDeclaration" || declarationKind == "ExportNamedDeclaration" || declarationKind == "ExportAllDeclaration";
+    const declarationKind: NodeKind = this.node(result).kind;
+    const moduleExport: boolean = declarationKind == NodeKind.ExportDefaultDeclaration || declarationKind == NodeKind.ExportNamedDeclaration || declarationKind == NodeKind.ExportAllDeclaration;
     if (exported && !moduleExport) {
-      if (declarationKind != "VariableDeclaration" && declarationKind != "UsingDeclaration" && declarationKind != "FunctionDeclaration"
-          && declarationKind != "ClassDeclaration" && declarationKind != "InterfaceDeclaration" && declarationKind != "TypeAliasDeclaration"
-          && declarationKind != "EnumDeclaration" && declarationKind != "UnionDeclaration"
-          && declarationKind != "ErrorNode") this.report("export necesita una declaración compatible");
-      this.attr(result, "exported", "true");
+      if (declarationKind != NodeKind.VariableDeclaration && declarationKind != NodeKind.UsingDeclaration && declarationKind != NodeKind.FunctionDeclaration
+          && declarationKind != NodeKind.ClassDeclaration && declarationKind != NodeKind.InterfaceDeclaration && declarationKind != NodeKind.TypeAliasDeclaration
+          && declarationKind != NodeKind.EnumDeclaration && declarationKind != NodeKind.UnionDeclaration
+          && declarationKind != NodeKind.ErrorNode) this.report("export necesita una declaración compatible");
+      this.attr(result, AttributeKind.Exported, "true");
     }
     let decorated: number = result;
-    if (declarationKind == "ExportDefaultDeclaration") decorated = this.nodes[result].edges[0].node;
-    const decoratedKind: string = this.node(decorated).kind;
-    if (decorators.length > 0 && decoratedKind != "VariableDeclaration" && decoratedKind != "FunctionDeclaration" && decoratedKind != "ClassDeclaration" && decoratedKind != "InterfaceDeclaration") {
+    if (declarationKind == NodeKind.ExportDefaultDeclaration) decorated = this.nodes[result].edges[0].node;
+    const decoratedKind: NodeKind = this.node(decorated).kind;
+    if (decorators.length > 0 && decoratedKind != NodeKind.VariableDeclaration && decoratedKind != NodeKind.FunctionDeclaration && decoratedKind != NodeKind.ClassDeclaration && decoratedKind != NodeKind.InterfaceDeclaration) {
       this.reportAt(start, "Los decoradores requieren una declaración compatible");
     } else this.prependDecorators(decorated, decorators);
     return result;
@@ -295,7 +296,7 @@ export class Parser {
     this.skipNewlines();
     if (!this.acceptWord("from")) this.report("Se esperaba 'from' en import/export");
     this.skipNewlines();
-    if (this.check("string")) this.attr(owner, "source", this.take().lexeme);
+    if (this.check("string")) this.attr(owner, AttributeKind.Source, this.take().lexeme);
     else this.report("Se esperaba un literal de módulo después de 'from'");
   }
   fromAfterNewlines(): boolean {
@@ -316,13 +317,13 @@ export class Parser {
       if (this.acceptWord("as")) {
         renamed = true; this.skipNewlines(); alias = (importing ? this.expect("identifier") : this.moduleName());
       }
-      const specifier: number = this.add(importing ? "ImportSpecifier" : "ExportSpecifier", start, alias);
+      const specifier: number = this.add(importing ? NodeKind.ImportSpecifier : NodeKind.ExportSpecifier, start, alias);
       if (importing) {
-        this.attr(specifier, "imported", name.lexeme); this.attr(specifier, "local", alias.lexeme); this.attr(specifier, "form", "named");
+        this.attr(specifier, AttributeKind.Imported, name.lexeme); this.attr(specifier, AttributeKind.Local, alias.lexeme); this.attr(specifier, AttributeKind.Form, "named");
         if (alias.kind != "identifier") this.reportAt(alias, "El nombre local del import necesita un identificador; usa 'as nombre'");
-      } else { this.attr(specifier, "name", name.lexeme); if (renamed) this.attr(specifier, "alias", alias.lexeme); }
-      if (itemTypeOnly) this.attr(specifier, "typeOnly", "true");
-      this.edge(owner, "specifiers", specifier); this.skipNewlines();
+      } else { this.attr(specifier, AttributeKind.Name, name.lexeme); if (renamed) this.attr(specifier, AttributeKind.Alias, alias.lexeme); }
+      if (itemTypeOnly) this.attr(specifier, AttributeKind.TypeOnly, "true");
+      this.edge(owner, EdgeRole.Specifiers, specifier); this.skipNewlines();
       if (this.current == before) break;
       if (this.check("}")) break;
       if (!this.accept(",")) {
@@ -336,29 +337,29 @@ export class Parser {
   checkModuleNames(owner: number, importing: boolean): void {
     let names: string[] = [];
     for (const edge of this.nodes[owner].edges) {
-      if (edge.role == "specifiers") {
-        const name: string = importing ? this.get(edge.node, "local") : this.get(edge.node, "alias");
-        const effective: string = name == "" ? this.get(edge.node, "name") : name;
+      if (edge.role == EdgeRole.Specifiers) {
+        const name: string = importing ? this.get(edge.node, AttributeKind.Local) : this.get(edge.node, AttributeKind.Alias);
+        const effective: string = name == "" ? this.get(edge.node, AttributeKind.Name) : name;
         if (names.includes(effective)) this.reportAt(this.node(edge.node).start, "Nombre duplicado en la lista de import/export");
         names.push(effective);
       }
     }
   }
   importDeclaration(keyword: ParserToken): number {
-    const result: number = this.add("ImportDeclaration", keyword, keyword); this.skipNewlines();
+    const result: number = this.add(NodeKind.ImportDeclaration, keyword, keyword); this.skipNewlines();
     if (this.check("string")) {
-      this.attr(result, "source", this.take().lexeme); this.attr(result, "sideEffect", "true");
+      this.attr(result, AttributeKind.Source, this.take().lexeme); this.attr(result, AttributeKind.SideEffect, "true");
       this.setEnd(result, this.moduleEnd()); return result;
     }
     if (this.check("(")) {
       this.report("import dinámico no está soportado por este parser"); this.synchronize(); this.setEnd(result, this.previous()); return result;
     }
-    const typeOnly: boolean = this.acceptWord("type"); if (typeOnly) this.attr(result, "typeOnly", "true");
+    const typeOnly: boolean = this.acceptWord("type"); if (typeOnly) this.attr(result, AttributeKind.TypeOnly, "true");
     this.skipNewlines(); let hasDefault: boolean = false; let more: boolean = true;
     if (this.check("identifier")) {
-      const local: ParserToken = this.take(); const item: number = this.add("ImportSpecifier", local, local);
-      this.attr(item, "imported", "default"); this.attr(item, "local", local.lexeme); this.attr(item, "form", "default");
-      if (typeOnly) this.attr(item, "typeOnly", "true"); this.edge(result, "specifiers", item);
+      const local: ParserToken = this.take(); const item: number = this.add(NodeKind.ImportSpecifier, local, local);
+      this.attr(item, AttributeKind.Imported, "default"); this.attr(item, AttributeKind.Local, local.lexeme); this.attr(item, AttributeKind.Form, "default");
+      if (typeOnly) this.attr(item, AttributeKind.TypeOnly, "true"); this.edge(result, EdgeRole.Specifiers, item);
       hasDefault = true; this.skipNewlines(); more = this.accept(","); if (more) this.skipNewlines();
     }
     if (more) {
@@ -366,19 +367,19 @@ export class Parser {
         const star: ParserToken = this.previous(); this.skipNewlines();
         if (!this.acceptWord("as")) this.report("Un import '*' requiere 'as nombre'");
         this.skipNewlines(); const local: ParserToken = this.expect("identifier");
-        const item: number = this.add("ImportSpecifier", star, local);
-        this.attr(item, "imported", "*"); this.attr(item, "local", local.lexeme); this.attr(item, "form", "namespace");
-        if (typeOnly) this.attr(item, "typeOnly", "true"); this.edge(result, "specifiers", item);
+        const item: number = this.add(NodeKind.ImportSpecifier, star, local);
+        this.attr(item, AttributeKind.Imported, "*"); this.attr(item, AttributeKind.Local, local.lexeme); this.attr(item, AttributeKind.Form, "namespace");
+        if (typeOnly) this.attr(item, AttributeKind.TypeOnly, "true"); this.edge(result, EdgeRole.Specifiers, item);
       } else if (this.check("{")) this.moduleSpecifiers(result, true, typeOnly);
       else this.report("Se esperaba un binding, namespace o lista de nombres en import");
     } else if (!hasDefault) this.report("Se esperaba un nombre local en import");
     this.moduleSource(result); this.checkModuleNames(result, true); this.setEnd(result, this.moduleEnd()); return result;
   }
   exportList(keyword: ParserToken, typeOnly: boolean): number {
-    const result: number = this.add(this.check("*") ? "ExportAllDeclaration" : "ExportNamedDeclaration", keyword, keyword);
-    if (typeOnly) this.attr(result, "typeOnly", "true");
+    const result: number = this.add(this.check("*") ? NodeKind.ExportAllDeclaration : NodeKind.ExportNamedDeclaration, keyword, keyword);
+    if (typeOnly) this.attr(result, AttributeKind.TypeOnly, "true");
     if (this.accept("*")) {
-      this.skipNewlines(); if (this.acceptWord("as")) { this.skipNewlines(); this.attr(result, "namespace", this.moduleName().lexeme); }
+      this.skipNewlines(); if (this.acceptWord("as")) { this.skipNewlines(); this.attr(result, AttributeKind.Namespace, this.moduleName().lexeme); }
       this.moduleSource(result);
     } else {
       this.moduleSpecifiers(result, false, typeOnly);
@@ -388,13 +389,13 @@ export class Parser {
     this.setEnd(result, this.moduleEnd()); return result;
   }
   exportDefault(keyword: ParserToken): number {
-    const result: number = this.add("ExportDefaultDeclaration", keyword, keyword); this.skipNewlines();
+    const result: number = this.add(NodeKind.ExportDefaultDeclaration, keyword, keyword); this.skipNewlines();
     let declaration: number = -1;
     if (this.check("function") || (this.check("async") && this.peek(1).kind == "function")) declaration = this.functionDeclaration(true);
     else if (this.accept("class")) declaration = this.classDeclaration(this.previous(), true);
     else if (this.check("let") || this.check("const")) declaration = this.variable(true);
     else { declaration = this.expression(); this.terminator(); }
-    this.edge(result, "declaration", declaration); this.setEnd(result, this.node(declaration).end); return result;
+    this.edge(result, EdgeRole.Declaration, declaration); this.setEnd(result, this.node(declaration).end); return result;
   }
   synchronize(): void {
     let depth: number = 0;
@@ -459,21 +460,21 @@ export class Parser {
     return this.decimalMultiplyAdd(value.slice(0, cut), 1, 1) + suffix;
   }
   enumDeclaration(keyword: ParserToken): number {
-    const name: ParserToken = this.expect("identifier"); const result: number = this.add("EnumDeclaration", keyword, name);
-    this.attr(result, "name", name.lexeme); this.expect("{"); this.skipNewlines();
+    const name: ParserToken = this.expect("identifier"); const result: number = this.add(NodeKind.EnumDeclaration, keyword, name);
+    this.attr(result, AttributeKind.Name, name.lexeme); this.expect("{"); this.skipNewlines();
     let nextValue: string = "0"; let mode: string = ""; let names: string[] = [];
     while (!this.check("}") && !this.check("eof")) {
       const before: number = this.current; const memberName: ParserToken = this.expect("identifier");
       if (names.includes(memberName.lexeme)) this.reportAt(memberName, "Miembro de enum duplicado");
       names.push(memberName.lexeme);
-      const member: number = this.add("EnumMember", memberName, memberName); this.attr(member, "name", memberName.lexeme);
+      const member: number = this.add(NodeKind.EnumMember, memberName, memberName); this.attr(member, AttributeKind.Name, memberName.lexeme);
       let literal: number = -1;
       if (this.accept("=")) {
         const value: ParserToken = this.peek(0);
         if (this.check("number") || this.check("string")) {
-          this.take(); literal = this.add("LiteralExpression", value, value);
-          this.attr(literal, "literalType", value.kind); const canonical: string = value.kind == "number" ? this.numericText(value) : value.lexeme;
-          this.attr(literal, "value", canonical);
+          this.take(); literal = this.add(NodeKind.LiteralExpression, value, value);
+          this.attr(literal, AttributeKind.LiteralType, value.kind); const canonical: string = value.kind == "number" ? this.numericText(value) : value.lexeme;
+          this.attr(literal, AttributeKind.Value, canonical);
           if (mode != "" && mode != value.kind) this.reportAt(value, "Un enum no puede mezclar miembros numéricos y de cadena");
           mode = value.kind;
           if (value.kind == "number") nextValue = this.incrementDecimal(canonical);
@@ -483,12 +484,12 @@ export class Parser {
         }
       } else {
         if (mode == "string") this.reportAt(memberName, "Un enum de cadena requiere valores explícitos en todos los miembros");
-        literal = this.add("LiteralExpression", memberName, memberName); this.attr(literal, "literalType", "number");
-        this.attr(literal, "value", nextValue); nextValue = this.incrementDecimal(nextValue);
+        literal = this.add(NodeKind.LiteralExpression, memberName, memberName); this.attr(literal, AttributeKind.LiteralType, "number");
+        this.attr(literal, AttributeKind.Value, nextValue); nextValue = this.incrementDecimal(nextValue);
         if (mode == "") mode = "number";
       }
-      if (literal >= 0) { this.edge(member, "value", literal); this.setEnd(member, this.node(literal).end); }
-      this.edge(result, "members", member); this.skipNewlines();
+      if (literal >= 0) { this.edge(member, EdgeRole.Value, literal); this.setEnd(member, this.node(literal).end); }
+      this.edge(result, EdgeRole.Members, member); this.skipNewlines();
       if (!this.check("}") && !this.check("eof")) {
         if (!this.accept(",")) this.report("Se esperaba ',' o '}' entre miembros del enum");
         this.skipNewlines();
@@ -496,12 +497,12 @@ export class Parser {
       if (this.current == before && !this.check("eof")) this.take();
     }
     if (names.length == 0) this.report("El enum debe tener al menos un miembro");
-    this.attr(result, "underlying", mode == "string" ? "string" : "number"); this.setEnd(result, this.expect("}")); return result;
+    this.attr(result, AttributeKind.Underlying, mode == "string" ? "string" : "number"); this.setEnd(result, this.expect("}")); return result;
   }
   unionDeclaration(keyword: ParserToken): number {
-    const result: number = this.add("UnionDeclaration", keyword, keyword);
+    const result: number = this.add(NodeKind.UnionDeclaration, keyword, keyword);
     const beforeName: boolean = this.check("<"); this.typeParameters(result, false);
-    const name: ParserToken = this.expect("identifier"); this.attr(result, "name", name.lexeme);
+    const name: ParserToken = this.expect("identifier"); this.attr(result, AttributeKind.Name, name.lexeme);
     if (beforeName && this.check("<")) this.report("La unión sólo admite una lista de parámetros de tipo");
     this.typeParameters(result, false); this.expect("="); this.skipNewlines();
     let names: string[] = []; let reading: boolean = true;
@@ -509,13 +510,13 @@ export class Parser {
       let variant: number = -1;
       if (this.check("{")) variant = this.objectVariant();
       else if (this.check("identifier")) {
-        const token: ParserToken = this.take(); variant = this.add("UnionVariant", token, token); this.attr(variant, "name", token.lexeme);
-        if (this.accept("(")) { this.attr(variant, "payload", this.typeName()); this.setEnd(variant, this.expect(")")); }
+        const token: ParserToken = this.take(); variant = this.add(NodeKind.UnionVariant, token, token); this.attr(variant, AttributeKind.Name, token.lexeme);
+        if (this.accept("(")) { this.attr(variant, AttributeKind.Payload, this.typeName()); this.setEnd(variant, this.expect(")")); }
       } else { this.report("Se esperaba una variante de la unión"); reading = false; }
       if (variant >= 0) {
-        const variantName: string = this.get(variant, "name");
+        const variantName: string = this.get(variant, AttributeKind.Name);
         if (names.includes(variantName)) this.reportAt(this.node(variant).start, "Variante de unión duplicada");
-        names.push(variantName); this.edge(result, "variants", variant);
+        names.push(variantName); this.edge(result, EdgeRole.Variants, variant);
         if (this.accept("|")) this.skipNewlines(); else reading = false;
       }
     }
@@ -524,7 +525,7 @@ export class Parser {
   objectVariant(): number {
     const open: ParserToken = this.expect("{"); this.skipNewlines();
     const field: ParserToken = this.expect("identifier"); this.expect(":"); const token: ParserToken = this.peek(0);
-    const result: number = this.add("UnionVariant", open, token);
+    const result: number = this.add(NodeKind.UnionVariant, open, token);
     let value: string = token.lexeme; let literalType: string = token.kind;
     if (this.check("number") || this.check("string") || this.check("true") || this.check("false")) {
       this.take(); if (token.kind == "number") value = this.numericText(token);
@@ -536,47 +537,47 @@ export class Parser {
     let variantName: string = field.lexeme + "_" + value;
     if (literalType == "string") variantName = value;
     else if (literalType == "boolean" && field.lexeme == "ok") variantName = (value == "true" ? "Ok" : "Err");
-    this.attr(result, "name", variantName);
-    const discriminator: number = this.add("Discriminator", field, token);
-    this.attr(discriminator, "field", field.lexeme); this.attr(discriminator, "literalType", literalType); this.attr(discriminator, "value", value);
-    this.edge(result, "discriminator", discriminator);
+    this.attr(result, AttributeKind.Name, variantName);
+    const discriminator: number = this.add(NodeKind.Discriminator, field, token);
+    this.attr(discriminator, AttributeKind.Field, field.lexeme); this.attr(discriminator, AttributeKind.LiteralType, literalType); this.attr(discriminator, AttributeKind.Value, value);
+    this.edge(result, EdgeRole.Discriminator, discriminator);
     let names: string[] = [field.lexeme]; let types: string[] = []; this.skipNewlines();
     while (this.accept(";") || this.accept(",")) {
       this.skipNewlines(); if (this.check("}") || this.check("eof")) break;
       const before: number = this.current; const bindingName: ParserToken = this.expect("identifier");
       if (names.includes(bindingName.lexeme)) this.reportAt(bindingName, "Binding de variante duplicado");
       names.push(bindingName.lexeme); this.expect(":"); const annotation: string = this.typeName();
-      const binding: number = this.add("Binding", bindingName, this.previous());
-      this.attr(binding, "name", bindingName.lexeme); this.attr(binding, "type", annotation);
-      this.edge(result, "bindings", binding); types.push(annotation); this.skipNewlines();
+      const binding: number = this.add(NodeKind.Binding, bindingName, this.previous());
+      this.attr(binding, AttributeKind.Name, bindingName.lexeme); this.attr(binding, AttributeKind.Type, annotation);
+      this.edge(result, EdgeRole.Bindings, binding); types.push(annotation); this.skipNewlines();
       if (this.current == before && !this.check("eof")) this.take();
     }
-    if (types.length == 1) this.attr(result, "payload", types[0]);
-    else if (types.length > 1) this.attr(result, "payload", "[" + types.join(",") + "]");
+    if (types.length == 1) this.attr(result, AttributeKind.Payload, types[0]);
+    else if (types.length > 1) this.attr(result, AttributeKind.Payload, "[" + types.join(",") + "]");
     this.setEnd(result, this.expect("}")); return result;
   }
   switchStatement(keyword: ParserToken): number {
-    const result: number = this.add("SwitchStatement", keyword, keyword);
-    this.expect("("); this.edge(result, "discriminant", this.expression()); this.expect(")"); this.expect("{");
+    const result: number = this.add(NodeKind.SwitchStatement, keyword, keyword);
+    this.expect("("); this.edge(result, EdgeRole.Discriminant, this.expression()); this.expect(")"); this.expect("{");
     let hasDefault: boolean = false;
     while (!this.check("}") && !this.check("eof")) {
       this.skipNewlines(); if (this.check("}") || this.check("eof")) break;
       if (this.check("case") || this.check("default")) {
-        const token: ParserToken = this.take(); const clause: number = this.add(token.kind == "case" ? "CaseClause" : "DefaultClause", token, token);
+        const token: ParserToken = this.take(); const clause: number = this.add(token.kind == "case" ? NodeKind.CaseClause : NodeKind.DefaultClause, token, token);
         if (token.kind == "case") {
-          if (this.check(":")) { this.report("case necesita una expresión"); this.edge(clause, "labels", this.add("ErrorNode", this.peek(0), this.peek(0))); }
-          else this.edge(clause, "labels", this.expression());
+          if (this.check(":")) { this.report("case necesita una expresión"); this.edge(clause, EdgeRole.Labels, this.add(NodeKind.ErrorNode, this.peek(0), this.peek(0))); }
+          else this.edge(clause, EdgeRole.Labels, this.expression());
         } else { if (hasDefault) this.reportAt(token, "Un switch solo puede tener un default"); hasDefault = true; }
         this.setEnd(clause, this.expect(":")); this.skipNewlines();
         while (!this.check("case") && !this.check("default") && !this.check("}") && !this.check("eof")) {
           this.skipNewlines(); if (this.check("case") || this.check("default") || this.check("}") || this.check("eof")) break;
           if (!this.accept(";")) {
-            const before: number = this.current; const child: number = this.statement(false); this.edge(clause, "body", child);
+            const before: number = this.current; const child: number = this.statement(false); this.edge(clause, EdgeRole.Body, child);
             this.setEnd(clause, this.node(child).end);
             if (this.current == before && !this.check("eof")) { this.report("Token inesperado en la cláusula de switch"); this.take(); }
           }
         }
-        this.edge(result, "clauses", clause);
+        this.edge(result, EdgeRole.Clauses, clause);
       } else { this.report("Se esperaba case o default en switch"); this.take(); }
     }
     this.setEnd(result, this.expect("}")); return result;
@@ -596,7 +597,7 @@ export class Parser {
   }
   bindingPattern(owner: number, array: boolean): void {
     this.take(); const close: string = array ? "]" : "}";
-    this.attr(owner, "pattern", array ? "array" : "object"); this.attr(owner, "name", "");
+    this.attr(owner, AttributeKind.Pattern, array ? "array" : "object"); this.attr(owner, AttributeKind.Name, "");
     let names: string[] = [];
     while (!this.check("eof")) {
       this.skipNewlines(); if (this.check(close)) break;
@@ -605,21 +606,21 @@ export class Parser {
         this.recoverBinding(close); if (this.accept(",")) continue; break;
       }
       const key: ParserToken = this.take(); let local: ParserToken = key; let end: ParserToken = key;
-      const binding: number = this.add(array ? "ArrayBinding" : "ObjectBinding", key, key);
-      if (!array) this.attr(binding, "property", key.lexeme);
+      const binding: number = this.add(array ? NodeKind.ArrayBinding : NodeKind.ObjectBinding, key, key);
+      if (!array) this.attr(binding, AttributeKind.Property, key.lexeme);
       this.skipNewlines();
       if (this.accept(":")) {
         this.skipNewlines();
         if (!array && this.check("identifier")) {
           local = this.take(); end = local; this.skipNewlines();
-          if (this.accept(":")) { this.skipNewlines(); this.attr(binding, "declaredType", this.typeName()); end = this.previous(); }
-        } else { this.attr(binding, "declaredType", this.typeName()); end = this.previous(); }
+          if (this.accept(":")) { this.skipNewlines(); this.attr(binding, AttributeKind.DeclaredType, this.typeName()); end = this.previous(); }
+        } else { this.attr(binding, AttributeKind.DeclaredType, this.typeName()); end = this.previous(); }
       }
-      this.attr(binding, "name", local.lexeme);
+      this.attr(binding, AttributeKind.Name, local.lexeme);
       if (names.includes(local.lexeme)) this.reportAt(local, "Binding duplicado '" + local.lexeme + "'");
       names.push(local.lexeme); this.skipNewlines();
-      if (this.accept("=")) { this.skipNewlines(); this.edge(binding, "defaultValue", this.expression()); end = this.previous(); }
-      this.setEnd(binding, end); this.edge(owner, array ? "arrayBindings" : "objectBindings", binding);
+      if (this.accept("=")) { this.skipNewlines(); this.edge(binding, EdgeRole.DefaultValue, this.expression()); end = this.previous(); }
+      this.setEnd(binding, end); this.edge(owner, array ? EdgeRole.ArrayBindings : EdgeRole.ObjectBindings, binding);
       this.skipNewlines(); if (this.accept(",")) continue;
       if (!this.check(close)) {
         this.report("Se esperaba ',' o '" + close + "' en el patrón"); this.recoverBinding(close);
@@ -631,32 +632,32 @@ export class Parser {
   }
   variable(terminated: boolean): number {
     if (!this.check("using") && (this.peek(1).kind == "[" || this.peek(1).kind == "{")) {
-      const keyword: ParserToken = this.take(); const result: number = this.add("VariableDeclaration", keyword, keyword);
-      this.attr(result, "mutable", keyword.kind == "let" ? "true" : "false");
+      const keyword: ParserToken = this.take(); const result: number = this.add(NodeKind.VariableDeclaration, keyword, keyword);
+      this.attr(result, AttributeKind.Mutable, keyword.kind == "let" ? "true" : "false");
       this.bindingPattern(result, this.check("["));
-      if (this.accept(":")) this.attr(result, "declaredType", this.typeName());
+      if (this.accept(":")) this.attr(result, AttributeKind.DeclaredType, this.typeName());
       this.expect("=");
       if (this.check(";") || this.check("newline") || this.check("}") || this.check("eof")) {
         this.report("El destructuring necesita un inicializador");
-        const missing: number = this.add("ErrorNode", this.peek(0), this.peek(0)); this.edge(result, "initializer", missing);
-      } else this.edge(result, "initializer", this.expression());
+        const missing: number = this.add(NodeKind.ErrorNode, this.peek(0), this.peek(0)); this.edge(result, EdgeRole.Initializer, missing);
+      } else this.edge(result, EdgeRole.Initializer, this.expression());
       this.setEnd(result, terminated ? this.terminator() : this.previous()); return result;
     }
     const keyword: ParserToken = this.take(); const name: ParserToken = this.expect("identifier");
-    const kind: string = keyword.kind == "using" ? "UsingDeclaration" : "VariableDeclaration";
-    const result: number = this.add(kind, keyword, name); this.attr(result, "name", name.lexeme);
-    if (kind == "VariableDeclaration") this.attr(result, "mutable", keyword.kind == "let" ? "true" : "false");
-    if (this.accept(":")) this.attr(result, "declaredType", this.typeName());
-    this.expect("="); this.edge(result, "initializer", this.expression());
+    const kind: NodeKind = keyword.kind == "using" ? NodeKind.UsingDeclaration : NodeKind.VariableDeclaration;
+    const result: number = this.add(kind, keyword, name); this.attr(result, AttributeKind.Name, name.lexeme);
+    if (kind == NodeKind.VariableDeclaration) this.attr(result, AttributeKind.Mutable, keyword.kind == "let" ? "true" : "false");
+    if (this.accept(":")) this.attr(result, AttributeKind.DeclaredType, this.typeName());
+    this.expect("="); this.edge(result, EdgeRole.Initializer, this.expression());
     this.setEnd(result, terminated ? this.terminator() : this.previous()); return result;
   }
   block(open: ParserToken): number {
-    const result: number = this.add("BlockStatement", open, open);
+    const result: number = this.add(NodeKind.BlockStatement, open, open);
     while (!this.check("}") && !this.check("eof")) {
       this.skipNewlines();
       if (this.check("}") || this.check("eof")) break;
       if (!this.accept(";")) {
-        const before: number = this.current; this.edge(result, "statements", this.statement(false));
+        const before: number = this.current; this.edge(result, EdgeRole.Statements, this.statement(false));
         if (this.current == before && !this.check("eof")) { this.report("Token inesperado en el bloque"); this.take(); }
       }
     }
@@ -685,21 +686,21 @@ export class Parser {
       if (property && variadic) this.reportAt(start, "Una propiedad de parámetro no puede ser variádica");
       const name: ParserToken = this.expect("identifier"); const optional: boolean = this.accept("?");
       this.expect(":"); const annotation: string = this.typeName();
-      const param: number = this.add("Parameter", start, this.previous());
-      this.attr(param, "name", name.lexeme); this.attr(param, "type", annotation);
-      this.attr(param, "out", isOut ? "true" : "false"); this.attr(param, "passing", isOut ? "out" : "value");
-      if (access != "") this.attr(param, "access", access);
-      if (isReadonly) this.attr(param, "readonly", "true");
-      if (property && properties) this.attr(param, "parameterProperty", "true");
-      if (!arrow) { this.attr(param, "variadic", variadic ? "true" : "false"); this.attr(param, "optional", optional ? "true" : "false"); }
+      const param: number = this.add(NodeKind.Parameter, start, this.previous());
+      this.attr(param, AttributeKind.Name, name.lexeme); this.attr(param, AttributeKind.Type, annotation);
+      this.attr(param, AttributeKind.Out, isOut ? "true" : "false"); this.attr(param, AttributeKind.Passing, isOut ? "out" : "value");
+      if (access != "") this.attr(param, AttributeKind.Access, access);
+      if (isReadonly) this.attr(param, AttributeKind.Readonly, "true");
+      if (property && properties) this.attr(param, AttributeKind.ParameterProperty, "true");
+      if (!arrow) { this.attr(param, AttributeKind.Variadic, variadic ? "true" : "false"); this.attr(param, AttributeKind.Optional, optional ? "true" : "false"); }
       if (this.accept("=")) {
         if (this.check(",") || this.check(")") || this.check("eof")) {
           this.report("Se esperaba un valor por defecto del parámetro");
-          const missing: number = this.add("ErrorNode", this.peek(0), this.peek(0)); this.edge(param, "defaultValue", missing);
-        } else this.edge(param, "defaultValue", this.expression());
+          const missing: number = this.add(NodeKind.ErrorNode, this.peek(0), this.peek(0)); this.edge(param, EdgeRole.DefaultValue, missing);
+        } else this.edge(param, EdgeRole.DefaultValue, this.expression());
       }
       this.setEnd(param, this.previous());
-      this.edge(owner, "params", param);
+      this.edge(owner, EdgeRole.Params, param);
       if (this.current == before || !this.accept(",")) break;
     }
     this.expect(")");
@@ -716,16 +717,16 @@ export class Parser {
         while (!this.check("eof") && !this.check(">") && !this.check(",") && !this.check("(") && !this.check("{") && !this.check(";") && !this.check("=")) this.take();
         if (this.accept(",")) { this.skipNewlines(); continue; } break;
       }
-      const name: ParserToken = this.take(); const param: number = this.add("TypeParameter", start, name); let end: ParserToken = name;
-      this.attr(param, "name", name.lexeme);
+      const name: ParserToken = this.take(); const param: number = this.add(NodeKind.TypeParameter, start, name); let end: ParserToken = name;
+      this.attr(param, AttributeKind.Name, name.lexeme);
       if (names.includes(name.lexeme)) this.reportAt(name, "Parámetro de tipo duplicado '" + name.lexeme + "'");
       names.push(name.lexeme);
-      if (variadic) { this.attr(param, "variadic", "true"); this.attr(owner, "variadicTypeParameter", name.lexeme); }
+      if (variadic) { this.attr(param, AttributeKind.Variadic, "true"); this.attr(owner, AttributeKind.VariadicTypeParameter, name.lexeme); }
       this.skipNewlines();
-      if (this.accept("extends")) { this.skipNewlines(); this.attr(param, "constraint", this.typeName()); end = this.previous(); }
+      if (this.accept("extends")) { this.skipNewlines(); this.attr(param, AttributeKind.Constraint, this.typeName()); end = this.previous(); }
       this.skipNewlines();
-      if (this.accept("=")) { this.skipNewlines(); this.attr(param, "default", this.typeName()); end = this.previous(); }
-      this.setEnd(param, end); this.edge(owner, "typeParameters", param); this.skipNewlines();
+      if (this.accept("=")) { this.skipNewlines(); this.attr(param, AttributeKind.Default, this.typeName()); end = this.previous(); }
+      this.setEnd(param, end); this.edge(owner, EdgeRole.TypeParameters, param); this.skipNewlines();
       if (this.accept(",")) { this.skipNewlines(); continue; }
       if (this.check(">")) break;
       this.report("Se esperaba ',' o '>' después del parámetro de tipo");
@@ -739,23 +740,23 @@ export class Parser {
     const decorators: number[] = this.decorators();
     const anonymous: boolean = allowAnonymous && (this.check("(") || this.check("<"));
     const name: ParserToken = anonymous ? this.peek(0) : this.expect("identifier");
-    const result: number = this.add("FunctionDeclaration", keyword, name);
+    const result: number = this.add(NodeKind.FunctionDeclaration, keyword, name);
     this.prependDecorators(result, decorators);
-    if (anonymous) this.attr(result, "anonymous", "true"); else this.attr(result, "name", name.lexeme);
-    this.attr(result, "async", isAsync ? "true" : "false");
+    if (anonymous) this.attr(result, AttributeKind.Anonymous, "true"); else this.attr(result, AttributeKind.Name, name.lexeme);
+    this.attr(result, AttributeKind.Async, isAsync ? "true" : "false");
     this.typeParameters(result, true); this.parametersInto(result, false, false); this.expect(":");
-    this.attr(result, "returnType", this.typeName());
+    this.attr(result, AttributeKind.ReturnType, this.typeName());
     let body: number = -1;
-    if (this.accept(";")) body = this.add("BlockStatement", this.previous(), this.previous());
+    if (this.accept(";")) body = this.add(NodeKind.BlockStatement, this.previous(), this.previous());
     else { const open: ParserToken = this.expect("{"); body = this.block(open); }
-    this.edge(result, "body", body); this.setEnd(result, this.node(body).end); return result;
+    this.edge(result, EdgeRole.Body, body); this.setEnd(result, this.node(body).end); return result;
   }
   classDeclaration(keyword: ParserToken, allowAnonymous: boolean): number {
     const decorators: number[] = this.decorators();
     const anonymous: boolean = allowAnonymous && (this.check("{") || this.check("<"));
-    const name: ParserToken = anonymous ? this.peek(0) : this.expect("identifier"); const result: number = this.add("ClassDeclaration", keyword, name);
+    const name: ParserToken = anonymous ? this.peek(0) : this.expect("identifier"); const result: number = this.add(NodeKind.ClassDeclaration, keyword, name);
     this.prependDecorators(result, decorators);
-    if (anonymous) this.attr(result, "anonymous", "true"); else this.attr(result, "name", name.lexeme);
+    if (anonymous) this.attr(result, AttributeKind.Anonymous, "true"); else this.attr(result, AttributeKind.Name, name.lexeme);
     this.typeParameters(result, true); this.expect("{");
     while (!this.check("}") && !this.check("eof")) {
       this.skipNewlines(); if (this.check("}") || this.check("eof")) break;
@@ -768,24 +769,24 @@ export class Parser {
         let isReadonly: boolean = this.accept("readonly"); const isStatic: boolean = this.accept("static");
         if (!isReadonly) isReadonly = this.accept("readonly");
         const member: ParserToken = this.expect("identifier");
-        const item: number = this.add("ClassField", member, member); this.attr(item, "name", member.lexeme);
+        const item: number = this.add(NodeKind.ClassField, member, member); this.attr(item, AttributeKind.Name, member.lexeme);
         this.prependDecorators(item, memberDecorators);
-        if (access != "") this.attr(item, "access", access);
-        if (isStatic) this.attr(item, "isStatic", "true");
-        if (isReadonly) this.attr(item, "readonly", "true");
+        if (access != "") this.attr(item, AttributeKind.Access, access);
+        if (isStatic) this.attr(item, AttributeKind.IsStatic, "true");
+        if (isReadonly) this.attr(item, AttributeKind.Readonly, "true");
         if (this.check("(") || this.check("<")) {
-          this.setKind(item, "ClassMethod"); this.typeParameters(item, false); this.parametersInto(item, false, member.lexeme == "constructor" && !isStatic);
+          this.setKind(item, NodeKind.ClassMethod); this.typeParameters(item, false); this.parametersInto(item, false, member.lexeme == "constructor" && !isStatic);
           let returnType: string = "void";
           if (this.accept(":")) returnType = this.typeName();
           else if (member.lexeme != "constructor") this.report("El método necesita un tipo de retorno");
-          this.attr(item, "returnType", returnType);
+          this.attr(item, AttributeKind.ReturnType, returnType);
           const open: ParserToken = this.expect("{"); const body: number = this.block(open);
-          this.edge(item, "body", body); this.setEnd(item, this.node(body).end);
-          this.edge(result, "methods", item);
+          this.edge(item, EdgeRole.Body, body); this.setEnd(item, this.node(body).end);
+          this.edge(result, EdgeRole.Methods, item);
         } else {
-          this.expect(":"); this.attr(item, "type", this.typeName());
-          if (this.accept("=")) this.edge(item, "defaultValue", this.expression());
-          this.setEnd(item, this.terminator()); this.edge(result, "fields", item);
+          this.expect(":"); this.attr(item, AttributeKind.Type, this.typeName());
+          if (this.accept("=")) this.edge(item, EdgeRole.DefaultValue, this.expression());
+          this.setEnd(item, this.terminator()); this.edge(result, EdgeRole.Fields, item);
         }
         if (this.current == before) { this.report("Miembro de clase no reconocido"); this.take(); }
       }
@@ -794,22 +795,22 @@ export class Parser {
   }
   interfaceDeclaration(keyword: ParserToken): number {
     const decorators: number[] = this.decorators();
-    const name: ParserToken = this.expect("identifier"); const result: number = this.add("InterfaceDeclaration", keyword, name);
+    const name: ParserToken = this.expect("identifier"); const result: number = this.add(NodeKind.InterfaceDeclaration, keyword, name);
     this.prependDecorators(result, decorators);
-    this.attr(result, "name", name.lexeme); this.expect("{");
+    this.attr(result, AttributeKind.Name, name.lexeme); this.expect("{");
     while (!this.check("}") && !this.check("eof")) {
       this.skipNewlines(); if (this.check("}") || this.check("eof")) break;
       const before: number = this.current; const memberDecorators: number[] = this.decorators();
       if (this.check("}") || this.check("eof")) { this.report("El decorador necesita un miembro de interface"); break; }
       const member: ParserToken = this.expect("identifier");
-      const item: number = this.add("InterfaceField", member, member); this.attr(item, "name", member.lexeme);
+      const item: number = this.add(NodeKind.InterfaceField, member, member); this.attr(item, AttributeKind.Name, member.lexeme);
       this.prependDecorators(item, memberDecorators);
       if (this.check("(") || this.check("<")) {
-        this.setKind(item, "InterfaceMethod"); this.typeParameters(item, false); this.parametersInto(item, false, false);
-        this.expect(":"); this.attr(item, "returnType", this.typeName()); this.edge(result, "methods", item);
+        this.setKind(item, NodeKind.InterfaceMethod); this.typeParameters(item, false); this.parametersInto(item, false, false);
+        this.expect(":"); this.attr(item, AttributeKind.ReturnType, this.typeName()); this.edge(result, EdgeRole.Methods, item);
       } else {
-        const optional: boolean = this.accept("?"); this.expect(":"); this.attr(item, "type", this.typeName());
-        this.attr(item, "optional", optional ? "true" : "false"); this.edge(result, "fields", item);
+        const optional: boolean = this.accept("?"); this.expect(":"); this.attr(item, AttributeKind.Type, this.typeName());
+        this.attr(item, AttributeKind.Optional, optional ? "true" : "false"); this.edge(result, EdgeRole.Fields, item);
       }
       this.setEnd(item, this.terminator());
       if (this.current == before) { this.report("Miembro de interface no reconocido"); this.take(); }
@@ -818,7 +819,7 @@ export class Parser {
   }
   forStatement(keyword: ParserToken): number {
     const awaited: boolean = this.accept("await"); this.expect("(");
-    const result: number = this.add("ForStatement", keyword, keyword);
+    const result: number = this.add(NodeKind.ForStatement, keyword, keyword);
     let iteration: boolean = false;
     if (this.check("let") || this.check("const")) {
       const saved: number = this.current;
@@ -835,26 +836,26 @@ export class Parser {
       }
       if (iteration) {
         const bindingKeyword: ParserToken = this.take(); const name: ParserToken = this.expect("identifier");
-        const binding: number = this.add("VariableDeclaration", bindingKeyword, name);
-        this.attr(binding, "name", name.lexeme); this.attr(binding, "mutable", bindingKeyword.kind == "let" ? "true" : "false");
-        if (this.accept(":")) this.attr(binding, "declaredType", this.typeName());
+        const binding: number = this.add(NodeKind.VariableDeclaration, bindingKeyword, name);
+        this.attr(binding, AttributeKind.Name, name.lexeme); this.attr(binding, AttributeKind.Mutable, bindingKeyword.kind == "let" ? "true" : "false");
+        if (this.accept(":")) this.attr(binding, AttributeKind.DeclaredType, this.typeName());
         const iterationToken: ParserToken = this.take();
-        this.setKind(result, iterationToken.kind == "of" ? "ForOfStatement" : "ForInStatement");
-        if (iterationToken.kind == "of") this.attr(result, "await", awaited ? "true" : "false");
+        this.setKind(result, iterationToken.kind == "of" ? NodeKind.ForOfStatement : NodeKind.ForInStatement);
+        if (iterationToken.kind == "of") this.attr(result, AttributeKind.Await, awaited ? "true" : "false");
         else if (awaited) this.report("for await requiere of");
-        this.edge(result, "binding", binding);
-        const iterable: number = this.expression(); this.edge(result, iterationToken.kind == "of" ? "iterable" : "target", iterable);
-      } else { this.current = saved; this.edge(result, "initializer", this.variable(true)); }
+        this.edge(result, EdgeRole.Binding, binding);
+        const iterable: number = this.expression(); this.edge(result, iterationToken.kind == "of" ? EdgeRole.Iterable : EdgeRole.Target, iterable);
+      } else { this.current = saved; this.edge(result, EdgeRole.Initializer, this.variable(true)); }
     } else if (!this.accept(";")) {
-      const value: number = this.expression(); const init: number = this.add("ExpressionStatement", this.node(value).start, this.terminator());
-      this.edge(init, "expression", value); this.edge(result, "initializer", init);
+      const value: number = this.expression(); const init: number = this.add(NodeKind.ExpressionStatement, this.node(value).start, this.terminator());
+      this.edge(init, EdgeRole.Expression, value); this.edge(result, EdgeRole.Initializer, init);
     }
     if (!iteration) {
       if (awaited) this.report("for await requiere of");
-      if (!this.check(";")) this.edge(result, "condition", this.expression());
-      this.expect(";"); if (!this.check(")")) this.edge(result, "increment", this.expression());
+      if (!this.check(";")) this.edge(result, EdgeRole.Condition, this.expression());
+      this.expect(";"); if (!this.check(")")) this.edge(result, EdgeRole.Increment, this.expression());
     }
-    this.expect(")"); const body: number = this.statement(false); this.edge(result, "body", body);
+    this.expect(")"); const body: number = this.statement(false); this.edge(result, EdgeRole.Body, body);
     this.setEnd(result, this.node(body).end); return result;
   }
   typeName(): string {
@@ -909,14 +910,14 @@ export class Parser {
   }
   expression(): number {
     const token: ParserToken = this.peek(0);
-    if (!this.enter()) return this.add("ErrorNode", token, token);
+    if (!this.enter()) return this.add(NodeKind.ErrorNode, token, token);
     let result: number = -1;
     if (this.arrowStart()) result = this.arrow();
     else result = this.assignment();
     if (this.accept("?")) {
       const yes: number = this.expression(); this.expect(":"); const no: number = this.expression();
-      const conditional: number = this.add("TernaryExpression", this.node(result).start, this.node(no).end);
-      this.edge(conditional, "condition", result); this.edge(conditional, "thenBranch", yes); this.edge(conditional, "elseBranch", no); result = conditional;
+      const conditional: number = this.add(NodeKind.TernaryExpression, this.node(result).start, this.node(no).end);
+      this.edge(conditional, EdgeRole.Condition, result); this.edge(conditional, EdgeRole.ThenBranch, yes); this.edge(conditional, EdgeRole.ElseBranch, no); result = conditional;
     }
     this.leave(); return result;
   }
@@ -940,12 +941,12 @@ export class Parser {
   }
   arrow(): number {
     const isAsync: boolean = this.accept("async"); const open: ParserToken = this.peek(0);
-    const result: number = this.add("ArrowFunctionExpression", open, open);
-    this.attr(result, "isAsync", isAsync ? "true" : "false"); this.parametersInto(result, true, false);
-    if (this.accept(":")) this.attr(result, "returnType", this.typeName());
+    const result: number = this.add(NodeKind.ArrowFunctionExpression, open, open);
+    this.attr(result, AttributeKind.IsAsync, isAsync ? "true" : "false"); this.parametersInto(result, true, false);
+    if (this.accept(":")) this.attr(result, AttributeKind.ReturnType, this.typeName());
     this.expect("=>"); let body: number = -1;
     if (this.accept("{")) body = this.block(this.previous()); else body = this.expression();
-    this.edge(result, "body", body); this.setEnd(result, this.node(body).end); return result;
+    this.edge(result, EdgeRole.Body, body); this.setEnd(result, this.node(body).end); return result;
   }
   assignment(): number {
     const left: number = this.binary(1); const op: ParserToken = this.peek(0);
@@ -954,11 +955,11 @@ export class Parser {
     this.take();
     if (!this.enter()) return left;
     const right: number = this.assignment(); this.leave();
-    const kind: string = this.node(left).kind;
-    if (kind != "IdentifierExpression" && kind != "MemberExpression" && kind != "IndexExpression") this.report("El lado izquierdo de una asignación debe ser una variable, campo o índice");
-    const result: number = this.add(op.kind == "=" ? "AssignmentExpression" : "CompoundAssignmentExpression", this.node(left).start, this.node(right).end);
-    if (op.kind != "=") this.attr(result, "operator", op.lexeme);
-    this.edge(result, "target", left); this.edge(result, "value", right); return result;
+    const kind: NodeKind = this.node(left).kind;
+    if (kind != NodeKind.IdentifierExpression && kind != NodeKind.MemberExpression && kind != NodeKind.IndexExpression) this.report("El lado izquierdo de una asignación debe ser una variable, campo o índice");
+    const result: number = this.add(op.kind == "=" ? NodeKind.AssignmentExpression : NodeKind.CompoundAssignmentExpression, this.node(left).start, this.node(right).end);
+    if (op.kind != "=") this.attr(result, AttributeKind.Operator, op.lexeme);
+    this.edge(result, EdgeRole.Target, left); this.edge(result, EdgeRole.Value, right); return result;
   }
   binaryKind(): string {
     const first: ParserToken = this.peek(0); const second: ParserToken = this.peek(1);
@@ -980,30 +981,30 @@ export class Parser {
       const kind: string = this.binaryKind(); const op: ParserToken = this.take(); if (kind != op.kind) this.take();
       if (!this.enter()) return left;
       let right: number = -1;
-      if (kind == "instanceof") { const annotation: string = this.typeName(); right = this.add("IdentifierExpression", op, op); this.attr(right, "name", annotation); }
+      if (kind == "instanceof") { const annotation: string = this.typeName(); right = this.add(NodeKind.IdentifierExpression, op, op); this.attr(right, AttributeKind.Name, annotation); }
       else right = this.binary(this.precedence(kind) + 1);
-      this.leave(); const parent: number = this.add("BinaryExpression", this.node(left).start, this.node(right).end);
-      this.attr(parent, "operator", kind); this.edge(parent, "left", left); this.edge(parent, "right", right); left = parent;
+      this.leave(); const parent: number = this.add(NodeKind.BinaryExpression, this.node(left).start, this.node(right).end);
+      this.attr(parent, AttributeKind.Operator, kind); this.edge(parent, EdgeRole.Left, left); this.edge(parent, EdgeRole.Right, right); left = parent;
     }
     return left;
   }
   unary(): number {
     const op: ParserToken = this.peek(0);
     if (op.kind == "!" || op.kind == "-" || op.kind == "+" || op.kind == "~" || op.kind == "typeof" || op.kind == "await") {
-      this.take(); if (!this.enter()) return this.add("ErrorNode", op, op);
+      this.take(); if (!this.enter()) return this.add(NodeKind.ErrorNode, op, op);
       const operand: number = this.unary(); this.leave();
-      const result: number = this.add(op.kind == "await" ? "AwaitExpression" : "UnaryExpression", op, this.node(operand).end);
-      if (op.kind != "await") this.attr(result, "operator", op.lexeme);
-      this.edge(result, "operand", operand); return result;
+      const result: number = this.add(op.kind == "await" ? NodeKind.AwaitExpression : NodeKind.UnaryExpression, op, this.node(operand).end);
+      if (op.kind != "await") this.attr(result, AttributeKind.Operator, op.lexeme);
+      this.edge(result, EdgeRole.Operand, operand); return result;
     }
     const operand: number = this.postfix();
     if (this.check("as") || this.check("satisfies")) {
       const op: ParserToken = this.take(); const annotation: string = this.typeName();
       const next: ParserToken = this.peek(0);
       const end: ParserToken = new ParserToken("", "", next.offset, next.line, next.column, next.offset, next.line, next.column);
-      const result: number = this.add(op.kind == "as" ? "AsExpression" : "SatisfiesExpression", this.node(operand).start, end);
-      this.attr(result, op.kind == "as" ? "targetType" : "declaredType", annotation);
-      this.edge(result, op.kind == "as" ? "expression" : "operand", operand); return result;
+      const result: number = this.add(op.kind == "as" ? NodeKind.AsExpression : NodeKind.SatisfiesExpression, this.node(operand).start, end);
+      this.attr(result, op.kind == "as" ? AttributeKind.TargetType : AttributeKind.DeclaredType, annotation);
+      this.edge(result, op.kind == "as" ? EdgeRole.Expression : EdgeRole.Operand, operand); return result;
     }
     return operand;
   }
@@ -1022,19 +1023,19 @@ export class Parser {
   typeArguments(owner: number): void {
     this.expect("<");
     while (!this.check(">") && !this.check("eof")) {
-      this.attr(owner, "typeArgument", this.typeName()); if (!this.accept(",")) break;
+      this.attr(owner, AttributeKind.TypeArgument, this.typeName()); if (!this.accept(",")) break;
     }
     this.expect(">");
   }
-  argumentsInto(owner: number, role: string, close: string): void {
+  argumentsInto(owner: number, role: EdgeRole, close: string): void {
     while (!this.check(close) && !this.check("eof")) {
       const before: number = this.current; let value: number = -1;
-      if (role != "elements" && this.check("identifier") && this.peek(1).kind == ":") {
+      if (role != EdgeRole.Elements && this.check("identifier") && this.peek(1).kind == ":") {
         const name: ParserToken = this.take(); this.take(); const child: number = this.expression();
-        value = this.add("NamedArgumentExpression", this.node(child).start, this.node(child).end);
-        this.attr(value, "name", name.lexeme); this.edge(value, "value", child);
+        value = this.add(NodeKind.NamedArgumentExpression, this.node(child).start, this.node(child).end);
+        this.attr(value, AttributeKind.Name, name.lexeme); this.edge(value, EdgeRole.Value, child);
       } else if (this.accept("...")) {
-        const child: number = this.expression(); value = this.add("SpreadElement", this.node(child).start, this.node(child).end); this.edge(value, "expression", child);
+        const child: number = this.expression(); value = this.add(NodeKind.SpreadElement, this.node(child).start, this.node(child).end); this.edge(value, EdgeRole.Expression, child);
       } else value = this.expression();
       this.edge(owner, role, value);
       if (this.current == before || !this.accept(",")) break;
@@ -1046,49 +1047,49 @@ export class Parser {
     let result: number = this.primary();
     let scanning: boolean = true;
     while (scanning && !this.check("eof")) {
-      if (this.check("(") || (this.node(result).kind == "IdentifierExpression" && this.genericFollower() == "(")) {
-        const parent: number = this.add("CallExpression", this.node(result).start, this.node(result).end);
-        if (this.node(result).kind != "IdentifierExpression") this.report("Solo se pueden invocar funciones por nombre");
-        this.attr(parent, "callee", this.get(result, "name"));
+      if (this.check("(") || (this.node(result).kind == NodeKind.IdentifierExpression && this.genericFollower() == "(")) {
+        const parent: number = this.add(NodeKind.CallExpression, this.node(result).start, this.node(result).end);
+        if (this.node(result).kind != NodeKind.IdentifierExpression) this.report("Solo se pueden invocar funciones por nombre");
+        this.attr(parent, AttributeKind.Callee, this.get(result, AttributeKind.Name));
         if (this.check("<")) this.typeArguments(parent);
-        this.expect("("); this.argumentsInto(parent, "args", ")"); this.setEnd(parent, this.previous()); result = parent;
-      } else if (this.node(result).kind == "IdentifierExpression" && this.genericFollower() == ".") {
-        this.setKind(result, "GenericIdentifierExpression"); this.typeArguments(result);
+        this.expect("("); this.argumentsInto(parent, EdgeRole.Args, ")"); this.setEnd(parent, this.previous()); result = parent;
+      } else if (this.node(result).kind == NodeKind.IdentifierExpression && this.genericFollower() == ".") {
+        this.setKind(result, NodeKind.GenericIdentifierExpression); this.typeArguments(result);
       } else if (this.check(".") || this.check("?.")) {
         const optional: boolean = this.take().kind == "?.";
         let member: ParserToken = this.peek(0);
         if (this.check("delete") || this.check("default")) member = this.take(); else member = this.expect("identifier");
-        const parent: number = this.add("MemberExpression", this.node(result).start, member);
-        this.edge(parent, "object", result); this.attr(parent, "optional", optional ? "true" : "false");
+        const parent: number = this.add(NodeKind.MemberExpression, this.node(result).start, member);
+        this.edge(parent, EdgeRole.Object, result); this.attr(parent, AttributeKind.Optional, optional ? "true" : "false");
         if (this.check("<")) this.typeArguments(parent);
         if (this.accept("(")) {
-          this.setKind(parent, "MemberCallExpression"); this.attr(parent, "method", member.lexeme);
-          this.argumentsInto(parent, "args", ")"); this.setEnd(parent, this.previous());
-        } else { this.attr(parent, "member", member.lexeme); if (this.get(parent, "typeArgument") != "") this.report("Los argumentos de tipo requieren una llamada"); }
+          this.setKind(parent, NodeKind.MemberCallExpression); this.attr(parent, AttributeKind.Method, member.lexeme);
+          this.argumentsInto(parent, EdgeRole.Args, ")"); this.setEnd(parent, this.previous());
+        } else { this.attr(parent, AttributeKind.Member, member.lexeme); if (this.get(parent, AttributeKind.TypeArgument) != "") this.report("Los argumentos de tipo requieren una llamada"); }
         result = parent;
       } else if (this.accept("[")) {
         const cursor: number = this.expression(); const close: ParserToken = this.expect("]");
-        const parent: number = this.add("IndexExpression", this.node(result).start, close);
-        this.edge(parent, "object", result); this.edge(parent, "index", cursor); result = parent;
+        const parent: number = this.add(NodeKind.IndexExpression, this.node(result).start, close);
+        this.edge(parent, EdgeRole.Object, result); this.edge(parent, EdgeRole.Index, cursor); result = parent;
       } else scanning = false;
     }
     return result;
   }
   templateLiteral(start: ParserToken): number {
-    const result: number = this.add("TemplateLiteralExpression", start, start);
+    const result: number = this.add(NodeKind.TemplateLiteralExpression, start, start);
     let scanning: boolean = true;
     while (scanning && !this.check("eof")) {
       if (!this.check("template-text")) { this.report("Se esperaba texto de template"); break; }
       const part: ParserToken = this.take();
-      const segment: number = this.add("TemplatePart", part, part);
-      this.attr(segment, "value", part.lexeme); this.edge(result, "parts", segment);
+      const segment: number = this.add(NodeKind.TemplatePart, part, part);
+      this.attr(segment, AttributeKind.Value, part.lexeme); this.edge(result, EdgeRole.Parts, segment);
       if (!this.accept("interpolation-start")) { scanning = false; }
       else {
         this.skipNewlines();
         if (this.check("interpolation-end")) {
           this.report("La interpolación necesita una expresión");
-          const missing: number = this.add("ErrorNode", this.peek(0), this.peek(0)); this.edge(result, "expressions", missing);
-        } else this.edge(result, "expressions", this.expression());
+          const missing: number = this.add(NodeKind.ErrorNode, this.peek(0), this.peek(0)); this.edge(result, EdgeRole.Expressions, missing);
+        } else this.edge(result, EdgeRole.Expressions, this.expression());
         this.skipNewlines();
         if (!this.check("interpolation-end")) {
           this.report("Se esperaba fin de interpolación");
@@ -1102,26 +1103,26 @@ export class Parser {
   primary(): number {
     const token: ParserToken = this.take();
     if (token.kind == "template-start") return this.templateLiteral(token);
-    if (token.kind == "template-error") { this.reportAt(token, token.lexeme); return this.add("ErrorNode", token, token); }
+    if (token.kind == "template-error") { this.reportAt(token, token.lexeme); return this.add(NodeKind.ErrorNode, token, token); }
     if (token.kind == "number" || token.kind == "string" || token.kind == "true" || token.kind == "false") {
-      const result: number = this.add("LiteralExpression", token, token);
+      const result: number = this.add(NodeKind.LiteralExpression, token, token);
       const annotation: string = token.kind == "number" ? "number" : token.kind == "string" ? "string" : "boolean";
-      this.attr(result, "literalType", annotation);
-      this.attr(result, annotation == "number" ? "raw" : "value", token.lexeme); return result;
+      this.attr(result, AttributeKind.LiteralType, annotation);
+      this.attr(result, annotation == "number" ? AttributeKind.Raw : AttributeKind.Value, token.lexeme); return result;
     }
-    if (token.kind == "identifier") { const result: number = this.add("IdentifierExpression", token, token); this.attr(result, "name", token.lexeme); return result; }
+    if (token.kind == "identifier") { const result: number = this.add(NodeKind.IdentifierExpression, token, token); this.attr(result, AttributeKind.Name, token.lexeme); return result; }
     if (token.kind == "(") { const result: number = this.expression(); this.expect(")"); return result; }
     if (token.kind == "[") {
-      const result: number = this.add("ArrayLiteralExpression", token, token); this.argumentsInto(result, "elements", "]"); this.setEnd(result, this.previous()); return result;
+      const result: number = this.add(NodeKind.ArrayLiteralExpression, token, token); this.argumentsInto(result, EdgeRole.Elements, "]"); this.setEnd(result, this.previous()); return result;
     }
     if (token.kind == "{") {
-      const result: number = this.add("ObjectLiteralExpression", token, token);
+      const result: number = this.add(NodeKind.ObjectLiteralExpression, token, token);
       while (!this.check("}") && !this.check("eof")) {
         const key: ParserToken = this.expect("identifier"); let value: number = -1;
         if (this.accept(":")) value = this.expression();
-        else { value = this.add("IdentifierExpression", key, key); this.attr(value, "name", key.lexeme); }
-        const property: number = this.add("ObjectProperty", key, this.node(value).end);
-        this.attr(property, "key", key.lexeme); this.edge(property, "value", value); this.edge(result, "properties", property);
+        else { value = this.add(NodeKind.IdentifierExpression, key, key); this.attr(value, AttributeKind.Name, key.lexeme); }
+        const property: number = this.add(NodeKind.ObjectProperty, key, this.node(value).end);
+        this.attr(property, AttributeKind.Key, key.lexeme); this.edge(property, EdgeRole.Value, value); this.edge(result, EdgeRole.Properties, property);
         if (!this.accept(",")) break;
       }
       this.setEnd(result, this.expect("}")); return result;
@@ -1129,17 +1130,17 @@ export class Parser {
     if (token.kind == "new") {
       let name: string = this.expect("identifier").lexeme;
       while (this.accept(".")) { if (this.check("default")) name = name + "." + this.take().lexeme; else name = name + "." + this.expect("identifier").lexeme; }
-      const result: number = this.add("NewExpression", token, token);
+      const result: number = this.add(NodeKind.NewExpression, token, token);
       if (this.accept("<")) {
         let args: string[] = [];
         while (!this.check(">") && !this.check("eof")) { args.push(this.typeName()); if (!this.accept(",")) break; }
         this.expect(">"); name = name + "<" + args.join(",") + ">";
       }
-      this.attr(result, "className", name); this.expect("("); this.argumentsInto(result, "args", ")"); this.setEnd(result, this.previous()); return result;
+      this.attr(result, AttributeKind.ClassName, name); this.expect("("); this.argumentsInto(result, EdgeRole.Args, ")"); this.setEnd(result, this.previous()); return result;
     }
     if (token.kind == "template") this.reportAt(token, "El token template requiere preparación léxica: template-start/text/end e interpolaciones");
     else this.report("Se esperaba una expresión");
-    return this.add("ErrorNode", token, token);
+    return this.add(NodeKind.ErrorNode, token, token);
   }
   inspect(): string { return formatAst(this.parseProgram()); }
 }
@@ -1164,11 +1165,11 @@ function spanAst(start: ParserToken, end: ParserToken): string {
 export function formatAst(result: ParseResult): string {
   let output: string[] = ["{\"root\":" + numberToString(result.root) + ",\"nodes\":["]; let separator: string = "";
   for (const item of result.nodes) {
-    output.push(separator + "{\"kind\":" + quoteAst(item.kind) + ",\"span\":" + spanAst(item.start, item.end) + ",\"attributes\":[");
+    output.push(separator + "{\"kind\":" + quoteAst(nodeKindName(item.kind)) + ",\"span\":" + spanAst(item.start, item.end) + ",\"attributes\":[");
     let comma: string = "";
-    for (const field of item.attributes) { output.push(comma + "{\"name\":" + quoteAst(field.name) + ",\"value\":" + quoteAst(field.value) + "}"); comma = ","; }
+    for (const field of item.attributes) { output.push(comma + "{\"name\":" + quoteAst(attributeKindName(field.name)) + ",\"value\":" + quoteAst(field.value) + "}"); comma = ","; }
     output.push("],\"edges\":["); comma = "";
-    for (const edge of item.edges) { output.push(comma + "{\"role\":" + quoteAst(edge.role) + ",\"node\":" + numberToString(edge.node) + "}"); comma = ","; }
+    for (const edge of item.edges) { output.push(comma + "{\"role\":" + quoteAst(edgeRoleName(edge.role)) + ",\"node\":" + numberToString(edge.node) + "}"); comma = ","; }
     output.push("]}"); separator = ",";
   }
   output.push("],\"diagnostics\":["); separator = "";

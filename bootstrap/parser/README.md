@@ -54,8 +54,27 @@ crea un parser nuevo; una instancia de `Parser` se usa para un único parseo.
 
 El AST es una arena: cada `AstNode` tiene `kind`, span, atributos escalares y
 aristas `{role,node}` hacia índices de la misma arena. No utiliza fragmentos de
-código ni referencias circulares. Los atributos se almacenan como strings;
-`mutable`, por ejemplo, vale `"true"` o `"false"`. `typeArgument` puede repetirse.
+código ni referencias circulares. El vocabulario cerrado está en
+[`ast-schema.ets`](./ast-schema.ets): `AstNode.kind` usa `NodeKind`,
+`AstEdge.role` usa `EdgeRole` y `AstAttribute.name` usa `AttributeKind`.
+Los constructores y accesores reciben esos enums, por ejemplo:
+
+```ts
+node.kind == NodeKind.VariableDeclaration;
+node.get(AttributeKind.Name);
+node.edge(EdgeRole.Initializer, expressionId);
+```
+
+Los valores de los atributos continúan siendo strings: `mutable`, por ejemplo,
+vale `"true"` o `"false"`. `AttributeKind.TypeArgument` puede repetirse.
+Las categorías de tokens, nombres fuente y tipos no usan estos enums.
+
+`nodeKindName`, `edgeRoleName` y `attributeKindName` conservan los nombres
+anteriores en JSON, caché y huellas semánticas; los ordinales internos no forman
+parte del formato persistente. Las funciones `parseNodeKind`, `parseEdgeRole` y
+`parseAttributeKind` devuelven `Invalid` para nombres desconocidos. La caché
+rechaza esas entradas y vuelve a analizar el fuente. Los enums distinguen las
+categorías, pero no verifican por sí solos los hijos permitidos por cada nodo.
 Los literales numéricos ordinarios conservan `raw` para resolver su valor y
 precisión en una fase futura. Enum y discriminadores numéricos de union usan
 `value` como texto decimal canónico exacto; los incrementos de enum se calculan
