@@ -33,7 +33,7 @@ try {
     let parsed;
     try{parsed=JSON.parse(run.stdout);}catch{throw new Error(`${c.id}: invalid native output: ${run.stdout.slice(-1000)}`);}
     if(typeof parsed.success !== 'boolean' || !Array.isArray(parsed.diagnostics) || parsed.success !== (run.status===0))throw new Error(`${c.id}: inconsistent result`);
-    const diagnostics=parsed.diagnostics.map((d:{phase:string;message:string})=>({phase:d.phase,message:d.message}));
+    const diagnostics=parsed.diagnostics.map((d:{phase:string;code:string;message:string})=>({phase:d.phase,message:`${d.code}: ${d.message}`}));
     const unsupported=diagnostics.some((d:{phase:string;message:string})=>/pendiente|no soportad/i.test(d.message));
     // Negative cases must reach semantics, not fail on unrelated syntax/name errors.
     const semanticRejection=diagnostics.length>0 && diagnostics.every((d:{phase:string;message:string})=>d.phase===(c.rejectionPhase??'checker')) && !unsupported

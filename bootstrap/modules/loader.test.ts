@@ -1,3 +1,4 @@
+import {assertDiagnostic} from "../frontend/diagnostic-contract.ts";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -20,7 +21,7 @@ function put(file: string, text: string) { mkdirSync(resolve(file, ".."), { recu
 function invoke(entry: string, flags: string[] = [], status = 0): any[] {
   const result = spawnSync(binary, [entry, ...flags], { encoding: "utf8", timeout: 30000, maxBuffer: 64 * 1024 * 1024 });
   assert.ifError(result.error); assert.equal(result.status, status, result.stderr + result.stdout.slice(0, 3000));
-  assert.equal(result.stderr, ""); return result.stdout.trim().split("\n").map(line => JSON.parse(line));
+  assert.equal(result.stderr, ""); return result.stdout.trim().split("\n").map(line => {const g=JSON.parse(line);g.diagnostics.forEach(assertDiagnostic);for(const m of g.modules)m.source.diagnostics.forEach(assertDiagnostic);return g;});
 }
 function run(f: ReturnType<typeof fixture>, flags: string[] = [], status = 0) { return invoke(f.entry, ["--cache", f.cache, ...flags], status)[0]; }
 function names(graph: any) { return graph.modules.map((m: any) => basename(m.file)); }

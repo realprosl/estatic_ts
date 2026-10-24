@@ -25,6 +25,8 @@ La demostración no ejecuta el programa analizado: muestra tokens, AST y errores
 - `tokens`: formato `ParserToken`, conservando los lexemas y spans UTF-16.
 - `ast`: el `ParseResult` del parser aislado, sin mezclar módulos o símbolos.
 - `diagnostics`: errores con archivo, fase (`lexer`/`parser`), mensaje y posición.
+  Usan el contrato común [ets-diagnostic-1](DIAGNOSTICS.md), con código,
+  severidad, intervalo UTF-16 y procedencia generada cuando corresponda.
 - `parsed`: indica si se ejecutó el parser. Ante errores léxicos es false y
   `ast` contiene `{root:-1,nodes:[],diagnostics:[]}`. Se evita una cascada de
   errores sintácticos sobre tokens incompletos.

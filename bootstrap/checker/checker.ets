@@ -24,8 +24,9 @@ export class NativeChecker {
   report(module: number, id: number, message: string): void {
     // Suppress cascades with the exact same owner/message, not independent errors.
     const token = this.node(module, id).start;
-    for (const d of this.result.diagnostics) if (d.file == this.graph.modules[module].file && d.token.offset == token.offset && d.message == message && d.generatedId == this.node(module,id).generatedId && d.generatedToken.offset == this.node(module,id).generatedStart.offset) return;
-    this.result.diagnostics.push(diagnosticAt("checker", message, this.graph.modules[module].file, this.node(module,id)));
+    const candidate = diagnosticAt("checker",message,this.graph.modules[module].file,this.node(module,id));
+    for (const d of this.result.diagnostics) if (d.file == this.graph.modules[module].file && d.token.offset == token.offset && d.code == candidate.code && d.message == candidate.message && d.generatedId == this.node(module,id).generatedId && d.generatedToken.offset == this.node(module,id).generatedStart.offset) return;
+    this.result.diagnostics.push(candidate);
   }
   unsupported(module: number, id: number, feature: string): string { this.report(module, id, "Comprobación nativa pendiente: " + feature); return "!error"; }
   compatible(actual: string, expected: string): boolean {

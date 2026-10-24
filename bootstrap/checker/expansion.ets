@@ -142,14 +142,14 @@ export class NativeExpansion {
     const site = this.node(module,call);
     this.graph.generatedSources.push(new GeneratedSource(sourceId,module,call,symbol.module,selected,parent,value.text,site.start,site.end));
     if (!parsed.success) {
-      for (const d of parsed.diagnostics) { let diagnostic = new SourceDiagnostic("checker","ETSGEN_GENERATED_PARSE: "+d.message,this.graph.modules[module].file,site.start); diagnostic.generatedId = sourceId; diagnostic.generatedToken = d.token; this.graph.diagnostics.push(diagnostic); }
+      for (const d of parsed.diagnostics) { let diagnostic = new SourceDiagnostic("checker","ETSGEN_GENERATED_PARSE: "+d.message,this.graph.modules[module].file,site.start); diagnostic.generatedId = sourceId; diagnostic.endToken = site.end; diagnostic.generatedToken = d.token; diagnostic.generatedEndToken = d.endToken; this.graph.diagnostics.push(diagnostic); }
       this.graph.success = false; return false;
     }
     if (!this.hygiene(fragment,module,call,symbol.module,sourceId)) return false;
     const statement: number = this.binding.files[module].parents[call]; const container: number = this.binding.files[module].parents[statement];
     const offset: number = this.graph.modules[module].cached.result.ast.nodes.length;
     for (const original of fragment.modules[0].cached.result.ast.nodes) {
-      let n = original; n.generatedId = sourceId; n.generatedStart = original.start; n.attr("generatedSource",sourceId); n.attr("generatedOffset",numberToString(original.start.offset)); n.attr("generatedEndOffset",numberToString(original.end.endOffset)); n.attr("generatedLine",numberToString(original.start.line)); n.attr("generatedColumn",numberToString(original.start.column));
+      let n = original; n.generatedId = sourceId; n.generatedStart = original.start; n.generatedEnd = original.end; n.attr("generatedSource",sourceId); n.attr("generatedOffset",numberToString(original.start.offset)); n.attr("generatedEndOffset",numberToString(original.end.endOffset)); n.attr("generatedLine",numberToString(original.start.line)); n.attr("generatedColumn",numberToString(original.start.column));
       n.start = site.start; n.end = site.end;
       for (let e: number = 0; e < n.edges.length; e = e+1) n.edges[e].node = n.edges[e].node+offset;
       this.graph.modules[module].cached.result.ast.nodes.push(n);

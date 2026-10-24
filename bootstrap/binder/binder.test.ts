@@ -1,3 +1,4 @@
+import {assertDiagnostic} from "../frontend/diagnostic-contract.ts";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
@@ -8,7 +9,7 @@ const directory=mkdtempSync(join(root,"build-binder-test-"));let binary:string;
 before(async()=>{binary=await buildLoader(join(directory,"binary"),"bootstrap/binder/demo.ets",true);});
 after(()=>rmSync(directory,{recursive:true,force:true}));
 function fixture(files:Record<string,string>){const dir=mkdtempSync(join(directory,"project-"));for(const [name,text]of Object.entries(files)){mkdirSync(dirname(join(dir,name)),{recursive:true});writeFileSync(join(dir,name),text);}return{dir,entry:join(dir,"main.ets"),cache:join(dir,"cache")};}
-function run(f:ReturnType<typeof fixture>,status=0,extra:string[]=[]){const p=spawnSync(binary,[f.entry,"--cache",f.cache,...extra],{encoding:"utf8",timeout:60000,maxBuffer:64*1024*1024});assert.ifError(p.error);assert.equal(p.status,status,p.stderr+p.stdout.slice(-5000));assert.equal(p.stderr,"");return JSON.parse(p.stdout);}
+function run(f:ReturnType<typeof fixture>,status=0,extra:string[]=[]){const p=spawnSync(binary,[f.entry,"--cache",f.cache,...extra],{encoding:"utf8",timeout:60000,maxBuffer:64*1024*1024});assert.ifError(p.error);assert.equal(p.status,status,p.stderr+p.stdout.slice(-5000));assert.equal(p.stderr,"");const result=JSON.parse(p.stdout);result.diagnostics.forEach(assertDiagnostic);return result;}
 function bind(source:string,status=0,files:Record<string,string>={}){return run(fixture({"main.ets":source,...files}),status);}
 function refs(g:any,name:string){return g.references.filter((r:any)=>r.name===name&&!r.deferred);}
 function targets(g:any,name:string){return refs(g,name).filter((r:any)=>r.target>=0).map((r:any)=>g.symbols[r.target]);}

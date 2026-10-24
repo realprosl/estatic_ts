@@ -2,12 +2,12 @@ import { CheckResult } from "./checker";
 import { BindingResult } from "../binder/binder";
 import { ModuleGraph } from "../modules/loader";
 import { formatBinding, bindingBoolean, bindingNumbers } from "../binder/format";
-import { quoteSource } from "../frontend/frontend";
+import { quoteSource, formatDiagnostic } from "../frontend/frontend";
 import { formatAst } from "../parser/parser";
 import { syntaxIdentity } from "../modules/platform";
 export function formatChecked(result: CheckResult, binding: BindingResult, graph: ModuleGraph): string {
   let entryId: string = ""; for (const record of result.moduleRecords) if (record.file == graph.entry) entryId = record.id;
-  let output: string[] = ["{\"format\":\"ets-checked-1\",\"frontendIdentity\":" + quoteSource(syntaxIdentity()) + ",\"entry\":" + quoteSource(graph.entry) + ",\"entryModuleId\":" + quoteSource(entryId) + ",\"success\":" + bindingBoolean(result.success) + ",\"binding\":" + formatBinding(binding,graph) + ",\"files\":["]; let comma: string = "";
+  let output: string[] = ["{\"format\":\"ets-checked-2\",\"frontendIdentity\":" + quoteSource(syntaxIdentity()) + ",\"entry\":" + quoteSource(graph.entry) + ",\"entryModuleId\":" + quoteSource(entryId) + ",\"success\":" + bindingBoolean(result.success) + ",\"binding\":" + formatBinding(binding,graph) + ",\"files\":["]; let comma: string = "";
   for (let m: number = 0; m < result.files.length; m = m + 1) {
     const file = result.files[m]; let types: string[] = []; for (const valueType of file.types) types.push(quoteSource(valueType));
     let matchCoverage: string[] = []; for (const coverage of file.matchCoverage) matchCoverage.push(quoteSource(coverage));
@@ -37,9 +37,7 @@ export function formatChecked(result: CheckResult, binding: BindingResult, graph
   }
   output.push("],\"diagnostics\":["); comma = "";
   for (const d of result.diagnostics) {
-    let generated: string = "";
-    if (d.generatedId != "") generated = ",\"generated\":{\"sourceId\":" + quoteSource(d.generatedId) + ",\"offset\":" + numberToString(d.generatedToken.offset) + ",\"line\":" + numberToString(d.generatedToken.line) + ",\"column\":" + numberToString(d.generatedToken.column) + "}";
-    output.push(comma + "{\"file\":" + quoteSource(d.file) + ",\"phase\":" + quoteSource(d.phase) + ",\"message\":" + quoteSource(d.message) + ",\"offset\":" + numberToString(d.token.offset) + ",\"line\":" + numberToString(d.token.line) + ",\"column\":" + numberToString(d.token.column) + generated + "}"); comma = ",";
+    output.push(comma + formatDiagnostic(d)); comma = ",";
   }
   output.push("],\"captures\":["); comma = "";
   for (const c of result.captures) {

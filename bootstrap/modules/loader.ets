@@ -1,5 +1,5 @@
 import { ParserToken, AstNode, ParseResult } from "../parser/parser";
-import { SourceDiagnostic, SourceResult, quoteSource, formatSource } from "../frontend/frontend";
+import { SourceDiagnostic, SourceResult, quoteSource, formatSource, formatDiagnostic } from "../frontend/frontend";
 import { canonicalFile, readSnapshot } from "./platform";
 import { SyntaxCache, CachedSource, FileRecord } from "./syntax-cache";
 
@@ -172,9 +172,7 @@ export function formatGraph(graph: ModuleGraph): string {
   }
   parts.push("],\"diagnostics\":["); separator = "";
   for (const diagnostic of graph.diagnostics) {
-    parts.push(separator + "{\"file\":" + quoteSource(diagnostic.file) + ",\"phase\":" + quoteSource(diagnostic.phase)
-      + ",\"message\":" + quoteSource(diagnostic.message) + ",\"offset\":" + numberToString(diagnostic.token.offset)
-      + ",\"line\":" + numberToString(diagnostic.token.line) + ",\"column\":" + numberToString(diagnostic.token.column) + "}"); separator = ",";
+    parts.push(separator + formatDiagnostic(diagnostic)); separator = ",";
   }
   parts.push("]}"); return parts.join("");
 }

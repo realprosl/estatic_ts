@@ -53,6 +53,10 @@ compartidas, evitando dependencias circulares. `CheckResult` devuelve:
   procedencia del retorno y obligaciones de préstamos; ver [EFFECTS.md](./EFFECTS.md).
 - `diagnostics`: fase `checker`, archivo canónico y posición UTF-16 original.
   Los errores previos se conservan e impiden crear las tablas tipadas.
+  Todas las fases usan [ets-diagnostic-1](../frontend/DIAGNOSTICS.md): código y
+  severidad separados, mensaje sin prefijo, intervalos completos y procedencia
+  generada. La salida de proyecto es `ets-checked-2`; las coordenadas planas
+  se mantienen como alias de compatibilidad.
 - `success`: no hubo errores en las comprobaciones de este núcleo. **No acredita
   una prueba completa de memoria/flujo más allá de las reglas** descritas abajo.
 

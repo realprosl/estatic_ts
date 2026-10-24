@@ -19,10 +19,10 @@ export class AstEdge {
   constructor(role: string, node: number) { this.role = role; this.node = node; }
 }
 export class AstNode {
-  kind: string; start: ParserToken; end: ParserToken; analysisStart: number; analysisEnd: number; generatedId: string; generatedStart: ParserToken;
+  kind: string; start: ParserToken; end: ParserToken; analysisStart: number; analysisEnd: number; generatedId: string; generatedStart: ParserToken; generatedEnd: ParserToken;
   attributes: AstAttribute[]; edges: AstEdge[];
   constructor(kind: string, start: ParserToken, end: ParserToken) {
-    this.kind = kind; this.start = start; this.end = end; this.attributes = []; this.edges = []; this.analysisStart = -1; this.analysisEnd = -1; this.generatedId = ""; this.generatedStart = start;
+    this.kind = kind; this.start = start; this.end = end; this.attributes = []; this.edges = []; this.analysisStart = -1; this.analysisEnd = -1; this.generatedId = ""; this.generatedStart = start; this.generatedEnd = end;
   }
   attr(name: string, value: string): void { this.attributes.push(new AstAttribute(name, value)); }
   edge(role: string, node: number): void { this.edges.push(new AstEdge(role, node)); }
