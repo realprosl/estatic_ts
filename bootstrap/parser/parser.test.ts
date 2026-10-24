@@ -1112,3 +1112,26 @@ for(const[source,expected]of [
  assert.equal(alias.attributes.find(a=>a.name==='type')?.value,expected);
 });
 for(const source of ['type Q=typeof ns.;','type Q=typeof ns..value;','type Q=typeof ns.value[;'])test(`bootstrap parser rejects malformed type query: ${source}`,()=>assert.ok(native(source).diagnostics.length>0));
+
+for(const[source,expected]of [
+ ['type F=((x:number)=>number)|string;','((number)=>number) | string'],
+ ['type F=(number|string)[];','(number | string)[]'],
+ ['type F=((x:number)=>number|string)[];','((number)=>number | string)[]'],
+] as const)test(`frontend closure parser groups type expressions: ${source}`,()=>{
+ const result=native(source);assert.deepEqual(result.diagnostics,[]);const alias=result.nodes.find(n=>n.kind==='TypeAliasDeclaration');assert.ok(alias);assert.equal(alias.attributes.find(a=>a.name==='type')?.value,expected);
+});
+for(const source of ['type F=(number|string;','type F=(() =>number;','type F=(number|)[];'])test(`frontend closure parser rejects incomplete grouping: ${source}`,()=>assert.ok(native(source).diagnostics.length>0));
+
+test('native legacy union preserves generic parameters and spans', () => {
+  const source = 'union<T extends number = number> U = Some(T)|None;';
+  const result = native(source);
+  assert.deepEqual(result.diagnostics, []);
+  const declaration = result.nodes.find(n => n.kind === 'UnionDeclaration')!;
+  const parameters = declaration.edges.filter(e => e.role === 'typeParameters').map(e => result.nodes[e.node]);
+  assert.equal(parameters.length, 1);
+  assert.deepEqual(Object.fromEntries(parameters[0].attributes.map(a => [a.name, a.value])), {name:'T',constraint:'number',default:'number'});
+  assert.equal(declaration.attributes.find(a => a.name === 'name')?.value, 'U');
+});
+test('native union rejects two generic parameter lists', () => {
+  assert.ok(native('union<T> U<V> = Some(T)|None;').diagnostics.some(d => /una lista/.test(d.message)));
+});

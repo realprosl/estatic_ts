@@ -39,9 +39,19 @@ Un grafo finito de valores enlaza declaraciones, aliases/asignaciones, callbacks
 pasados como argumentos, retornos, arrays y campos. Una worklist por puntos fijos
 acumula destinos y orígenes. Otro punto fijo compone efectos, retención e
 invocación. Los ciclos no se resuelven mediante una profundidad de recursión
-arbitraria. Las búsquedas son lineales; no se anuncia una mejora de rendimiento.
+arbitraria. Las referencias, funciones, identidades nominales y pertenencia a
+conjuntos tienen índices. Cada arista propaga sólo las entradas nuevas de su
+origen, conservando el mismo punto fijo y el orden determinista de las tablas.
 
 La seguridad mantiene el recorrido de flujo preciso de llamadas conocidas.
+Para llamadas ordinarias que sólo transportan valores sin ownership, préstamos
+ni callbacks, puede aplicar el resumen en lugar de repetir el cuerpo. Comprueba
+antes los defaults transitivos, raíces observables, préstamos activos y estado
+de inicialización. Cada cuerpo sigue comprobándose por separado. Los accesos
+opacos ejecutan las mismas obligaciones de alcanzabilidad mediante `unknown`;
+el resumen no los convierte en operaciones puras. Los constructores conservan
+el recorrido preciso de sus campos; sus llamadas sólo pueden usar el resumen
+cuando todos los campos requeridos están inicializados en la ruta actual.
 Para callables reasignados combina los estados de todos los destinos posibles.
 Conserva préstamos del llamador y añade préstamos temporales de parámetros,
 por lo que un callback no puede escribir a una fuente prestada a su consumidor.
@@ -53,8 +63,13 @@ Una llamada recursiva, o que alcance el límite de expansión precisa de 64
 frames, usa el resumen transitivo. Un move observable produce un estado
 posiblemente movido; las lecturas posteriores se vuelven a comprobar.
 La recursión pura ya no falla por la mera presencia de un owner global ajeno.
-Si ese resumen contiene efectos opacos o una invocación callback simbólica
-pendiente, se rechaza explícitamente con E4104.
+Los efectos opacos se comprueban contra las raíces y préstamos alcanzables;
+un efecto externo sobre escalares aislados puede aceptarse. Una invocación de
+callback simbólica recursiva pendiente conserva el rechazo E4104.
+
+Al proyectar un parámetro prestado o receptor, el acceso del resumen conserva
+el nodo del argumento o receptor del llamador. Esto autoriza el uso del handle
+prestado sin autorizar accesos ocultos a la misma fuente por otro alias.
 
 Los consumidores conocidos que sólo invocan un callback permiten closures con
 captura por referencia durante la llamada. Guardarlas globalmente, devolverlas

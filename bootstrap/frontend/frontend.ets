@@ -1,12 +1,15 @@
 // A per-source bridge. No filesystem access, module resolution or shared state.
 import { tokenizeExpanded, LexerToken, LexerDiagnostic, LexerResult } from "../lexer/lexer";
-import { ParserToken, ParseResult, parseTokens, formatAst } from "../parser/parser";
+import { AstNode, ParserToken, ParseResult, parseTokens, formatAst } from "../parser/parser";
 
 export class SourceDiagnostic {
-  phase: string; message: string; file: string; token: ParserToken;
+  phase: string; message: string; file: string; token: ParserToken; generatedId: string; generatedToken: ParserToken;
   constructor(phase: string, message: string, file: string, token: ParserToken) {
-    this.phase = phase; this.message = message; this.file = file; this.token = token;
+    this.phase = phase; this.message = message; this.file = file; this.token = token; this.generatedId = ""; this.generatedToken = token;
   }
+}
+export function diagnosticAt(phase: string, message: string, file: string, node: AstNode): SourceDiagnostic {
+  let result = new SourceDiagnostic(phase,message,file,node.start); result.generatedId = node.generatedId; result.generatedToken = node.generatedStart; return result;
 }
 export class SourceResult {
   file: string; tokens: ParserToken[]; ast: ParseResult;

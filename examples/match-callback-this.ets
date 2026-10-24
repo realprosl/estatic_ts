@@ -30,7 +30,7 @@ class Svg {
   }
 }
 
-const s = new Svg([
+let s = new Svg([
   new Mod("drawLine", 10, 20),
   new Mod("moveCursor", 5, 7),
 ])

@@ -41,7 +41,9 @@
     "setup:unlink": "npm unlink -g estatic-ts-cpp",
     "bootstrap:checker": "node --experimental-strip-types bootstrap/checker/run.ts",
     "test:bootstrap:checker": "node --experimental-strip-types --test bootstrap/checker/checker.test.ts",
-    "audit:bootstrap": "node --experimental-strip-types bootstrap/audit/run.ts"
+    "audit:bootstrap": "node --experimental-strip-types bootstrap/audit/run.ts",
+    "audit:bootstrap:syntax": "node --experimental-strip-types bootstrap/audit/syntax-parity.ts",
+    "audit:bootstrap:self": "node --experimental-strip-types bootstrap/audit/self.ts"
   },
   "engines": { "node": ">=22.6" }
 }

@@ -18,6 +18,6 @@ function increment(c: ref<Counter>): void {
   c.value = c.value + 1;
 }
 
-const counter: Counter = new Counter(99);
+let counter: Counter = new Counter(99);
 increment(counter);
 print(numberToString(counter.value));  // 100

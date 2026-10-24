@@ -1,15 +1,15 @@
 import { SourceDiagnostic } from "../frontend/frontend";
 
 export class TypedFile {
-  types: string[]; members: number[]; selected: number[]; selectedModules: number[]; signatures: string[]; states: number[];
-  constantCodes: string[]; constantStates: string[]; constantValues: string[]; taskSources: number[][]; exactIntegers: string[]; conversions: string[]; caseValues: string[]; argumentParameters: number[];
+  matchCoverage: string[]; receivers: string[]; types: string[]; members: number[]; selected: number[]; selectedModules: number[]; signatures: string[]; states: number[];
+  constructionFields: number[][]; constantCodes: string[]; constantStates: string[]; constantValues: string[]; taskSources: number[][]; exactIntegers: string[]; conversions: string[]; caseValues: string[]; argumentParameters: number[]; argumentElements: number[];
   constructor(count: number) {
-    this.types = []; this.members = []; this.selected = []; this.selectedModules = []; this.signatures = []; this.states = [];
-    this.constantCodes = []; this.constantStates = []; this.constantValues = []; this.taskSources = []; this.exactIntegers = []; this.conversions = []; this.caseValues = []; this.argumentParameters = [];
-    for (let i: number = 0; i < count; i = i + 1) { this.constantCodes.push(""); this.constantStates.push(""); this.constantValues.push(""); this.taskSources.push([]); this.types.push(""); this.members.push(-1); this.selected.push(-1); this.selectedModules.push(-1); this.signatures.push(""); this.states.push(0); this.exactIntegers.push(""); this.conversions.push(""); this.caseValues.push(""); this.argumentParameters.push(-1); }
+    this.matchCoverage = []; this.receivers = []; this.types = []; this.members = []; this.selected = []; this.selectedModules = []; this.signatures = []; this.states = [];
+    this.constructionFields = []; this.constantCodes = []; this.constantStates = []; this.constantValues = []; this.taskSources = []; this.exactIntegers = []; this.conversions = []; this.caseValues = []; this.argumentParameters = []; this.argumentElements = [];
+    for (let i: number = 0; i < count; i = i + 1) { this.constructionFields.push([]); this.constantCodes.push(""); this.constantStates.push(""); this.constantValues.push(""); this.taskSources.push([]); this.matchCoverage.push(""); this.receivers.push(""); this.types.push(""); this.members.push(-1); this.selected.push(-1); this.selectedModules.push(-1); this.signatures.push(""); this.states.push(0); this.exactIntegers.push(""); this.conversions.push(""); this.caseValues.push(""); this.argumentParameters.push(-1); this.argumentElements.push(-1); }
   }
 }
-export function argumentParameter(file: TypedFile, node: number, position: number): number {
+export function argumentParameter(file: constRef<TypedFile>, node: number, position: number): number {
   return file.argumentParameters[node] >= 0 ? file.argumentParameters[node] : position;
 }
 export class NativeCapture {
@@ -24,7 +24,8 @@ export class BorrowLease {
 }
 export class EffectPoint {
   targets: number[]; origins: number[]; tasks: number[];
-  constructor() { this.targets = []; this.origins = []; this.tasks = []; }
+  targetSet: Map<number,boolean>; originSet: Map<number,boolean>; taskSet: Map<number,boolean>;
+  constructor() { this.targets = []; this.origins = []; this.tasks = []; this.targetSet = new Map<number,boolean>(); this.originSet = new Map<number,boolean>(); this.taskSet = new Map<number,boolean>(); }
 }
 export class EffectBorrow {
   call: number; callback: number; root: number; mode: string;
@@ -46,7 +47,12 @@ export class NativeTypeQuery {
   module: number; node: number; text: string; typeName: string; symbols: number[];
   constructor(module: number, node: number, text: string, typeName: string, symbols: number[]) { this.module = module; this.node = node; this.text = text; this.typeName = typeName; this.symbols = symbols; }
 }
+export class NativeModuleRecord {
+  file: string; id: string; sourceHash: string; interfaceHash: string; implementationHash: string; semanticKey: string;
+  dependencies: string[]; bodyDependencies: string[]; requiresBody: boolean;
+  constructor(file: string, id: string, sourceHash: string) { this.file = file; this.id = id; this.sourceHash = sourceHash; this.interfaceHash = ""; this.implementationHash = ""; this.semanticKey = ""; this.dependencies = []; this.bodyDependencies = []; this.requiresBody = false; }
+}
 export class CheckResult {
-  queries: NativeTypeQuery[]; decorators: NativeDecorator[]; files: TypedFile[]; symbolTypes: string[]; captures: NativeCapture[]; borrows: BorrowLease[]; effects: EffectSummary[]; diagnostics: SourceDiagnostic[]; success: boolean;
-  constructor() { this.queries = []; this.decorators = []; this.files = []; this.symbolTypes = []; this.captures = []; this.borrows = []; this.effects = []; this.diagnostics = []; this.success = false; }
+  moduleRecords: NativeModuleRecord[]; symbolIds: string[]; queries: NativeTypeQuery[]; decorators: NativeDecorator[]; files: TypedFile[]; symbolTypes: string[]; captures: NativeCapture[]; borrows: BorrowLease[]; effects: EffectSummary[]; diagnostics: SourceDiagnostic[]; success: boolean;
+  constructor() { this.moduleRecords = []; this.symbolIds = []; this.queries = []; this.decorators = []; this.files = []; this.symbolTypes = []; this.captures = []; this.borrows = []; this.effects = []; this.diagnostics = []; this.success = false; }
 }

@@ -19,10 +19,10 @@ export class AstEdge {
   constructor(role: string, node: number) { this.role = role; this.node = node; }
 }
 export class AstNode {
-  kind: string; start: ParserToken; end: ParserToken;
+  kind: string; start: ParserToken; end: ParserToken; analysisStart: number; analysisEnd: number; generatedId: string; generatedStart: ParserToken;
   attributes: AstAttribute[]; edges: AstEdge[];
   constructor(kind: string, start: ParserToken, end: ParserToken) {
-    this.kind = kind; this.start = start; this.end = end; this.attributes = []; this.edges = [];
+    this.kind = kind; this.start = start; this.end = end; this.attributes = []; this.edges = []; this.analysisStart = -1; this.analysisEnd = -1; this.generatedId = ""; this.generatedStart = start;
   }
   attr(name: string, value: string): void { this.attributes.push(new AstAttribute(name, value)); }
   edge(role: string, node: number): void { this.edges.push(new AstEdge(role, node)); }
@@ -31,6 +31,8 @@ export class AstNode {
     return "";
   }
 }
+export function nodeBegin(node: AstNode): number { return node.analysisStart >= 0 ? node.analysisStart : node.start.offset; }
+export function nodeEnd(node: AstNode): number { return node.analysisEnd >= 0 ? node.analysisEnd : node.end.endOffset; }
 export class ParserDiagnostic {
   message: string; token: ParserToken;
   constructor(message: string, token: ParserToken) { this.message = message; this.token = token; }
@@ -497,8 +499,11 @@ export class Parser {
     this.attr(result, "underlying", mode == "string" ? "string" : "number"); this.setEnd(result, this.expect("}")); return result;
   }
   unionDeclaration(keyword: ParserToken): number {
-    const name: ParserToken = this.expect("identifier"); const result: number = this.add("UnionDeclaration", keyword, name);
-    this.attr(result, "name", name.lexeme); this.typeParameters(result, false); this.expect("="); this.skipNewlines();
+    const result: number = this.add("UnionDeclaration", keyword, keyword);
+    const beforeName: boolean = this.check("<"); this.typeParameters(result, false);
+    const name: ParserToken = this.expect("identifier"); this.attr(result, "name", name.lexeme);
+    if (beforeName && this.check("<")) this.report("La unión sólo admite una lista de parámetros de tipo");
+    this.typeParameters(result, false); this.expect("="); this.skipNewlines();
     let names: string[] = []; let reading: boolean = true;
     while (reading && !this.check("eof")) {
       let variant: number = -1;
@@ -864,6 +869,9 @@ export class Parser {
       return this.typeSuffix(query);
     }
     if (this.accept("(")) {
+      if (!this.check(")") && !(this.check("identifier") && this.peek(1).kind == ":")) {
+        const grouped: string = this.typeName(); this.expect(")"); return this.typeSuffix("(" + grouped + ")");
+      }
       let params: string[] = [];
       while (!this.check(")") && !this.check("eof")) {
         this.expect("identifier"); this.expect(":"); params.push(this.typeName()); if (!this.accept(",")) break;

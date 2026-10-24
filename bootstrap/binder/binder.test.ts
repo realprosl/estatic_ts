@@ -61,7 +61,7 @@ test("binder: real todo project binds without type inference",()=>{const p=spawn
 test("binder: overloaded class and interface methods retain one declaration group",()=>{const g=bind('interface I{f(x:number):number; f(x:string):string;} class C{f(x:number):number{return x;} f(x:string):string{return x;}}');const groups=g.symbols.filter((s:any)=>s.name==="f"&&s.module>=0);assert.equal(groups.length,2);assert.ok(groups.every((s:any)=>s.declarations.length===2));});
 test("binder: constructor properties are class members and parameters",()=>{const g=bind('class C{constructor(public value:number){print(value);}}');assert.equal(g.symbols.filter((s:any)=>s.name==="value"&&s.module>=0).length,2);assert.equal(targets(g,"value")[0].kind,"Parameter");errors('class C{value:number; constructor(public value:number){}}',/duplicada/);});
 for(const expression of ['print(ns);','ns();','new ns();','print(ns["x"]);','print(ns?.x);'])test(`binder namespace requires static access: ${expression}`,()=>{errors('import * as ns from "./lib"; '+expression,/namespace/,{"lib.ets":"export const x=1;"});});
-test("binder: binds its own nine-module ETS project",()=>{const p=spawnSync(binary,[join(root,"bootstrap/binder/demo.ets")],{encoding:"utf8",timeout:120000,maxBuffer:64*1024*1024});assert.ifError(p.error);assert.equal(p.status,0,p.stdout.slice(-10000)+p.stderr);const g=JSON.parse(p.stdout);assert.equal(g.files.length,9);assert.ok(g.references.length>1000);});
+test("binder: binds its own ETS project and builtin catalog",()=>{const p=spawnSync(binary,[join(root,"bootstrap/binder/demo.ets")],{encoding:"utf8",timeout:120000,maxBuffer:64*1024*1024});assert.ifError(p.error);assert.equal(p.status,0,p.stdout.slice(-10000)+p.stderr);const g=JSON.parse(p.stdout);assert.equal(g.files.length,10);assert.ok(g.files.some((f:any)=>f.file.endsWith("/frontend/builtins.ets")));assert.ok(g.references.length>1000);});
 
 test("binder: typeof can query a type-only import without runtime access",()=>{const g=bind('import type {f} from "./lib"; type Signature=typeof f;',0,{"lib.ets":"export function f():number{return 1;}"});assert.equal(refs(g,"f")[0].space,"query");assert.equal(targets(g,"f")[0].kind,"FunctionDeclaration");});
 test("binder: typeof requires a value declaration rather than an interface",()=>{errors('interface I{x:number;} type T=typeof I;',/como query/);});
@@ -82,4 +82,9 @@ test('binder: type-only namespace can be queried without becoming a runtime valu
  const g=bind('import type * as ns from "./lib"; type Q=typeof ns.value[];',0,{'lib.ets':'export const value:number=1;'});
  assert.ok(refs(g,'ns').some((r:any)=>r.space==='query'));assert.ok(refs(g,'value').some((r:any)=>r.space==='query'));
  errors('import type * as ns from "./lib"; print(ns.value);',/value/,{'lib.ets':'export const value:number=1;'});
+});
+
+test('binder: native builtin contracts match their generated stage 0 data',()=>{
+ const p=spawnSync(process.execPath,['--experimental-strip-types',join(root,'scripts/generate-native-builtins.ts'),'--check'],{cwd:root,encoding:'utf8',timeout:30000});
+ assert.ifError(p.error);assert.equal(p.status,0,p.stdout+p.stderr);
 });

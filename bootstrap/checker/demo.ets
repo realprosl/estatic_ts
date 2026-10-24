@@ -2,6 +2,7 @@ import { ModuleLoader, LoaderOptions, PathAlias } from "../modules/loader";
 import { bindProject, BindingResult } from "../binder/binder";
 import { formatBinding } from "../binder/format";
 import { checkProject, CheckResult } from "./checker";
+import { analyzeProject } from "./expansion";
 import { formatChecked } from "./format";
 import { formatSource } from "../frontend/frontend";
 import { contentHash } from "../modules/platform";
@@ -20,15 +21,15 @@ function runCheckingDemo(): void {
   if (entry == "") { printError("Expected entry [--cache directory] [--root directory] [--alias name target]"); exitProcess(2); }
   let loader: ModuleLoader = new ModuleLoader(options); const graph = loader.load(entry);
   let before: string[] = []; for (const module of graph.modules) before.push(contentHash(formatSource(module.cached.result)));
-  const binding: BindingResult = bindProject(graph); const bindingBefore: string = formatBinding(binding,graph);
-  const result: CheckResult = checkProject(graph,binding); const text: string = formatChecked(result,binding,graph);
+  const originalBinding: BindingResult = bindProject(graph); const bindingBefore: string = formatBinding(originalBinding,graph);
+  const project = analyzeProject(graph); const text: string = formatChecked(project.checked,project.binding,project.graph);
   // A second check must be independent, and may never annotate cached syntax.
-  const again: CheckResult = checkProject(graph,binding);
-  if (formatChecked(again,binding,graph) != text) { printError("Checking is not deterministic"); exitProcess(3); }
+  const again = analyzeProject(graph);
+  if (formatChecked(again.checked,again.binding,again.graph) != text) { printError("Checking is not deterministic"); exitProcess(3); }
   for (let i: number = 0; i < graph.modules.length; i = i + 1) {
     if (before[i] != contentHash(formatSource(graph.modules[i].cached.result))) { printError("Checker mutated syntax"); exitProcess(3); }
   }
-  if (formatBinding(binding,graph) != bindingBefore) { printError("Checker mutated binding"); exitProcess(3); }
-  print(text); if (!result.success) exitProcess(1);
+  if (formatBinding(originalBinding,graph) != bindingBefore) { printError("Checker mutated binding"); exitProcess(3); }
+  print(text); if (!project.checked.success) exitProcess(1);
 }
 runCheckingDemo();
