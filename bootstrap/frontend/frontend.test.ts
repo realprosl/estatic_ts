@@ -1,3 +1,4 @@
+import {assertDiagnostic} from "./diagnostic-contract.ts";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, readdirSync, mkdirSync } from "node:fs";
@@ -38,7 +39,7 @@ after(() => rmSync(directory,{recursive:true,force:true}));
 
 function nativeMany(inputs: [string,string][]): NativeResult[] {
   const output=execFileSync(binary,inputs.flat(),{encoding:"utf8",timeout:20000,maxBuffer:64*1024*1024});
-  return output.trim().split("\n").map(line => JSON.parse(line));
+  return output.trim().split("\n").map(line => {const result=JSON.parse(line);result.diagnostics.forEach(assertDiagnostic);return result;});
 }
 function native(source:string,file="test.ets"): NativeResult { return nativeMany([[source,file]])[0]; }
 function parity(source:string,file="test.ets"): NativeResult {
@@ -47,7 +48,7 @@ function parity(source:string,file="test.ets"): NativeResult {
   assert.deepEqual(result.tokens,expected,"expanded tokens, decoded lexemes and all UTF-16 coordinates");
   const isolated=JSON.parse(execFileSync(parserBinary,transportTokens(expected),{encoding:"utf8",timeout:20000,maxBuffer:64*1024*1024}));
   assert.deepEqual(result.ast,isolated,"the native chain and isolated parser produce the exact same arena");
-  assert.deepEqual(result.diagnostics,isolated.diagnostics.map(d=>({...d,file})));
+  assert.deepEqual(result.diagnostics.map(({file,phase,message,span}:any)=>({file,phase,message,span})),isolated.diagnostics.map(d=>({...d,file})));
   assert.equal(result.success,result.diagnostics.length===0);
   return result;
 }
@@ -118,4 +119,15 @@ test("bootstrap frontend accepts repository examples accepted by the direct stag
 test("bootstrap frontend lexical and parser nesting remain bounded",()=>{
   const lexical=native('`${'.repeat(140)+'1'+'}`'.repeat(140),'deep-template.ets');assert.equal(lexical.parsed,false);assert.ok(lexical.diagnostics.some(d=>d.message.includes('Límite de anidamiento')));
   const syntax=native('('.repeat(150)+'1'+')'.repeat(150),'deep-parser.ets');assert.equal(syntax.parsed,true);assert.ok(syntax.diagnostics.some(d=>d.message.includes('Límite de anidamiento')));assert.ok(syntax.diagnostics.length<=100);
+});
+
+test('frontend diagnostics share a versioned contract and preserve UTF-16 ranges',()=>{
+ const source='const text="🙂";\r\n$;';const g=native(source,'unicode.ets');
+ const d=g.diagnostics.find((d:any)=>d.phase==='lexer');assert.ok(d);
+ assert.equal(d.code,'LEXER_ERROR');assert.equal(d.generated,null);
+ assert.deepEqual(d.span,{start:{offset:source.indexOf('$'),line:2,column:1},end:{offset:source.indexOf('$')+1,line:2,column:2}});
+});
+test('frontend parser diagnostics use the same schema as lexical diagnostics',()=>{
+ const g=native('const n=;','parse.ets');assert.ok(g.diagnostics.length);
+ for(const d of g.diagnostics){assertDiagnostic(d);assert.equal(d.code,'PARSER_ERROR');assert.equal(d.generated,null);}
 });

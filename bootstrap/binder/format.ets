@@ -1,6 +1,6 @@
 import { BindingResult } from "./binder";
 import { ModuleGraph } from "../modules/loader";
-import { quoteSource } from "../frontend/frontend";
+import { quoteSource, formatDiagnostic } from "../frontend/frontend";
 export function bindingBoolean(value: boolean): string { return value ? "true" : "false"; }
 export function bindingNumbers(values: number[]): string {
   let output: string[] = []; for (const value of values) output.push(numberToString(value)); return "[" + output.join(",") + "]";
@@ -37,8 +37,7 @@ export function formatBinding(result: BindingResult, graph: ModuleGraph): string
   }
   output.push("],\"diagnostics\":["); comma = "";
   for (const diagnostic of result.diagnostics) {
-    output.push(comma + "{\"file\":" + quoteSource(diagnostic.file) + ",\"phase\":" + quoteSource(diagnostic.phase) + ",\"message\":" + quoteSource(diagnostic.message)
-      + ",\"offset\":" + numberToString(diagnostic.token.offset) + ",\"line\":" + numberToString(diagnostic.token.line) + ",\"column\":" + numberToString(diagnostic.token.column) + "}"); comma = ",";
+    output.push(comma + formatDiagnostic(diagnostic)); comma = ",";
   }
   output.push("]}"); return output.join("");
 }

@@ -1,6 +1,6 @@
 # Procedencia e inputs incrementales del frontend
 
-La salida `ets-checked-1` mantiene un AST independiente por archivo, junto con
+La salida `ets-checked-2` mantiene un AST independiente por archivo, junto con
 sus tablas de tipos, firmas, conversiones, símbolos, efectos y constantes.
 `entry` y `entryModuleId` identifican la entrada. `frontendIdentity` identifica
 las fuentes del build que produjo el análisis.

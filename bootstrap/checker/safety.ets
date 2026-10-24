@@ -57,8 +57,9 @@ export class SafetyAnalyzer {
   node(module: number, id: number): AstNode { return this.graph.modules[module].cached.result.ast.nodes[id]; }
   report(module: number, id: number, message: string): void {
     const token = this.node(module,id).start;
-    for (const d of this.result.diagnostics) if (d.file == this.graph.modules[module].file && d.token.offset == token.offset && d.message == message && d.generatedId == this.node(module,id).generatedId && d.generatedToken.offset == this.node(module,id).generatedStart.offset) return;
-    this.result.diagnostics.push(diagnosticAt("checker",message,this.graph.modules[module].file,this.node(module,id)));
+    const candidate = diagnosticAt("checker",message,this.graph.modules[module].file,this.node(module,id));
+    for (const d of this.result.diagnostics) if (d.file == this.graph.modules[module].file && d.token.offset == token.offset && d.code == candidate.code && d.message == candidate.message && d.generatedId == this.node(module,id).generatedId && d.generatedToken.offset == this.node(module,id).generatedStart.offset) return;
+    this.result.diagnostics.push(candidate);
   }
   origin(sid: number): number { let at: number = sid; while (at >= 0 && this.binding.symbols[at].target >= 0) at = this.binding.symbols[at].target; return at; }
   reference(module: number, id: number): number {

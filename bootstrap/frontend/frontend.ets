@@ -3,13 +3,22 @@ import { tokenizeExpanded, LexerToken, LexerDiagnostic, LexerResult } from "../l
 import { AstNode, ParserToken, ParseResult, parseTokens, formatAst } from "../parser/parser";
 
 export class SourceDiagnostic {
-  phase: string; message: string; file: string; token: ParserToken; generatedId: string; generatedToken: ParserToken;
+  phase: string; code: string; severity: string; message: string; file: string; token: ParserToken; endToken: ParserToken;
+  generatedId: string; generatedToken: ParserToken; generatedEndToken: ParserToken;
   constructor(phase: string, message: string, file: string, token: ParserToken) {
-    this.phase = phase; this.message = message; this.file = file; this.token = token; this.generatedId = ""; this.generatedToken = token;
+    this.phase = phase; this.code = phase.toUpperCase()+"_ERROR"; this.severity = "error"; this.message = message;
+    const colon: number = message.indexOf(": ",0); let coded: boolean = colon > 0;
+    for (let at: number = 0; at < colon; at = at+1) {
+      const c: number = message.charCodeAt(at);
+      if (!((c >= 65 && c <= 90) || (at > 0 && ((c >= 48 && c <= 57) || c == 95)))) coded = false;
+    }
+    if (coded) { this.code = message.slice(0,colon); this.message = message.slice(colon+2,message.length); }
+    this.file = file; this.token = token; this.endToken = token; this.generatedId = ""; this.generatedToken = token; this.generatedEndToken = token;
   }
 }
 export function diagnosticAt(phase: string, message: string, file: string, node: AstNode): SourceDiagnostic {
-  let result = new SourceDiagnostic(phase,message,file,node.start); result.generatedId = node.generatedId; result.generatedToken = node.generatedStart; return result;
+  let result = new SourceDiagnostic(phase,message,file,node.start); result.endToken = node.end;
+  result.generatedId = node.generatedId; result.generatedToken = node.generatedStart; result.generatedEndToken = node.generatedEnd; return result;
 }
 export class SourceResult {
   file: string; tokens: ParserToken[]; ast: ParseResult;
@@ -61,6 +70,21 @@ function spanSource(token: ParserToken): string {
   return "{\"start\":" + positionSource(token.offset, token.line, token.column)
     + ",\"end\":" + positionSource(token.endOffset, token.endLine, token.endColumn) + "}";
 }
+function diagnosticSpan(start: ParserToken, end: ParserToken): string {
+  return "{\"start\":"+positionSource(start.offset,start.line,start.column)+",\"end\":"+positionSource(end.endOffset,end.endLine,end.endColumn)+"}";
+}
+// One public wire contract for every source/project diagnostic. Flat coordinates
+// remain aliases for older consumers; renderers use span and generated.span.
+export function formatDiagnostic(diagnostic: SourceDiagnostic): string {
+  let generated: string = "null";
+  if (diagnostic.generatedId != "") generated = "{\"sourceId\":"+quoteSource(diagnostic.generatedId)
+    +",\"span\":"+diagnosticSpan(diagnostic.generatedToken,diagnostic.generatedEndToken)
+    +",\"offset\":"+numberToString(diagnostic.generatedToken.offset)+",\"line\":"+numberToString(diagnostic.generatedToken.line)+",\"column\":"+numberToString(diagnostic.generatedToken.column)+"}";
+  return "{\"schema\":\"ets-diagnostic-1\",\"file\":"+quoteSource(diagnostic.file)+",\"phase\":"+quoteSource(diagnostic.phase)
+    +",\"code\":"+quoteSource(diagnostic.code)+",\"severity\":"+quoteSource(diagnostic.severity)+",\"message\":"+quoteSource(diagnostic.message)
+    +",\"span\":"+diagnosticSpan(diagnostic.token,diagnostic.endToken)+",\"generated\":"+generated
+    +",\"offset\":"+numberToString(diagnostic.token.offset)+",\"line\":"+numberToString(diagnostic.token.line)+",\"column\":"+numberToString(diagnostic.token.column)+"}";
+}
 export function formatSource(result: SourceResult): string {
   let output: string[] = ["{\"file\":" + quoteSource(result.file) + ",\"parsed\":" + (result.parsed ? "true" : "false")
     + ",\"success\":" + (result.success ? "true" : "false") + ",\"tokens\":["];
@@ -71,8 +95,7 @@ export function formatSource(result: SourceResult): string {
   }
   output.push("],\"ast\":" + formatAst(result.ast) + ",\"diagnostics\":["); separator = "";
   for (const diagnostic of result.diagnostics) {
-    output.push(separator + "{\"file\":" + quoteSource(diagnostic.file) + ",\"phase\":" + quoteSource(diagnostic.phase)
-      + ",\"message\":" + quoteSource(diagnostic.message) + ",\"span\":" + spanSource(diagnostic.token) + "}");
+    output.push(separator + formatDiagnostic(diagnostic));
     separator = ",";
   }
   output.push("]}"); return output.join("");

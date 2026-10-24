@@ -1,3 +1,4 @@
+import {assertDiagnostic} from "../frontend/diagnostic-contract.ts";
 import {createHash} from "node:crypto";
 import {test,before,after} from "node:test";
 import assert from "node:assert/strict";
@@ -13,9 +14,9 @@ const directory=mkdtempSync(join(root,"build-checker-test-")); let binary:string
 before(async()=>{binary=await buildLoader(join(directory,"binary"),"bootstrap/checker/demo.ets",true);});
 after(()=>rmSync(directory,{recursive:true,force:true}));
 function fixture(source:string,files:Record<string,string>={}){const dir=mkdtempSync(join(directory,"project-"));for(const[name,text]of Object.entries({"main.ets":source,...files})){mkdirSync(dirname(join(dir,name)),{recursive:true});writeFileSync(join(dir,name),text);}return{entry:join(dir,"main.ets"),cache:join(dir,"cache")};}
-function run(f:ReturnType<typeof fixture>,status=0){const p=spawnSync(binary,[f.entry,"--cache",f.cache],{encoding:"utf8",timeout:60000,maxBuffer:64*1024*1024});assert.ifError(p.error);assert.equal(p.status,status,p.stderr+p.stdout.slice(-3000));const g=JSON.parse(p.stdout);assert.equal(g.success,status===0);return g;}
+function run(f:ReturnType<typeof fixture>,status=0){const p=spawnSync(binary,[f.entry,"--cache",f.cache],{encoding:"utf8",timeout:60000,maxBuffer:64*1024*1024});assert.ifError(p.error);assert.equal(p.status,status,p.stderr+p.stdout.slice(-3000));const g=JSON.parse(p.stdout);g.diagnostics.forEach(assertDiagnostic);g.binding.diagnostics.forEach(assertDiagnostic);assert.equal(g.success,status===0);return g;}
 function check(source:string,files:Record<string,string>={}){return run(fixture(source,files));}
-function error(source:string,pattern:RegExp,files:Record<string,string>={}){const g=run(fixture(source,files),1);assert.ok(g.diagnostics.some((d:any)=>d.phase==="checker"&&pattern.test(d.message)),JSON.stringify(g.diagnostics));return g;}
+function error(source:string,pattern:RegExp,files:Record<string,string>={}){const g=run(fixture(source,files),1);assert.ok(g.diagnostics.some((d:any)=>d.phase==="checker"&&pattern.test(`${d.code}: ${d.message}`)),JSON.stringify(g.diagnostics));return g;}
 function types(g:any,kind:string){return g.files.flatMap((f:any)=>f.ast.nodes.map((n:any,i:number)=>n.kind===kind?f.types[i]:null).filter((x:any)=>x!==null));}
 const valid:Record<string,string>={
  empty:"",
@@ -1655,7 +1656,7 @@ for(const [name,source,pattern] of [
  ['capture',etsGenerator('print(etsCapture("absent"));')+'emit();',/ETSGEN_GENERATED_HYGIENE/],
  ['recursive','@etsgen function emit():string{return "emit();";}emit();',/ETSGEN_RECURSION_LIMIT/],
  ['export',etsGenerator('export const n=1;')+'emit();',/ETSGEN_GENERATED_HYGIENE/],
-] as const)test(`frontend closure etsgen rejects ${name}`,()=>{const g=run(fixture(source),1);assert.ok(g.diagnostics.some((d:any)=>pattern.test(d.message)),JSON.stringify(g.diagnostics));});
+] as const)test(`frontend closure etsgen rejects ${name}`,()=>{const g=run(fixture(source),1);assert.ok(g.diagnostics.some((d:any)=>pattern.test(`${d.code}: ${d.message}`)),JSON.stringify(g.diagnostics));});
 test('frontend closure etsgen publishes generated source and typed AST provenance',()=>{
  const g=check(etsGenerator('const n:i32=7;print(n);')+'emit();');assert.equal(g.generatedSources.length,1);assert.equal(g.generatedSources[0].module,0);assert.equal(g.generatedSources[0].source,'const n:i32=7;print(n);');const f=g.files[0];const id=f.ast.nodes.findIndex((n:any)=>n.kind==='VariableDeclaration'&&n.attributes.some((a:any)=>a.name==='generatedOriginalName'&&a.value==='n'));assert.ok(id>=0);assert.equal(f.types[id],'i32');assert.ok(f.ast.nodes[id].attributes.some((a:any)=>a.name==='generatedSource'&&a.value===g.generatedSources[0].id));assert.ok(g.moduleRecords[0].semanticKey);
 });
@@ -1669,7 +1670,7 @@ test('frontend closure etsgen reports original call and generated semantic span'
  const source=etsGenerator('const good=1;\nconst bad:string=1;')+'\nemit();';const g=run(fixture(source),1);const d=g.diagnostics.find((d:any)=>d.phase==='checker'&&/incompatible/.test(d.message));assert.ok(d);assert.equal(d.line,2);assert.equal(d.generated.line,2);assert.equal(d.generated.sourceId,g.generatedSources[0].id);assert.equal(g.generatedSources[0].source,'const good=1;\nconst bad:string=1;');
 });
 test('frontend closure etsgen reports generated parser span',()=>{
- const g=run(fixture(etsGenerator('const good=1;\nconst bad=;')+'\nemit();'),1);assert.ok(g.generatedSources.length);assert.ok(g.diagnostics.some((d:any)=>/ETSGEN_GENERATED_PARSE/.test(d.message)&&d.line===2&&d.generated.line===2));
+ const g=run(fixture(etsGenerator('const good=1;\nconst bad=;')+'\nemit();'),1);assert.ok(g.generatedSources.length);assert.ok(g.diagnostics.some((d:any)=>d.code==='ETSGEN_GENERATED_PARSE'&&d.line===2&&d.generated.line===2));
 });
 test('frontend closure etsgen uses generated lexical order for borrows',()=>{
  check(etsGenerator('class B{x:number=1;}let b=new B();const a=constRef(b);print(a.x);b.x=2;const c=constRef(b);print(c.x);')+'function run():void{emit();}run();');
@@ -1948,3 +1949,22 @@ test('frontend performance summarizes a deep method tree through an out receiver
 });
 test('frontend performance receiver summaries preserve hidden global alias checks', () => error('class B{x:number=1;read():number{return source.x;}}let source=new B();function run():number{const loan=ref(source);return loan.read();}run();',/E4207/));
 test('frontend performance receiver summaries preserve readonly checks', () => error('class B{x:number=1;write():void{this.x=2;}}let b=new B();const loan=constRef(b);loan.write();',/E4300|readonly/));
+
+test('diagnostic contract publishes code separately from the message',()=>{
+ const g=error('class B{}let p:ptr<B> =new B();const q=move(p);print(p);',/E4102/);
+ assert.equal(g.format,'ets-checked-2');const d=g.diagnostics.find((d:any)=>d.code==='E4102');assert.ok(d);
+ assert.equal(d.severity,'error');assert.ok(!d.message.startsWith('E4102:'));assert.equal(d.generated,null);
+});
+test('diagnostic contract preserves full generated and invocation ranges',()=>{
+ const source=etsGenerator('const good=1;\nconst bad:string=1;')+'\nemit();';
+ const g=run(fixture(source),1);const d=g.diagnostics.find((d:any)=>/incompatible/.test(d.message));assert.ok(d);
+ assertDiagnostic(d);assert.equal(d.code,'CHECKER_ERROR');assert.equal(d.span.start.line,2);
+ assert.equal(source.slice(d.span.start.offset,d.span.end.offset),'emit()');
+ assert.equal(d.generated.sourceId,g.generatedSources[0].id);assert.equal(d.generated.span.start.line,2);
+ assert.ok(d.generated.span.end.offset>d.generated.span.start.offset);
+});
+test('diagnostic contract separates comptime codes',()=>{
+ const g=error('const n=comptime(():number=>1/0);',/COMPTIME_/);
+ const d=g.diagnostics.find((d:any)=>d.code.startsWith('COMPTIME_'));assert.ok(d);assertDiagnostic(d);
+ assert.ok(!d.message.startsWith(d.code));
+});
