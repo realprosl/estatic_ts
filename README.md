@@ -1,5 +1,10 @@
 # Estatic TS → C++
 
+El flujo instalado se prepara con `./install.sh`; después se trabaja con
+`nativo init`, `nativo build` y `nativo run`. Ver [instalación](./INSTALL.md)
+para requisitos, prefijos y la dependencia actual del driver/emisor en Node.
+
+
 Transpilador modular escrito en TypeScript de un lenguaje con sintaxis inspirada en TypeScript, tipado estático y salida C++20. La implementación canónica vive en `src/`.
 
 > **¿Qué se soporta exactamente?** Lee [`LIMITATIONS.md`](./LIMITATIONS.md) para ver la lista completa de features rechazadas o pospuestas. Este README documenta cómo usar el dialecto y qué features están implementadas.

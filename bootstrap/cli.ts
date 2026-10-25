@@ -1,10 +1,11 @@
 #!/usr/bin/env -S node --experimental-strip-types --no-warnings
 // Host driver only. Parsing, binding, checking, expansion and lowering execute
 // in the native ETS frontend; C++ emission consumes only its verified IR.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { root } from "./root.ts";
 import { buildIrFrontend, nativeIr, buildIrCpp } from "./ir/cpp.ts";
 import { generateCppFromIr, IrCppGenerator } from "../src/codegen/ir/cpp-generator.ts";
 import type { IrProject } from "../src/codegen/ir/model.ts";
@@ -12,7 +13,10 @@ import { loadConfig } from "../src/config/project-config.ts";
 import { initializeProject, updateProjectTypes } from "../src/project/init-project.ts";
 import { getTs2cppVersionLabel } from "../src/core/ts2cpp-version.ts";
 
-const help=`Uso: etsc-bootstrap [entrada.ts|entrada.ets] [opciones] [-- argumentos]
+const help=`Uso: nativo init [directorio]
+     nativo build [entrada.ts|entrada.ets] [opciones]
+     nativo run [entrada.ts|entrada.ets] [opciones] [-- argumentos]
+     etsc-bootstrap [entrada.ts|entrada.ets] [opciones]
   -o archivo.cpp       Generar C++ (por defecto build/<entrada>.cpp)
   --build              Compilar y enlazar el C++ con el runtime existente
   --run                Compilar y ejecutar; propagar su código de salida
@@ -33,11 +37,14 @@ const help=`Uso: etsc-bootstrap [entrada.ts|entrada.ets] [opciones] [-- argument
 El backend HTTP se selecciona con @cpp_drogon; el predeterminado es cpp-httplib.`;
 class UsageError extends Error {}
 export async function main(argv:string[]):Promise<void> {
+  if(argv[0]==="build"||argv[0]==="run")argv=[argv[0]==="run"?"--run":"--build",...argv.slice(1)];
   if(argv.length===1&&["--version","-v"].includes(argv[0])){console.log(`${getTs2cppVersionLabel()} (bootstrap IR → C++20)`);return;}
   if(argv.length===1&&["--help","-h"].includes(argv[0])){console.log(help);return;}
+  const installed=existsSync(join(root,"installation.json"))?JSON.parse(readFileSync(join(root,"installation.json"),"utf8")):undefined;
+  const defaultCompiler=process.env.CXX??installed?.compiler??"g++";
   if(["init","update-types"].includes(argv[0])) {
     if(argv.length>2||argv[1]?.startsWith("-"))throw new UsageError("Uso: etsc-bootstrap init|update-types [directorio]");
-    const result=argv[0]==="init"?await initializeProject(argv[1]??"."):await updateProjectTypes(argv[1]??".");
+    const result=argv[0]==="init"?await initializeProject(argv[1]??".",{command:"nativo",compiler:defaultCompiler}):await updateProjectTypes(argv[1]??".");
     console.log(JSON.stringify(result,null,2));return;
   }
   let entry="",output="",binary="",configPath="",emitIr="",fromIr="",frontend="",cache="",cxx="";
@@ -73,7 +80,7 @@ export async function main(argv:string[]):Promise<void> {
   if(emitIr)save(emitIr,JSON.stringify(project,null,2)+"\n");
   if(check){console.log(`Comprobado: ${entry}`);return;}
   output=resolve(output||config?.output.cpp||join("build",basename(entry,extname(entry))+".cpp"));save(output,result!.cpp);
-  if(build||config?.compiler.enabled){binary=resolve(binary||config?.output.binary||output.replace(/\.cpp$/,"")+".bin");buildIrCpp(result!,output,binary,cxx||config?.compiler.command||process.env.CXX||"g++",[...config?.compiler.flags??[],...flags],[...config?.compiler.linkFlags??[],...config?.linkLibraries.map(lib=>`-l${lib}`)??[],...linkFlags]);}
+  if(build||config?.compiler.enabled){binary=resolve(binary||config?.output.binary||output.replace(/\.cpp$/,"")+".bin");buildIrCpp(result!,output,binary,cxx||config?.compiler.command||defaultCompiler,[...config?.compiler.flags??[],...flags],[...config?.compiler.linkFlags??[],...config?.linkLibraries.map(lib=>`-l${lib}`)??[],...linkFlags]);}
   if(run){const child=spawnSync(binary,programArgs,{stdio:"inherit"});if(child.error)throw child.error;process.exitCode=child.status??1;}
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main(process.argv.slice(2)).catch(error=>{console.error(error instanceof Error?error.message:String(error));process.exitCode=error instanceof UsageError?2:1;});

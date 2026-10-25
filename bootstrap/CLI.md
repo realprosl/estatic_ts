@@ -1,5 +1,8 @@
 # CLI del compilador bootstrap
 
+El flujo de uso instalado se prepara con [`install.sh`](../INSTALL.md):
+`nativo init proyecto`, `nativo build` y `nativo run`.
+
 `bootstrap/cli.ts` conecta el frontend nativo ETS (carga de módulos, lexer,
 parser, expansión, binder, checker, seguridad, efectos y comptime), el lowering
 con verificador `ets-ir-2` y el backend C++ de `src/codegen/ir/`. El driver y el
@@ -28,12 +31,14 @@ sobre sus equivalentes de configuración. Sin entrada explícita se busca
 incremental del CLI histórico todavía no se aplican a este recorrido.
 
 `--root`, `--alias` y `--cache` se envían al cargador nativo. La caché es de
-sintaxis; no se anuncia caché persistente de resultados semánticos. El driver
-reutiliza el ejecutable del frontend mientras su huella de fuentes, runtime,
+sintaxis; no se anuncia caché persistente de resultados semánticos. En la instalación se utiliza `native/frontend` y no se invoca stage 0. En el clon,
+el driver reutiliza el ejecutable del frontend mientras su huella de fuentes, runtime,
 configuración del paquete, plataforma y nombre del compilador no cambie.
 `--frontend ruta` permite seleccionar un ejecutable ya construido.
 
-El enlace reutiliza el runtime existente y detecta libuv, curl y el wrapper
+El enlace reutiliza archivos estáticos precompilados y validados por compilador,
+flags y dependencias. Los perfiles nuevos se preparan en una caché del usuario
+cuando el prefijo instalado es de sólo lectura. Detecta libuv, curl y el wrapper
 HTTP seleccionado. Se prefieren las instalaciones locales de libuv y Drogon
 bajo `build/libs/`; en su ausencia se utilizan las bibliotecas del sistema.
 Las dependencias no se descargan ni se instalan al compilar un programa.
