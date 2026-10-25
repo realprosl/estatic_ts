@@ -13,9 +13,9 @@ import { loadConfig } from "../src/config/project-config.ts";
 import { initializeProject, updateProjectTypes } from "../src/project/init-project.ts";
 import { getTs2cppVersionLabel } from "../src/core/ts2cpp-version.ts";
 
-const help=`Uso: nativo init [directorio]
-     nativo build [entrada.ts|entrada.ets] [opciones]
-     nativo run [entrada.ts|entrada.ets] [opciones] [-- argumentos]
+const help=`Uso: estc init [directorio]
+     estc build [entrada.ts|entrada.ets] [opciones]
+     estc run [entrada.ts|entrada.ets] [opciones] [-- argumentos]
      etsc-bootstrap [entrada.ts|entrada.ets] [opciones]
   -o archivo.cpp       Generar C++ (por defecto build/<entrada>.cpp)
   --build              Compilar y enlazar el C++ con el runtime existente
@@ -27,11 +27,11 @@ const help=`Uso: nativo init [directorio]
   --config archivo     Cargar estatic.config.ts
   --root directorio    Añadir raíz de módulos (repetible)
   --alias nombre ruta  Añadir alias de módulos (repetible)
-  --cache directorio   Caché de sintaxis del frontend nativo
+  --cache directorio   Caché de sintaxis del frontend estc
   --cxx compilador     Seleccionar compilador C++
   --cxx-flag flag      Añadir opción de compilación (repetible)
   --link-flag flag     Añadir opción de enlace (repetible)
-  --frontend binario   Usar un frontend nativo ya construido
+  --frontend binario   Usar un frontend estc ya construido
   init [directorio] | update-types [directorio]
   --version | --help
 El backend HTTP se selecciona con @cpp_drogon; el predeterminado es cpp-httplib.`;
@@ -44,7 +44,7 @@ export async function main(argv:string[]):Promise<void> {
   const defaultCompiler=process.env.CXX??installed?.compiler??"g++";
   if(["init","update-types"].includes(argv[0])) {
     if(argv.length>2||argv[1]?.startsWith("-"))throw new UsageError("Uso: etsc-bootstrap init|update-types [directorio]");
-    const result=argv[0]==="init"?await initializeProject(argv[1]??".",{command:"nativo",compiler:defaultCompiler}):await updateProjectTypes(argv[1]??".");
+    const result=argv[0]==="init"?await initializeProject(argv[1]??".",{command:"estc",compiler:defaultCompiler}):await updateProjectTypes(argv[1]??".");
     console.log(JSON.stringify(result,null,2));return;
   }
   let entry="",output="",binary="",configPath="",emitIr="",fromIr="",frontend="",cache="",cxx="";

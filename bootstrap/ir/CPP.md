@@ -3,7 +3,10 @@
 El emisor `src/codegen/ir/cpp-generator.ts` consume exclusivamente el IR nativo
 verificado. No reconstruye un AST ni llama al codegen histórico para traducir
 el programa. El adaptador Node construye/invoca el lowering ETS y gestiona E/S.
-La implementación de este backend es TypeScript; no se anuncia autoalojamiento.
+La referencia TypeScript se mantiene para bootstrap y pruebas; la implementación
+nativa de `src/codegen/ir/native/` está integrada en `estc` y no ejecuta Node.
+El frontend es ETS compilado y el backend/driver C++20; no se anuncia que todo
+el compilador esté escrito en ETS.
 
 ```sh
 npm run bootstrap:ir:cpp -- examples/hello.ets -o build/hello-ir.cpp --run
@@ -64,9 +67,9 @@ ambos comportamientos reales en loopback, no un sustituto del runtime.
 El [CLI general de bootstrap](../CLI.md) conecta el recorrido completo:
 
 ```sh
-npm run bootstrap -- examples/interface.ets --run
-npm run bootstrap -- examples/express-style-server.ets --build
-npm run bootstrap -- --config estatic.config.ts --run
+estc run examples/interface.ets
+estc build examples/express-style-server.ets
+estc run --config estatic.config.json
 ```
 
 ## Reutilización

@@ -1,11 +1,11 @@
 # Estatic TS → C++
 
 El flujo instalado se prepara con `./install.sh`; después se trabaja con
-`nativo init`, `nativo build` y `nativo run`. Ver [instalación](./INSTALL.md)
-para requisitos, prefijos y la dependencia actual del driver/emisor en Node.
+`estc init`, `estc build` y `estc run`. Ver [instalación](./INSTALL.md)
+para requisitos, prefijos y el recorrido instalado sin Node.
 
 
-Transpilador modular escrito en TypeScript de un lenguaje con sintaxis inspirada en TypeScript, tipado estático y salida C++20. La implementación canónica vive en `src/`.
+Compilador de Estatic, con sintaxis inspirada en TypeScript, tipado estático y salida C++20. El frontend ETS y el driver/backend C++20 se instalan como `estc`. `src/` conserva el bootstrap y la referencia TypeScript para herramientas y pruebas.
 
 > **¿Qué se soporta exactamente?** Lee [`LIMITATIONS.md`](./LIMITATIONS.md) para ver la lista completa de features rechazadas o pospuestas. Este README documenta cómo usar el dialecto y qué features están implementadas.
 
@@ -27,28 +27,25 @@ Transpilador modular escrito en TypeScript de un lenguaje con sintaxis inspirada
 
 ## Uso rápido
 
-Requiere Node.js 22.6+, g++ 13+ con C++20, y (opcional) `libuv1-dev` /
-`libssl-dev` / `libcurl4-openssl-dev` que `npm install` detecta e instala.
+Node >=22.6 se usa para el bootstrap y la instalación. El compilador instalado
+`estc` funciona sin Node y necesita el toolchain C++20 y las bibliotecas de
+runtime utilizadas. Ver [INSTALL.md](./INSTALL.md).
 
 ### Instalar el compilador (una vez)
 
 ```bash
-git clone https://github.com/realprosl/Ts2cpp.git
-cd Ts2cpp
-npm install
-#   → Detecta distro, chequea deps, pre-compila runtime.
-#   → Ofrece 'npm link' para usar 'etsc' globalmente.
-#   → Responde 'y' al prompt si quieres 'etsc' en PATH.
+git clone https://github.com/realprosl/estatic_ts.git
+cd estatic_ts
+./install.sh
 ```
 
 ### Crear un proyecto nuevo
 
 ```bash
-etsc init ~/mi-proyecto
+estc init ~/mi-proyecto
 cd ~/mi-proyecto
-cp /ruta/a/Ts2cpp/examples/hello.ets src/main.ts
-etsc --build          # genera build/app
-./build/app           # corre el binario
+estc build
+estc run
 ```
 
 El archivo canónico [`types/estatic.d.ts`](./types/estatic.d.ts) contiene las
@@ -56,23 +53,23 @@ declaraciones que usa el editor para los builtins registrados. Para actualizar
 un proyecto creado con una versión anterior:
 
 ```bash
-etsc update-types ~/mi-proyecto
+estc update-types ~/mi-proyecto
 ```
 
 Si el archivo anterior es diferente, se conserva primero como
-`types/estatic.d.ts.bak`. `etsc init` copia exactamente la misma fuente
+`types/estatic.d.ts.bak`. `estc init` copia exactamente la misma fuente
 canónica y una prueba detecta builtins sin declaración de editor.
 
 Para consultar la versión instalada:
 
 ```bash
-etsc --version
-etsc -v
-# estatic 1.26.0 (v64)
+estc --version
+estc -v
+# estc 1.26.0 (v64)
 ```
 
-El `estatic.config.ts` generado NO requiere que listes `-luv`, `-lssl`,
-etc. — el CLI detecta los backends que el programa usa (mirando el AST)
+El `estatic.config.json` generado por `estc init` no requiere que listes `-luv`, `-lssl`,
+etc. — el CLI detecta los backends que el programa usa (desde el IR)
 y los añade solo.
 
 ### Compilar un ejemplo puntual sin proyecto

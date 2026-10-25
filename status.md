@@ -12,6 +12,8 @@ verificación de ownership y préstamos por CFG, y contratos de runtime/efectos.
 El [backend C++ del IR](./bootstrap/ir/CPP.md) ya genera, compila y ejecuta
 programas reutilizando el runtime existente. El [CLI de bootstrap](./bootstrap/CLI.md)
 conecta frontend nativo, IR y C++, con configuración, build y ejecución.
+`install.sh` instala `estc`: frontend ETS compilado y driver/emisor C++20,
+sin dependencia de Node durante el uso instalado. Node queda en el bootstrap.
 La ampliación de interfaces y HTTP pasa 75 pruebas del backend y compila
 126/131 fuentes válidos del corpus; las rutas HTTP se prueban con httplib
 y Drogon reales, y el cliente con libcurl.

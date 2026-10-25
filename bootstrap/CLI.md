@@ -1,63 +1,42 @@
-# CLI del compilador bootstrap
+# Driver nativo estc
 
-El flujo de uso instalado se prepara con [`install.sh`](../INSTALL.md):
-`nativo init proyecto`, `nativo build` y `nativo run`.
-
-`bootstrap/cli.ts` conecta el frontend nativo ETS (carga de módulos, lexer,
-parser, expansión, binder, checker, seguridad, efectos y comptime), el lowering
-con verificador `ets-ir-2` y el backend C++ de `src/codegen/ir/`. El driver y el
-emisor C++ siguen escritos en TypeScript. Stage 0 sólo construye la herramienta
-nativa del frontend; no analiza el programa solicitado ni emite su C++.
+[`install.sh`](../INSTALL.md) construye e instala `estc`. El frontend ETS se
+compila usando `src/` durante el bootstrap. El driver y el emisor C++ se compilan
+a código máquina; el recorrido instalado funciona sin Node ni TypeScript de
+stage 0. Node sólo participa en el bootstrap, en la instalación y en las
+herramientas de desarrollo/pruebas.
 
 ```sh
-npm run bootstrap -- examples/interface.ets --run
-npm run bootstrap -- examples/hello.ets --check
-npm run bootstrap -- examples/hello.ets -o build/hello.cpp --emit-ir build/hello.ir.json --build
-npm run bootstrap -- --from-ir build/hello.ir.json --run
-npm run bootstrap -- --config estatic.config.ts --run
-npm run bootstrap -- app.ets --run -- argumento1 argumento2
+estc init proyecto
+cd proyecto
+estc build
+estc run -- argumento1
+estc --check src/main.ts
+estc src/main.ts -o build/main.cpp --emit-ir build/main.ir.json --build
+estc --from-ir build/main.ir.json --run
 ```
 
-El ejecutable npm es `etsc-bootstrap`. `--help` enumera todas las opciones.
-El CLI histórico `etsc` y la entrada `etsc-ir-cpp` siguen disponibles.
+`estc --help` enumera las opciones. El driver reutiliza la configuración de
+entry, aliases, raíces, outputs, compilador, flags y bibliotecas. `init` genera
+`estatic.config.json`; se admiten configuraciones TS de objeto declarativo,
+pero no ejecución de configuraciones JavaScript dinámicas. `--root`, `--alias`
+y `--cache` llegan al cargador nativo. `--cache` es de sintaxis, no una caché
+semántica persistente. El perfil instalado puede ser de sólo lectura.
 
-## Proyecto y compilación
+El enlace reutiliza el runtime preparado y comprueba sus dependencias/ABI.
+Los perfiles diferentes usan la caché del usuario. Se respetan los wrappers
+HTTP existentes: httplib por defecto y Drogon con `@cpp_drogon`, además del
+cliente libcurl. No se descargan dependencias durante los builds.
 
-Se reutilizan `loadConfig`, la versión y los comandos `init`/`update-types` de
-`src/`. La configuración resuelve `entry`, aliases, raíces, rutas de C++/binario,
-compilador, flags y bibliotecas. Las opciones de la línea de comandos prevalecen
-sobre sus equivalentes de configuración. Sin entrada explícita se busca
-`estatic.config.ts` en el directorio actual. Las opciones de logging e
-incremental del CLI histórico todavía no se aplican a este recorrido.
+Códigos de salida: 0 en éxito, 1 en error de compilación y 2 en uso inválido.
+`run` propaga el código del programa. La generación fallida no escribe C++ ni
+el JSON de `--emit-ir`. La entrada `--from-ir` presupone IR verificado de un
+productor de confianza; la frontera del host no sustituye al verificador.
 
-`--root`, `--alias` y `--cache` se envían al cargador nativo. La caché es de
-sintaxis; no se anuncia caché persistente de resultados semánticos. En la instalación se utiliza `native/frontend` y no se invoca stage 0. En el clon,
-el driver reutiliza el ejecutable del frontend mientras su huella de fuentes, runtime,
-configuración del paquete, plataforma y nombre del compilador no cambie.
-`--frontend ruta` permite seleccionar un ejecutable ya construido.
-
-El enlace reutiliza archivos estáticos precompilados y validados por compilador,
-flags y dependencias. Los perfiles nuevos se preparan en una caché del usuario
-cuando el prefijo instalado es de sólo lectura. Detecta libuv, curl y el wrapper
-HTTP seleccionado. Se prefieren las instalaciones locales de libuv y Drogon
-bajo `build/libs/`; en su ausencia se utilizan las bibliotecas del sistema.
-Las dependencias no se descargan ni se instalan al compilar un programa.
-Drogon requiere soporte de excepciones en sus headers C++, por lo que sólo
-ese backend añade `-fexceptions`; esto no introduce excepciones en ETS.
-
-## Diagnósticos y alcance
-
-`--check` comprueba el frontend y el IR sin emitir C++. La generación comprueba
-además las capacidades del backend; por eso un programa puede pasar `--check`
-y requerir una capacidad C++ pendiente. `--from-ir` presupone un productor
-nativo de confianza que haya verificado el proyecto; los chequeos estructurales
-del host no sustituyen esa verificación ni validan entradas hostiles.
-
-Los errores incluyen el archivo, offset y código del diagnóstico. Los códigos
-de salida son 0 en éxito, 1 en error de compilación y 2 en uso inválido del CLI.
-`--run` propaga el código de salida del programa. Si el generador rechaza una
-capacidad, no escribe C++ ni el JSON solicitado mediante `--emit-ir`.
-
-El recorrido de unidades múltiples, los perfiles y el caché incremental del
-backend histórico no se sustituyen: se genera una unidad C++ del proyecto.
-La cobertura y los límites están en [ir/CPP.md](./ir/CPP.md).
+El compilador de stage 0 y el driver TypeScript de referencia permanecen en
+el clon para bootstrap y pruebas diferenciales. La implementación nativa del
+backend está en `src/codegen/ir/native/` y la del driver en `bootstrap/native/`.
+Las tablas runtime/tipos se generan desde las definiciones compartidas de
+`src/` durante la construcción, y se integran en el binario. Los perfiles,
+logging y caché incremental del CLI histórico no se anuncian como portados:
+este recorrido emite una unidad C++ del proyecto.
