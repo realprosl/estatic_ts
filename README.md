@@ -1029,8 +1029,14 @@ Los enums internos del AST conservan nombres legibles en JSON. Los tipos del
 checker siguen siendo strings canónicos; la caché persistente nativa almacena
 sintaxis, no resultados semánticos. El [IR nativo `ets-ir-2`](./bootstrap/ir/README.md)
 consume estas tablas y añade lowering/verificación de agregados, clases,
-genéricos, closures, variantes, recursos, préstamos y async. Aún no hay backend
-conectado a este IR, scheduler concurrente o compilación completa del compilador por sí mismo.
+genéricos, closures, variantes, recursos, préstamos y async. El backend C++ del IR tiene una entrada separada; siguen pendientes scheduler
+concurrente y compilación completa del compilador por sí mismo.
+
+El backend C++20 del IR ya está disponible mediante `npm run bootstrap:ir:cpp --
+examples/hello.ets --run`. Consume las tablas verificadas de `ets-ir-2` y
+reutiliza el runtime de `src/`, con capacidades y límites documentados en
+[`bootstrap/ir/CPP.md`](./bootstrap/ir/CPP.md). El CLI histórico permanece
+separado durante la validación de este recorrido.
 
 El [inventario vigente](./bootstrap/PENDING.md) separa implementación ejercitada,
 restricciones explícitas y obligaciones y límites del [IR común](./bootstrap/checker/IR.md).

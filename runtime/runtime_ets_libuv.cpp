@@ -182,6 +182,11 @@ void LibuvEventLoop::stop() noexcept {
 // oportunidad de ejecutarse (consume posted_/ready_ y procesa stop_).
 // El cleanup final de handles lo hace el destructor; run() solo
 // sale del bucle.
+void LibuvEventLoop::drainDetached() {
+    while ((!detached_.empty() || !detached_to_reap_.empty()) &&
+           !stop_.load(std::memory_order_acquire)) runOne();
+}
+
 void LibuvEventLoop::run() {
     stop_.store(false, std::memory_order_release);
     blockWhenIdle_ = true;

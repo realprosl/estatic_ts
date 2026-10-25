@@ -8,8 +8,8 @@ implementadas y sus límites; las secciones siguientes conservan los requisitos
 arquitectónicos del consumidor y de futuros backends.
 
 El lowering exige un proyecto nativo comprobado sin diagnósticos. No cuenta
-`COMPTIME_UNSUPPORTED` como soporte, no conecta todavía el backend C++ del CLI
-productivo y no certifica por sí solo el cierre global de [PENDING.md](../PENDING.md).
+`COMPTIME_UNSUPPORTED` como soporte, se consume mediante el backend C++ separado de `src/codegen/ir/`, sin sustituir
+el CLI histórico y no certifica por sí solo el cierre global de [PENDING.md](../PENDING.md).
 
 El AST de entrada seguirá pudiendo ser la arena actual `nodes[]`: no hace falta
 convertirlo primero en un árbol de objetos propietarios. El IR tendrá sus propias

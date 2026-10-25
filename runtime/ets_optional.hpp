@@ -40,7 +40,9 @@ public:
     }
     bool isPresent() const noexcept { return storage_.has_value(); }
     bool isEmpty() const noexcept { return !storage_.has_value(); }
-    const T& value() const { return storage_.value(); }
+    T& value() & { return storage_.value(); }
+    const T& value() const & { return storage_.value(); }
+    T&& value() && { return std::move(storage_).value(); }
     T valueOr(const T& defaultValue) const { return storage_.value_or(defaultValue); }
     template <typename F>
     auto map(F&& f) const -> Optional<decltype(f(std::declval<T>()))> {

@@ -74,17 +74,19 @@ export function verifyShapeInstruction(project: constRef<IrProject>, f: constRef
   }
   if (i.op == "aggregate") {
     if (!["array","fixedArray","tuple","pack"].includes(shape.kind) || i.names.length != i.operands.length || (i.result) < 0) return "Construcción de agregado inválida";
-    let position: number = 0;
+    let position: number = 0; let knownLength: number = 0;
     for (let at: number = 0; at < i.operands.length; at = at+1) {
       if (i.operands[at] < 0 || i.operands[at] >= f.values.length) return "Elemento inexistente";
       const actual: number = f.values[i.operands[at]]; let elements: number[] = [actual];
-      if (i.names[at] == "spread") { const input = project.typeDefinitions[actual]; if (!["array","fixedArray","tuple","pack"].includes(input.kind)) return "Spread inválido"; elements = input.arguments; }
+      if (i.names[at] == "spread") { const input = project.typeDefinitions[actual]; if (!["array","fixedArray","tuple","pack"].includes(input.kind)) return "Spread inválido"; elements = input.arguments; if (knownLength < 0 || input.kind == "array") knownLength = -1; else knownLength = knownLength+(input.kind == "fixedArray" ? input.length : input.arguments.length); }
       else if (i.names[at] != "value") return "Modo de elemento inválido";
+      else if (knownLength >= 0) knownLength = knownLength+1;
       for (const element of elements) {
         const expected: number = (shape.kind == "tuple" || shape.kind == "pack") ? position < shape.arguments.length ? shape.arguments[position] : -1 : shape.arguments[0];
         if (!irAssignable(project,element,expected,0)) return "Tipo de elemento incompatible"; position = position+1;
       }
     }
+    if (shape.kind == "fixedArray" && knownLength != shape.length) return "Longitud de agregado fijo incompatible";
     if ((shape.kind == "tuple" || shape.kind == "pack") && position != shape.arguments.length) return "Aridad de tupla incompatible";
     return "";
   }

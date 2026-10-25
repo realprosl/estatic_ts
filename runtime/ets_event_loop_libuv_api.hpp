@@ -53,6 +53,8 @@ public:
     uv_async_t* raw_wake() noexcept;
 
     void runOne() override;
+    // Finish owned detached tasks without entering the permanent service loop.
+    void drainDetached();
     // V26: run() bloquea el thread actual hasta que stop() se llame.
     // Pensado para ejecutarse en un thread dedicado de un
     // MultiLoopRunner. NO es seguro llamar runOne() y run() en el
