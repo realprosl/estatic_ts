@@ -112,6 +112,14 @@ struct ets_json_parser {
     std::string input;
     std::string error;
     explicit ets_json_parser(const std::string& src) : pos(0), input(src) {}
+    static bool parseDocument(const std::string& src, ets_json_value& value, std::string& error) {
+        ets_json_parser parser(src);
+        value = parser.parseAny();
+        parser.skipWhitespace();
+        if (parser.error.empty() && parser.pos != src.size()) parser.error = "unexpected trailing JSON input";
+        error = parser.error;
+        return error.empty();
+    }
     static ets_json_value parseValue(const std::string& src) {
         ets_json_parser parser(src);
         ets_json_value value = parser.parseAny();

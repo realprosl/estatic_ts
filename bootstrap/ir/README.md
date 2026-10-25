@@ -13,7 +13,8 @@ node --experimental-strip-types bootstrap/ir/audit.ts
 La salida JSON es determinista. El código de salida es 0 para un proyecto
 verificado, 1 para diagnósticos y 2 para argumentos incorrectos. Un proyecto
 fallido puede contener IR parcial: **un consumidor debe exigir `success: true`**.
-El backend C++20 de `src/codegen/ir/` consume este formato y reutiliza el
+El backend C++20 nativo de `src/codegen/ir/native/` y la referencia TypeScript
+de `src/codegen/ir/` consumen este formato y reutiliza el
 runtime del compilador existente. El [CLI general](../CLI.md) conecta todas las etapas;
 la entrada de backend sigue disponible en `bootstrap/ir/cpp.ts`;
 el CLI histórico de `src/` conserva su pipeline. Véase

@@ -71,8 +71,8 @@ export function runtimeArchive(unit:RuntimeUnit,cxx=process.env.CXX??"g++",flags
   const key=hash(JSON.stringify(["ets-runtime-cache-1",unit,identity(cxx),identity(ar,false),options.map(flag=>flag.replaceAll(root,"$ROOT")),["CPATH","CPLUS_INCLUDE_PATH","C_INCLUDE_PATH","GCC_EXEC_PREFIX","COMPILER_PATH","SDKROOT"].map(name=>process.env[name]??""),flags.some(flag=>!flag.startsWith("-")||/^-(?:I|iquote|isystem|include|imacros)/.test(flag)&&!isAbsolute(flag.replace(/^-(?:I|iquote|isystem|include|imacros)/,"")))?process.cwd():"",sources[unit].map(p=>hash(readFileSync(join(root,p))))]));
   const name=`libets_${unit}.a`,installed=existsSync(join(root,"installation.json"));
   const prebuilt=join(root,"build/runtime-cache",key);
-  const userCache=resolve(process.env.ESTATIC_RUNTIME_CACHE??join(process.env.XDG_CACHE_HOME??join(homedir(),".cache"),"nativo/runtime"));
-  const writable=join(installed?userCache:resolve(process.env.ESTATIC_RUNTIME_CACHE??join(root,"build/runtime-cache")),key);
+  const userCache=resolve(process.env.ESTC_RUNTIME_CACHE??process.env.ESTATIC_RUNTIME_CACHE??join(process.env.XDG_CACHE_HOME??join(homedir(),".cache"),"estc/runtime"));
+  const writable=join(installed?userCache:resolve(process.env.ESTC_RUNTIME_CACHE??process.env.ESTATIC_RUNTIME_CACHE??join(root,"build/runtime-cache")),key);
   for(const directory of [...new Set([prebuilt,writable])])if(valid(directory,name))return join(directory,name);
   const temporary=writable+".tmp-"+randomUUID();mkdirSync(temporary,{recursive:true});
   try{

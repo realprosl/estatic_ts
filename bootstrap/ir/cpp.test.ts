@@ -6,8 +6,23 @@ import { spawnSync, spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { buildLoader, root } from "../modules/build.ts";
-import { nativeIr, buildIrCpp } from "./cpp.ts";
-import { generateCppFromIr } from "../../src/codegen/ir/cpp-generator.ts";
+import { nativeIr, buildIrCpp as referenceBuild } from "./cpp.ts";
+import { generateCppFromIr as referenceCpp } from "../../src/codegen/ir/cpp-generator.ts";
+const nativeProjects=new WeakMap<object,Parameters<typeof referenceCpp>[0]>();
+function generateCppFromIr(project:Parameters<typeof referenceCpp>[0]):ReturnType<typeof referenceCpp>{
+ let result:ReturnType<typeof referenceCpp>;
+ if(!process.env.ESTATIC_NATIVE_CODEGEN)result=referenceCpp(project);
+ else {const p=spawnSync(process.env.ESTATIC_NATIVE_CODEGEN,["--codegen-json"],{input:JSON.stringify(project),encoding:"utf8",maxBuffer:64*1024*1024});if(p.error)throw p.error;if(p.status!==0)throw new Error(p.stderr);result=JSON.parse(p.stdout);}
+ nativeProjects.set(result,project);return result;
+}
+function buildIrCpp(result:ReturnType<typeof referenceCpp>,cpp:string,binary:string,cxx?:string,flags:string[]=[]):void{
+ if(!process.env.ESTATIC_NATIVE_BUILD){referenceBuild(result,cpp,binary,cxx,flags);return;}
+ const project=nativeProjects.get(result);assert(project);const jsonFile=cpp+".json";writeFileSync(jsonFile,JSON.stringify(project));
+ const args=["--from-ir",jsonFile,"-o",cpp,"--binary",binary,"--build"];if(cxx)args.push("--cxx",cxx);for(const flag of flags)args.push("--cxx-flag",flag);
+ if(flags.some(flag=>flag.includes("sanitize"))&&process.env.ESTATIC_TEST_DISABLE_LSAN==="1"){const header=cpp+".lsan.hpp";writeFileSync(header,'extern "C" int __lsan_is_turned_off(){return 1;}\n');args.push("--cxx-flag","-include","--cxx-flag",header);}
+ const p=spawnSync(process.env.ESTATIC_NATIVE_BUILD,args,{encoding:"utf8",timeout:180000,env:{...process.env,ESTC_ROOT:root}});assert.ifError(p.error);assert.equal(p.status,0,p.stderr);
+ // Sanitizer test's environment exception remains test-only.
+}
 const directory=mkdtempSync(join(root,"build-ir-cpp-test-"));let lower:string;
 before(async()=>{lower=process.env.ESTATIC_IR_BINARY??await buildLoader(join(directory,"lower"),"bootstrap/ir/demo.ets",true);});
 after(()=>rmSync(directory,{recursive:true,force:true}));
