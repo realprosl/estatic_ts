@@ -40,19 +40,41 @@ test("installed estc initializes, builds and runs independently of the clone wit
   assert(!existsSync(join(home,"src")));assert(!existsSync(join(home,"bootstrap")));
   const poison=join(dir,"without-node"),sentinel=join(dir,"node-was-used");mkdirSync(poison);
   for(const executable of ["node","nodejs","npm"]){const path=join(poison,executable);writeFileSync(path,`#!/bin/sh\necho forbidden >> '${sentinel}'\nexit 99\n`);chmodSync(path,0o755);}
-  const nativeEnv={...process.env,PATH:poison+":"+process.env.PATH,NATIVO_NODE:"/missing/node",NODE:"/missing/node",XDG_CACHE_HOME:cache};
+  const nativeEnv={...process.env,PATH:poison+":"+process.env.PATH,NATIVO_NODE:"/missing/node",NODE:"/missing/node",XDG_CACHE_HOME:cache,ESTC_RUNTIME_CACHE:"",ESTATIC_RUNTIME_CACHE:""};
   const run=(args:string[],cwd=dir)=>spawnSync(bin,args,{cwd,encoding:"utf8",timeout:120000,env:nativeEnv});
+  for(const flag of ["--version","-version","-v","-V","/V"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/^estc \d+\.\d+\.\d+ \(v\d+\)\n$/);}
+  for(const flag of ["--help","-h","-H"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/Uso: estc init/);assert.match(p.stdout,/\/V/);assert.match(p.stdout,/-H/);}
+  writeFileSync(join(home,"templates/types/estatic.d.ts"),"// stale template");
+  mkdirSync(project);writeFileSync(join(project,"existing.txt"),"keep me");
   let p=run(["init",project]);assert.equal(p.status,0,p.stderr);assert.match(readFileSync(join(project,"README.md"),"utf8"),/estc build/);
+  assert.equal(readFileSync(join(project,"existing.txt"),"utf8"),"keep me");
+  assert.equal(readFileSync(join(project,"types/estatic.d.ts"),"utf8"),readFileSync(join(root,"types/estatic.d.ts"),"utf8"));
+  const editor=JSON.parse(readFileSync(join(project,"tsconfig.json"),"utf8"));assert(editor.include.includes("types/**/*"));assert(editor.include.includes("estatic.config.json"));
+  assert.match(readFileSync(join(project,"types/estatic.d.ts"),"utf8"),/declare global/);
+  for(const folder of ["cache","generated","runtime"])assert(existsSync(join(project,".build",folder)));
+  assert.match(readFileSync(join(project,".gitignore"),"utf8"),/\.build\//);
+  p=run(["init",project]);assert.equal(p.status,1);assert.equal(readFileSync(join(project,"existing.txt"),"utf8"),"keep me");
   const libraries=readdirSync(join(home,"build/runtime-cache"),{recursive:true}).map(String).filter(p=>p.endsWith(".a")).map(p=>join(home,"build/runtime-cache",p));assert.equal(libraries.length,2);
   const before=libraries.map(p=>statSync(p).mtimeMs);
   writeFileSync(join(project,"src/main.ts"),'async function f():Promise<void>{await sleep(1);print("native installed");}await f();');
   p=run(["build"],project);assert.equal(p.status,0,p.stderr);assert(existsSync(join(project,"build/app")));
+  const objects=()=>readdirSync(join(project,".build/cache/objects"),{recursive:true}).map(String).filter(p=>p.endsWith(".o")).map(p=>join(project,".build/cache/objects",p));
+  const firstObjects=objects();assert.equal(firstObjects.length,1);const objectTime=statSync(firstObjects[0]).mtimeMs;
+  assert(readdirSync(join(project,".build/runtime"),{recursive:true}).some(p=>String(p).endsWith(".a")));
+  assert(readdirSync(join(project,".build/generated")).some(p=>p.endsWith(".cpp")));
+  assert(existsSync(join(project,".build/cache/syntax")));
   p=run(["run"],project);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");
+  assert.equal(statSync(firstObjects[0]).mtimeMs,objectTime,"Unchanged builds reuse their object");
+  writeFileSync(firstObjects[0],"corrupt");p=run(["run"],project);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");assert.notEqual(readFileSync(firstObjects[0],"utf8"),"corrupt");
   assert.deepEqual(libraries.map(p=>statSync(p).mtimeMs),before);assert(!existsSync(cache),"Installed builds should reuse the prepared archives");
+  const runtimeFiles=readdirSync(join(project,".build/runtime"),{recursive:true}).map(String).filter(p=>p.endsWith(".a"));
+  const localArchive=join(project,".build/runtime",runtimeFiles[0]);writeFileSync(localArchive,"corrupt");
+  p=run(["run"],project);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");assert.notEqual(readFileSync(localArchive,"utf8"),"corrupt");
   const upgrade=node(["--experimental-strip-types",join(root,"bootstrap/install.ts"),"--prefix",prefix,"--frontend",frontend]);assert.equal(upgrade.status,0,upgrade.stderr);assert.notEqual(realpathSync(join(prefix,"lib/estc/current")),home);
   const moved=join(dir,"relocated prefix");renameSync(prefix,moved);const movedBin=join(moved,"bin/estc");
   p=spawnSync(movedBin,["run"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");assert(!existsSync(cache));
-  p=spawnSync(movedBin,["run","--cxx-flag","-DUSER_PROFILE=1"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");assert(existsSync(join(cache,"estc/runtime")),"A new ABI profile must use the user cache");
+  const countBeforeProfile=objects().length;
+  p=spawnSync(movedBin,["run","--cxx-flag","-DUSER_PROFILE=1"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");assert(!existsSync(cache),"A new ABI profile stays in the project cache");assert.equal(objects().length,countBeforeProfile+1);
   const irFile=join(project,"checked.ir.json");
   p=spawnSync(movedBin,["--check","--emit-ir",irFile],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert(existsSync(irFile));
   p=spawnSync(movedBin,["--from-ir",irFile,"-o",join(project,"from-ir.cpp"),"--binary",join(project,"from-ir"),"--run"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");
@@ -62,6 +84,15 @@ test("installed estc initializes, builds and runs independently of the clone wit
   writeFileSync(tsConfig,'export default (()=>({entry:"src/main.ts"}))();');p=spawnSync(movedBin,["--check"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,2);rmSync(tsConfig);renameSync(configPath+".saved",configPath);
   mkdirSync(join(project,"deps"));writeFileSync(join(project,"deps/dep.ets"),'export const answer=42;');config.aliases={app:"deps"};writeFileSync(configPath,JSON.stringify(config));writeFileSync(join(project,"src/main.ts"),'import {answer} from "app/dep";print(answer);');
   p=spawnSync(movedBin,["run"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");
+  config.incremental={enabled:true,cacheDirectory:"custom cache",generatedDirectory:"custom generated"};writeFileSync(configPath,JSON.stringify(config));
+  p=spawnSync(movedBin,["run"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");assert(existsSync(join(project,"custom cache/objects")));assert(existsSync(join(project,"custom generated")));
+  const header=join(project,"cache-header.hpp"),headerFlags=["--cxx-flag","-include","--cxx-flag",header];writeFileSync(header,"// valid header\n");
+  p=spawnSync(movedBin,["run",...headerFlags],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);
+  writeFileSync(header,"#error changed header must invalidate the object\n");
+  p=spawnSync(movedBin,["build",...headerFlags],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,1);assert.match(p.stderr,/changed header/);
+  writeFileSync(header,"// valid header\n");p=spawnSync(movedBin,["run",...headerFlags],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");
+  config.incremental.enabled=false;config.incremental.cacheDirectory="disabled cache";config.incremental.generatedDirectory="disabled generated";writeFileSync(configPath,JSON.stringify(config));
+  p=spawnSync(movedBin,["run"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");assert(!existsSync(join(project,"disabled cache")));assert(!existsSync(join(project,"disabled generated")));
   writeFileSync(join(project,"src/main.ts"),'print(argument(1));exitProcess(7);');p=spawnSync(movedBin,["run","--","forwarded"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,7,p.stderr);assert.equal(p.stdout,"forwarded\n");assert(!existsSync(sentinel),"The installed compiler must never execute Node");
  }finally{rmSync(dir,{recursive:true,force:true});}
 });

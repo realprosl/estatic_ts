@@ -47,7 +47,15 @@ export async function install(argv:string[]):Promise<void> {
     const driver=buildNativeCompiler(undefined,cxx);
     const templates=join(work,"templates");await initializeProject(templates,{command:"estc",compiler:cxx});
     const config=(await import(pathToFileURL(join(templates,"estatic.config.ts")).href)).default;
+    config.incremental.cacheDirectory=".build/cache";
+    config.incremental.generatedDirectory=".build/generated";
+    config.logging.file=".build/transpiler-report.json";
     writeFileSync(join(templates,"estatic.config.json"),JSON.stringify(config,null,2)+"\n");
+    writeFileSync(join(templates,".gitignore"),readFileSync(join(templates,".gitignore"),"utf8")+".build/\n");
+    const editorConfig=JSON.parse(readFileSync(join(templates,"tsconfig.json"),"utf8"));
+    editorConfig.include=editorConfig.include.filter((p:string)=>p!=="estatic.config.ts");
+    editorConfig.include.push("estatic.config.json");
+    writeFileSync(join(templates,"tsconfig.json"),JSON.stringify(editorConfig,null,2)+"\n");
     writeFileSync(join(templates,"README.md"),readFileSync(join(templates,"README.md"),"utf8").replaceAll("estatic.config.ts","estatic.config.json"));rmSync(join(templates,"estatic.config.ts"));
     const key=createHash("sha256").update(digest(native)).update(digest(driver));
     for(const folder of folders)for(const file of readdirSync(join(root,folder),{recursive:true}).map(String).sort()){
