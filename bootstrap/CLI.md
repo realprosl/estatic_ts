@@ -37,9 +37,10 @@ El compilador de stage 0 y el driver TypeScript de referencia permanecen en
 el clon para bootstrap y pruebas diferenciales. La implementación nativa del
 backend está en `src/codegen/ir/native/` y la del driver en `bootstrap/native/`.
 Las tablas runtime/tipos se generan desde las definiciones compartidas de
-`src/` durante la construcción, y se integran en el binario. Los perfiles,
-logging y caché incremental del CLI histórico no se anuncian como portados:
-este recorrido emite una unidad C++ del proyecto.
+`src/` durante la construcción y se integran en el binario. El logging
+estructurado y los perfiles del CLI histórico no se anuncian como portados.
+Este recorrido emite una unidad C++ del proyecto y reutiliza su objeto cuando
+las entradas y dependencias de la caché siguen siendo válidas.
 
 ## Progreso del CLI de bootstrap
 
