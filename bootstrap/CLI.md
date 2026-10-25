@@ -1,22 +1,22 @@
-# Driver nativo estc
+# Driver nativo etsc
 
-[`install.sh`](../INSTALL.md) construye e instala `estc`. El frontend ETS se
+[`install.sh`](../INSTALL.md) construye e instala `etsc`. El frontend ETS se
 compila usando `src/` durante el bootstrap. El driver y el emisor C++ se compilan
 a código máquina; el recorrido instalado funciona sin Node ni TypeScript de
 stage 0. Node sólo participa en el bootstrap, en la instalación y en las
 herramientas de desarrollo/pruebas.
 
 ```sh
-estc init proyecto
+etsc init proyecto
 cd proyecto
-estc build
-estc run -- argumento1
-estc --check src/main.ts
-estc src/main.ts -o build/main.cpp --emit-ir build/main.ir.json --build
-estc --from-ir build/main.ir.json --run
+etsc build
+etsc run -- argumento1
+etsc --check src/main.ts
+etsc src/main.ts -o build/main.cpp --emit-ir build/main.ir.json --build
+etsc --from-ir build/main.ir.json --run
 ```
 
-`estc --help` enumera las opciones. El driver reutiliza la configuración de
+`etsc --help` enumera las opciones. El driver reutiliza la configuración de
 entry, aliases, raíces, outputs, compilador, flags y bibliotecas. `init` genera
 `estatic.config.json`; se admiten configuraciones TS de objeto declarativo,
 pero no ejecución de configuraciones JavaScript dinámicas. `--root`, `--alias`
@@ -67,4 +67,4 @@ Los argumentos situados después de `--` pertenecen al programa, incluidos
 `--verbose` y `--no-progress`. `-v` continúa mostrando la versión.
 
 Estas opciones se implementan en `bootstrap/cli.ts`; no añaden flags nuevos
-al ejecutable nativo instalado `estc`.
+al ejecutable nativo instalado `etsc`.

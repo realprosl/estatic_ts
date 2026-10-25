@@ -1,16 +1,16 @@
-# Instalación y trabajo con estc
+# Instalación y trabajo con etsc
 
 ```sh
 git clone https://github.com/realprosl/estatic_ts.git
 cd estatic_ts
 ./install.sh
-estc init mi-proyecto
+etsc init mi-proyecto
 cd mi-proyecto
-estc build
-estc run
+etsc build
+etsc run
 ```
 
-`install.sh` instala `/usr/local/bin/estc` y sus archivos privados bajo
+`install.sh` instala `/usr/local/bin/etsc` y sus archivos privados bajo
 `/usr/local/lib/estc/`. Se necesitan permisos sobre ese prefijo. Para una
 instalación personal:
 
@@ -23,15 +23,17 @@ export PATH="$HOME/.local/bin:$PATH"
 
 Durante la instalación se usa Node >=22.6 y el compilador de stage 0 en `src/`
 para construir el frontend ETS. El driver y el emisor C++ se compilan también
-a código máquina. Después, `estc` ejecuta el frontend nativo y emite, compila y
+a código máquina. Después, `etsc` ejecuta el frontend nativo y emite, compila y
 enlaza C++ sin Node, npm, intérprete JavaScript ni los fuentes TypeScript de
 stage 0. El frontend es ETS compilado; el driver y el backend son C++20. Esto
 no afirma que todo el compilador esté escrito en ETS o sea autoalojado.
 
-El ejecutable instalado es `estc`. La distribución contiene el frontend nativo,
+El ejecutable instalado es `etsc`. La distribución contiene el frontend nativo,
 plantillas, tipos del editor, cabeceras y runtime precompilado; no instala el
 antiguo launcher que ejecutaba Node. Al actualizar una instalación anterior,
-se retira `nativo` sólo si el comando pertenece a esa instalación. Un comando
+se retiran `estc` y `nativo` sólo si sus hashes prueban que pertenecen a esa
+instalación. Un enlace npm de `etsc` al CLI de este mismo clon se sustituye
+por el binario nativo. Un comando
 ajeno no se sobrescribe. El prefijo completo puede trasladarse.
 
 Requisitos de construcción: C++20 (GCC/Clang), `ar`, OpenSSL/libcrypto y las
@@ -47,17 +49,17 @@ Una actualización prepara una distribución nueva antes de publicar el comando.
 
 ## Proyectos y configuración
 
-`estc init` genera `src/main.ts`, los tipos del editor y `estatic.config.json`.
+`etsc init` genera `src/main.ts`, los tipos del editor y `estatic.config.json`.
 `build` usa esa configuración; `run` construye y ejecuta, pasando los argumentos
 y conservando el código de salida:
 
 ```sh
-estc run -- argumento1 argumento2
-estc build src/main.ets -o build/main.cpp --binary build/main
-estc run src/main.ets -- argumento1
-estc update-types .
-estc --help  # también -h y -H
-estc --version  # también -version, -v, -V y /V
+etsc run -- argumento1 argumento2
+etsc build src/main.ets -o build/main.cpp --binary build/main
+etsc run src/main.ets -- argumento1
+etsc update-types .
+etsc --help  # también -h y -H
+etsc --version  # también -version, -v, -V y /V
 ```
 
 El driver admite también `estatic.config.ts` cuando contiene un objeto
@@ -70,10 +72,10 @@ presupone un productor de confianza que lo haya verificado.
 
 ## Tipos y caché del proyecto
 
-`estc init` admite un directorio existente y conserva sus archivos: si alguno
+`etsc init` admite un directorio existente y conserva sus archivos: si alguno
 colisiona con una plantilla, aborta antes de escribir. Copia las declaraciones
 canónicas a `types/estatic.d.ts` y genera un `tsconfig.json` que las carga para
-que el editor conozca los globales del dialecto sin imports. `estc update-types`
+que el editor conozca los globales del dialecto sin imports. `etsc update-types`
 permite refrescarlas conservando un respaldo de las anteriores.
 
 Los proyectos nativos nuevos crean `.build/` (ignorado por Git):
