@@ -76,3 +76,11 @@ build/configured-app → 26   # sumRange(10) con break/continue
 Para una integración más completa, [`todo-project/`](./todo-project/) contiene
 modelo, repositorio, validación, servicio, presentación, ocho comprobaciones
 ejecutables y un servidor HTTP opcional seleccionado con `@cpp_drogon`.
+
+## Proyecto modular con el compilador nativo
+
+[`notification-app/`](notification-app/README.md) contiene un proyecto de siete
+módulos con canales SMS/correo simulados, clases, interfaces, aliases y async.
+Se ejecuta con `etsc run --verbose` desde esa carpeta. Su script `run.sh`
+comprueba toda la salida esperada; `npm run test:notification-app` verifica
+además la recompilación, las cachés y los errores en una copia temporal.

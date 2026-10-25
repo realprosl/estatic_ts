@@ -1,0 +1,5 @@
+sms | Ana: Tu pedido esta listo
+mail | Pedido | Ana: Tu pedido esta listo
+sms | Luis: Tu cuenta esta activada
+mail | Cuenta | Luis: Tu cuenta esta activada
+TOTAL: 4
