@@ -28,6 +28,10 @@ function testIr(): void {
     if (mode == "fixed-count") for (let f: number = 0; f < ir.functions.length; f = f+1) for (let b: number = 0; b < ir.functions[f].blocks.length; b = b+1) for (let at: number = 0; at < ir.functions[f].blocks[b].instructions.length; at = at+1) {
       const i = ir.functions[f].blocks[b].instructions[at]; if (i.op == "aggregate" && ir.typeDefinitions[i.typeId].kind == "fixedArray") { ir.functions[f].blocks[b].instructions[at].operands.pop(); ir.functions[f].blocks[b].instructions[at].names.pop(); }
     }
+    if (mode == "dispatch-callee" && ir.dispatches.length > 0) ir.dispatches[0].callee = 999999;
+    if (mode == "dispatch-missing") ir.dispatches = [];
+    if (mode == "dispatch-signature" && ir.dispatches.length > 0) ir.dispatches[0].signature = 0;
+    if (mode == "method-table") for (let at: number = 0; at < ir.typeDefinitions.length; at = at+1) if (ir.typeDefinitions[at].methods.length > 0) ir.typeDefinitions[at].methodTypes = [];
     if (mode == "resource-flag") for (let at: number = 0; at < ir.typeDefinitions.length; at = at+1) ir.typeDefinitions[at].resource = false;
     if (mode == "finalizer") ir.modules[0].finalizer = 999999;
     if (mode == "finalization-order") ir.finalizationOrder = [];

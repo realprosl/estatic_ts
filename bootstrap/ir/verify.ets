@@ -84,6 +84,15 @@ export class IrVerifier {
         if (target.signature != this.project.types[i.typeId] || i.operands.length != target.captureTypes.length || !hasResult) this.error(i.source,"Entorno de closure incompatible");
         for (let at: number = 0; at < i.operands.length && at < target.captureTypes.length; at = at+1) if (this.value(f,i.operands[at])) { const actual: number = f.values[i.operands[at]]; const shape = this.project.typeDefinitions[actual]; if (target.captureModes[at] == "reference" ? shape.kind != "ref" || shape.arguments[0] != target.captureTypes[at] : actual != target.captureTypes[at]) this.error(i.source,"Tipo de captura incompatible"); }
       }
+    } else if (i.op == "interfaceCall") {
+      if (!this.typeId(i.signature) || this.project.typeDefinitions[i.signature].kind != "function" || i.operands.length == 0 || !this.value(f,i.operands[0])) this.error(i.source,"Dispatch de interfaz sin firma/receptor");
+      else {
+        const signature = this.project.typeDefinitions[i.signature]; const receiver = this.project.typeDefinitions[f.values[i.operands[0]]];
+        if (receiver.kind != "ref" || receiver.arguments.length != 1 || !["interface","intersection"].includes(this.project.typeDefinitions[receiver.arguments[0]].kind)) this.error(i.source,"Receptor de interfaz inválido");
+        else for (const concrete of this.project.typeDefinitions[receiver.arguments[0]].variants) { let found: boolean = false; for (const d of this.project.dispatches) if (d.interfaceType == receiver.arguments[0] && d.concreteType == concrete && d.name == i.text && d.signature == i.signature) found = true; if (!found) this.error(i.source,"Dispatch de interfaz incompleto"); }
+        if (signature.arguments.length != i.operands.length || signature.arguments[signature.arguments.length-1] != i.typeId || hasResult != (resultType != "void")) this.error(i.source,"Firma de interfaz incompatible");
+        for (let at: number = 1; at < i.operands.length && at < signature.arguments.length; at = at+1) if (!this.value(f,i.operands[at]) || f.values[i.operands[at]] != signature.arguments[at-1]) this.error(i.source,"Argumento de interfaz incompatible");
+      }
     } else if (i.op == "callIndirect") {
       if (!this.typeId(i.signature) || this.project.typeDefinitions[i.signature].kind != "function" || i.operands.length == 0 || !this.value(f,i.operands[0])) this.error(i.source,"Llamada indirecta sin firma");
       else { const signature = this.project.typeDefinitions[i.signature];
@@ -216,6 +225,21 @@ export class IrVerifier {
       for (const child of shape.arguments) if (!this.typeId(child)) this.error(new IrSource("","","",-1,0,0),"Argumento de tipo inexistente");
       if (shape.fields.length != shape.names.length) this.error(new IrSource("","","",-1,0,0),"Tabla de campos incompatible");
       for (const child of shape.fields) if (!this.typeId(child)) this.error(new IrSource("","","",-1,0,0),"Campo de tipo inexistente");
+    }
+    let dispatchKeys: string[] = [];
+    for (const d of this.project.dispatches) {
+      const key: string = numberToString(d.interfaceType)+":"+numberToString(d.concreteType)+":"+d.name+":"+numberToString(d.signature);
+      if (dispatchKeys.includes(key)) this.error(new IrSource("","","",-1,0,0),"Dispatch duplicado"); dispatchKeys.push(key);
+      const source = new IrSource("","","",-1,0,0);
+      if (!this.typeId(d.interfaceType) || !this.typeId(d.concreteType) || !this.typeId(d.signature) || (d.callee) < 0 || d.callee >= this.project.functions.length) this.error(source,"Identidad de dispatch inválida");
+      else {
+        const target = this.project.functions[d.callee]; const signature = this.project.typeDefinitions[d.signature];
+        if (!["interface","intersection"].includes(this.project.typeDefinitions[d.interfaceType].kind) || !this.project.typeDefinitions[d.interfaceType].variants.includes(d.concreteType) || signature.kind != "function" || target.parameterTypes.length != signature.arguments.length || (target.receiverType) < 0) this.error(source,"Contrato de dispatch inválido");
+        else {
+          if (this.project.typeDefinitions[target.receiverType].kind != "ref" || this.project.typeDefinitions[target.receiverType].arguments[0] != d.concreteType || !irAssignable(this.project,target.returns,signature.arguments[signature.arguments.length-1],0)) this.error(source,"Destino de dispatch incompatible");
+          for (let at: number = 1; at < target.parameterTypes.length; at = at+1) if (!irAssignable(this.project,signature.arguments[at-1],target.parameterTypes[at],0)) this.error(source,"Parámetro de dispatch incompatible");
+        }
+      }
     }
     for (const contract of this.project.effectContracts) {
       if (!["body","creation"].includes(contract.phase) || (contract.creation) < -1 || contract.creation >= this.project.effectContracts.length) this.error(contract.source,"Contrato de efectos incompatible");

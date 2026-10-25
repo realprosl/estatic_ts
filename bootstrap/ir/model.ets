@@ -50,19 +50,29 @@ export class IrIssue {
   constructor(code: string, message: string, source: IrSource) { this.code = code; this.message = message; this.source = source; }
 }
 export class IrProject {
+  dispatches: IrDispatch[];
   effectContracts: IrEffectContract[]; annotations: IrAnnotation[];
   runtimeContracts: IrRuntimeContract[];
   typeDefinitions: IrType[]; finalizationOrder: number[];
   types: string[]; modules: IrModule[]; globals: IrPlace[]; functions: IrFunction[]; initializationOrder: number[]; entry: number; diagnostics: IrIssue[]; success: boolean;
-  constructor() { this.effectContracts = []; this.annotations = []; this.runtimeContracts = []; this.typeDefinitions = []; this.finalizationOrder = []; this.types = []; this.modules = []; this.globals = []; this.functions = []; this.initializationOrder = []; this.entry = -1; this.diagnostics = []; this.success = false; }
+  constructor() { this.dispatches = []; this.effectContracts = []; this.annotations = []; this.runtimeContracts = []; this.typeDefinitions = []; this.finalizationOrder = []; this.types = []; this.modules = []; this.globals = []; this.functions = []; this.initializationOrder = []; this.entry = -1; this.diagnostics = []; this.success = false; }
+}
+
+// Concrete method identities for structural interface dispatch, resolved by the producer.
+export class IrDispatch {
+  interfaceType: number; concreteType: number; name: string; signature: number; callee: number;
+  constructor(interfaceType: number, concreteType: number, name: string, signature: number, callee: number) {
+    this.interfaceType = interfaceType; this.concreteType = concreteType; this.name = name; this.signature = signature; this.callee = callee;
+  }
 }
 
 // Logical shapes only: no target layout, C++ spelling or ABI decisions.
 export class IrType {
+  methods: string[]; methodTypes: number[];
   variants: number[]; tag: string; discriminator: string; discriminatorType: number; discriminatorValue: string;
   numericKind: string; bits: number; isSigned: boolean;
   kind: string; arguments: number[]; fields: number[]; names: string[]; symbolId: string; resource: boolean; length: number;
-  constructor(kind: string) { this.variants = []; this.tag = ""; this.discriminator = ""; this.discriminatorType = -1; this.discriminatorValue = ""; this.numericKind = "none"; this.bits = 0; this.isSigned = false; this.kind = kind; this.arguments = []; this.fields = []; this.names = []; this.symbolId = ""; this.resource = false; this.length = -1; }
+  constructor(kind: string) { this.methods = []; this.methodTypes = []; this.variants = []; this.tag = ""; this.discriminator = ""; this.discriminatorType = -1; this.discriminatorValue = ""; this.numericKind = "none"; this.bits = 0; this.isSigned = false; this.kind = kind; this.arguments = []; this.fields = []; this.names = []; this.symbolId = ""; this.resource = false; this.length = -1; }
 }
 export class IrRuntimeContract {
   name: string; parameters: number[]; returns: number; effects: string[]; capability: string;

@@ -5,7 +5,9 @@ Revisión documental: **2026-10-24**. Base de código inspeccionada y ejecutada:
 La revisión no cambia la revisión pública v64. Actualización de implementación:
 el [IR nativo `ets-ir-2`](./ir/README.md) ya incluye lowering, verificación de recursos/préstamos y continuaciones async;
 hay un backend C++ separado sobre estas tablas; su cobertura se documenta en
-[ir/CPP.md](./ir/CPP.md). El cierre global sigue pendiente.
+[ir/CPP.md](./ir/CPP.md). Interfaces/intersecciones, HTTP (httplib/Drogon y
+cliente curl) y el [CLI general](./CLI.md) ya tienen recorridos de ejecución
+verificados. El cierre global sigue pendiente.
 
 El frontend nativo ejecuta lexer, parser, cargador, expansión, binder, checker,
 seguridad, efectos y evaluación comptime. Devuelve `ets-checked-2`, con ASTs por

@@ -1,4 +1,4 @@
-import { IrCleanupScope, IrRuntimeContract, IrType, IrSource, IrPlace, IrInstruction, IrBlock, IrFunction, IrModule, IrIssue, IrProject } from "./model";
+import { IrDispatch, IrCleanupScope, IrRuntimeContract, IrType, IrSource, IrPlace, IrInstruction, IrBlock, IrFunction, IrModule, IrIssue, IrProject } from "./model";
 import { ModuleGraph } from "../modules/loader";
 import { BindingResult, bindingChild } from "../binder/binder";
 import { CheckResult } from "../checker/model";
@@ -22,6 +22,8 @@ function memoryValue(text: string): string { let value: string = text; while (me
 function irSameNumbers(left: number[], right: number[]): boolean { if (left.length != right.length) return false; for (let i: number = 0; i < left.length; i = i+1) if (left[i] != right[i]) return false; return true; }
 
 export class IrLowering {
+  interfaceFrom: number[]; interfaceTo: number[];
+  dispatchInterfaces: number[]; dispatchNames: string[]; dispatchSignatures: number[];
   contextFrom: string[]; contextTo: string[];
   graph: ModuleGraph; binding: BindingResult; checked: CheckResult; result: IrProject;
   module: number; currentFunction: number; block: number; symbols: number[]; breakTargets: number[]; continueTargets: number[];
@@ -31,6 +33,7 @@ export class IrLowering {
   argumentSymbols: number[]; argumentValues: number[];
   functionModules: number[]; functionNodes: number[]; globalSymbols: number[]; orderState: number[];
   constructor(graph: ModuleGraph, binding: BindingResult, checked: CheckResult) {
+    this.interfaceFrom = []; this.interfaceTo = []; this.dispatchInterfaces = []; this.dispatchNames = []; this.dispatchSignatures = [];
     this.contextFrom = []; this.contextTo = [];
     this.graph = graph; this.binding = binding; this.checked = checked; this.result = new IrProject();
     this.module = 0; this.currentFunction = -1; this.block = 0; this.symbols = []; this.breakTargets = []; this.continueTargets = [];
@@ -103,6 +106,19 @@ export class IrLowering {
     this.result.typeDefinitions[index].kind = kind;
     this.result.typeDefinitions[index].numericKind = irNumericKind(text); this.result.typeDefinitions[index].bits = irNumericWidth(text); this.result.typeDefinitions[index].isSigned = irNumericSigned(text);
     for (let at: number = 0; at < arguments.length; at = at+1) { let argument: string = arguments[at]; if (argument.startsWith("...")) argument = argument.slice(3,argument.length); this.result.typeDefinitions[index].arguments.push(this.typeId(argument,id)); }
+    if (kind == "interface") {
+      const owner = this.binding.symbols[nominal];
+      for (const e of this.graph.modules[owner.module].cached.result.ast.nodes[owner.node].edges) if (e.role == EdgeRole.Methods) {
+        const member: number = this.binding.files[owner.module].declarations[e.node];
+        this.result.typeDefinitions[index].methods.push(this.binding.symbols[member].name);
+        this.result.typeDefinitions[index].methodTypes.push(this.typeId(this.memberType(text,member),id));
+      }
+    }
+    if (kind == "intersection") for (const part of this.result.typeDefinitions[index].arguments) {
+      const shape = this.result.typeDefinitions[part];
+      for (let at: number = 0; at < shape.names.length; at = at+1) if (!this.result.typeDefinitions[index].names.includes(shape.names[at])) { this.result.typeDefinitions[index].names.push(shape.names[at]); this.result.typeDefinitions[index].fields.push(shape.fields[at]); }
+      for (let at: number = 0; at < shape.methods.length; at = at+1) { this.result.typeDefinitions[index].methods.push(shape.methods[at]); this.result.typeDefinitions[index].methodTypes.push(shape.methodTypes[at]); }
+    }
     this.result.typeDefinitions[index].resource = !["ref","constRef","readonly"].includes(kind) && resourceType(this.graph,this.binding,this.checked,text,[]);
     return index;
   }
@@ -231,7 +247,7 @@ export class IrLowering {
     if (op == "own") instruction.effects = ["allocate"];
     if (["dropValue","dropRemaining","dropFrame"].includes(op)) instruction.effects = ["destroy"];
     if (["borrow","address"].includes(op)) instruction.effects = ["borrow"];
-    if (["call","callIndirect"].includes(op)) instruction.effects = ["invoke"];
+    if (["call","callIndirect","interfaceCall"].includes(op)) instruction.effects = ["invoke"];
     if (op == "taskCreate") instruction.effects = ["allocate","defer"];
     if (op == "backendEscape") instruction.effects = ["opaque","backend:cpp"];
     if (op == "runtimeCall") instruction.effects = ["runtime"];
@@ -259,9 +275,72 @@ export class IrLowering {
     const identity: string = symbol >= 0 ? this.checked.symbolIds[symbol] : "";
     this.result.functions[this.currentFunction].places.push(new IrPlace(identity,typeId,-1,parameter,this.source(id))); return place;
   }
+  memberFor(text: string, name: string, signature: string = ""): number {
+    const nominal: number = canonicalSymbol(memoryValue(text)); if (nominal < 0) return -1;
+    const owner = this.binding.symbols[nominal];
+    let fallback: number = -1; let count: number = 0;
+    for (let at: number = 0; at < this.binding.symbols.length; at = at+1) { const member = this.binding.symbols[at]; if (member.module == owner.module && member.scope >= 0 && this.binding.scopes[member.scope].node == owner.node && member.name == name && ["ClassMethod","InterfaceMethod"].includes(member.kind)) { if (signature == "" || this.memberType(text,at) == signature) return at; fallback = at; count = count+1; } }
+    return count == 1 ? fallback : -1;
+  }
+  memberType(text: string, member: number): string {
+    let signature: string = this.checked.symbolTypes[member]; const nominal: number = canonicalSymbol(text);
+    if (nominal < 0) return signature;
+    const owner = this.binding.symbols[nominal]; const declaration = this.graph.modules[owner.module].cached.result.ast.nodes[owner.node];
+    const actuals: string[] = genericArguments(text); let at: number = 0;
+    for (const e of declaration.edges) if (e.role == EdgeRole.TypeParameters && at < actuals.length) { signature = replaceType(signature,"@"+numberToString(this.binding.files[owner.module].declarations[e.node]),actuals[at]); at = at+1; }
+    return signature;
+  }
+  concreteDispatch(from: number, to: number, name: string, signature: number, id: number): void {
+    for (const d of this.result.dispatches) if (d.interfaceType == to && d.concreteType == from && d.name == name && d.signature == signature) return;
+    const actual: number = this.memberFor(this.result.types[from],name,this.result.types[signature]);
+    if (actual < 0) { this.fail(id,"Implementación de interfaz sin método resuelto: "+name); return; }
+    const method = this.binding.symbols[actual]; const declaration = this.graph.modules[method.module].cached.result.ast.nodes[method.node];
+    let generic: boolean = false; for (const e of declaration.edges) if (e.role == EdgeRole.TypeParameters) generic = true;
+    const callee: number = this.ensureFunction(method.module,method.node,generic ? this.result.types[signature] : this.memberType(this.result.types[from],actual),this.result.types[from]);
+    this.result.dispatches.push(new IrDispatch(to,from,name,signature,callee));
+    const required = this.result.typeDefinitions[signature]; const target = this.result.functions[callee];
+    this.implementation(target.returns,required.arguments[required.arguments.length-1],id);
+    for (let at: number = 1; at < target.parameterTypes.length && at < required.arguments.length; at = at+1) this.implementation(required.arguments[at-1],target.parameterTypes[at],id);
+  }
+  requestDispatch(to: number, name: string, signature: number, id: number): void {
+    let found: boolean = false; for (let at: number = 0; at < this.dispatchInterfaces.length; at = at+1) if (this.dispatchInterfaces[at] == to && this.dispatchNames[at] == name && this.dispatchSignatures[at] == signature) found = true;
+    if (!found) { this.dispatchInterfaces.push(to); this.dispatchNames.push(name); this.dispatchSignatures.push(signature); }
+    for (const concrete of this.result.typeDefinitions[to].variants) this.concreteDispatch(concrete,to,name,signature,id);
+  }
+  implementation(from: number, to: number, id: number): void {
+    if (from == to || from < 0 || to < 0) return;
+    const a = this.result.typeDefinitions[from]; const b = this.result.typeDefinitions[to];
+    if (["ref","constRef","readonly"].includes(a.kind)) { this.implementation(a.arguments[0],to,id); return; }
+    if (a.kind == "sum" && ["interface","intersection"].includes(b.kind)) { for (const alternative of a.arguments) this.implementation(alternative,to,id); return; }
+    if (["interface","intersection"].includes(b.kind) && b.methods.length > 0) {
+      if (["interface","intersection"].includes(a.kind)) {
+        let found: boolean = false; for (let at: number = 0; at < this.interfaceFrom.length; at = at+1) if (this.interfaceFrom[at] == from && this.interfaceTo[at] == to) found = true;
+        if (!found) { this.interfaceFrom.push(from); this.interfaceTo.push(to); }
+        for (const concrete of a.variants) this.implementation(concrete,to,id); return;
+      }
+      if (a.kind != "record" && a.kind != "variant") return;
+      if (a.resource && !b.resource) { this.fail(id,"Una interfaz copiable no puede borrar ownership del valor concreto"); return; }
+      if (b.variants.includes(from)) return;
+      this.result.typeDefinitions[to].variants.push(from);
+      let requirements: number[] = b.kind == "intersection" ? b.arguments : [to];
+      for (const requirement of requirements) {
+        const ownerId: number = canonicalSymbol(this.result.types[requirement]); if (ownerId < 0) continue;
+        const owner = this.binding.symbols[ownerId];
+        for (const e of this.graph.modules[owner.module].cached.result.ast.nodes[owner.node].edges) if (e.role == EdgeRole.Methods) {
+          const member: number = this.binding.files[owner.module].declarations[e.node]; const name: string = this.binding.symbols[member].name;
+          let generic: boolean = false; for (const parameter of this.graph.modules[owner.module].cached.result.ast.nodes[e.node].edges) if (parameter.role == EdgeRole.TypeParameters) generic = true;
+          if (!generic) this.concreteDispatch(from,to,name,this.typeId(this.memberType(this.result.types[requirement],member),id),id);
+        }
+      }
+      for (let at: number = 0; at < this.dispatchInterfaces.length; at = at+1) if (this.dispatchInterfaces[at] == to) this.concreteDispatch(from,to,this.dispatchNames[at],this.dispatchSignatures[at],id);
+      return;
+    }
+    if (a.kind == b.kind && a.arguments.length == b.arguments.length && ["array","fixedArray","Optional","Result","tuple","pack"].includes(a.kind)) for (let at: number = 0; at < a.arguments.length; at = at+1) this.implementation(a.arguments[at],b.arguments[at],id);
+  }
   convert(value: number, typeId: number, id: number): number {
     if (value < 0) return value;
     if (this.result.functions[this.currentFunction].values[value] == typeId) return value;
+    this.implementation(this.valueType(value),typeId,id);
     const shape = this.result.typeDefinitions[typeId];
     if (shape.kind == "Optional" && (shape.arguments[0] == this.valueType(value) || this.result.typeDefinitions[this.valueType(value)].kind != "Optional")) return this.emit("some",typeId,[this.convert(value,shape.arguments[0],id)],-1,-1,"",id);
     if (["ptr","constPtr"].includes(shape.kind) && shape.arguments[0] == this.valueType(value)) return this.emit("own",typeId,[value],-1,-1,"",id);
@@ -448,8 +527,8 @@ export class IrLowering {
     if (p >= 0 && this.result.functions[this.currentFunction].places[p].typeId != typeId && this.result.typeDefinitions[this.result.functions[this.currentFunction].places[p].typeId].kind == "ref") p = this.projection(p,"deref",typeId,-1,-1,id);
     const stored: number = this.result.functions[this.currentFunction].places[p].typeId; return this.convert(this.emit("load",stored,[],p,-1,"",id),typeId,id);
   }
-  call(id: number, typeId: number, receiver: number = -1, indirect: number = -1): number {
-    const n = this.node(id); const file = this.checked.files[this.module]; const selected: number = file.selected[id]; const owner: number = file.selectedModules[id];
+  call(id: number, typeId: number, receiver: number = -1, indirect: number = -1, target: number = -1, targetModule: number = -1): number {
+    const n = this.node(id); const file = this.checked.files[this.module]; const selected: number = target >= 0 ? target : file.selected[id]; const owner: number = target >= 0 ? targetModule : file.selectedModules[id];
     const symbol: number = this.reference(id);
     if (symbol >= 0 && (this.binding.symbols[symbol].module) < 0 && this.binding.symbols[symbol].name == "match") return this.matchExpression(id,typeId);
     if (symbol >= 0 && (this.binding.symbols[symbol].module) < 0 && ["move","ref","constRef"].includes(this.binding.symbols[symbol].name)) return this.memoryBuiltin(id,this.binding.symbols[symbol].name,typeId);
@@ -712,6 +791,20 @@ export class IrLowering {
       const callable: number = this.emit("load",this.typeId(signature,id),[],p,-1,"",id);
       return this.call(id,typeId,-1,callable);
     }
+    const resolvedReceiver: string = memoryValue(this.resolved(this.checked.files[this.module].receivers[id]));
+    if (member >= 0 && this.binding.symbols[member].kind == "InterfaceMethod") {
+      const actual: number = this.memberFor(resolvedReceiver,n.get(AttributeKind.Method),this.resolved(this.checked.files[this.module].signatures[id]));
+      if (actual >= 0 && this.binding.symbols[actual].kind == "ClassMethod") { const method = this.binding.symbols[actual]; return this.call(id,typeId,this.unwrappedPlace(receiver,this.typeId(resolvedReceiver,id)),-1,method.node,method.module); }
+      const p: number = this.unwrappedPlace(receiver,this.typeId(resolvedReceiver,id));
+      let operands: number[] = [this.emit("address",this.typeId("ref<"+resolvedReceiver+">",id),[],p,-1,"",id)];
+      const signature: string = this.resolved(this.checked.files[this.module].signatures[id]); const formals: string[] = functionParams(signature);
+      let values: number[] = []; let positions: number[] = [];
+      for (const e of n.edges) if (e.role == EdgeRole.Args) { const at: number = this.checked.files[this.module].argumentParameters[e.node] >= 0 ? this.checked.files[this.module].argumentParameters[e.node] : values.length; positions.push(at); values.push(this.argumentValue(e.node,formals[at])); }
+      for (let at: number = 0; at < formals.length; at = at+1) { const position: number = irIndex(positions,at); if (position < 0) { this.fail(id,"Argumento de interfaz ausente"); return -1; } operands.push(this.convert(values[position],this.typeId(formals[at],id),id)); }
+      this.requestDispatch(this.typeId(resolvedReceiver,id),n.get(AttributeKind.Method),this.typeId(signature,id),id);
+      const result: number = this.emit("interfaceCall",typeId,operands,-1,-1,n.get(AttributeKind.Method),id);
+      this.result.functions[this.currentFunction].blocks[this.block].instructions[this.result.functions[this.currentFunction].blocks[this.block].instructions.length-1].signature = this.typeId(signature,id); return result;
+    }
     if (member >= 0 && this.binding.symbols[member].kind == "ClassMethod") {
       const method = this.binding.symbols[member]; const declaration = this.graph.modules[method.module].cached.result.ast.nodes[method.node];
       return this.call(id,typeId,declaration.get(AttributeKind.IsStatic) == "true" ? -1 : this.unwrappedPlace(receiver,this.typeId(memoryValue(this.resolved(this.checked.files[this.module].receivers[id])),id)));
@@ -720,7 +813,7 @@ export class IrLowering {
     let operands: number[] = []; let effects: string[] = ["runtime"];
     const receiverSymbol: number = this.reference(receiver);
     if (!(receiverSymbol >= 0 && (this.binding.symbols[receiverSymbol].module) < 0 && this.node(receiver).kind == NodeKind.IdentifierExpression) && receiverType != "namespace" && !receiverType.startsWith("class:") && !receiverType.startsWith("!")) {
-      if (["push","pop","sort","set","add","delete","clear"].includes(name)) {
+      if (receiverType == "Server" || ["push","pop","sort","set","add","delete","clear"].includes(name)) {
         const p: number = this.materialize(receiver); operands.push(this.emit("address",this.typeId("ref<"+receiverType+">",id),[],p,-1,"",id)); effects.push("mutate");
       } else {
         const actual: number = this.typeId(this.checked.files[this.module].types[receiver],receiver);
@@ -944,6 +1037,8 @@ export class IrLowering {
         if (this.result.types[this.result.functions[f].bodyReturns] == "void") { this.cleanup(0,id); this.terminate("return",-1,[],id); }
         else this.terminate("unreachable",-1,[],id);
       }
+      let changed: boolean = true;
+      while (changed) { let before: number = this.result.dispatches.length; for (const shape of this.result.typeDefinitions) before = before+shape.variants.length; for (let at: number = 0; at < this.interfaceFrom.length; at = at+1) this.implementation(this.interfaceFrom[at],this.interfaceTo[at],id); let after: number = this.result.dispatches.length; for (const shape of this.result.typeDefinitions) after = after+shape.variants.length; changed = after != before; }
     }
     for (let m: number = 0; m < this.graph.modules.length; m = m+1) this.order(m);
     for (let at: number = this.result.initializationOrder.length-1; at >= 0; at = at-1) for (const module of this.result.modules) if (module.initializer == this.result.initializationOrder[at]) this.result.finalizationOrder.push(module.finalizer);

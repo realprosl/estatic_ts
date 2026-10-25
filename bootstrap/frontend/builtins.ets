@@ -161,7 +161,7 @@ export function nativeBuiltinSignatures(key: string): string[] {
   if (key == "Response.status") return ["(number)=>Response"];
   if (key == "Server.delete") return ["(string,(Request,Response)=>void)=>void"];
   if (key == "Server.get") return ["(string,(Request,Response)=>void)=>void"];
-  if (key == "Server.listen") return ["(number)=>void"];
+  if (key == "Server.listen") return ["(number)=>void","(string,number)=>void"];
   if (key == "Server.patch") return ["(string,(Request,Response)=>void)=>void"];
   if (key == "Server.post") return ["(string,(Request,Response)=>void)=>void"];
   if (key == "Server.put") return ["(string,(Request,Response)=>void)=>void"];

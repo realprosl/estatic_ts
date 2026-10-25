@@ -10,7 +10,11 @@ Bootstrap ya dispone de un [IR nativo `ets-ir-2`](./bootstrap/ir/README.md)
 con lowering de agregados, clases, genéricos, closures, variantes y async,
 verificación de ownership y préstamos por CFG, y contratos de runtime/efectos.
 El [backend C++ del IR](./bootstrap/ir/CPP.md) ya genera, compila y ejecuta
-programas mediante una entrada separada, reutilizando el runtime existente.
+programas reutilizando el runtime existente. El [CLI de bootstrap](./bootstrap/CLI.md)
+conecta frontend nativo, IR y C++, con configuración, build y ejecución.
+La ampliación de interfaces y HTTP pasa 75 pruebas del backend y compila
+126/131 fuentes válidos del corpus; las rutas HTTP se prueban con httplib
+y Drogon reales, y el cliente con libcurl.
 Su cobertura sigue siendo parcial: los límites se rechazan explícitamente.
 [`bootstrap/PENDING.md`](./bootstrap/PENDING.md) registra el trabajo abierto y
 sus criterios de cierre. La [revisión reproducible](./bootstrap/audit/FRONTEND-REVIEW.md)
@@ -34,7 +38,7 @@ producción concurrente.
 | `comptime` | Experimental | Validación semántica en dos fases, ámbitos, TDZ, bucles y cortocircuito; conversiones y promociones numéricas tipadas; faltan higiene modular y unificación de evaluadores |
 | Runtime async/libuv | Experimental | Lifetime de handles y frames de `race` corregido; falta sanitizers y cancelación cooperativa |
 | HTTP cpp-httplib | Funcional con límites básicos | Cola, workers, cuerpo y timeouts acotados; falta carga sostenida y API de configuración `.ets` |
-| HTTP Drogon | Integrado, validación parcial | Caché ilimitada eliminada; falta validar el servidor completo con Drogon |
+| HTTP Drogon | Integrado, peticiones reales verificadas | Selección y rutas probadas desde el IR; falta carga sostenida y validación de producción |
 | Tooling y build incremental | Funcional | Caché persistente de sintaxis, AST, snapshot de transpilación y `.o`; falta type-check incremental por interfaz y CI reproducible |
 
 Las declaraciones del editor tienen una única fuente canónica en

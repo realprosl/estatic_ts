@@ -8,7 +8,7 @@ import { memoryMode, memoryInner, ownedType, borrowedType, splitTypes, genericBa
 // Borrowed views do not own their referents. Callable signatures describe calls,
 // not their environments; closure capture ownership is checked separately.
 export function resourceType(graph: constRef<ModuleGraph>, binding: constRef<BindingResult>, checked: constRef<CheckResult>, text: string, history: string[]): boolean {
-  if (ownedType(text)) return true;
+  if (ownedType(text) || text == "Server") return true;
   if (borrowedType(text) || functionClose(text) >= 0) return false;
   if (memoryMode(text) != "") return resourceType(graph,binding,checked,memoryInner(text),history);
   if (genericBase(text) == "Promise") return true;

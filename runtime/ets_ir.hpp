@@ -12,6 +12,23 @@
 #include <cstdlib>
 
 namespace ets::ir {
+// Deep-copying indirection preserves value semantics and allows recursive
+// interface containers without recursive by-value C++ layouts.
+template<class T> class Box {
+    std::unique_ptr<T> value_;
+public:
+    using value_type = T;
+    Box() = default;
+    explicit Box(T value) : value_(std::make_unique<T>(std::move(value))) {}
+    Box(const Box& other) : value_(other.value_ ? std::make_unique<T>(*other.value_) : nullptr) {}
+    Box(Box&&) noexcept = default;
+    Box& operator=(const Box& other) { if(this != &other) value_ = other.value_ ? std::make_unique<T>(*other.value_) : nullptr; return *this; }
+    Box& operator=(Box&&) noexcept = default;
+    T& get() { if(!value_) std::abort(); return *value_; }
+    const T& get() const { if(!value_) std::abort(); return *value_; }
+    bool operator==(const Box& other) const { return bool(value_) == bool(other.value_) && (!value_ || *value_ == *other.value_); }
+};
+
 // emplace also handles non-assignable runtime types such as Task<T>.
 // An empty slot is the logical initialization flag used by dropRemaining.
 template<class T> struct Slot {

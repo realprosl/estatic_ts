@@ -10,6 +10,8 @@ export function verifyIrTables(project: constRef<IrProject>): IrIssue[] {
     if (!["scalar","ref","constRef","ptr","constPtr","readonly","function","array","fixedArray","tuple","sum","intersection","variant","enum","union","interface","record","Optional","Result","Map","Set","Promise","pack","iterator","runtime","parameter"].includes(shape.kind)) issues.push(new IrIssue("IR_INVALID","Shape desconocida",source));
     for (const child of shape.arguments) if (child < 0 || child >= count) issues.push(new IrIssue("IR_INVALID","Argumento de tipo inexistente",source));
     for (const child of shape.fields) if (child < 0 || child >= count) issues.push(new IrIssue("IR_INVALID","Campo de tipo inexistente",source));
+    if (shape.methods.length != shape.methodTypes.length) issues.push(new IrIssue("IR_INVALID","Tabla de métodos incompleta",source));
+    for (const child of shape.methodTypes) if (child < 0 || child >= count) issues.push(new IrIssue("IR_INVALID","Firma de método inexistente",source));
     for (const child of shape.variants) if (child < 0 || child >= count) issues.push(new IrIssue("IR_INVALID","Variante de tipo inexistente",source));
     if (shape.fields.length != shape.names.length) issues.push(new IrIssue("IR_INVALID","Tabla de campos incompatible",source));
     let names: string[] = []; for (const name of shape.names) { if (name == "" || names.includes(name)) issues.push(new IrIssue("IR_INVALID","Identidad de campo duplicada/vacía",source)); names.push(name); }
@@ -22,7 +24,7 @@ export function verifyIrTables(project: constRef<IrProject>): IrIssue[] {
   // Recompute the structural ownership bit; trusting it would let a malformed
   // producer turn move-only values into copies and bypass every route check.
   if (issues.length == 0) {
-    let resources: boolean[] = []; for (const shape of project.typeDefinitions) resources.push(["ptr","constPtr","Promise"].includes(shape.kind));
+    let resources: boolean[] = []; for (const shape of project.typeDefinitions) resources.push(["ptr","constPtr","Promise"].includes(shape.kind) || (shape.kind == "runtime" && project.types[resources.length] == "Server"));
     let changed: boolean = true;
     while (changed) {
       changed = false;
