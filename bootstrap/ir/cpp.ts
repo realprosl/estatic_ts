@@ -5,16 +5,23 @@ import { createHash } from "node:crypto";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { buildLoader, root } from "../modules/build.ts";
+import { root } from "../root.ts";
+import { runtimeArchive } from "../build/runtime-cache.ts";
 import { generateCppFromIr, type IrCppResult } from "../../src/codegen/ir/cpp-generator.ts";
 import type { IrProject } from "../../src/codegen/ir/model.ts";
 
 export async function buildIrFrontend(directory=join(root,"build/bootstrap/ir-cpp")):Promise<string> {
+  if(existsSync(join(root,"installation.json"))){
+    const binary=join(root,"native/frontend");
+    if(!existsSync(binary))throw new Error("Instalación incompleta: falta native/frontend; vuelve a ejecutar install.sh");
+    return binary;
+  }
   const hash=createHash("sha256").update(root).update(process.platform).update(process.arch).update(process.env.CXX??"g++");
   for(const folder of ["src","bootstrap","runtime"])for(const path of readdirSync(join(root,folder),{recursive:true}).map(String).filter(p=>/\.(ts|ets|hpp|cpp)$/.test(p)&&!p.endsWith(".test.ts")).sort())hash.update(folder+"/"+path).update(readFileSync(join(root,folder,path)));
   hash.update(readFileSync(join(root,"package.json")));
   const identity=hash.digest("hex"),stamp=join(directory,"frontend.sha256"),binary=join(directory,"modules-demo");
   if(existsSync(binary)&&existsSync(stamp)&&readFileSync(stamp,"utf8")===identity)return binary;
+  const {buildLoader}=await import("../modules/build.ts");
   const built=await buildLoader(directory,"bootstrap/ir/demo.ets",true);writeFileSync(stamp,identity);return built;
 }
 export function nativeIr(binary:string, entry:string,loaderArgs:string[]=[]):IrProject {
@@ -28,16 +35,15 @@ export function nativeIr(binary:string, entry:string,loaderArgs:string[]=[]):IrP
   return JSON.parse(p.stdout);
 }
 export function buildIrCpp(result:IrCppResult,cpp:string,binary:string,cxx=process.env.CXX??"g++",flags:string[]=[],linkFlags:string[]=[]):void {
-  const args=["-std=c++20","-O0","-pthread","-fno-exceptions",`-I${root}`,...flags,cpp];
-  const local=join(root,"build/libs/libuv"), libs:string[]=[];
+  const args=["-std=c++20","-O0","-pthread","-fno-exceptions",`-I${root}`,...flags];
+  const local=join(root,"build/libs/libuv"), libs:string[]=[],units:("libuv"|"httplib")[]=[];
   if(result.runtimeBackends.libuv) {
     if(existsSync(join(local,"include/uv.h")))args.push(`-I${local}/include`);
-    args.push(join(root,"runtime/runtime_ets_libuv.cpp"));
-    if(result.headers.includes("runtime/ets_runtime_full.hpp"))args.push(join(root,"runtime/runtime_ets_net_libuv.cpp"));
+    units.push("libuv");
     libs.push(existsSync(join(local,"lib/libuv.a"))?join(local,"lib/libuv.a"):"-luv");
     if(process.platform==="linux")libs.push("-ldl","-lrt");
   }
-  if(result.headers.includes("runtime/ets_http_httplib.hpp"))args.push("-DCPPHTTPLIB_NO_EXCEPTIONS",join(root,"runtime/external/httplib/httplib.cc"));
+  if(result.headers.includes("runtime/ets_http_httplib.hpp")){args.push("-DCPPHTTPLIB_NO_EXCEPTIONS");units.push("httplib");}
   if(result.headers.includes("runtime/ets_http_drogon.hpp")) {
     const drogon=join(root,"build/libs/drogon");
     // Drogon's public template headers require C++ exception support internally.
@@ -49,7 +55,8 @@ export function buildIrCpp(result:IrCppResult,cpp:string,binary:string,cxx=proce
   if(result.runtimeBackends.tls)libs.push("-lssl","-lcrypto");
   if(result.runtimeBackends.curl)libs.push("-lcurl");
   mkdirSync(dirname(binary),{recursive:true});
-  const p=spawnSync(cxx,[...args,...libs,...linkFlags,"-o",binary],{encoding:"utf8",maxBuffer:8*1024*1024,timeout:180000});
+  const archives=units.map(unit=>runtimeArchive(unit,cxx,args));
+  const p=spawnSync(cxx,[...args,cpp,...archives,...libs,...linkFlags,"-o",binary],{encoding:"utf8",maxBuffer:8*1024*1024,timeout:180000});
   if(p.error)throw p.error;if(p.status!==0)throw new Error(`C++ compile/link failed:\n${p.stdout}${p.stderr}`);
 }
 export async function main(argv:string[]):Promise<void> {

@@ -143,9 +143,18 @@ async function exists(path: string): Promise<boolean> {
   catch { return false; }
 }
 
-export async function initializeProject(target = "."): Promise<InitializedProject> {
+export async function initializeProject(target = ".", options: { command?: "etsc" | "nativo"; compiler?: string } = {}): Promise<InitializedProject> {
   const directory = resolve(target);
-  const templates = projectTemplates(await readCanonicalEstaticTypes());
+  const templates = projectTemplates(await readCanonicalEstaticTypes()).map(([file, original]) => {
+    let contents = original;
+    if (options.compiler && file === "estatic.config.ts") contents = contents.replace('command: "g++"', `command: ${JSON.stringify(options.compiler)}`);
+    if (options.command === "nativo" && file === "README.md") {
+      contents = contents.replace("etsc --config estatic.config.ts\n./build/app", "nativo build\nnativo run")
+        .replace("etsc update-types .", "nativo update-types .")
+        .replace(/Durante el desarrollo,[\s\S]*?\n```\n/, "El driver instalado utiliza el frontend y el runtime preparados por install.sh.\n");
+    }
+    return [file, contents] as const;
+  });
   const files = templates.map(([relative]) => join(directory, relative));
   const conflicts = (await Promise.all(files.map(async file => ({ file, exists: await exists(file) })))).filter(item => item.exists);
   if (conflicts.length > 0) {
