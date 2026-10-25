@@ -40,3 +40,31 @@ Las tablas runtime/tipos se generan desde las definiciones compartidas de
 `src/` durante la construcción, y se integran en el binario. Los perfiles,
 logging y caché incremental del CLI histórico no se anuncian como portados:
 este recorrido emite una unidad C++ del proyecto.
+
+## Progreso del CLI de bootstrap
+
+El driver TypeScript `bootstrap/cli.ts` admite `--verbose` para mostrar en
+stderr las fases reales, sus duraciones, la entrada, el frontend, las opciones
+de módulos, las rutas generadas y el compilador con sus flags:
+
+```sh
+npm run bootstrap -- run examples/hello.ets --verbose
+npm run bootstrap -- examples/hello.ets --check --verbose
+npm run bootstrap -- build --config estatic.config.ts --verbose --no-progress
+```
+
+La preparación del frontend, el análisis/verificación del IR, la generación
+C++ y la compilación/enlace muestran spinners en terminales interactivas. La
+animación continúa durante las herramientas bloqueantes porque el trabajo se
+ejecuta en un worker y el renderizado permanece en el hilo principal. La fase
+nativa de análisis incluye el checker y el IR; no muestra fases internas que
+el frontend no comunica. `--check` sigue comprobando el IR y omite C++.
+
+`--no-progress`, `NO_COLOR`, `TERM=dumb` y `CI` desactivan las animaciones.
+Al redirigir stderr se usa texto plano con `--verbose`; sin verbose el progreso
+es silencioso. Stdout conserva el JSON de `init` o la salida del programa.
+Los argumentos situados después de `--` pertenecen al programa, incluidos
+`--verbose` y `--no-progress`. `-v` continúa mostrando la versión.
+
+Estas opciones se implementan en `bootstrap/cli.ts`; no añaden flags nuevos
+al ejecutable nativo instalado `estc`.
