@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { initializeProject } from "../src/project/init-project.ts";
@@ -14,14 +14,14 @@ export async function install(argv:string[]):Promise<void> {
   let prefix="/usr/local",cxx=process.env.CXX??"g++",frontend="";
   for(let at=0;at<argv.length;at++){
     if(argv[at]==="--help"||argv[at]==="-h"){
-      console.log("Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario]\nConstruye el frontend con src/, precompila libuv/httplib e instala estc.\nRequisitos: Node >=22.6, C++20, ar y las dependencias del runtime.\nNode sólo se usa durante el bootstrap y la instalación; estc es nativo.");return;
+      console.log("Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario]\nConstruye el frontend con src/, precompila libuv/httplib e instala etsc.\nRequisitos: Node >=22.6, C++20, ar y las dependencias del runtime.\nNode sólo se usa durante el bootstrap y la instalación; etsc es nativo.");return;
     }
     const flag=argv[at];if(!["--prefix","--cxx","--frontend"].includes(flag)||!argv[at+1]||argv[at+1].startsWith("-"))throw new Error(`Opción inválida o sin valor: ${flag}`);
     const value=argv[++at];if(flag==="--prefix")prefix=resolve(value);else if(flag==="--cxx")cxx=value;else frontend=resolve(value);
   }
   if(Number(process.versions.node.split(".")[0])<22 || Number(process.versions.node.split(".")[0])===22&&Number(process.versions.node.split(".")[1])<6)throw new Error("Se requiere Node >=22.6");
   process.env.CXX=cxx;
-  const library=join(prefix,"lib/estc"),current=join(library,"current"),destination=join(prefix,"bin/estc");
+  const library=join(prefix,"lib/estc"),current=join(library,"current"),destination=join(prefix,"bin/etsc");
   let oldPointer:string|undefined;
   if(existsSync(current)){
     if(!lstatSync(current).isSymbolicLink())throw new Error(`No se sobrescribe un directorio ajeno: ${current}`);
@@ -32,8 +32,14 @@ export async function install(argv:string[]):Promise<void> {
   if(existsSync(destination)){
     let owned=false;
     try{owned=JSON.parse(readFileSync(join(current,"installation.json"),"utf8")).commandHash===digest(destination);}catch{}
+    // npm link from this checkout is an owned stage-0 launcher, not another tool.
+    if(!owned&&lstatSync(destination).isSymbolicLink()){
+      try{owned=realpathSync(destination)===realpathSync(join(root,"src/cli.ts"));}catch{}
+    }
     if(!owned)throw new Error(`No se sobrescribe un comando ajeno: ${destination}; usa otro --prefix`);
   }
+  const legacyEstc=join(prefix,"bin/estc");let ownedEstc=false;
+  try{const old=JSON.parse(readFileSync(join(current,"installation.json"),"utf8"));ownedEstc=old.format==="estc-install-1"&&existsSync(legacyEstc)&&old.commandHash===digest(legacyEstc);}catch{}
   // Finish compilation in the clone before attempting publication to the prefix.
   console.log("==> Construyendo el frontend nativo mediante src/");
   const native=frontend||await buildIrFrontend();
@@ -43,9 +49,9 @@ export async function install(argv:string[]):Promise<void> {
   const work=join(root,"build/install-"+randomUUID());mkdirSync(work,{recursive:true});
   let stage="",release="",pointerChanged=false;
   try{
-    console.log("==> Compilando driver y emisor nativos estc");
+    console.log("==> Compilando driver y emisor nativos etsc");
     const driver=buildNativeCompiler(undefined,cxx);
-    const templates=join(work,"templates");await initializeProject(templates,{command:"estc",compiler:cxx});
+    const templates=join(work,"templates");await initializeProject(templates,{command:"etsc",native:true,compiler:cxx});
     const config=(await import(pathToFileURL(join(templates,"estatic.config.ts")).href)).default;
     config.incremental.cacheDirectory=".build/cache";
     config.incremental.generatedDirectory=".build/generated";
@@ -75,10 +81,11 @@ export async function install(argv:string[]):Promise<void> {
     release=join(library,"releases",version+"-"+randomUUID().slice(0,8));
     renameSync(stage,release);stage="";
     const pointer=join(library,".current-"+randomUUID());symlinkSync("releases/"+release.split("/").at(-1),pointer);renameSync(pointer,current);pointerChanged=true;
-    const newCommand=join(dirname(destination),".estc-"+randomUUID());cpSync(driver,newCommand);chmodSync(newCommand,0o755);renameSync(newCommand,destination);
+    const newCommand=join(dirname(destination),".etsc-"+randomUUID());cpSync(driver,newCommand);chmodSync(newCommand,0o755);renameSync(newCommand,destination);
+    if(ownedEstc)rmSync(legacyEstc);
     const legacy=join(prefix,"bin/nativo");
     try{const old=JSON.parse(readFileSync(join(prefix,"lib/nativo/current/installation.json"),"utf8"));if(old.format==="nativo-install-1"&&existsSync(legacy)&&old.commandHash===digest(legacy))rmSync(legacy);}catch{}
-    console.log(`==> Instalado: ${destination}\n    estc init proyecto\n    cd proyecto\n    estc build\n    estc run`);
+    console.log(`==> Instalado: ${destination}\n    etsc init proyecto\n    cd proyecto\n    etsc build\n    etsc run`);
   }catch(error){
     if((error as NodeJS.ErrnoException).code==="EACCES")console.error(`Sin permisos en ${prefix}; utiliza un prefijo escribible, por ejemplo --prefix "$HOME/.local"`);
     if(pointerChanged){if(oldPointer){const restore=join(library,".restore-"+randomUUID());symlinkSync(oldPointer,restore);renameSync(restore,current);}else rmSync(current,{force:true});}

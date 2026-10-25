@@ -49,6 +49,7 @@
     "audit:bootstrap:syntax": "node --experimental-strip-types bootstrap/audit/syntax-parity.ts",
     "audit:bootstrap:self": "node --experimental-strip-types bootstrap/audit/self.ts",
     "bootstrap": "node --experimental-strip-types bootstrap/cli.ts",
+    "install:etsc": "bash install.sh",
     "install:estc": "bash install.sh",
     "test:bootstrap:install": "node --experimental-strip-types --test bootstrap/install.test.ts",
     "test:bootstrap:ir:native": "node --experimental-strip-types --test bootstrap/ir/native.test.ts",

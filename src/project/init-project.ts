@@ -143,12 +143,12 @@ async function exists(path: string): Promise<boolean> {
   catch { return false; }
 }
 
-export async function initializeProject(target = ".", options: { command?: "etsc" | "nativo" | "estc"; compiler?: string } = {}): Promise<InitializedProject> {
+export async function initializeProject(target = ".", options: { command?: "etsc" | "nativo" | "estc"; compiler?: string; native?: boolean } = {}): Promise<InitializedProject> {
   const directory = resolve(target);
   const templates = projectTemplates(await readCanonicalEstaticTypes()).map(([file, original]) => {
     let contents = original;
     if (options.compiler && file === "estatic.config.ts") contents = contents.replace('command: "g++"', `command: ${JSON.stringify(options.compiler)}`);
-    if (options.command && options.command !== "etsc" && file === "README.md") {
+    if (options.command && (options.command !== "etsc" || options.native) && file === "README.md") {
       contents = contents.replace("etsc --config estatic.config.ts\n./build/app", `${options.command} build\n${options.command} run`)
         .replace("etsc update-types .", `${options.command} update-types .`)
         .replace(/Durante el desarrollo,[\s\S]*?\n```\n/, "El driver instalado utiliza el frontend y el runtime preparados por install.sh.\n");

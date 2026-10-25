@@ -1,11 +1,11 @@
 # Estatic TS → C++
 
 El flujo instalado se prepara con `./install.sh`; después se trabaja con
-`estc init`, `estc build` y `estc run`. Ver [instalación](./INSTALL.md)
+`etsc init`, `etsc build` y `etsc run`. Ver [instalación](./INSTALL.md)
 para requisitos, prefijos y el recorrido instalado sin Node.
 
 
-Compilador de Estatic, con sintaxis inspirada en TypeScript, tipado estático y salida C++20. El frontend ETS y el driver/backend C++20 se instalan como `estc`. `src/` conserva el bootstrap y la referencia TypeScript para herramientas y pruebas.
+Compilador de Estatic, con sintaxis inspirada en TypeScript, tipado estático y salida C++20. El frontend ETS y el driver/backend C++20 se instalan como `etsc`. `src/` conserva el bootstrap y la referencia TypeScript para herramientas y pruebas.
 
 > **¿Qué se soporta exactamente?** Lee [`LIMITATIONS.md`](./LIMITATIONS.md) para ver la lista completa de features rechazadas o pospuestas. Este README documenta cómo usar el dialecto y qué features están implementadas.
 
@@ -28,7 +28,7 @@ Compilador de Estatic, con sintaxis inspirada en TypeScript, tipado estático y 
 ## Uso rápido
 
 Node >=22.6 se usa para el bootstrap y la instalación. El compilador instalado
-`estc` funciona sin Node y necesita el toolchain C++20 y las bibliotecas de
+`etsc` funciona sin Node y necesita el toolchain C++20 y las bibliotecas de
 runtime utilizadas. Ver [INSTALL.md](./INSTALL.md).
 
 ### Instalar el compilador (una vez)
@@ -42,10 +42,10 @@ cd estatic_ts
 ### Crear un proyecto nuevo
 
 ```bash
-estc init ~/mi-proyecto
+etsc init ~/mi-proyecto
 cd ~/mi-proyecto
-estc build
-estc run
+etsc build
+etsc run
 ```
 
 El archivo canónico [`types/estatic.d.ts`](./types/estatic.d.ts) contiene las
@@ -53,22 +53,22 @@ declaraciones que usa el editor para los builtins registrados. Para actualizar
 un proyecto creado con una versión anterior:
 
 ```bash
-estc update-types ~/mi-proyecto
+etsc update-types ~/mi-proyecto
 ```
 
 Si el archivo anterior es diferente, se conserva primero como
-`types/estatic.d.ts.bak`. `estc init` copia exactamente la misma fuente
+`types/estatic.d.ts.bak`. `etsc init` copia exactamente la misma fuente
 canónica y una prueba detecta builtins sin declaración de editor.
 
 Para consultar la versión instalada:
 
 ```bash
-estc --version
-estc -v
-# estc 1.26.0 (v64)
+etsc --version
+etsc -v
+# etsc 1.26.0 (v64)
 ```
 
-El `estatic.config.json` generado por `estc init` no requiere que listes `-luv`, `-lssl`,
+El `estatic.config.json` generado por `etsc init` no requiere que listes `-luv`, `-lssl`,
 etc. — el CLI detecta los backends que el programa usa (desde el IR)
 y los añade solo.
 
