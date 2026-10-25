@@ -56,7 +56,8 @@ estc run -- argumento1 argumento2
 estc build src/main.ets -o build/main.cpp --binary build/main
 estc run src/main.ets -- argumento1
 estc update-types .
-estc --help
+estc --help  # también -h y -H
+estc --version  # también -version, -v, -V y /V
 ```
 
 El driver admite también `estatic.config.ts` cuando contiene un objeto
@@ -66,6 +67,32 @@ diagnóstico; deben expresarse mediante JSON u opciones del comando. También
 se admiten `--config`, `--check`, `--emit-ir`, `--from-ir`, aliases, raíces de
 módulos, flags del compilador/enlazador y un frontend alternativo. El IR JSON
 presupone un productor de confianza que lo haya verificado.
+
+## Tipos y caché del proyecto
+
+`estc init` admite un directorio existente y conserva sus archivos: si alguno
+colisiona con una plantilla, aborta antes de escribir. Copia las declaraciones
+canónicas a `types/estatic.d.ts` y genera un `tsconfig.json` que las carga para
+que el editor conozca los globales del dialecto sin imports. `estc update-types`
+permite refrescarlas conservando un respaldo de las anteriores.
+
+Los proyectos nativos nuevos crean `.build/` (ignorado por Git):
+
+- `.build/cache/syntax`: caché del frontend nativo.
+- `.build/cache/objects`: objetos C++ de compilaciones anteriores, con hashes de
+  contenido, compilador, flags, entorno de includes y dependencias de cabeceras.
+- `.build/generated`: versiones del C++ generado identificadas por contenido.
+- `.build/runtime`: archivos estáticos del runtime, reutilizados desde la
+  distribución instalada cuando son compatibles.
+
+Los resultados finales siguen en `build/app.cpp` y `build/app`. Los proyectos
+existentes conservan sus rutas `incremental.cacheDirectory` y
+`incremental.generatedDirectory`, relativas al archivo de configuración.
+`incremental.enabled: false` desactiva la caché de objetos y fuentes generadas
+del proyecto. El runtime mantiene su caché compartida en ese caso. Cada build
+vuelve a verificar el programa y enlaza el ejecutable; reutiliza la compilación
+a objeto cuando sus entradas siguen siendo válidas. Los archivos corruptos o
+las cabeceras modificadas invalidan los objetos correspondientes.
 
 ## Runtime preparado
 
