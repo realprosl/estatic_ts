@@ -311,3 +311,14 @@ for(const [mode,source] of [
 ] as const) test(`native verifier rejects table/continuation corruption ${mode}`,()=>{
  const ir=run(source,{},mode,1);assert.ok(ir.diagnostics.some((d:any)=>d.code==="IR_INVALID"));
 });
+
+const dispatchFixture='interface I{f():number;}class A{f():number{return 2;}}class B{f():number{return 3;}}function f(x:I):number{return x.f();}print(f(new A())+f(new B()));';
+test("native IR preserves concrete identities for structural interface dispatch",()=>{
+ const ir=run(dispatchFixture);const call=instructions(ir).find((i:any)=>i.op==="interfaceCall");assert(call);assert.equal(ir.dispatches.length,2);
+ const receiver=ir.typeDefinitions[ir.functions.find((f:any)=>f.values.includes(call.typeId)&&f.blocks.some((b:any)=>b.instructions.includes(call))).values[call.operands[0]]].arguments[0];
+ assert.deepEqual(ir.typeDefinitions[receiver].methods,["f"]);assert.equal(ir.typeDefinitions[receiver].variants.length,2);
+ for(const d of ir.dispatches){assert.equal(d.interfaceType,receiver);assert.equal(d.name,"f");assert.equal(ir.functions[d.callee].name,"f");assert.equal(ir.typeDefinitions[ir.functions[d.callee].parameterTypes[0]].arguments[0],d.concreteType);}
+});
+for(const mode of ["dispatch-callee","dispatch-missing","dispatch-signature","method-table"])test(`native IR verifier rejects ${mode}`,()=>{
+ const ir=run(dispatchFixture,{},mode,1);assert(ir.diagnostics.some((d:any)=>d.code==="IR_INVALID"));
+});

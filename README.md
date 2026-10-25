@@ -1032,6 +1032,16 @@ consume estas tablas y añade lowering/verificación de agregados, clases,
 genéricos, closures, variantes, recursos, préstamos y async. El backend C++ del IR tiene una entrada separada; siguen pendientes scheduler
 concurrente y compilación completa del compilador por sí mismo.
 
+El [CLI general de bootstrap](./bootstrap/CLI.md) conecta el frontend nativo,
+el IR verificado y C++, reutilizando el runtime existente:
+
+```sh
+npm run bootstrap -- examples/interface.ets --run
+```
+
+Incluye métodos de interfaces/intersecciones y HTTP con cpp-httplib/Drogon y
+cliente libcurl. La selección `@cpp_drogon` y los wrappers son los existentes.
+
 El backend C++20 del IR ya está disponible mediante `npm run bootstrap:ir:cpp --
 examples/hello.ets --run`. Consume las tablas verificadas de `ets-ir-2` y
 reutiliza el runtime de `src/`, con capacidades y límites documentados en

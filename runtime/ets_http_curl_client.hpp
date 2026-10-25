@@ -114,7 +114,7 @@ inline size_t curlHeaderCb(char* p, size_t s, size_t n, void* ud) {
 
 inline CURL* makeEasyHandle(const std::string& url, long timeoutSec = 10) {
     CURL* h = curl_easy_init();
-    if (!h) throw std::runtime_error("curl_easy_init failed");
+    if (!h) return nullptr;
     curl_easy_setopt(h, CURLOPT_URL, url.c_str());
     curl_easy_setopt(h, CURLOPT_TIMEOUT, timeoutSec);
     curl_easy_setopt(h, CURLOPT_CONNECTTIMEOUT, timeoutSec);
@@ -161,12 +161,8 @@ namespace ets {
 
 inline ets::Result<ets::HttpClientResponse> httpClientGet(const std::string& url) {
     detail::ensureCurlGlobalInit();
-    CURL* h = nullptr;
-    try {
-        h = detail::makeEasyHandle(url);
-    } catch (const std::exception& e) {
-        return ets::Result<ets::HttpClientResponse>::failure(std::string("curl init: ") + e.what());
-    }
+    CURL* h = detail::makeEasyHandle(url);
+    if (!h) return ets::Result<ets::HttpClientResponse>::failure("curl_easy_init failed");
     detail::WriteBuf wb;
     HttpClientResponse resp;
     curl_easy_setopt(h, CURLOPT_HTTPGET, 1L);
@@ -193,12 +189,8 @@ inline ets::Result<ets::HttpClientResponse> httpClientPost(const std::string& ur
                                                 const std::string& body,
                                                 const std::string& contentType) {
     detail::ensureCurlGlobalInit();
-    CURL* h = nullptr;
-    try {
-        h = detail::makeEasyHandle(url);
-    } catch (const std::exception& e) {
-        return ets::Result<ets::HttpClientResponse>::failure(std::string("curl init: ") + e.what());
-    }
+    CURL* h = detail::makeEasyHandle(url);
+    if (!h) return ets::Result<ets::HttpClientResponse>::failure("curl_easy_init failed");
     detail::WriteBuf wb;
     HttpClientResponse resp;
     curl_easy_setopt(h, CURLOPT_POST, 1L);

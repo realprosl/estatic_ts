@@ -27,6 +27,48 @@ API pública, exportada desde `src/compiler.ts`:
 const { cpp, headers, runtimeBackends, capabilities } = generateCppFromIr(project);
 ```
 
+## Interfaces y HTTP
+
+El productor publica `methods`/`methodTypes` en las shapes y una tabla
+`dispatches` con la interfaz, tipo concreto, nombre, firma y función IR de cada
+implementación. `interfaceCall` usa estos IDs; el backend no vuelve al AST ni
+resuelve métodos por nombres de clases. El verificador comprueba destinos,
+receptores, firmas y cobertura de cada llamada. Los métodos genéricos se
+especializan por firma de llamada; el checker compara sus parámetros genéricos
+por equivalencia de nombres ligados, conservando sus restricciones.
+
+La representación C++ es una variante cerrada de boxes de los tipos concretos
+que realmente se convierten a cada interfaz. Los boxes copian su contenido por
+valor, permiten containers recursivos y no convierten owners en shared pointers.
+Se conservan métodos, campos de representación uniforme, intersecciones,
+arrays heterogéneos, conversiones entre interfaces y clases genéricas. Las
+reglas conservadoras de efectos/préstamos del frontend siguen vigentes:
+un `E4104` no se transforma en una autorización para invocar efectos opacos.
+Tampoco se permite borrar ownership al convertir un recurso a una interfaz
+que el frontend declara copiable.
+
+HTTP reutiliza `ets_http_httplib.hpp` por defecto y `ets_http_drogon.hpp` con
+`@cpp_drogon`. Se selecciona un wrapper por unidad generada, igual que en el
+backend histórico. Ambos admiten registro de rutas, parámetros, headers,
+consulta de request, respuestas encadenadas y `listen(port)`/`listen(host,port)`.
+`Server` es move-only en el contrato nativo y se presta para invocar sus métodos.
+Los adapters retienen el callback por valor y pasan vistas de Request/Response
+válidas durante el handler síncrono; no duplican peticiones ni respuestas.
+
+`http.get/post` reutiliza el cliente async de libcurl, con `Task<Result<...>>`,
+status, body y headers. La creación fallida de un handle produce `Result::failure`
+sin exigir excepciones de C++. Se preserva la diferencia existente de queries:
+httplib URL-decodea y Drogon consulta el texto crudo. Las pruebas HTTP ejercitan
+ambos comportamientos reales en loopback, no un sustituto del runtime.
+
+El [CLI general de bootstrap](../CLI.md) conecta el recorrido completo:
+
+```sh
+npm run bootstrap -- examples/interface.ets --run
+npm run bootstrap -- examples/express-style-server.ets --build
+npm run bootstrap -- --config estatic.config.ts --run
+```
+
 ## Reutilización
 
 - `cpp-types.ts`: representación de escalares y tipos propios del runtime.
@@ -73,13 +115,10 @@ payload propietario de un contenedor consumido.
 
 - `backendEscape` (`@cppgen`) se rechaza: aún no hay una etapa de ejecución del
   generador desde el IR. No se interpreta como una llamada ordinaria.
-- Las llamadas opacas a métodos de interfaces/intersecciones no contienen aún
-  un destino concreto/tabla de dispatch suficiente. Se rechazan por capacidad;
-  el backend no vuelve al AST para recuperar esa información ni inventa vtables.
-- Los decoradores de ABI externo C++ (`@cpp_name`, `@cpp_type`, `@include`, `@link` y selección Drogon) se
+- Los decoradores de ABI externo C++ (`@cpp_name`, `@cpp_type`, `@include` y `@link`) se
   rechazan: no se confunden sus layouts externos con los records internos.
-- HTTP y capacidades runtime sin binding explícito se rechazan. La existencia
-  de una API en el frontend no demuestra por sí sola su soporte en este backend.
+- Las capacidades runtime sin binding explícito, como `io_uring`, se rechazan.
+  La existencia de una API en el frontend no demuestra por sí sola su soporte.
 - `Timer` no copiable requiere cerrar el contrato de ownership/copia que hoy
   publica el frontend/IR. No se introduce shared ownership para evitar el error.
 - El CLI histórico, su caché incremental y sus perfiles de optimización no se
@@ -107,42 +146,32 @@ o con ptrace puede repetirse con `ESTATIC_TEST_DISABLE_LSAN=1`: esto desactiva
 sólo el comprobador de fugas dentro de ese binario de pruebas. No modifica el
 C++ entregado por el backend ni demuestra ausencia de fugas.
 
-## Validación de 2026-10-25
+## Validación de interfaces, HTTP y CLI (2026-10-25)
 
 | Comprobación | Resultado |
 |---|---|
-| C++ del IR: generación, compilación y ejecución | **57/57**, cero fallos, cancelaciones y skips |
-| Lowering/verificador nativo | **128/128** |
-| Tipos C++, codegen histórico y selección de runtime reutilizados | **180/180** |
-| Suite global con libuv y objetos de runtime locales | **3706/3706**, cero fallos, cancelaciones y skips; 724702 ms |
-| Corpus completo: generación, compilación y enlace, sin ejecución | **119/131 fuentes válidos**; el ejemplo negativo esperado se rechaza |
-| CLI de fuente y `--from-ir`, ejecutando hello | `Hola, mundo` y `120` |
-| ASan/UBSan para ownership y aritmética exacta | Pasa; LeakSanitizer desactivado sólo en ese binario por la restricción de `/proc`/ptrace |
-| `git diff --check` | Sin errores |
+| Backend, HTTP real y CLI de bootstrap | **75/75**, sin fallos ni skips |
+| Lowering/verificador nativo, incluidos dispatches corruptos | **133/133** |
+| Checker nativo, seguridad y efectos | **1376/1376** |
+| Tipos C++, backend histórico, selección de runtime y docs | **181/181** |
+| Corpus: generación, compilación y enlace, sin ejecutar ejemplos | **126/131 fuentes válidos**; el ejemplo negativo esperado se rechaza |
+| Servidores HTTP | Rutas, path/query/header, POST, DELETE, status y JSON con **httplib y Drogon reales** |
+| Cliente HTTP | GET/POST reales con **libcurl**, corutinas y Result |
+| CLI | Fuente → IR → C++ → binario; JSON → C++; config, aliases, raíces, caché, argumentos, errores y exit code |
+| ASan/UBSan | Pasan ownership/aritmética y copias recursivas de interfaces; sólo LSan desactivado por restricción de `/proc`/ptrace |
 
-La ejecución global incluyó las 56 pruebas del backend anteriores al caso de
-spawn y al helper de drenaje. Después se repitieron las 57 pruebas del backend,
-que incluyen el comportamiento final de todos sus entrypoints async. No se
-presenta 3706 como el total de una ejecución global con la prueba adicional.
+Para esta validación se prepararon localmente libuv v1.48.0, Drogon v1.9.11,
+Trantor (submódulo de Drogon) y JsonCpp 1.9.6. El cliente usó libcurl del sistema.
+Las bibliotecas se instalaron bajo `build/libs/`, sin cambiar paquetes del sistema.
+La suite se ejecutó con `TMPDIR` dentro del workspace y
+`ESTATIC_TEST_DISABLE_LSAN=1`. Las dependencias locales no forman parte del commit.
 
-La dependencia local fue libuv v1.48.0, sin instalar paquetes del sistema. Para
-la suite general se prepararon `build/runtime_ets_libuv.o` y
-`build/runtime_ets_net_libuv.o`, como requiere el runner histórico. Se usaron
-`CPLUS_INCLUDE_PATH`, `LIBRARY_PATH` y `TMPDIR` apuntando a los directorios de
-build locales, junto con `ESTATIC_TEST_DISABLE_LSAN=1`.
+Los cinco fuentes válidos todavía rechazados pertenecen a capacidades ajenas a
+interfaces y HTTP: `comptime-overloads/main` (`@cppgen`), `io-uring-async-demo`,
+`memory-safe-timer`, `libc.lib` y `libraries-demo` (ABI externa). El audit sale
+con código 1 mientras queden estas capacidades pendientes. Compilar los 126
+fuentes no certifica su ejecución: los resultados de ejecución se verifican en
+las pruebas del backend, incluidos los servidores y el cliente HTTP locales.
 
-Los doce fuentes válidos rechazados por el audit pertenecen a estas capacidades:
-
-| Capacidad pendiente | Ejemplos |
-|---|---|
-| Métodos opacos de interfaces/intersecciones | `complete-demo`, `interface`, `intersection-demo`, `svg-with-discriminated-union`, `svg-with-spread` |
-| `@cppgen` | `comptime-overloads/main` |
-| HTTP | `express-style-server`, `todo-project/server` |
-| io_uring | `io-uring-async-demo` |
-| Ownership/copia de Timer | `memory-safe-timer` |
-| ABI externo `@link`/`@include`/`@cpp_name` | `libc.lib`, `libraries-demo` |
-
-El audit de cobertura sale con código 1 mientras estas capacidades sigan
-pendientes. Los rechazos son explícitos, no fallos de compilación del C++
-emitido. Compilar los 119 ejemplos no certifica su ejecución ni paridad completa.
-Las pruebas con resultados esperados independientes cubren las 57 regresiones.
+La suite global anterior pasó **3706/3706** antes de esta ampliación; esa cifra
+es histórica y no se presenta como una ejecución global del cambio actual.

@@ -70,7 +70,22 @@ export class NativeChecker {
           const source = this.binding.symbols[member]; const declaration: AstNode = this.node(source.module,source.node);
           if (declaration.get(AttributeKind.Access) == "private" || declaration.get(AttributeKind.Access) == "protected" || declaration.get(AttributeKind.IsStatic) == "true") return false;
           const required: number = this.binding.files[owner.module].declarations[edge.node];
-          if (!this.compatible(this.instantiateMember(actual,this.symbolType(member,source.module,source.node)),this.instantiateMember(expected,this.symbolType(required,owner.module,edge.node)))) return false;
+          let supplied: string = this.instantiateMember(actual,this.symbolType(member,source.module,source.node));
+          const wanted: string = this.instantiateMember(expected,this.symbolType(required,owner.module,edge.node));
+          let sourceParameters: number[] = []; let targetParameters: number[] = [];
+          for (const parameter of declaration.edges) if (parameter.role == EdgeRole.TypeParameters) sourceParameters.push(parameter.node);
+          for (const parameter of field.edges) if (parameter.role == EdgeRole.TypeParameters) targetParameters.push(parameter.node);
+          if (sourceParameters.length != targetParameters.length) return false;
+          // Generic method parameters are alpha-equivalent, not symbol-identical.
+          for (let at: number = 0; at < sourceParameters.length; at = at+1) {
+            const from: string = "@"+numberToString(this.binding.files[source.module].declarations[sourceParameters[at]]);
+            const to: string = "@"+numberToString(this.binding.files[owner.module].declarations[targetParameters[at]]);
+            const sourceBound: string = this.node(source.module,sourceParameters[at]).get(AttributeKind.Constraint);
+            const targetBound: string = this.node(owner.module,targetParameters[at]).get(AttributeKind.Constraint);
+            if (sourceBound != targetBound) return false;
+            supplied = replaceType(supplied,from,to);
+          }
+          if (!this.compatible(supplied,wanted)) return false;
         }
       } return true;
     }

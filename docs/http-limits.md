@@ -16,9 +16,10 @@ se incluye un solo wrapper y todas las instancias `Server` usan ese backend;
 no se pueden mezclar cpp-httplib y Drogon por instancia. El decorador sobre una
 variable que no sea `Server` no selecciona Drogon.
 
-Las pruebas verifican la selección del header por el compilador, no la
-ejecución nativa de Drogon: para esta última siguen haciendo falta sus headers
-y librerías.
+Las pruebas del backend IR (`bootstrap/ir/cpp.test.ts`) generan, compilan y
+ejecutan peticiones reales con ambos wrappers. Requieren los headers y
+bibliotecas correspondientes; Drogon puede instalarse en `build/libs/drogon/`.
+El CLI de bootstrap respeta esta misma selección.
 
 ## cpp-httplib
 

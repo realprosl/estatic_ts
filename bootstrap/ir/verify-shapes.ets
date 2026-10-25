@@ -23,7 +23,7 @@ export function irAssignable(project: constRef<IrProject>, from: number, to: num
     if (b.kind == "tuple" && (a.kind != "tuple" || a.arguments.length != b.arguments.length)) return false;
     for (let at: number = 0; at < a.arguments.length; at = at+1) if (!irAssignable(project,a.arguments[at],b.arguments[b.kind == "tuple" ? at : 0],depth+1)) return false; return true;
   }
-  if (b.kind == "interface") {
+  if (["interface","intersection"].includes(b.kind)) {
     for (let field: number = 0; field < b.names.length; field = field+1) { let found: boolean = false;
       for (let source: number = 0; source < a.names.length; source = source+1) if (a.names[source] == b.names[field] && irAssignable(project,a.fields[source],b.fields[field],depth+1)) found = true;
       if (!found) return false;

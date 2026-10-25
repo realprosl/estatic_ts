@@ -1,6 +1,7 @@
 /** Public ets-ir-2 wire contract. No source AST or checker objects cross here. */
 export interface IrSource { file: string; moduleId: string; sourceHash: string; node: number; start: number; end: number }
 export interface IrType {
+  methods?: string[]; methodTypes?: number[];
   kind: string; arguments: number[]; fields: number[]; names: string[]; variants: number[];
   numericKind: string; bits: number; signed: boolean; resource: boolean; length: number;
   tag: string; discriminator: string; discriminatorType: number; discriminatorValue: string;
@@ -18,7 +19,9 @@ export interface IrFunction {
   frameValues: number[]; framePlaces: number[]; source: IrSource;
 }
 export interface IrRuntimeContract { name: string; parameters: number[]; returns: number; effects: string[]; capability: string }
+export interface IrDispatch { interfaceType: number; concreteType: number; name: string; signature: number; callee: number }
 export interface IrProject {
+  dispatches?: IrDispatch[];
   annotations?: {name: string; source: IrSource; target: IrSource; arguments: string[]}[];
   format: "ets-ir-2"; success: boolean; diagnostics: {code: string; message: string}[];
   types: string[]; typeDefinitions: IrType[]; globals: IrPlace[]; functions: IrFunction[];

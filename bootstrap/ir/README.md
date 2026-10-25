@@ -14,7 +14,8 @@ La salida JSON es determinista. El código de salida es 0 para un proyecto
 verificado, 1 para diagnósticos y 2 para argumentos incorrectos. Un proyecto
 fallido puede contener IR parcial: **un consumidor debe exigir `success: true`**.
 El backend C++20 de `src/codegen/ir/` consume este formato y reutiliza el
-runtime del compilador existente. Su entrada de CLI es `bootstrap/ir/cpp.ts`;
+runtime del compilador existente. El [CLI general](../CLI.md) conecta todas las etapas;
+la entrada de backend sigue disponible en `bootstrap/ir/cpp.ts`;
 el CLI histórico de `src/` conserva su pipeline. Véase
 [CPP.md](./CPP.md) para cobertura, capacidades rechazadas y validación.
 
@@ -119,3 +120,13 @@ productivo. La auditoría del corpus valida lowering/verificación, sin ejecutar
 servidores, red ni los programas de ejemplo.
 
 La evidencia de la ejecución final se recoge en [VALIDATION.md](./VALIDATION.md).
+
+## Dispatch estructural
+
+Las shapes de interfaces/intersecciones publican `methods` y `methodTypes`.
+`variants` enumera los tipos concretos efectivamente convertidos a la interfaz.
+La tabla `dispatches` enlaza interfaz, concreto, nombre y firma con un callee IR;
+`interfaceCall` toma el receptor prestado y los argumentos ordenados. El
+verificador exige cobertura para cada alternativa y comprueba firmas/destinos.
+Los métodos genéricos tienen entradas especializadas por firma de llamada.
+La representación física de estos valores continúa siendo decisión del backend.

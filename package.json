@@ -13,7 +13,8 @@
     "etsc-codegen": "src/tools/codegen.ts",
     "etsc-format": "src/tools/format.ts",
     "etsc-doc": "src/tools/doc.ts",
-    "etsc-ir-cpp": "bootstrap/ir/cpp.ts"
+    "etsc-ir-cpp": "bootstrap/ir/cpp.ts",
+    "etsc-bootstrap": "bootstrap/cli.ts"
   },
   "scripts": {
     "start": "node --experimental-strip-types src/cli.ts",
@@ -47,6 +48,7 @@
     "audit:bootstrap": "node --experimental-strip-types bootstrap/audit/run.ts",
     "audit:bootstrap:syntax": "node --experimental-strip-types bootstrap/audit/syntax-parity.ts",
     "audit:bootstrap:self": "node --experimental-strip-types bootstrap/audit/self.ts",
+    "bootstrap": "node --experimental-strip-types bootstrap/cli.ts",
     "bootstrap:ir:cpp": "node --experimental-strip-types bootstrap/ir/cpp.ts",
     "test:bootstrap:ir:cpp": "node --experimental-strip-types --test bootstrap/ir/cpp.test.ts"
   },

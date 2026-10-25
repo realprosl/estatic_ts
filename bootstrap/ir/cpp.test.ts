@@ -2,12 +2,14 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawnSync, spawn } from "node:child_process";
+import { createServer } from "node:http";
+import { once } from "node:events";
 import { buildLoader, root } from "../modules/build.ts";
 import { nativeIr, buildIrCpp } from "./cpp.ts";
 import { generateCppFromIr } from "../../src/codegen/ir/cpp-generator.ts";
 const directory=mkdtempSync(join(root,"build-ir-cpp-test-"));let lower:string;
-before(async()=>{lower=await buildLoader(join(directory,"lower"),"bootstrap/ir/demo.ets",true);});
+before(async()=>{lower=process.env.ESTATIC_IR_BINARY??await buildLoader(join(directory,"lower"),"bootstrap/ir/demo.ets",true);});
 after(()=>rmSync(directory,{recursive:true,force:true}));
 function ir(source:string,files:Record<string,string>={}) {
  const dir=mkdtempSync(join(directory,"case-"));for(const [name,text]of Object.entries({"main.ets":source,...files})){mkdirSync(dirname(join(dir,name)),{recursive:true});writeFileSync(join(dir,name),text);}return nativeIr(lower,join(dir,"main.ets"));
@@ -18,6 +20,17 @@ function execute(source:string,files:Record<string,string>={},flags:string[]=[])
  buildIrCpp(result,cpp,binary,undefined,flags);const p=spawnSync(binary,[],{encoding:"utf8",timeout:15000,env:flags.some(f=>f.includes("sanitize"))?{...process.env,ASAN_OPTIONS:"detect_leaks=0",LSAN_OPTIONS:"detect_leaks=0"}:process.env});assert.ifError(p.error);assert.equal(p.status,0,p.stderr);return p.stdout;
 }
 for(const [name,source,expected] of [
+ ["interface dispatch",'interface Named{name():string;}class A{name():string{return "A";}}class B{name():string{return "B";}}function f(x:Named):string{return x.name();}print(f(new A()));print(f(new B()));',"A\nB\n"],
+ ["interface array dispatch",'interface I{f():number;}class A{f():number{return 2;}}class B{f():number{return 3;}}let xs:I[]=[new A(),new B()];print(xs[0].f());print(xs[1].f());',"2\n3\n"],
+ ["interface value copy",'interface I{n:number;inc():void;}class C{n:number=1;inc():void{this.n+=1;}}let x:I=new C();let y:I=x;y.inc();print(x.n);print(y.n);',"1\n2\n"],
+ ["generic interface",'interface I{get():number;}class C<T>{value:T;get():T{return this.value;}}function f(x:I):number{return x.get();}print(f(new C<number>(7)));',"7\n"],
+ ["interface narrowing conversion",'interface A{f():number;}interface B{f():number;g():number;}class C{f():number{return 4;}g():number{return 5;}}let b:B=new C();let a:A=b;print(a.f());',"4\n"],
+ ["intersection dispatch",'interface A{a():number;}interface B{b():number;}class C{a():number{return 2;}b():number{return 3;}}function f(x:A&B):number{return x.a()+x.b();}print(f(new C()));',"5\n"],
+ ["interface recursive container",'interface I{render():string;}class Leaf{render():string{return "L";}}class Group{children:I[];render():string{let s="";for(const child of this.children)s+=child.render();return s;}}const x:I=new Group([new Leaf(),new Group([new Leaf()])]);print(x.render());',"LL\n"],
+ ["interface named arguments",'interface I{f(a:number,b:number):number;}class C{f(a:number,b:number):number{return a*10+b;}}function call(x:I):number{return x.f(b:2,a:1);}print(call(new C()));',"12\n"],
+ ["interface optional conversion",'interface I{f():number;}class C{f():number{return 8;}}const c:I=new C();const x=optionalSome(c);if(x.isPresent())print(x.value().f());',"8\n"],
+ ["interface generic method",'interface I{id<T>(x:T):T;}class C{id<T>(x:T):T{return x;}}function f(i:I):void{print(i.id<number>(3));print(i.id<string>("s"));}f(new C());',"3\ns\n"],
+ ["interface field projection",'interface A{n:number;}interface B{n:number;f():number;}class C{n:number=4;f():number{return this.n;}}const b:B=new C();const a:A=b;print(a.n);',"4\n"],
  ["scalars",'let n:i32=2;n+=3;print(n*2);',"10\n"],
  ["recursion",'function f(n:number):number{if(n==0)return 1;return n*f(n-1);}print(f(5));',"120\n"],
  ["loops",'let n=0;for(let i=0;i<6;i+=1){if(i==1)continue;if(i==5)break;n+=i;}print(n);',"9\n"],
@@ -92,3 +105,59 @@ test("IR C++ writes back legacy out parameters through runtime references",()=>{
  const path=join(directory,"out-contents.txt");writeFileSync(path,"out");
  assert.equal(execute(`let content="";let error="";if(readFile(${JSON.stringify(path)},content,error))print(content);`),"out\n");
 });
+
+
+for(const backend of ["httplib","drogon"] as const)test(`IR C++ retains callbacks and routes real HTTP through ${backend}`,async()=>{
+ const reservation=createServer();reservation.listen(0,"127.0.0.1");await once(reservation,"listening");const port=(reservation.address() as {port:number}).port;await new Promise<void>(resolve=>reservation.close(()=>resolve()));
+ const source=`let server=http.createServer();const greeting="hello ";server.get("/users/:id",(req:Request,res:Response):void=>{res.status(202).header("X-Reply","yes").send(greeting+http.param(req,"id")+":"+http.query(req,"q")+":"+http.header(req,"X-Test")+":"+req.method+":"+req.path);});server.post("/echo",(req:Request,res:Response):void=>{res.status(201).send(req.body);});server.delete("/item",(req:Request,res:Response):void=>{res.status(203).json(${JSON.stringify('{"ok":true}')});});server.listen("127.0.0.1",${port});`;
+ const project=ir((backend==="drogon"?"@cpp_drogon ":"")+source),result=generateCppFromIr(project);assert(result.headers.includes(`runtime/ets_http_${backend}.hpp`));
+ const cpp=join(directory,"server.cpp"),binary=join(directory,"server");writeFileSync(cpp,result.cpp);buildIrCpp(result,cpp,binary);
+ const child=spawn(binary,[],{stdio:["ignore","pipe","pipe"]});let errors="";child.stderr.on("data",chunk=>errors+=chunk);const closed=once(child,"close");
+ try {
+  let response:Response|undefined;
+  for(let attempt=0;attempt<100;attempt++){try{response=await fetch(`http://127.0.0.1:${port}/users/42?q=one%20two`,{headers:{"X-Test":"custom"}});break;}catch{if(child.exitCode!==null)throw new Error(errors);await new Promise(resolve=>setTimeout(resolve,25));}}
+  assert(response,"Server did not start");assert.equal(response.status,202);assert.equal(response.headers.get("x-reply"),"yes");assert.equal(await response.text(),backend==="drogon"?"hello 42:one%20two:custom:GET:/users/42":"hello 42:one two:custom:GET:/users/42");
+  response=await fetch(`http://127.0.0.1:${port}/echo`,{method:"POST",body:"payload"});assert.equal(response.status,201);assert.equal(await response.text(),"payload");
+  response=await fetch(`http://127.0.0.1:${port}/item`,{method:"DELETE"});assert.equal(response.status,203);assert.match(response.headers.get("content-type")??"",/application\/json/);assert.deepEqual(await response.json(),{ok:true});
+ }finally{child.kill("SIGTERM");await closed;}
+});
+
+test("IR C++ selects the existing Drogon wrapper through its annotation",()=>{
+ const p=ir('@cpp_drogon let server:Server=http.createServer();server.get("/",(req:Request,res:Response):void=>{res.send("ok");});');
+ const result=generateCppFromIr(p);assert(result.headers.includes("runtime/ets_http_drogon.hpp"));assert(!result.headers.includes("runtime/ets_http_httplib.hpp"));
+});
+
+test("IR C++ libcurl client executes GET and POST through native async",async()=>{
+ const server=createServer((req,res)=>{let body="";req.on("data",chunk=>body+=chunk);req.on("end",()=>{res.writeHead(202,{"X-Test":"curl"});res.end(req.method=== "POST"?body:"hello");});});server.listen(0,"127.0.0.1");await once(server,"listening");const port=(server.address() as {port:number}).port;
+ try {
+  const project=ir(`const a=await http.get("http://127.0.0.1:${port}/");if(a.isOk()){const r=a.value();print(r.status());print(r.body());print(r.header("X-Test"));}const b=await http.post("http://127.0.0.1:${port}/","payload");if(b.isOk())print(b.value().body());`);
+  const result=generateCppFromIr(project);assert(result.runtimeBackends.curl);assert(result.runtimeBackends.libuv);
+  const cpp=join(directory,"client.cpp"),binary=join(directory,"client");writeFileSync(cpp,result.cpp);buildIrCpp(result,cpp,binary);
+  const child=spawn(binary,[],{stdio:["ignore","pipe","pipe"]});let stdout="",stderr="";child.stdout.on("data",chunk=>stdout+=chunk);child.stderr.on("data",chunk=>stderr+=chunk);
+  const timer=setTimeout(()=>child.kill("SIGKILL"),15000);try{const [code]=await once(child,"close");assert.equal(code,0,stderr);assert.equal(stdout,"202\nhello\ncurl\npayload\n");}finally{clearTimeout(timer);}
+ }finally{await new Promise<void>(resolve=>server.close(()=>resolve()));}
+});
+
+test("bootstrap CLI connects native frontend, IR, C++, build and execution",()=>{
+ const cli=join(root,"bootstrap/cli.ts"),dir=mkdtempSync(join(directory,"cli-"));
+ const command=(args:string[])=>spawnSync(process.execPath,["--experimental-strip-types",cli,...args],{cwd:root,encoding:"utf8",timeout:120000});
+ const source=join(dir,"main.ets"),cpp=join(dir,"app.cpp"),json=join(dir,"app.ir.json"),binary=join(dir,"app");writeFileSync(source,'print(argument(1));');
+ let p=command([source,"--frontend",lower,"-o",cpp,"--binary",binary,"--emit-ir",json,"--run","--","hello"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"hello\n");
+ p=command(["--from-ir",json,"-o",cpp,"--binary",binary,"--run","--","IR"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"IR\n");
+ p=command([source,"--frontend",lower,"--check"]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/Comprobado/);
+ writeFileSync(source,'exitProcess(7);');p=command([source,"--frontend",lower,"-o",cpp,"--binary",binary,"--run"]);assert.equal(p.status,7,p.stderr);
+ writeFileSync(source,'let n:number="bad";');p=command([source,"--frontend",lower,"--check"]);assert.equal(p.status,1);assert.match(p.stderr,/IR_INPUT|incompatible|comprobado/);
+ assert.equal(command(["--unknown"]).status,2);assert.equal(command(["--version"]).status,0);assert.equal(command(["--help"]).status,0);
+});
+
+test("bootstrap CLI reuses project config and passes aliases/roots to native loader",()=>{
+ const dir=mkdtempSync(join(directory,"config-")),modules=join(dir,"lib");mkdirSync(modules);writeFileSync(join(modules,"dep.ets"),'export const n=9;');
+ const source=join(dir,"main.ets");writeFileSync(source,'import {n} from "lib/dep";print(n);');
+ const config=join(dir,"estatic.config.ts");writeFileSync(config,'export default {entry:"main.ets",aliases:{lib:"./lib"},output:{cpp:"out/app.cpp",binary:"out/app"},compiler:{flags:["-O0"],linkFlags:[]}};');
+ const p=spawnSync(process.execPath,["--experimental-strip-types",join(root,"bootstrap/cli.ts"),"--config",config,"--frontend",lower,"--run"],{cwd:dir,encoding:"utf8",timeout:120000});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"9\n");
+ writeFileSync(source,'import {n} from "dep";print(n);');
+ const checked=spawnSync(process.execPath,["--experimental-strip-types",join(root,"bootstrap/cli.ts"),source,"--frontend",lower,"--root",modules,"--cache",join(dir,"cache"),"--check"],{cwd:dir,encoding:"utf8",timeout:120000});assert.equal(checked.status,0,checked.stderr);
+});
+
+
+test("IR C++ recursive interface copies pass ASan/UBSan",()=>assert.equal(execute('interface I{render():string;}class Leaf{render():string{return "L";}}class Group{children:I[];render():string{let s="";for(const c of this.children)s+=c.render();return s;}}const x:I=new Group([new Leaf(),new Group([new Leaf()])]);const y:I=x;print(x.render());print(y.render());',{},["-fsanitize=address,undefined","-fno-omit-frame-pointer"]),"LL\nLL\n"));

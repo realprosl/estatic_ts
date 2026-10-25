@@ -6,7 +6,7 @@ import type { RuntimeBackends } from "../../modules/runtime-backends.ts";
 export interface IrCppResult { cpp: string; headers: string[]; runtimeBackends: RuntimeBackends; capabilities: string[] }
 const recordKinds = new Set(["record","interface","intersection","variant"]);
 const sumKinds = new Set(["sum","union"]);
-const ops = new Set(["constant","load","store","address","move","borrow","dropRemaining","aggregate","record","property","extractIndex","emptyRecord","collection","isPresent","unwrap","typeTag","typeTest","iterator","iterHasNext","iterNext","some","result","variant","convert","unary","binary","dropFrame","resume","endBorrow","own","dropValue","none","closure","callIndirect","call","taskCreate","runtimeCall","intrinsic"]);
+const ops = new Set(["constant","load","store","address","move","borrow","dropRemaining","aggregate","record","property","extractIndex","emptyRecord","collection","isPresent","unwrap","typeTag","typeTest","iterator","iterHasNext","iterNext","some","result","variant","convert","unary","binary","dropFrame","resume","endBorrow","own","dropValue","none","closure","callIndirect","call","taskCreate","runtimeCall","interfaceCall","intrinsic"]);
 
 /** A pure consumer of verified ets-ir-2. It never consults or reconstructs ASTs. */
 export class IrCppGenerator {
@@ -37,6 +37,9 @@ export class IrCppGenerator {
       case "parameter": return "std::monostate"; // unused generic metadata, rejected when an executable slot needs it
       case "runtime": {
         const name=this.project.types[id];
+        if(name==="Server"){this.httpServer();return "ets::Server";}
+        if(name==="Request"||name==="Response"){this.httpServer();return name==="Request"?"const ets::HttpRequest*":"ets::HttpResponse*";}
+        if(name==="HttpClientResponse"){this.headers.add("runtime/ets_http_curl_async.hpp");this.backends.libuv=true;this.backends.curl=true;return "ets::HttpClientResponse";}
         if(name==="Timer")this.fail("runtime:Timer necesita un contrato de ownership/copia en el IR para reutilizar el Timer no copiable de C++");
         if(["JsonValue","Console","Regex","Request","Response","HttpClientResponse","FileReader","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","Server","Timer","FsWatcher","FsEvent"].includes(name)) {
           if(name==="Regex")this.headers.add("runtime/ets_regex.hpp");
@@ -47,6 +50,9 @@ export class IrCppGenerator {
     }
     return this.fail(`Shape C++ sin representación: ${s.kind}`);
   }
+  interface(id:number):boolean { return ["interface","intersection"].includes(this.shape(id).kind)&&(this.shape(id).methods?.length??0)>0; }
+  interfaceVariant(id:number):string { return `std::variant<${this.shape(id).variants.length?this.shape(id).variants.map(t=>`ets::ir::Box<${this.type(t)}>`).join(","):"std::monostate"}>`; }
+  httpServer():void {this.headers.add(this.project.annotations?.some(a=>a.name==="cpp_drogon")?"runtime/ets_http_drogon.hpp":"runtime/ets_http_httplib.hpp");}
   elementType(id:number):string {return this.project.types[id]==="boolean"?"ets::ir::Boolean":this.type(id);}
   // Canonical names are only diagnostics. C++ identifiers come exclusively from IDs.
   record(id:number): boolean { return recordKinds.has(this.shape(id).kind); }
@@ -81,13 +87,25 @@ export class IrCppGenerator {
     if(b.kind==="enum")return this.convert(value,from,b.arguments[0]);
     if(this.project.types[to]==="string")return a.numericKind==="integer"?`std::to_string(${value})`:`ets::concat(${value})`;
     if(b.kind==="Optional"&&a.kind!=="Optional")return `${T}::some(${this.convert(value,from,b.arguments[0])})`;
+    if(a.kind==="Optional"&&b.kind==="Optional")return `([&](){auto input=${value};if(input.isPresent())return ${T}::some(${this.convert(this.shape(a.arguments[0]).resource?"std::move(input).value()":"input.value()",a.arguments[0],b.arguments[0])});return ${T}::none();}())`;
+    if(a.kind==="Result"&&b.kind==="Result")return `([&](){auto input=${value};if(input.isOk())return ${T}::success(${this.convert(this.shape(a.arguments[0]).resource?"std::move(input).value()":"input.value()",a.arguments[0],b.arguments[0])});return ${T}::failure(input.error());}())`;
+    if(["tuple","pack"].includes(a.kind)&&["tuple","pack"].includes(b.kind))return `([&](){auto input=${value};return ${T}{${b.arguments.map((t,k)=>this.convert(`${this.shape(a.arguments[k]).resource?"std::move(":""}std::get<${k}>(input)${this.shape(a.arguments[k]).resource?")":""}`,a.arguments[k],t)).join(",")}};}())`;
     if(sumKinds.has(b.kind)) {
       const at=this.choices(to).indexOf(from);
       if(at>=0)return `${T}{std::variant<${this.choices(to).map(x=>this.type(x)).join(",")}>{std::in_place_index<${at}>,${value}}}`;
     }
     if(sumKinds.has(a.kind)&&this.choices(from).includes(to))return `std::get<${this.choices(from).indexOf(to)}>(${value}.data)`;
+    if(this.interface(to)) {
+      if(sumKinds.has(a.kind)) {
+        const branches=this.choices(from).map((alt,k)=>`${k?"else ":""}if constexpr(std::is_same_v<std::remove_cvref_t<decltype(input)>,${this.type(alt)}>)return ${this.convert("std::move(input)",alt,to)};`).join("");
+        return `([&](){auto source=${value};return std::visit([&](auto&& input)->${T}{${branches}else std::abort();},source.data);}())`;
+      }
+      if(this.interface(from))return `([&](){auto source=${value};return std::visit([&](auto&& box)->${T}{using B=std::remove_cvref_t<decltype(box)>;if constexpr(std::is_same_v<B,std::monostate>)std::abort();else return ${T}{${this.interfaceVariant(to)}{std::move(box)}};},source.data);}())`;
+      if(!b.variants.includes(from))this.fail("Implementación concreta ausente del contrato de interfaz");
+      return `${T}{${this.interfaceVariant(to)}{std::in_place_type<ets::ir::Box<${this.type(from)}>>,${value}}}`;
+    }
     if(this.record(from)&&this.record(to)) {
-      const fields=b.names.map((name,k)=>{const at=a.names.indexOf(name);if(at<0)this.fail(`Campo ausente en conversión: ${name}`);return `out.f${k}.set(${this.convert(`input.f${at}.${this.shape(a.fields[at]).resource?"take":"get"}()`,a.fields[at],b.fields[k])});`;});
+      const fields=b.names.map((name,k)=>{const at=a.names.indexOf(name);if(at<0)this.fail(`Campo ausente en conversión: ${name}`);return `out.f${k}.set(${this.convert(`${this.field("input",from,at)}.${this.shape(a.fields[at]).resource?"take":"get"}()`,a.fields[at],b.fields[k])});`;});
       return `([&](){auto input=${value};${T} out;${fields.join("")}return out;}())`;
     }
     if(a.kind==="function"&&b.kind==="function") {
@@ -102,6 +120,11 @@ export class IrCppGenerator {
   }
   field(base:string,type:number,index:number):string {
     const s=this.shape(type);
+    if(this.interface(type)) {
+      const name=s.names[index],fieldType=s.fields[index];
+      const branches=s.variants.map((alt,k)=>{const shape=this.shape(alt),field=shape.names.indexOf(name);if(field<0||shape.fields[field]!==fieldType)this.fail(`Campo de interfaz incompatible: ${name}`);return `${k?"else ":""}if constexpr(std::is_same_v<B,ets::ir::Box<${this.type(alt)}>>)return box.get().f${field};`;}).join("");
+      return `std::visit([](auto& box)->std::conditional_t<std::is_const_v<std::remove_reference_t<decltype((${base}))>>,const ets::ir::Slot<${this.type(fieldType)}>&,ets::ir::Slot<${this.type(fieldType)}>&>{using B=std::remove_cvref_t<decltype(box)>;${branches}${branches?"else ":""}std::abort();},(${base}).data)`;
+    }
     if(!sumKinds.has(s.kind))return `(${base}).f${index}`;
     const name=s.names[index], alternatives=this.choices(type);
     const branches=alternatives.map((alt,k)=>{
@@ -218,6 +241,17 @@ export class IrCppGenerator {
       }
       case "call": case "taskCreate": value=`ir_f${i.callee}(${i.operands.map((_,k)=>a(k)).join(",")})`;break;
       case "callIndirect": value=`${a(0)}(${i.operands.slice(1).map((_,k)=>a(k+1)).join(",")})`;break;
+      case "interfaceCall": {
+        const receiver=this.inner(f.values[i.operands[0]]),returnType=this.type(i.typeId);
+        const branches=this.shape(receiver).variants.map((concrete,k)=>{
+          const d=this.project.dispatches?.find(d=>d.interfaceType===receiver&&d.concreteType===concrete&&d.name===i.text&&d.signature===i.signature);
+          if(!d)this.fail("Dispatch de interfaz incompleto",i.source);
+          const target=this.project.functions[d.callee];
+          const call=`ir_f${d.callee}(${[`std::addressof(box.get())`,...i.operands.slice(1).map((v,n)=>this.convert(a(n+1),f.values[v],target.parameterTypes[n+1]))].join(",")})`;
+          return `${k?"else ":""}if constexpr(std::is_same_v<B,ets::ir::Box<${this.type(concrete)}>>){${this.project.types[i.typeId]==="void"?`${call};return;`:`return ${this.convert(call,target.returns,i.typeId)};`}}`;
+        }).join("");
+        value=`std::visit([&](auto& box)->${returnType}{using B=std::remove_cvref_t<decltype(box)>;${branches}${branches?"else ":""}std::abort();},(${this.deref(a(0,false),f.values[i.operands[0]])}).data)`;break;
+      }
       case "runtimeCall": value=emitRuntimeCall(this,f,i);break;
       case "intrinsic": {
         if(i.operands.some(v=>s(this.inner(f.values[v])).kind==="pack")) {
@@ -293,7 +327,8 @@ export class IrCppGenerator {
     const dependency=(id:number):void=>{const s=this.shape(id);if(["ptr","constPtr","ref","constRef","function"].includes(s.kind))return;if(this.record(id)||sumKinds.has(s.kind))emit(id);else for(const a of s.arguments)dependency(a);};
     const emit=(id:number):void=>{
       if(done.has(id))return;if(active.has(id))this.fail("Ciclo de layout por valor en tipos IR");active.add(id);const s=this.shape(id);
-      if(this.record(id)){for(const f of s.fields)dependency(f);out.push(`struct ir_t${id}{${s.fields.map((t,k)=>`ets::ir::Slot<${this.type(t)}> f${k};`).join("")}bool operator==(const ir_t${id}&)const=default;};`);}
+      if(this.interface(id))out.push(`struct ir_t${id}{${this.interfaceVariant(id)} data;bool operator==(const ir_t${id}&)const=default;};`);
+      else if(this.record(id)){for(const f of s.fields)dependency(f);out.push(`struct ir_t${id}{${s.fields.map((t,k)=>`ets::ir::Slot<${this.type(t)}> f${k};`).join("")}bool operator==(const ir_t${id}&)const=default;};`);}
       else {for(const a of this.choices(id))dependency(a);out.push(`struct ir_t${id}{std::variant<${this.choices(id).map(t=>this.type(t)).join(",")}> data;bool operator==(const ir_t${id}&)const=default;};`);}
       active.delete(id);done.add(id);
     };
@@ -309,6 +344,13 @@ export class IrCppGenerator {
       const s=this.shape(id);if(s.kind==="scalar"&&!scalar.has(p.types[id]))this.fail("Tipo escalar inválido");
       if(![...s.arguments,...s.fields,...s.variants].every(type))this.fail("Referencia de tipo inexistente");
       if(s.names.length!==s.fields.length)this.fail("Tabla de campos incompatible");
+      if((s.methods?.length??0)!==(s.methodTypes?.length??0)||!(s.methodTypes??[]).every(t=>type(t)&&this.shape(t).kind==="function"))this.fail("Tabla de métodos incompatible");
+    }
+    const dispatchKeys=new Set<string>();
+    for(const d of p.dispatches??[]) {
+      const target=p.functions[d.callee],key=`${d.interfaceType}:${d.concreteType}:${d.name}:${d.signature}`;
+      if(!type(d.interfaceType)||!type(d.concreteType)||!type(d.signature)||!target||!this.interface(d.interfaceType)||!this.shape(d.interfaceType).variants.includes(d.concreteType)||this.shape(d.signature).kind!=="function"||target.parameterTypes.length!==this.shape(d.signature).arguments.length||this.shape(target.parameterTypes[0]).kind!=="ref"||this.shape(target.parameterTypes[0]).arguments[0]!==d.concreteType||dispatchKeys.has(key))this.fail("Contrato de dispatch de interfaz inválido");
+      dispatchKeys.add(key);
     }
     for(const f of p.functions) {
       if(![f.returns,f.bodyReturns,...f.parameterTypes,...f.values,...f.places.map(x=>x.typeId)].every(type))this.fail("Tipo de función/place/valor inexistente",f.source);
@@ -326,7 +368,7 @@ export class IrCppGenerator {
   }
   generate():IrCppResult {
     this.validateBoundary();
-    for(const annotation of this.project.annotations??[])if(["cpp_name","cpp_type","cpp_drogon","include","link","cpp_header","cpp_include","cpp_link"].includes(annotation.name))this.fail(`ABI externo no implementado: @${annotation.name}`,annotation.source);
+    for(const annotation of this.project.annotations??[])if(["cpp_name","cpp_type","include","link","cpp_header","cpp_include","cpp_link"].includes(annotation.name))this.fail(`ABI externo no implementado: @${annotation.name}`,annotation.source);
     if(this.project.format!=="ets-ir-2"||!this.project.success||this.project.diagnostics.length)this.fail("Se requiere ets-ir-2 verificado con success:true");
     if(this.project.types.length!==this.project.typeDefinitions.length)this.fail("Tablas de tipos incompletas");
     for(const f of this.project.functions)for(const t of [...f.values,...f.parameterTypes,...f.places.map(p=>p.typeId)])if(this.shape(t).kind==="parameter")this.fail("Parámetro genérico sin especializar en código ejecutable",f.source);

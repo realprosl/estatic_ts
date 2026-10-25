@@ -62,6 +62,23 @@ export function emitRuntimeCall(g:IrCppGenerator,f:IrFunction,i:IrInstruction):s
     g.fail(`Capacidad runtime no implementada: ${c.capability}`,i.source);
   }
   const dot=c.name.lastIndexOf("."), base=c.name.slice(0,dot), method=c.name.slice(dot+1);
+  if(base==="!http") {
+    if(["createServer","express","server"].includes(method)){g.httpServer();return "ets::Server{}";}
+    if(["param","query","header"].includes(method)){g.httpServer();return `ets::http_${method}(*(${a(0,false)}),${a(1)})`;}
+    if(["get","post"].includes(method)) {
+      g.headers.add("runtime/ets_http_curl_async.hpp");g.backends.curl=true;g.backends.libuv=true;
+      const values=i.operands.map((_,k)=>a(k));if(method==="post"&&values.length===2)values.push('std::string("text/plain")');
+      return `ets::httpClient${method==="get"?"Get":"Post"}Async(${values.join(",")})`;
+    }
+  }
+  if(base==="Request.property"&&["method","path","rawQuery","body"].includes(method)){g.httpServer();return `(${a(0,false)})->${method}`;}
+  if(base==="Server") {
+    g.httpServer();const receiver=g.deref(a(0,false),f.values[i.operands[0]]);
+    if(["get","post","put","patch","delete"].includes(method))return `(${receiver}).${method==="delete"?"del":method}(${a(1)},[handler=${a(2)}](const ets::HttpRequest& request,ets::HttpResponse& response)mutable{handler(std::addressof(request),std::addressof(response));})`;
+    if(method==="listen")return `(${receiver}).listen(${i.operands.slice(1).map((_,k)=>a(k+1)).join(",")})`;
+  }
+  if(base==="Response"&&["status","header","send","json"].includes(method)){g.httpServer();return `std::addressof((${a(0,false)})->${method}(${i.operands.slice(1).map((_,k)=>a(k+1)).join(",")}))`;}
+  if(base==="HttpClientResponse"&&["status","body","header"].includes(method))return `(${g.deref(a(0,false),f.values[i.operands[0]])}).${method==="status"?"status_code":method==="body"?"body_str":method}(${i.operands.slice(1).map((_,k)=>a(k+1)).join(",")})`;
   if(base==="Console"&&TERMINAL_METHODS[method]){g.headers.add("runtime/ets_terminal.hpp");return `console.${method}(${args()})`;}
   if(objectMethods[base]?.has(method)) {
     if(["!fs","!path","!process"].includes(base)){g.headers.add("runtime/ets_runtime_full.hpp");g.backends.libuv=true;}
