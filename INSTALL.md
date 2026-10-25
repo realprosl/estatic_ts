@@ -101,9 +101,11 @@ archivos estáticos, validando compilador, arquitectura, flags de ABI, fuentes,
 dependencias e integridad. La optimización del runtime es `-O2`; los perfiles
 normales reutilizan los mismos archivos aunque el programa use `-O0`.
 
-Los perfiles distintos se construyen bajo `$XDG_CACHE_HOME/estc/runtime` o
-`~/.cache/estc/runtime`, sin escribir en el prefijo instalado.
-`ESTC_RUNTIME_CACHE` permite seleccionar otra caché (`ESTATIC_RUNTIME_CACHE`
+En proyectos con caché incremental, los perfiles distintos se construyen en
+`.build/runtime`. Sin caché de proyecto, se construyen bajo
+`$XDG_CACHE_HOME/estc/runtime` o `~/.cache/estc/runtime`, sin escribir en el
+prefijo instalado.
+`ESTC_RUNTIME_CACHE` permite seleccionar otra caché compartida (`ESTATIC_RUNTIME_CACHE`
 continúa admitido). Cabeceras modificadas o archivos corruptos invalidan la
 caché. `npm run bootstrap:runtime` prepara la misma caché en el clon.
 
