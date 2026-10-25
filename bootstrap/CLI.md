@@ -66,5 +66,16 @@ es silencioso. Stdout conserva el JSON de `init` o la salida del programa.
 Los argumentos situados después de `--` pertenecen al programa, incluidos
 `--verbose` y `--no-progress`. `-v` continúa mostrando la versión.
 
-Estas opciones se implementan en `bootstrap/cli.ts`; no añaden flags nuevos
-al ejecutable nativo instalado `etsc`.
+El ejecutable nativo instalado `etsc` admite también `--verbose` y
+`--no-progress`. Muestra las fases, los comandos reales del compilador, los
+aciertos/fallos de caché y sus tiempos, sin utilizar Node. La animación se
+actualiza mientras espera al frontend y al compilador, y termina antes de
+ceder el terminal al programa:
+
+```sh
+etsc run --verbose
+etsc build --verbose --no-progress
+```
+
+En ambos drivers, stdout se reserva para los resultados y el programa; el
+progreso se escribe por stderr y se desactiva en pipes salvo con verbose.

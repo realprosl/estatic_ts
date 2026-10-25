@@ -50,7 +50,7 @@ test("installed etsc initializes, builds and runs independently of the clone wit
   for(const flag of ["--help","-h","-H"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/Uso: etsc init/);assert.match(p.stdout,/\/V/);assert.match(p.stdout,/-H/);}
   writeFileSync(join(home,"templates/types/estatic.d.ts"),"// stale template");
   mkdirSync(project);writeFileSync(join(project,"existing.txt"),"keep me");
-  let p=run(["init",project]);assert.equal(p.status,0,p.stderr);assert.match(readFileSync(join(project,"README.md"),"utf8"),/etsc build/);
+  let p=run(["init",project,"--verbose"]);assert.equal(p.status,0,p.stderr);assert.match(readFileSync(join(project,"README.md"),"utf8"),/etsc build/);assert.match(p.stderr,/Creando proyecto/);
   assert.equal(readFileSync(join(project,"existing.txt"),"utf8"),"keep me");
   assert.equal(readFileSync(join(project,"types/estatic.d.ts"),"utf8"),readFileSync(join(root,"types/estatic.d.ts"),"utf8"));
   const editor=JSON.parse(readFileSync(join(project,"tsconfig.json"),"utf8"));assert(editor.include.includes("types/**/*"));assert(editor.include.includes("estatic.config.json"));

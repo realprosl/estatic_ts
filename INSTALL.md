@@ -58,6 +58,8 @@ etsc run -- argumento1 argumento2
 etsc build src/main.ets -o build/main.cpp --binary build/main
 etsc run src/main.ets -- argumento1
 etsc update-types .
+etsc run --verbose  # fases, comandos, cachés y tiempos
+etsc build --verbose --no-progress  # progreso sin animaciones
 etsc --help  # también -h y -H
 etsc --version  # también -version, -v, -V y /V
 ```
