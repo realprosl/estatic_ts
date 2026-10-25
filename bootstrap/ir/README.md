@@ -13,8 +13,10 @@ node --experimental-strip-types bootstrap/ir/audit.ts
 La salida JSON es determinista. El código de salida es 0 para un proyecto
 verificado, 1 para diagnósticos y 2 para argumentos incorrectos. Un proyecto
 fallido puede contener IR parcial: **un consumidor debe exigir `success: true`**.
-No hay todavía un backend de producción conectado al IR. El CLI de `src/`
-conserva su pipeline.
+El backend C++20 de `src/codegen/ir/` consume este formato y reutiliza el
+runtime del compilador existente. Su entrada de CLI es `bootstrap/ir/cpp.ts`;
+el CLI histórico de `src/` conserva su pipeline. Véase
+[CPP.md](./CPP.md) para cobertura, capacidades rechazadas y validación.
 
 ## Modelo
 
@@ -47,7 +49,10 @@ El layout, la alineación y el ABI pertenecen al backend.
   constructores, parameter properties, métodos y campos estáticos inicializados.
 - Funciones y recursión; especialización genérica, sobrecargas, argumentos
   nombrados, defaults, parámetros opcionales/rest y llamadas indirectas.
-  Los argumentos reales se evalúan una vez en orden fuente.
+  Los argumentos reales y los destinos indexados se evalúan una vez en orden fuente.
+  Los defaults de funciones, constructores y campos usan la sustitución concreta
+  de su declaración. Los campos callable (también estáticos y opcionales) producen
+  llamadas indirectas, sin fabricar contratos de runtime.
 - Closures con entorno tipado y capturas por valor o referencia; la identidad
   de cada captura y su modo de transporte quedan explícitos.
 - `if`, bucles, switch con fallthrough, break/continue, ternarios y cortocircuito;
@@ -88,7 +93,11 @@ del frame son lógicas; el backend decide su representación física.
 
 `verifyIr` comprueba tablas, shapes, promociones, firmas, proyecciones, destinos,
 definiciones y dominancia, inicialización por punto fijo, rutas de ownership y
-duración de préstamos. Comprueba también que existan las aristas de los contratos
+duración de préstamos. Valida referencias y aridades antes de indexar las tablas,
+recalcula la propiedad estructural de recurso y comprueba capturas, leases,
+frames completos, reanudación única y orden inverso de finalización. En una unión
+del CFG, un préstamo sólo está disponible si continúa activo en todas las rutas;
+la unión de préstamos posibles se conserva para detectar conflictos y salidas. Comprueba también que existan las aristas de los contratos
 de efectos. Estos resúmenes son conservadores: no autorizan eliminar llamadas ni
 sustituyen la comprobación de capacidades y callbacks de un backend.
 

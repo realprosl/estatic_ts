@@ -40,7 +40,7 @@ function execute(ir:any) {
       const b = f.blocks[block];
       for (const i of b.instructions) {
         const a = i.operands.map((v:number)=>values[v]); let result:any;
-        if(i.op === "constant") result = ir.types[i.typeId] === "string" ? i.text : ir.types[i.typeId] === "boolean" ? i.text === "true" : Number(i.text.replaceAll("_", ""));
+        if(i.op === "constant") result = (ir.types[i.typeId] === "string" || ir.typeDefinitions[i.typeId].kind === "enum" && ir.types[ir.typeDefinitions[i.typeId].arguments[0]] === "string") ? i.text : ir.types[i.typeId] === "boolean" ? i.text === "true" : Number(i.text.replaceAll("_", ""));
         else if(i.op === "load") result=load(i.place);
         else if(i.op === "store") store(i.place,a[0]);
         else if(i.op === "convert") {
@@ -90,6 +90,10 @@ function execute(ir:any) {
           else if(name==="Map.size")result=input.size;
           else if(name==="Set.add")input.add(a[1]);
           else if(name==="Map.delete"||name==="Set.delete")result=input.delete(a[1]);
+          else if(name==="array.forEach")input.forEach((value:any)=>{
+            const parameter=ir.typeDefinitions[ir.functions[a[1].closure].parameterTypes[0]];
+            call(a[1].closure,[["ref","constRef"].includes(parameter.kind)?{irref:true,read:()=>value?.owner?value.data:value}:copy(value)],a[1].environment);
+          });
           else if(name==="array.map")result=input.map((value:any,index:number)=>call(a[1].closure,[value,index],a[1].environment));
           else assert.fail(name);
         }
@@ -151,7 +155,7 @@ test("native IR: modules initialize dependencies once, aliases use symbol identi
 test("native IR: string constants, unary and void functions", () => {
   assert.deepEqual(execute(run('function f():void{print("hola",!false,-2);return;} f();')),["hola true -2"]);
 });
-for(const mode of ["input","table","hash","identity"]) test(`native IR rejects ${mode} contract`,()=>{const ir=run('const x=1;',{},mode,1);assert.equal(ir.diagnostics[0].code,"IR_INPUT");});
+for(const mode of ["input","table","hash","identity","member-table","signature-table","constant-table","symbol-table"]) test(`native IR rejects ${mode} contract`,()=>{const ir=run('const x=1;',{},mode,1);assert.equal(ir.diagnostics[0].code,"IR_INPUT");});
 for(const mode of ["entry","order","target","terminator","result","use","duplicate","operator","place","return","callee"]) test(`native verifier rejects ${mode}`,()=>{
   const ir=run('function f(n:number):number{return -n;} print(f(1));',{},mode,1); assert.ok(ir.diagnostics.some((d:any)=>d.code==="IR_INVALID"));
 });
@@ -273,3 +277,37 @@ test("native IR initializes static fields once and resolves static methods",()=>
 test("native IR preserves effect contracts with persistent symbol identities",()=>{const ir=run('let n=0;function bump():void{n+=1;}bump();');const f=ir.functions.find((f:any)=>f.name==="bump");assert.ok(f.effectContracts.length);const effects=f.effectContracts.map((id:number)=>ir.effectContracts[id]);assert.ok(effects.some((e:any)=>e.writes.includes(ir.globals[0].symbolId)));for(const e of ir.effectContracts)for(const x of [...e.reads,...e.writes,...e.moves,...e.parameters])assert.equal(typeof x,"string");});
 
 test("native IR resource assignment transfers ownership exactly once",()=>assert.deepEqual(execute(run('class C{children:ptr<C>[];constructor(){this.children=[];}}let root:ptr<C> = new C();print(root.children.length);')),["0"]));
+
+for(const [name,source,expected] of [
+ ["enum string",'enum Color{Red="red",Blue="blue"}print(Color.Red);',["red"]],
+ ["default uses argument",'function f(a:number,b:number=a+1):number{return b;}print(f(4));',["5"]],
+ ["generic default",'function f<T>(a:T,b:T=a):T{return b;}print(f(4));',["4"]],
+ ["generic aggregate default",'function f<T>(a:T,b:T[]=[a]):T[]{return b;}print(f(4)[0]);',["4"]],
+ ["generic field default",'class Box<T>{items:T[]=[];}const box=new Box<number>();print(box.items.length);',["0"]],
+ ["callable field",'class C{f:(n:number)=>number;}const c=new C((n:number):number=>n+1);print(c.f(2));',["3"]],
+ ["generic closure default",'function f<T>(a:T,b:()=>T=():T=>a):T{return b();}print(f(4));',["4"]],
+ ["generic constructor default",'class Box<T>{constructor(public items:T[]=[]){}}const box=new Box<number>();print(box.items.length);',["0"]],
+ ["static callable field",'class C{static f:(n:number)=>number=(n:number):number=>n+1;}print(C.f(2));',["3"]],
+ ["optional callable field",'class C{f:(n:number)=>number;}const c=optionalSome(new C((n:number):number=>n+1));print(c?.f(2)??0);',["3"]],
+ ["owner parameter property",'class C{x:number=3;}class Box{constructor(public value:ptr<C>){}}const b=new Box(new C());print(b.value.x);',["3"]],
+ ["ref constructor argument",'class C{x:number;constructor(n:ref<number>){n+=1;this.x=n;}}let n=1;const c=new C(n);print(n,c.x);',["2 2"]],
+ ["nested constructor arguments",'class C{x:number;constructor(x:number){this.x=x;}}class D{x:C;y:C;constructor(x:C,y:C){this.x=x;this.y=y;}}const d=new D(new C(1),new C(2));print(d.x.x,d.y.x);',["1 2"]],
+ ["resource read method",'class C{x:number=1;}const xs:ptr<C>[]=[new C()];xs.forEach((x:constRef<C>):void=>print(x.x));',["1"]],
+ ["assignment receiver",'let n=0;let xs:number[][]=[[1],[2]];function next():number{n+=1;return 0;}(xs[next()]=[3]).push(4);print(n,xs[0].length);',["1 2"]],
+] as const) test(`native IR regression ${name}`,()=>assert.deepEqual(execute(run(source)),expected));
+
+for(const [mode,source] of [
+ ["early-end-arm",'function f(flag:boolean):void{let n=1;const r=constRef(n);if(flag)print(0);print(r);}f(true);'],
+ ["fixed-count",'const xs:number[2]=[1,2];print(xs[0]);'],
+ ["resource-flag",'class C{}const p:ptr<C> = new C();'],
+ ["finalizer",'print(1);'], ["finalization-order",'print(1);'], ["module-id",'print(1);'],
+ ["shape-kind",'print(1);'], ["shape-child",'const xs=[1];print(xs);'],
+ ["runtime-type",'console.log(1);'],
+ ["place-type",'function f(n:number):number{return n;}print(f(1));'],
+ ["value-type",'print(1);'],
+ ["capture-table",'function f(n:number):number{const g=():number=>n+1;return g();}print(f(1));'],
+ ["lease-mode",'function f():void{let n=1;const r=constRef(n);print(r);}f();'],
+ ...["frame-values","frame-places","frame-index","no-resume","duplicate-resume","resume-entry"].map(mode=>[mode,'async function one():Promise<number>{return 1;}async function f(n:number):Promise<number>{return n+await one();}print(await f(2));']),
+] as const) test(`native verifier rejects table/continuation corruption ${mode}`,()=>{
+ const ir=run(source,{},mode,1);assert.ok(ir.diagnostics.some((d:any)=>d.code==="IR_INVALID"));
+});

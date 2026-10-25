@@ -1,3 +1,4 @@
+import { fileCalleeMap, regexCalleeMap, netCalleeMap, asyncCalleeMap, etsNetworkCalleeMap, resultCalleeMap } from "./runtime-callees.ts";
 import { containsOwner } from "./owned-values.ts";
 import { TERMINAL_METHODS } from "../semantic/terminal-methods.ts";
 import { markCppOrigin } from "./cpp-source-map.ts";
@@ -4036,68 +4037,23 @@ export class CppGenerator {
         // (fileRead → etsFsRead) como networking (tcpListen → etsNetListen)
         // usan el prefijo `ets` para evitar colisión con posibles APIs
         // futuras del runtime.
-        const fileCalleeMap: Record<string, string> = {
-          fileRead:   "etsFsRead",
-          fileWrite:  "etsFsWrite",
-          fileAppend: "etsFsAppend",
-          fileCopy:   "etsFsCopy",
-          fileMove:   "etsFsMove",
-          fileRemove: "etsFsRemove",
-        };
+
         // V30.25: `regex(pattern)` y `regex(pattern, flags)` crean un
         // `ets::ets_regex` (envuelve `std::regex`). El map apunta al
         // constructor libre `::ets::regex(...)` declarado en
         // runtime/ets_regex.hpp.
-        const regexCalleeMap: Record<string, string> = {
-          regex: "::ets::regex",
-        };
-        const netCalleeMap: Record<string, string> = {
-          tcpListen:  "etsNetListen",
-          tcpAccept:  "etsNetAccept",
-          tcpConnect: "etsNetConnect",
-          tcpRead:    "etsNetRead",
-          tcpWrite:   "etsNetWrite",
-          tcpClose:   "etsNetClose",
-        };
+
+
         // V16: helpers async y de cancelación viven en el namespace `ets::`
         // (definidos en `runtime/ets_async.hpp`). Sin el prefijo, el linker
         // no los encuentra.
-        const asyncCalleeMap: Record<string, string> = {
-          spawn:               "ets::spawn",
-          sleep:               "ets::sleep",
-          cancel:              "ets::cancel",
-          cancellationToken:   "ets::cancellationToken",
-          createCancellation:  "ets::createCancellation",
-          isCancelled:         "ets::isCancelled",
-          ioUringAvailable:    "ets::ioUringAvailable",
-          // V30.4: DNS async sobre uv_getaddrinfo. La funcion toma
-          // un host (string) y devuelve Task<string> (= Promise<string>
-          // en el dialecto). Definida en runtime/ets_dns.hpp.
-          resolveDns:          "ets::resolveDns",
-        };
+
         // V16: las funciones de red del dialecto (`listenTcp`, `acceptTcp`,
         // `readTcp`, `writeTcp`, `closeTcp`) viven en `ets::` (definidas en
         // `runtime/ets_net.hpp`). Sin el prefijo el linker no las encuentra.
-        const etsNetworkCalleeMap: Record<string, string> = {
-          listenTcp:      "ets::listenTcp",
-          acceptTcp:      "ets::acceptTcp",
-          acceptTcpUntil: "ets::acceptTcpUntil",
-          readTcp:        "ets::readTcp",
-          readTcpUntil:   "ets::readTcpUntil",
-          writeTcp:       "ets::writeTcp",
-          writeTcpUntil:  "ets::writeTcpUntil",
-          closeTcp:       "ets::closeTcp",
-          createTlsServer:"ets::createTlsServer",
-          acceptTls:      "ets::acceptTls",
-          readTls:        "ets::readTls",
-          writeTls:       "ets::writeTls",
-          closeTls:       "ets::closeTls",
-        };
+
         // V16: constructores `ok<T>(t)` / `err<T>(e)` viven en `ets::`.
-        const resultCalleeMap: Record<string, string> = {
-          ok:  "ets::ok",
-          err: "ets::err",
-        };
+
         const finalCallee = fileCalleeMap[callee] ?? netCalleeMap[callee] ?? callee;
         if (regexCalleeMap[finalCallee]) {
           return `${regexCalleeMap[finalCallee]}${typeArguments.length ? `<${typeArguments.map(cppType).join(", ")}>` : ""}(${args.join(", ")})`;

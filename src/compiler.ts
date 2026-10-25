@@ -357,3 +357,9 @@ export function compile(source: string): CompilationResult {
   const { program, checker } = analyze([ast]);
   return { ast: program, cpp: new CppGenerator(expression => checker.typeOf(expression), expression => checker.isVariadic(expression), expression => checker.typeArgumentsOf(expression), name => checker.resolveTypeAliasFromAst(name), union => checker.resolveUnionAliasNameFromAst(union)).generate(program) };
 }
+
+// Independent backend for verified ets-ir-2 projects.
+export { generateCppFromIr } from "./codegen/ir/cpp-generator.ts";
+export type { IrCppResult } from "./codegen/ir/cpp-generator.ts";
+export type { IrProject } from "./codegen/ir/model.ts";
+export { IrCodegenError } from "./codegen/ir/model.ts";

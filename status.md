@@ -1,6 +1,6 @@
 # Ts2cpp — Estado actual
 
-Última revisión documental: **2026-10-24**. Este archivo es una fotografía
+Última revisión documental: **2026-10-25**. Este archivo es una fotografía
 del repositorio, no un historial de sesiones. El historial vive en
 [`CHANGELOG.md`](./CHANGELOG.md) y en [`docs/historical/`](./docs/historical/).
 
@@ -9,7 +9,9 @@ del repositorio, no un historial de sesiones. El historial vive en
 Bootstrap ya dispone de un [IR nativo `ets-ir-2`](./bootstrap/ir/README.md)
 con lowering de agregados, clases, genéricos, closures, variantes y async,
 verificación de ownership y préstamos por CFG, y contratos de runtime/efectos.
-La integración con backends y su validación de ejecución siguen pendientes.
+El [backend C++ del IR](./bootstrap/ir/CPP.md) ya genera, compila y ejecuta
+programas mediante una entrada separada, reutilizando el runtime existente.
+Su cobertura sigue siendo parcial: los límites se rechazan explícitamente.
 [`bootstrap/PENDING.md`](./bootstrap/PENDING.md) registra el trabajo abierto y
 sus criterios de cierre. La [revisión reproducible](./bootstrap/audit/FRONTEND-REVIEW.md)
 actualiza las 49 filas y separa implementación, restricciones y obligaciones.
@@ -25,7 +27,7 @@ producción concurrente.
 | Área | Estado | Observación |
 |---|---|---|
 | Lexer, parser y diagnósticos | Estable para el dialecto documentado | No pretende aceptar TypeScript completo |
-| Autoalojamiento | Frontend nativo con tipos, memoria, efectos, comptime y expansión | 2182 pruebas focalizadas y autoanálisis verdes; IR con recursos, closures y async implementado; cierre global, backend y scheduler pendientes |
+| Autoalojamiento | Frontend nativo con tipos, memoria, efectos, comptime y expansión | 2182 pruebas focalizadas y autoanálisis verdes; IR con recursos, closures y async implementado; backend C++ separado con cobertura parcial; cierre global, autoalojamiento del backend y scheduler pendientes |
 | Tipos, genéricos, unions y clases | Funcional | Checker y codegen siguen muy acoplados |
 | Módulos | Funcional con límites | Default, reexports y multilínea; análisis mediante AST combinado |
 | Ownership y borrow checking | Funcional, conservador | Hay moves, conflictos y NLL; no hay lifetime parameters |

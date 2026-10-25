@@ -1,3 +1,4 @@
+import { verifyIrTables, verifyFunctionContracts, verifyModuleContracts } from "./verify-contracts";
 import { IrSource, IrIssue, IrProject, IrFunction, IrInstruction } from "./model";
 import { numericType, primitiveType } from "../checker/types";
 import { nativeNumericLiteral, nativeInteger64, nativeUnaryPromotion, nativeBinaryPromotion } from "../checker/numeric";
@@ -203,6 +204,10 @@ export class IrVerifier {
     for (const definition of this.definitions) if (definition < 0) this.error(f.source,"Temporal sin definición");
   }
   run(): IrIssue[] {
+    this.issues = verifyIrTables(this.project); if (this.issues.length > 0) return this.issues;
+    for (const f of this.project.functions) for (const issue of verifyFunctionContracts(this.project,f)) this.issues.push(issue);
+    for (const issue of verifyModuleContracts(this.project)) this.issues.push(issue);
+    if (this.issues.length > 0) return this.issues;
     if (this.project.typeDefinitions.length != this.project.types.length) { this.error(new IrSource("","","",-1,0,0),"Tabla de tipos incompleta"); return this.issues; }
     for (let at: number = 0; at < this.project.typeDefinitions.length; at = at+1) {
       const shape = this.project.typeDefinitions[at];

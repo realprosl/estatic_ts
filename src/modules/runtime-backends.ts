@@ -61,6 +61,12 @@ export function detectRuntimeBackends(program: Program): RuntimeBackends {
   for (const stmt of program.statements) {
     collectCalls(stmt, used);
   }
+  return runtimeBackendsForCalls(used);
+}
+
+/** Shared by AST and IR consumers; input is resolved runtime function names. */
+export function runtimeBackendsForCalls(callees: Iterable<string>): RuntimeBackends {
+  const used=new Set(callees);
   return {
     libuv:   [...LIBUV_CALLEES].some(c => used.has(c)),
     curl:    [...CURL_CALLEES].some(c => used.has(c)),
