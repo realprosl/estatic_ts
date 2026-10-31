@@ -181,8 +181,9 @@ entrega tipos, símbolos de miembros y firmas seleccionadas/instanciadas. Se
 construye el ejecutable con stage 0; el análisis solicitado se ejecuta en C++.
 
 La cobertura actual incorpora las extensiones documentadas en las capas
-siguientes y conserva límites explícitos; no anuncia paridad general con stage 0
-ni codegen nativo desde esas tablas. Ver el [contrato y cobertura](./checker/README.md).
+siguientes y conserva límites explícitos; no anuncia paridad general con stage 0.
+Estas tablas alimentan además el lowering del IR `ets-ir-2` y la emisión a C++
+del programa solicitado. Ver el [contrato y cobertura](./checker/README.md).
 
 ## Paso 7: flujo, memoria y superficies públicas (v63)
 

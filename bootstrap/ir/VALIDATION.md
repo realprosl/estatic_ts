@@ -89,4 +89,11 @@ modular (Result, Task y helpers de archivos) fallan por la misma dependencia.
 No se registraron fallos de las pruebas del IR. No se modificó el runtime ni
 se omitieron pruebas para ocultar esos errores del entorno.
 
+Comprobado de nuevo el **2026-10-31** sobre `38c505f`: el diagnóstico sigue
+siendo el mismo, pero el total sube a **119 fallos** porque el backend C++ del
+IR y el instalador nativo ya traen sus propias pruebas, que compilan C++ real y
+fallan por la misma dependencia ausente. El conjunto de tests fallidos es
+idéntico al de un checkout limpio de ese commit: son fallos de entorno, no
+regresiones.
+
 Ver [README.md](./README.md) para el contrato, capacidades y límites actuales.

@@ -169,9 +169,11 @@ mismo préstamo sigue rechazándose. Los packs se validan después de selecciona
 la sobrecarga: un candidato descartado no añade errores de lifetime y un tipo
 callable con parámetros prestados no se confunde con almacenar un préstamo.
 
-El CLI principal y el codegen conservan su cadena. Estos resultados semánticos
-nativos todavía no se traducen a C++ del programa solicitado. No hay caché
-semántica, scheduler paralelo ni certificación completa de memoria.
+El CLI principal y el codegen histórico conservan su cadena. Estos resultados
+semánticos nativos alimentan además el lowering del IR `ets-ir-2` y, desde ahí,
+la emisión a C++ del programa solicitado por el backend documentado en
+[../ir/CPP.md](../ir/CPP.md). No hay caché semántica nativa, scheduler paralelo
+ni certificación completa de memoria.
 
 ## Constructores y consumidores síncronos
 
