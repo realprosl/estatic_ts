@@ -1,5 +1,11 @@
 # Limitaciones del dialecto Estatic
 
+Revisión documental: **2026-10-31**. Base de código inspeccionada:
+[`38c505f`](https://github.com/realprosl/estatic_ts/commit/38c505f) (`main`).
+Las afirmaciones sobre el frontend nativo se contrastaron contra el código y
+contra la matriz de paridad de sintaxis. Las cifras de validación reproducen
+la del **2026-10-25** y van etiquetadas con esa fecha.
+
 El dialecto "Estatic" es un subset curado de TypeScript con salida a C++20.
 NO es un transpilador TS-completo: muchas features de TypeScript se han
 rechazado explícitamente para mantener las garantías del dialecto (RAII,
@@ -7,19 +13,34 @@ sin herencia y sin tipos dinámicos generales). Algunos nodos internos usan
 `any` como recurso de implementación, pero no equivale al `any` abierto de
 TypeScript.
 
+Hay dos implementaciones del dialecto y este documento las distingue:
+
+- **stage 0 (`src/`)** — compilador en TypeScript. Describe el CLI, la emisión y
+  el evaluador principal.
+- **frontend nativo (`bootstrap/`)** — lexer, parser, cargador, binder, checker,
+  seguridad, efectos y comptime reescritos en el propio dialecto Estatic.
+
 Las secciones generales de CLI/emisión y evaluador principal describen stage 0
 (`src/`), salvo indicación contraria. El frontend ETS tiene su propio
 [inventario auditado](./bootstrap/PENDING.md) y
 [revisión reproducible](./bootstrap/audit/FRONTEND-REVIEW.md): incluye switch,
 consultas typeof cualificadas, expansión higiénica y un único evaluador nativo
 para comptime/@etsgen. No se deduce la cobertura ETS de los límites del backend TS.
-IR y emisión desde las tablas nativas aún no están implementados.
 
-Este documento está dividido en tres secciones:
+El frontend nativo tiene además un IR propio, `ets-ir-2`, con lowering y
+verificador, y un backend C++20 que consume ese IR y produce ejecutables. Esa
+cadena **está implementada**; lo que no lo está son el autoalojamiento del
+backend, el cierre global del lenguaje y algunas capacidades concretas, todas
+enumeradas en la sección «Estado del frontend nativo». Ver
+[`bootstrap/ir/README.md`](./bootstrap/ir/README.md) y
+[`bootstrap/ir/CPP.md`](./bootstrap/ir/CPP.md).
+
+Este documento está dividido en cuatro secciones:
 
 - **✅ Implementado** — features de TS soportadas. Para uso y ejemplos ver `README.md`.
 - **❌ Rechazado por diseño** — features que el dialecto NUNCA tendrá (con motivo).
 - **🟡 Pendiente / TS no cubierto** — features en TS que aún no están en el dialecto.
+- **🧱 Estado del frontend nativo** — alcance, límites y rechazos propios de `bootstrap/`.
 
 > Este doc se sincroniza con el código vía `scripts/check-docs-sync.ts`. Si
 > encuentras una feature implementada que no aparece en "Implementado", o una
@@ -79,7 +100,10 @@ Lista no exhaustiva — ver `README.md`, `examples/` y los nodos AST en
   `match (r) { case { kind: ... }: ...; }` se **eliminó en V30.5.1** con
   error E4410. La forma TC39 `match (x) { when (pat) => r; }` se eliminó
   en V23.
-- `switch / case / default` sobre enums, strings y números.
+- `switch / case / default` sobre enums, strings y números — **solo en el
+  frontend nativo**. El parser de stage 0 **no** acepta `switch`: su lexer lo
+  reconoce como keyword y el AST declara `SwitchStatement`, pero su parser no
+  lo produce. Ver [`bootstrap/SYNTAX-PARITY.md`](./bootstrap/SYNTAX-PARITY.md).
 - `delete` sobre propiedades dinámicas de Map/Set.
 - `await` y `async function` (compilados a corutinas C++20).
 - `for await (const x of Promise<T>[])` para iterar arrays de promesas.
@@ -213,6 +237,16 @@ del dialecto (RAII puro, sin vtable, sin tipado dinámico).
 | `function*` (generadores) | Lazy iteration no encaja con RAII — usar async/Promise |
 | Tagged templates (`tag\`...\``) | Sin uso idiomático claro en el dialecto |
 | Dynamic imports (`import("...")`) | El grafo de módulos se resuelve estáticamente durante la compilación |
+| Object spread (`{ ...obj }`) | Sin semántica fijada para el spread de objetos |
+| Exponenciación numérica (`**` y notación `1.5e2`) | Fuera del inventario de operadores `+ - * / %` |
+| Regex literales (`/patrón/flags`) | El runtime no define un tipo de regex |
+| Destructuring anidado y destructuring rest | El dialecto cubre destructuring plano |
+
+Las cuatro últimas filas se rechazan **tanto en stage 0 como en el frontend
+nativo**: son formas excluidas del dialecto, no lagging de una de las dos
+implementaciones. La matriz reproducible está en
+[`bootstrap/SYNTAX-PARITY.md`](./bootstrap/SYNTAX-PARITY.md) y los casos en
+[`bootstrap/audit/syntax-cases.ts`](./bootstrap/audit/syntax-cases.ts).
 
 ---
 
@@ -224,7 +258,10 @@ que el dialecto aún no implementa. **Se aceptan contribuciones** en estas
 
 ### Sistema de tipos avanzado
 
-- `as` / `<T>x` type assertions — se prefiere `match` para narrowing.
+- `<T>x` type assertions (forma angle-bracket) — rechazada por el parser de
+  stage 0 y por el nativo. La forma `expr as T` **sí** está implementada en
+  ambos: el frontend nativo la comprueba y rechaza los casts que borren o
+  fabricate ownership (`E4101`). Se prefiere `match` para narrowing.
 - `const` type parameters (`<T const>`).
 - Conditional types (`T extends U ? X : Y`) en tipos.
 - Mapped types (`{ [K in keyof T]: V }`).
@@ -234,7 +271,11 @@ que el dialecto aún no implementa. **Se aceptan contribuciones** en estas
 - `infer U` en conditional types.
 - Variadic tuple types (`[...T, ...U]`).
 - Tuples con spread variádico (`[T, ...U]`).
-- `if (typeof x === "string") { x.toUpperCase() }` — narrowing por tipo (cubierto por V1.4 para tagged unions con discriminador literal).
+- Narrowing por tipo sobre primitivos en **stage 0**:
+  `if (typeof x == "string") { x.toUpperCase() }`. El frontend nativo sí lo
+  implementa —narrowing por `typeof`, por `instanceof` y por discriminador—, pero
+  stage 0 solo cubre tagged unions con discriminador literal (V1.4). La
+  comparación es con `==`: el dialecto rechaza `===` por diseño.
 - Exhaustiveness checking con `never` — el dialecto no valida la rama `_ =>` por cobertura exhaustiva; sigue siendo pattern matching por igualdad.
 - Type predicates `x is T`.
 
@@ -380,6 +421,120 @@ Siguen pendientes:
 
 ---
 
+## 🧱 Estado del frontend nativo
+
+El frontend nativo (`bootstrap/`) cubre todas las capas del dialecto —lexer,
+parser, cargador, expansión, binder, checker, seguridad, efectos, comptime y
+procedencia— y entrega `ets-checked-2`. No es un prototipo, pero tampoco es el
+cierre del lenguaje: su inventario vigente está en
+[`bootstrap/PENDING.md`](./bootstrap/PENDING.md), con 49 filas clasificadas en
+**29 implementadas, 13 restringidas y 7 obligaciones pendientes**. Lo que sigue
+son los límites que el frontend nativo impone y que este documento no describe
+en las secciones de stage 0.
+
+### Formas que solo acepta el frontend nativo
+
+El parser nativo acepta siete formas que el parser de stage 0 rechaza: tipos
+agrupados, consultas `typeof` cualificadas, `typeof` con sufijos, `typeof`
+estático, `switch`, `enum` con salto de línea y separador final en unions. La
+comparación reproducible, caso a caso, está en
+[`bootstrap/SYNTAX-PARITY.md`](./bootstrap/SYNTAX-PARITY.md).
+
+### Límites propios del frontend nativo
+
+| Límite | Diagnóstico |
+|---|---|
+| Un contrato de memoria no se puede probar durante comptime (p. ej. un parámetro `constRef`); la misma lectura es válida fuera de comptime | `COMPTIME_UNSUPPORTED` |
+| El IR rechaza los casos sin contrato; un éxito del checker no certifica un IR válido | `IR_UNSUPPORTED` |
+| El backend C++ rechaza las capacidades que no implementa | `IR_CPP_UNSUPPORTED` |
+| Ownership: un argumento owner exige `move(identifier)`, el acceso opcional no puede copiar un campo con ownership y un cast no puede borrar ni fabricar ownership | `E4101` (14 variantes) |
+| Un cast no puede cambiar un contrato de memoria | `E4301` |
+| `move` requiere un lvalue con ownership y un campo con ownership necesita inicialización en el constructor | `E4100` |
+| Uso de un owner movido, de un agregado movido parcialmente o escritura a través de un padre movido | `E4102` |
+| Uso de un owner posiblemente movido | `E4103` |
+| Procedencia o efectos no demostrados: lvalue que no se puede estabilizar, resumen recursivo con callbacks simbólicos, efectos opacos sobre globals o durante un préstamo activo | `E4104` |
+| Un préstamo no puede almacenarse ni retornarse, y una instancia genérica no puede retornar un préstamo sin contrato de lifetime | `E4203` |
+| Suspensión y `spawn`: efectos de la tarea demostrados, duración del constructor y retención de globals con ownership | `E4204` |
+| Préstamos mutables o compartidos con duraciones solapadas sobre la misma fuente | `E4206` |
+| Acceso a la fuente durante un préstamo activo | `E4207` |
+| Un préstamo mutable necesita un lvalue con origen conocido y no se admite el préstamo mutable de una constante | `E4208` |
+| Captura de préstamo u owner sin lifetime demostrado | `E4209` |
+| Una closure con captura por referencia escapa del bloque | `E4210` |
+| Escritura genérica a través de una vista readonly | `E4300` |
+| La API pública expone un tipo o un alias privado | `E4401` |
+
+Cada fila cita los casos representativos del diagnóstico, no su catálogo
+completo: `E4101` tiene 14 variantes, `E4204` ocho y `E4300` siete. El conjunto
+exacto de mensajes está en `bootstrap/checker/checker.ets` y
+`bootstrap/checker/safety.ets`.
+
+`COMPTIME_OVERLOAD_UNRESOLVED` y `MODULE_SYMBOL_COLLISION` pertenecen a stage 0
+(`src/codegen/comptime-functions.ts` y `src/modules/module-symbols.ts`): no los
+emite el frontend nativo.
+
+El evaluador de comptime y la expansión `@etsgen` tienen además familias
+propias de diagnósticos: `COMPTIME_*` cubre aridad, conversiones, división,
+overflow, precisión, rangos, budgets (`COMPTIME_INSTRUCTION_LIMIT`,
+`COMPTIME_RECURSION_LIMIT`, `COMPTIME_VALUE_LIMIT`), zona muerta temporal,
+valores no literales, coincidencias de `match` sin cubrir y miembros o
+contenedores inválidos; `ETSGEN_*` cubre los límites de expansión, generación
+y recursión, la higiene, el parseo del texto generado y el contexto o
+generador inválidos. El nombre exacto de cada código aparece en
+`bootstrap/checker/comptime.ets` y `bootstrap/checker/expansion.ets`.
+
+El frontend nativo también rechaza, con un contrato conservado, la extracción
+genérica sin llamada que instancie los argumentos, los literales de objeto sin
+contexto de interfaz y la exponenciación `**`, que rechaza el parser. No son
+ausencias del análisis: son rechazos explícitos, y no se relajan para subir una
+cifra de pruebas.
+
+### IR y backend C++
+
+El IR `ets-ir-2` está implementado en ETS dentro de `bootstrap/ir/`, con
+lowering desde el grafo de módulos y el `CheckResult`, y un verificador
+(`verifyIr`) que comprueba tablas, shapes, promociones, firmas, proyecciones,
+dominancia, inicialización por punto fijo, rutas de ownership y duración de
+préstamos. El emisor `src/codegen/ir/cpp-generator.ts` consume **exclusivamente**
+IR nativo verificado: no reconstruye un AST ni llama al codegen histórico. La
+implementación nativa está en `src/codegen/ir/native/` y el driver en
+`bootstrap/native/`; `install.sh` instala `etsc`, que recorre
+`.ets → IR → C++ → binario` sin Node en tiempo de uso.
+
+Un productor debe exigir `success: true`: un proyecto fallido puede contener IR
+parcial. La entrada `--from-ir` presupone IR verificado de un productor de
+confianza y no es un deserializador para entradas hostiles.
+
+El backend C++ rechaza explícitamente `backendEscape` (`@cppgen`), los
+decoradores de ABI externo (`@cpp_name`, `@cpp_type`, `@include`, `@link`,
+`@cpp_header`, `@cpp_include`, `@cpp_link`), las capacidades de runtime sin
+binding explícito como `io_uring`, y `Timer` no copiable hasta que se cierre su
+contrato de ownership. El CLI histórico de `src/` y su caché incremental no se
+sustituyen.
+
+### Evidencia
+
+Validación del **2026-10-25** con g++ C++20:
+
+| Comprobación | Resultado |
+|---|---|
+| Backend, HTTP real y CLI de bootstrap | 75/75 |
+| Lowering y verificador nativo, incluidos dispatches corruptos | 133/133 |
+| Checker nativo, seguridad y efectos | 1376/1376 |
+| Tipos C++, backend histórico, selección de runtime y docs | 181/181 |
+| Corpus: generación, compilación y enlace, sin ejecutar ejemplos | 126/131 fuentes válidas |
+
+Las cinco fuentes válidas aún rechazadas son `comptime-overloads/main`
+(`@cppgen`), `io-uring-async-demo`, `memory-safe-timer`, `libc.lib` y
+`libraries-demo` (ABI externa). Compilar las 126 no certifica su ejecución: los
+resultados de ejecución se verifican en las pruebas del backend, incluidos los
+servidores y el cliente HTTP locales.
+
+Las obligaciones de referencia (`npm run audit:bootstrap`) y los contratos de
+sintaxis (`npm run audit:bootstrap:syntax`) son la fuente reproducible de esta
+sección.
+
+---
+
 ## Cómo se mantiene este doc
 
 `scripts/check-docs-sync.ts` realiza comprobaciones heurísticas sobre:
@@ -391,8 +546,20 @@ Siguen pendientes:
 
 El check detecta algunas contradicciones y referencias rotas, pero no puede
 demostrar que toda la documentación sea correcta ni exigir que cada nodo se
-mencione literalmente. La revisión humana y las pruebas siguen siendo la
+mencione literalmente. En concreto, contrasta **solo la sección de rechazos**
+contra el inventario del código: una feature listada como pendiente puede
+estar implementada sin que el check lo detecte, y esa comprobación es
+responsabilidad de la revisión humana y de las pruebas, que siguen siendo la
 fuente principal de verdad.
+
+Para las afirmaciones sobre el frontend nativo, las fuentes de verdad son
+[`bootstrap/PENDING.md`](./bootstrap/PENDING.md) (inventario de 49 filas),
+[`bootstrap/SYNTAX-PARITY.md`](./bootstrap/SYNTAX-PARITY.md) (paridad de
+sintaxis), [`bootstrap/ir/README.md`](./bootstrap/ir/README.md) y
+[`bootstrap/ir/CPP.md`](./bootstrap/ir/CPP.md) (IR y backend). Un doc fechado
+como [`bootstrap/audit/FRONTEND-REVIEW.md`](./bootstrap/audit/FRONTEND-REVIEW.md)
+es una fotografía de la revisión del **2026-10-24**, anterior al IR: describe
+el estado de ese día y no el actual.
 
 Para ejecutarlo:
 

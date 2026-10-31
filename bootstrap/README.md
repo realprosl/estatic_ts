@@ -6,7 +6,9 @@ seguridad/efectos, comptime y registros semánticos por módulo. Stage 0 (`src/`
 construye sus ejecutables C++20; el análisis del proyecto solicitado se hace
 nativamente. El [IR nativo `ets-ir-2`](./ir/README.md) añade lowering y verificador,
 agregados, clases, genéricos, closures, variantes, recursos y async.
-Todavía no hay codegen del programa desde las tablas ETS.
+Esta revisión es del **2026-10-24**: el backend C++ que genera el programa
+desde las tablas ETS aterrizó después (PR #34) y se documenta en
+[ir/CPP.md](./ir/CPP.md).
 
 La validación actual pasa **2182/2182** pruebas de frontend, **83/83** obligaciones
 de referencia y **75/75** contratos de sintaxis. El autoanálisis pasa con 23
