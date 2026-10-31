@@ -886,6 +886,25 @@ test("V30: match V23 con when/otherwise funciona con discriminador", () => {
   `);
 });
 
+test("V30.5.1: match de dos argumentos rechaza un patron incompatible con el subject", () => {
+  // Sin esta comprobacion el codegen comparaba la union con el string del
+  // patron y emitia C++ que no compilaba (`no match for 'operator=='`).
+  expectError(`
+    union Shape = Circle | Square;
+    function v(s: Shape): number {
+      return match(s, [when("Circle", (x: Shape): number => 1), otherwise((x: Shape): number => 0)]);
+    }
+  `, "pero se obtuvo string");
+});
+
+test("V30.5.1: match de dos argumentos acepta un patron del tipo del subject", () => {
+  check(`
+    function f(x: number): number {
+      return match(x, [when(1, (v: number): number => 10), otherwise((v: number): number => 0)]);
+    }
+  `);
+});
+
 // V30.5.2: el type-checker anota matchedDiscriminatorType cuando el
 // subject es union y el discriminator es el campo `kind`. Esto permite
 // que el codegen emita `r.kind == R_Kind::Success` (miembro del enum

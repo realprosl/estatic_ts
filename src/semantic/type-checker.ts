@@ -2612,7 +2612,14 @@ export class TypeChecker {
               }
               const [pattern, callback] = caseCall.args;
               // Pattern se valida contra el subject type.
-              this.expression(pattern, scope, subjectType);
+              const patternType: TypeName = this.expression(pattern, scope, subjectType);
+              // En la forma de dos argumentos el patron es un valor (o un tipo)
+              // y tiene que ser compatible con el subject: el codegen compara
+              // directamente ambos. Sin esta comprobacion, un patron de otro
+              // tipo producia C++ que no compilaba (p.ej. comparar una union
+              // con un string). En la forma de tres, el patron es el nombre de
+              // la variante y su tipo es el del discriminador.
+              if (node.args.length === 2) this.require(patternType, subjectType, pattern);
               // Callback puede tener 0 o 1 params (0 si no usa el subject, 1 si sí).
               if (callback.params.length > 1) {
                 this.report(callback, `E4406: 'when' callback must have at most 1 parameter, got ${callback.params.length}`);

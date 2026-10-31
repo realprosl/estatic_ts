@@ -99,7 +99,7 @@ export class NativeChecker {
     this.literalRange(module,id,expected);
     if (ownedType(expected) && actual == memoryInner(expected) && id >= 0 && this.node(module,id).kind == NodeKind.NewExpression) return;
     if (id >= 0 && actual != expected && actual != "!error" && expected != "!error" && expected != "" && this.compatible(actual,expected)) this.result.files[module].conversions[id] = expected;
-    if (!this.compatible(actual, expected)) this.report(module, id, "Tipo '" + actual + "' incompatible con '" + expected + "'");
+    if (!this.compatible(actual, expected)) this.report(module, id, "Tipo '" + this.displayType(actual) + "' incompatible con '" + this.displayType(expected) + "'");
   }
   literalRange(module: number, id: number, expected: string): void {
     if (!numericType(expected) || id < 0) return;
@@ -184,6 +184,20 @@ export class NativeChecker {
     return id < 0 ? -1 : this.binding.files[module].valueTargets[id];
   }
   nominal(sid: number): string { return "#" + numberToString(sid); }
+  displayType(text: string): string {
+    // Los tipos nominales ("#<symbolId>") y los parametros de tipo ("@<symbolId>")
+    // se codifican con ids internos. En los mensajes del usuario se sustituyen
+    // por el nombre del simbolo: "#218" -> "Point", "@219" -> "T".
+    if (text.indexOf("#",0) < 0 && text.indexOf("@",0) < 0) return text;
+    let result: string = text;
+    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
+      const symbol: BindingSymbol = this.binding.symbols[sid];
+      if (symbol.name == "") continue;
+      if (["ClassDeclaration","InterfaceDeclaration","EnumDeclaration","UnionDeclaration"].includes(symbol.kind)) result = replaceType(result, this.nominal(sid), symbol.name);
+      if (symbol.kind == "TypeParameter") result = replaceType(result, "@" + numberToString(sid), symbol.name);
+    }
+    return result;
+  }
   flowType(sid: number, module: number, id: number): string {
     for (let at: number = this.narrowedSymbols.length - 1; at >= 0; at = at - 1) if (this.narrowedSymbols[at] == sid) return this.narrowedTypes[at];
     const declared: string = this.symbolType(sid,module,id);
@@ -760,7 +774,7 @@ export class NativeChecker {
     const catalog: string = valueType+"."+name;
     if (nativeBuiltinSignatures(catalog).length > 0) return "!builtin:"+catalog;
     const sid: number = this.memberSymbol(valueType,name);
-    if (sid < 0) { this.report(module,id,"El tipo '" + valueType + "' no declara el miembro '" + name + "'"); return "!error"; }
+    if (sid < 0) { this.report(module,id,"El tipo '" + this.displayType(valueType) + "' no declara el miembro '" + name + "'"); return "!error"; }
     if (!query) this.result.files[module].members[id] = sid;
     const s: BindingSymbol = this.binding.symbols[sid]; const n: AstNode = this.node(s.module,(s.node) < 0 ? this.graph.modules[s.module].cached.result.ast.root : s.node);
     if (((n.get(AttributeKind.IsStatic) == "true") || s.kind == "EnumMember") != valueType.startsWith("class:")) this.report(module,id,"Receptor estático/de instancia incorrecto para '" + name + "'");
@@ -1645,7 +1659,7 @@ export class NativeChecker {
         for (let i: number = 0; i < items.length; i = i + 1) if (index.kind == NodeKind.LiteralExpression && index.get(AttributeKind.Raw) == numberToString(i)) return items[i];
         this.report(module,id,"Índice de tupla fuera de rango o no constante"); return "!error";
       }
-      if (object != "!error") this.report(module,id,"El tipo no admite índices: " + object); return "!error";
+      if (object != "!error") this.report(module,id,"El tipo no admite índices: " + this.displayType(object)); return "!error";
     }
     if (kind == NodeKind.ObjectLiteralExpression) {
       const unionOwner: number = this.nominalSymbol(expected); if (unionOwner >= 0 && this.binding.symbols[unionOwner].kind == "UnionDeclaration") return this.unionObject(module,id,expected,unionOwner);

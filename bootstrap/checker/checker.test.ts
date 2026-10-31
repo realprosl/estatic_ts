@@ -792,6 +792,17 @@ test('native Map.get returns Optional<T> and never a T|void union',()=>{
 test('native Map.get result cannot be used as a bare value',()=>{
   error('let m=new Map<string,number>();const v:number = m.get("a");',/Optional/);
 });
+test('native diagnostics name nominal types instead of leaking internal ids',()=>{
+  const g=error('class Point{v:number;constructor(v:number){this.v=v;}} function f(x:Point):number{return x.zzz;}',/El tipo 'Point' no declara el miembro 'zzz'/);
+  assert.doesNotMatch(g.diagnostics.map((d:any)=>d.message).join(" "),/#\d+/);
+});
+test('native diagnostics name type parameters instead of leaking internal ids',()=>{
+  const g=error('function f<T>(x: T): T { return x.zzz; }',/El tipo 'T' no declara el miembro 'zzz'/);
+  assert.doesNotMatch(g.diagnostics.map((d:any)=>d.message).join(" "),/@\d+/);
+});
+test('native diagnostics name both sides of an incompatible assignment',()=>{
+  error('class Punto{v:number;constructor(v:number){this.v=v;}} class Caja{v:number;constructor(v:number){this.v=v;}} function g(x:Punto):number{const y:Caja = x; return y.v;}',/Tipo 'Punto' incompatible con 'Caja'/);
+});
 for(const [name,source] of Object.entries({
  key:'let m=new Map<string,number>();m.set(1,2);',
  value:'let m=new Map<string,number>();m.set("s","bad");',
