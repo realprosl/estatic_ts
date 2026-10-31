@@ -47,7 +47,12 @@ no describe esta ejecución.
 - **P — obligación pendiente:** queda una cobertura, un contrato del consumidor
   o una validación concreta por cerrar. No equivale a ausencia total de la fila.
 
-La revisión clasifica las 49 filas en **29 I, 13 R y 7 P**.
+La revisión clasifica las 72 filas en **29 I, 13 R y 30 P**.
+
+Las filas nuevas son obligaciones pendientes de sintaxis de TypeScript que aun no estan en el dialecto. El exhaustiveness checking con `never`
+(T19) queda fuera por decision del autor. La herencia y las excepciones se
+mantienen rechazadas por diseno, igual que la ampliacion dinamica de tipos
+declarados.
 
 | ID | Estado | Estado observado y alcance | Implementación/evidencia |
 |---|---|---|---|
@@ -100,6 +105,31 @@ La revisión clasifica las 49 filas en **29 I, 13 R y 7 P**.
 | V01 | P | Suites, audit, corpus y autoanálisis pasan. Son muestras y regresiones; no constituyen una certificación de todas las composiciones del inventario. | `audit/, checker.test.ts`; [validación reproducida en esta revisión](./checker/checker.test.ts#L1818) |
 | V02 | I | Se separa estado actual de historial y de límites de stage 0; se registra evidencia y alcance de cada fila. | `PENDING.md, FRONTEND-REVIEW.md`; [revisión documental 2026-10-24](./audit/FRONTEND-REVIEW.md) |
 | V03 | P | Validación focalizada actualizada y verde. npm test completo no se ha repetido en esta revisión; las cifras globales anteriores se archivan. | `package.json`; [comandos y resultados de esta revisión](./audit/FRONTEND-REVIEW.md) |
+
+| T09 | P | `keyof T`: conjunto de claves de un tipo de clase o interfaz. Es la base de los mapped types, las conditional types y los utility types. | `checker/checker.ets` (operaciones de nivel de tipo) |
+| T10 | P | Mapped types (`{ [K in keyof T]: V }`). Depende de T09. | `checker/checker.ets`, `ir/lower.ets` |
+| T11 | P | Conditional types (`T extends U ? X : Y`). Depende de T12 para `infer`. | `checker/checker.ets` |
+| T12 | P | `infer U` en conditional types. Depende de T11. | `checker/checker.ets` |
+| T13 | P | Utility types (`Partial`, `Pick`, `Record`, `Required`, `Omit`). Dependen de T09, T10 y T11. | `frontend/builtins.ets`, `checker/checker.ets` |
+| T14 | P | Template literal types (`` `prefix_${T}` ``). Depende de los tipos de literal generales de T18. | `checker/checker.ets` |
+| T15 | P | Type predicates (`x is T`) con narrowing por el predicado. | `parser/parser.ets`, `checker/checker.ets` |
+| T16 | P | Index signatures `[key: string]: T` con semantica de diccionario. | `checker/checker.ets`, `runtime/ets_runtime.hpp` |
+| T17 | P | Tuplas variadicas (`[...T, ...U]`) y tuplas con spread (`[T, ...U]`). Relacionado con los packs de tipo. | `parser/parser.ets`, `checker/checker.ets` |
+| T18 | P | `as const`: los literales conservan su tipo exacto. Requiere tipos de literal generales, que hoy el dialecto no tiene: un literal solo es tipo en el discriminador de una variante de union. | `parser/parser.ets`, `checker/checker.ets` |
+
+| G05 | P | `const` type parameters (`<const T>`): el tipo inferido se conserva como literal. Depende de los tipos de literal generales de T18. El parser ya tiene la ranura del prefijo (`...` de los packs); falta aceptar `const` y la inferencia de literal. | `parser/parser.ets`, `checker/checker.ets` |
+| O04 | P | Getters y setters (`get`/`set`): acceso a propiedad que ejecuta un metodo. | `parser/parser.ets`, `checker/checker.ets`, `src/codegen/cpp-generator.ts`, `ir/lower.ets` |
+| T21 | P | `===` y `!==`: igualdad estricta sin coercion. | `src/lexer/token.ts`, `bootstrap/lexer/lexer.ets`, ambos parsers y checkers |
+| T22 | P | `>>>`: unsigned shift. | `src/lexer/token.ts`, `bootstrap/lexer/lexer.ets`, ambos parsers y checkers |
+| T23 | P | Exponenciacion numerica: el operador `**` y la notacion `1.5e2`. | ambos lexers, parsers y checkers; el runtime ya define `ets::ir::pow` para enteros |
+| T24 | P | Object spread (`{ ...obj }`). | `parser.ets`, `parser.ts`, ambos checkers |
+| T25 | P | Regex literales (`/patron/flags`). Requiere un tipo de regex en el runtime; `runtime/ets_regex.hpp` ya existe. | ambos lexers, parsers y el runtime |
+| T26 | P | Destructuring anidado y destructuring rest. | `parser.ets`, `parser.ts`, ambos checkers |
+| T27 | P | Tagged templates (`tag\`...\``). | ambos lexers, parsers y checkers |
+| T28 | P | Dynamic imports (`import("...")`). El grafo de modulos se resuelve hoy estaticamente en compilacion. | `modules/loader.ets`, `module-loader.ts`, ambos binders |
+| T29 | P | `function*` (generadores). | ambos lexers, parsers, checkers y el runtime |
+| T31 | P | `arguments`. | ambos lexers, parsers y checkers |
+| T32 | P | `<T>x` type assertions en forma angle-bracket. La forma `expr as T` ya esta soportada. | ambos lexers y parsers |
 
 ## Qué requiere una decisión de cierre antes del IR
 
