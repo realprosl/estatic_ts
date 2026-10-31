@@ -56,7 +56,7 @@ Lista no exhaustiva — ver `README.md`, `examples/` y los nodos AST en
 ### Sistema de tipos
 
 - Tipos primitivos: `number`, `string`, `boolean`, `void`.
-- Genéricos con constraints (`<T extends X>`) y parameter packs (`<T...>`).
+- Genéricos con constraints (`<T extends X>`) y parameter packs (`<...T>`).
 - Sobrecargas de funciones libres resueltas estáticamente por firma.
 - Type aliases (`type X = …`).
 - **Unions** (`A | B | C`) e **intersecciones** (`A & B`) de tipos.
@@ -96,10 +96,13 @@ Lista no exhaustiva — ver `README.md`, `examples/` y los nodos AST en
 - **Match expressions** — V30.5.1 unifica **una sola forma válida**: la
   V23 `match(value, [when(pat, cb), otherwise(cb)])` o
   `match(value, "key", [when(pat, cb)])` con discriminator. Es TS-compatible
-  (CallExpression regular, no keyword). La forma V2 destructurada
-  `match (r) { case { kind: ... }: ...; }` se **eliminó en V30.5.1** con
-  error E4410. La forma TC39 `match (x) { when (pat) => r; }` se eliminó
-  en V23.
+  (CallExpression regular, no keyword). En la forma de dos argumentos el
+  patrón se compara contra el **valor** del subject (`when(1, cb)`) o
+  selecciona por **tipo** (`whenType<T>(cb)`); en la de tres, el patrón es el
+  nombre de la **variante** de una unión con discriminador. La forma V2
+  destructurada `match (r) { case { kind: ... }: ...; }` se **eliminó en
+  V30.5.1** con error E4410. La forma TC39 `match (x) { when (pat) => r; }` se
+  eliminó en V23.
 - `switch / case / default` sobre enums, strings y números — **solo en el
   frontend nativo**. El parser de stage 0 **no** acepta `switch`: su lexer lo
   reconoce como keyword y el AST declara `SwitchStatement`, pero su parser no
@@ -193,6 +196,7 @@ cíclicos y las identidades de símbolo universales siguen pendientes.
 
 - `Result<T>`, `Optional<T>`, `Task<T>` (Promise C++).
 - `Map<T>`, `Set<T>` con `forEach`, `has`, `get`, `set`, `delete`, `size`.
+  `Map.get` devuelve `Optional<T>`, así que se consume con `??` o `.value()`.
 - `etS::concat` para strings heterogéneos.
 - `numberToString`, `length`, `charAt`, `concat`.
 - **Memory Model v2 (V22)**: `ptr<T>` (`std::unique_ptr<T>`),

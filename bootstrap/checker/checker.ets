@@ -742,7 +742,7 @@ export class NativeChecker {
       if (name == "forEach") return "!array.forEach";
       if (name == "has" || name == "delete") return "(" + parts[0] + ")=>boolean";
       if (name == "clear") return "()=>void";
-      if (container == "Map" && name == "get") return "(" + parts[0] + ")=>" + joinTypes([parts[1],"void"],"|");
+      if (container == "Map" && name == "get") return "(" + parts[0] + ")=>Optional<" + parts[1] + ">";
       if (container == "Map" && name == "set") return "(" + parts[0] + "," + parts[1] + ")=>void";
       if (container == "Set" && name == "add") return "(" + parts[0] + ")=>boolean";
     }

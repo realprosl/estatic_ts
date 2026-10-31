@@ -18,6 +18,25 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 - `satisfies` conserva el tipo de la expresión, incluido al comprobarla contra
   un union o un tipo numérico más amplio.
 
+### Fixed
+
+- `Map.get` devuelve `Optional<T>` en lugar de `T | void`. La unión `T | void`
+  no tiene representación válida en C++ (`std::variant` no admite `void`), así
+  que usar el valor de `Map.get` generaba C++ que no compilaba en los dos
+  pipelines: `std::variant<V, void>` con `error: forming reference to void`. El
+  runtime ya exponía `std::optional<V>` y el emisor del IR ya generaba
+  `ets::Optional<V>::of(...)`; era el tipado del frontend el que no cuadraba.
+  Ahora `m.get(k) ?? 0` y `m.get(k).value()` funcionan, y el diagnóstico para un
+  uso incorrecto pasa a ser `Tipo 'Optional<number>' incompatible con 'number'`.
+
+### Documentation
+
+- La sintaxis de parameter packs es `<...T>`, no `<T...>`: la forma documentada
+  no la aceptaba ningún pipeline.
+- `match` tiene dos formas. En la de dos argumentos el patrón se compara contra
+  el **valor** del subject o selecciona por **tipo** (`whenType<T>`); en la de
+  tres, el patrón es el nombre de la **variante** de una unión con discriminador.
+
 ### Added
 
 - IR nativo `ets-ir-2` en `bootstrap/ir/`: lowering desde el grafo de módulos y

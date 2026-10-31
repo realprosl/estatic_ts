@@ -224,10 +224,11 @@ export const DATE_METHODS: Record<string, { params: TypeName[]; returnType: Type
 
 // Tabla de métodos de `Map<K, V>`. Las firmas son plantillas que se materializan
 // sustituyendo `K`/`V` por los argumentos de tipo reales del objeto en cada llamada.
-// `get` devuelve `V | void` porque un valor ausente se representa como `void` en
-// este lenguaje (no hay `undefined`/`null`).
+// `get` devuelve `Optional<V>`: el runtime ya expone `std::optional<V>` y una
+// union `V | void` no tiene representacion valida en C++ (`std::variant` no
+// admite `void`). Se usa con `??` o `.value()`.
 const MAP_METHODS: Record<string, { params: (typeArgs: TypeName[]) => TypeName[]; returnType: (typeArgs: TypeName[]) => TypeName }> = {
-  get:     { params: ([K]) => [K],                                          returnType: ([, V]) => `${V} | void` },
+  get:     { params: ([K]) => [K],                                          returnType: ([, V]) => `Optional<${V}>` },
   set:     { params: ([K, V]) => [K, V],                                    returnType: () => "void" },
   has:     { params: ([K]) => [K],                                          returnType: () => "boolean" },
   delete:  { params: ([K]) => [K],                                          returnType: () => "boolean" },

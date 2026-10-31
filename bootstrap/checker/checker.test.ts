@@ -785,6 +785,13 @@ for(const [name,source] of Object.entries({
  forSet:'let s=new Set<string>();for(const value of s){const a:string=value;}',
  readOnly:'const s=new Set<string>();print(s.has("a"));',
 }))test(`native Map/Set accepts ${name}`,()=>check(source));
+test('native Map.get returns Optional<T> and never a T|void union',()=>{
+  const g=check('let m=new Map<string,number>();const v: Optional<number> = m.get("a");');
+  assert.deepEqual(types(g,"MemberCallExpression"),["Optional<number>"]);
+});
+test('native Map.get result cannot be used as a bare value',()=>{
+  error('let m=new Map<string,number>();const v:number = m.get("a");',/Optional/);
+});
 for(const [name,source] of Object.entries({
  key:'let m=new Map<string,number>();m.set(1,2);',
  value:'let m=new Map<string,number>();m.set("s","bad");',
