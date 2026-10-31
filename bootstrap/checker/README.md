@@ -26,8 +26,10 @@ sí lo usan como referencia diferencial para un conjunto acotado de casos.
 Este frontend entrega sintaxis, binding, tipos, seguridad, efectos, constantes
 y procedencia por módulo. Conserva restricciones documentadas y cobertura
 pendiente; no se anuncia paridad general con stage 0 ni cierre del inventario.
-El CLI principal conserva su cadena: las tablas ETS todavía no se conectan a
-un lowering de IR o al codegen del programa solicitado.
+El CLI principal y el codegen histórico conservan su cadena. Las tablas ETS
+alimentan además el lowering del IR `ets-ir-2` y, desde ahí, la emisión a C++
+del programa solicitado; ese recorrido está documentado en
+[../ir/CPP.md](../ir/CPP.md).
 
 ## Contrato
 

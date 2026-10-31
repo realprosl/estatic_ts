@@ -460,7 +460,8 @@ entrada. Los mensajes y la recuperación de errores de TS y ETS no son idéntico
 los spans nuevos de parámetros, bindings y decoradores siguen el contrato local.
 Las formas excluidas en las secciones anteriores continúan fuera de alcance:
 TypeScript completo, import dinámico/import=, atributos de importación, tagged
-templates, regex y destructuring anidado/rest.
+templates, regex, object spread, exponentes numéricos y destructuring
+anidado/rest.
 Tras un tipo genérico hace falta separar `>` y `=` para evitar `>=`, como en
 stage 0. No se validan aquí tipos, acceso, ownership ni resolución de módulos.
 

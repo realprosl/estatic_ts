@@ -1,0 +1,5 @@
+build/
+node_modules/
+test/scratch/
+build-*-test-*/
+build-*-audit-*/

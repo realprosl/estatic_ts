@@ -2,23 +2,40 @@
 
 Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
-## Sin publicar (2026-10-22)
+## Sin publicar (2026-10-31)
 
-### En desarrollo: cierre del frontend nativo antes del IR
+### En desarrollo: cierre del frontend nativo e IR
 
-- Registro de pendientes y criterios de cierre en `bootstrap/PENDING.md`.
-  El IR queda bloqueado; no se anuncia soporte completo del lenguaje.
-- `audit:bootstrap`: 80 obligaciones iniciales de aceptación/rechazo sobre
-  proyectos comprobados por el ejecutable nativo. Sigue habiendo pendientes;
-  una falta de cobertura no cuenta como diagnóstico negativo válido.
+- Registro de pendientes y criterios de cierre en `bootstrap/PENDING.md`
+  (49 filas: 29 implementadas, 13 restringidas y 7 obligaciones pendientes).
+  El IR ya no está bloqueado; el cierre global del lenguaje sigue pendiente.
+- `audit:bootstrap`: 83 obligaciones de aceptación/rechazo sobre proyectos
+  comprobados por el ejecutable nativo, 83/83 satisfechas. Una falta de
+  cobertura no cuenta como diagnóstico negativo válido.
 - Validación de literales numéricos en bases 2/8/16, separadores, fracciones,
   rangos y finitud; promociones numéricas y rechazo de bitwise f32/f64.
-  Los enteros exactos de 64 bits continúan abiertos.
+  Los enteros exactos de 64 bits quedan implementados en el frontend nativo.
 - `satisfies` conserva el tipo de la expresión, incluido al comprobarla contra
   un union o un tipo numérico más amplio.
 
 ### Added
 
+- IR nativo `ets-ir-2` en `bootstrap/ir/`: lowering desde el grafo de módulos y
+  el `CheckResult`, con verificador `verifyIr` sobre tablas, shapes, promociones,
+  firmas, proyecciones, dominancia, inicialización por punto fijo, rutas de
+  ownership y duración de préstamos. Contrato en `bootstrap/ir/README.md`.
+- Backend C++20 que consume **exclusivamente** IR nativo verificado
+  (`src/codegen/ir/cpp-generator.ts`, implementación nativa en
+  `src/codegen/ir/native/`): no reconstruye un AST ni llama al codegen
+  histórico. Las capacidades no implementadas producen `IR_CPP_UNSUPPORTED`.
+  Límites y validación en `bootstrap/ir/CPP.md`.
+- Driver nativo `etsc` (`bootstrap/native/`) e `install.sh`: instala el
+  ejecutable y recorre `.ets → IR → C++ → binario` sin Node en tiempo de uso,
+  con `etsc init/build/run`. El nombre del binario pasa de `estc` a `etsc`.
+- Verbose y progreso animado en el CLI de bootstrap y en `etsc`, con cachés de
+  proyecto y de runtime compartidos entre el flujo de desarrollo y el instalado.
+- Proyecto modular de ejemplo de siete módulos para el compilador nativo de
+  notificaciones.
 - v64 (`estatic 1.26.0`): resúmenes nativos ETS de efectos por función y
   obligaciones de préstamos. Conjuntos conservadores de destinos de callables,
   aliases/retornos/contenedores y llamadas entre módulos; propagación por punto
@@ -32,7 +49,7 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
   expresamente tres expectativas conservadoras de v63; no se altera stage 0.
 - Contratos y límites en `bootstrap/checker/EFFECTS.md`, más el diseño del IR
   común y la separación de codegens por backend en `bootstrap/checker/IR.md`.
-  El IR y su generación de código todavía no están implementados.
+  Ese diseño se materializa en el IR nativo `ets-ir-2` descrito arriba.
 
 
 - v63 (`estatic 1.25.0`): pasada nativa ETS de flujo, memoria, capturas/escapes y
