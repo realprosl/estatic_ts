@@ -17,7 +17,8 @@
 // Salida: exit 0 si pasa; exit 1 + lista de fallos si no.
 
 import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const ROOT = process.cwd();
 
@@ -83,6 +84,26 @@ interface Issue {
 }
 
 const issues: Issue[] = [];
+
+// Regla (d): feature implementada por el frontend nativo que LIMITATIONS.md
+// declara pendiente sin acotarlo a stage 0.
+//
+// Las filas I de bootstrap/PENDING.md son el inventario de lo que el frontend
+// nativo ya soporta. No se cruzan aqui de forma automatica: la seccion
+// "Pendiente" es prosa que puede mencionar una feature implementada para
+// contrastarla, y un cruce por palabras produciría falsos positivos (por
+// ejemplo "comptime" o "narrowing" aparecen en ambos sitios). La lista es
+// corta, explicita y cita la fila de PENDING.md que la respalda.
+//
+// Un bullet que menciona "stage 0" queda fuera: describe el alcance del
+// compilador de bootstrap, no una feature pendiente del dialecto.
+const nativeImplemented: { row: string; feature: RegExp }[] = [
+  { row: "T08", feature: /`as`\s*\/\s*`<T>x`\s+type assertions/i },
+  { row: "C02", feature: /^\s*[-*]\s*`switch\s*\/\s*case\s*\/\s*default`/im },
+  { row: "T04", feature: /^\s*[-*]\s*Narrowing por tipo sobre primitivos/im },
+  { row: "L04", feature: /^\s*[-*]\s*Nullish coalescing|^\s*[-*]\s*Optional chaining/im },
+  { row: "G03", feature: /^\s*[-*]\s*.*parameter packs/im },
+];
 
 function isRejected(token: string): boolean {
   const safe = escapeRegex(token);
@@ -154,18 +175,44 @@ for (const ref of exampleRefsInDoc) {
 // contradictoria (p. ej. "extends" en Implementado al hablar de "sin
 // herencia" y en Pendiente al hablar de "herencia no soportada").
 
+// ─── Regla (d) como función importable ─────────────────────────────────────
+// Se exporta para que el test pueda comprobar la regla sin tocar LIMITATIONS.md.
+
+export function implementedAsPendingIssues(pending: string): Issue[] {
+  const found: Issue[] = [];
+  for (const { row, feature } of nativeImplemented) {
+    const bullet = pending.split("\n").find((line) => feature.test(line) && !/stage 0/i.test(line));
+    if (bullet) {
+      found.push({
+        rule: "implemented-as-pending",
+        symbol: `PENDING.md ${row}`,
+        detail: `LIMITATIONS.md declara pendiente una feature que el frontend nativo ya implementa: ${bullet.trim()}`,
+      });
+    }
+  }
+  return found;
+}
+
+issues.push(...implementedAsPendingIssues(pendingSection));
+
 // ─── Reporte ───────────────────────────────────────────────────────────────
 
-const stats = `AST=${astNodes.length} Tokens=${tokenKinds.length} Keywords=${keywords.length} Examples=${examples.length}`;
-if (issues.length === 0) {
-  console.log(`✓ check-docs-sync: LIMITATIONS.md coherente con el código. ${stats}`);
-  process.exit(0);
-}
+// El modulo tambien se importa desde el test para ejercitar la regla (d)
+// sin tocar LIMITATIONS.md; en ese caso no se ejecuta el reporte ni se sale.
+const isMain = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
-console.error(`✗ check-docs-sync: ${issues.length} problema(s) [${stats}]:\n`);
-for (const issue of issues) {
-  console.error(`  [${issue.rule}] ${issue.symbol}`);
-  console.error(`    detalle: ${issue.detail}\n`);
+if (isMain) {
+  const stats = `AST=${astNodes.length} Tokens=${tokenKinds.length} Keywords=${keywords.length} Examples=${examples.length}`;
+  if (issues.length === 0) {
+    console.log(`✓ check-docs-sync: LIMITATIONS.md coherente con el código. ${stats}`);
+    process.exit(0);
+  }
+
+  console.error(`✗ check-docs-sync: ${issues.length} problema(s) [${stats}]:\n`);
+  for (const issue of issues) {
+    console.error(`  [${issue.rule}] ${issue.symbol}`);
+    console.error(`    detalle: ${issue.detail}\n`);
+  }
+  console.error("Actualiza LIMITATIONS.md (sección Implementado / Rechazado / Pendiente).");
+  process.exit(1);
 }
-console.error("Actualiza LIMITATIONS.md (sección Implementado / Rechazado / Pendiente).");
-process.exit(1);

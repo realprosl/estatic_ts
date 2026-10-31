@@ -4149,6 +4149,17 @@ export class CppGenerator {
         const objectType = this.expressionType(node.object);
         const isContainer = objectType && isGenericType(objectType) && (genericBase(objectType) === "Map" || genericBase(objectType) === "Set");
         const method = isContainer && node.method === "delete" ? "removeKey" : node.method;
+        // `Map.get` devuelve `std::optional<V>` en el runtime y el dialecto lo
+        // tipa como `Optional<V>`. La llamada se envuelve con
+        // `ets::Optional<V>::of(...)` para materializar ese tipo. Sin el
+        // envuelto, el valor se emitia como `std::variant<V, void>`, que no es
+        // C++ valido (`std::variant` no admite `void`).
+        if (objectType && isGenericType(objectType) && genericBase(objectType) === "Map" && node.method === "get") {
+          const obj = this.emitExpression(node.object);
+          const args = node.args.map(a => this.emitExpression(a)).join(", ");
+          const valueType = genericArguments(objectType)[1];
+          return `::ets::Optional<${this.cppT(valueType)}>::of((${obj}).get(${args}))`;
+        }
         // `JSON.parse` (legacy) devuelve `std::string`. La versión que el dialecto
         // expone como `parse: string → JsonValue` se mapea a `parseValue` en C++.
         // También distinguimos `stringify(string/number/bool/JsonValue)` por el tipo

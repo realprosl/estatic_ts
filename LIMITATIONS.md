@@ -15,10 +15,14 @@ TypeScript.
 
 Hay dos implementaciones del dialecto y este documento las distingue:
 
-- **stage 0 (`src/`)** — compilador en TypeScript. Describe el CLI, la emisión y
-  el evaluador principal.
+- **stage 0 (`src/`)** — compilador en TypeScript. **Es un bootstrap**: su función
+  es compilar el dialecto a nativo, no ser un TypeScript completo. Construye los
+  ejecutables C++20 del frontend nativo y del runtime; el análisis del proyecto
+  solicitado lo hace el frontend nativo. Su CLI histórico y su caché incremental
+  se conservan, pero no son el camino de producción.
 - **frontend nativo (`bootstrap/`)** — lexer, parser, cargador, binder, checker,
-  seguridad, efectos y comptime reescritos en el propio dialecto Estatic.
+  seguridad, efectos y comptime reescritos en el propio dialecto Estatic. **Es la
+  implementación de referencia** del dialecto.
 
 Las secciones generales de CLI/emisión y evaluador principal describen stage 0
 (`src/`), salvo indicación contraria. El frontend ETS tiene su propio
@@ -34,6 +38,12 @@ backend, el cierre global del lenguaje y algunas capacidades concretas, todas
 enumeradas en la sección «Estado del frontend nativo». Ver
 [`bootstrap/ir/README.md`](./bootstrap/ir/README.md) y
 [`bootstrap/ir/CPP.md`](./bootstrap/ir/CPP.md).
+
+> **Las diferencias entre ambos pipelines son esperadas, no errores.** Stage 0 no
+> tiene que alcanzar la cobertura del frontend nativo: su trabajo termina en
+> producir el compilador nativo. Cuando este documento describa un
+> comportamiento, indica a qué pipeline se refiere; si no lo indica, es el del
+> frontend nativo.
 
 Este documento está dividido en cuatro secciones:
 
@@ -56,7 +66,7 @@ Lista no exhaustiva — ver `README.md`, `examples/` y los nodos AST en
 ### Sistema de tipos
 
 - Tipos primitivos: `number`, `string`, `boolean`, `void`.
-- Genéricos con constraints (`<T extends X>`) y parameter packs (`<T...>`).
+- Genéricos con constraints (`<T extends X>`) y parameter packs (`<...T>`).
 - Sobrecargas de funciones libres resueltas estáticamente por firma.
 - Type aliases (`type X = …`).
 - **Unions** (`A | B | C`) e **intersecciones** (`A & B`) de tipos.
@@ -96,10 +106,13 @@ Lista no exhaustiva — ver `README.md`, `examples/` y los nodos AST en
 - **Match expressions** — V30.5.1 unifica **una sola forma válida**: la
   V23 `match(value, [when(pat, cb), otherwise(cb)])` o
   `match(value, "key", [when(pat, cb)])` con discriminator. Es TS-compatible
-  (CallExpression regular, no keyword). La forma V2 destructurada
-  `match (r) { case { kind: ... }: ...; }` se **eliminó en V30.5.1** con
-  error E4410. La forma TC39 `match (x) { when (pat) => r; }` se eliminó
-  en V23.
+  (CallExpression regular, no keyword). En la forma de dos argumentos el
+  patrón se compara contra el **valor** del subject (`when(1, cb)`) o
+  selecciona por **tipo** (`whenType<T>(cb)`); en la de tres, el patrón es el
+  nombre de la **variante** de una unión con discriminador. La forma V2
+  destructurada `match (r) { case { kind: ... }: ...; }` se **eliminó en
+  V30.5.1** con error E4410. La forma TC39 `match (x) { when (pat) => r; }` se
+  eliminó en V23.
 - `switch / case / default` sobre enums, strings y números — **solo en el
   frontend nativo**. El parser de stage 0 **no** acepta `switch`: su lexer lo
   reconoce como keyword y el AST declara `SwitchStatement`, pero su parser no
@@ -143,8 +156,9 @@ Lista no exhaustiva — ver `README.md`, `examples/` y los nodos AST en
 - `arr.length` (alias del builtin `length(arr)`).
 - `forEach`, `find` (devuelve `Optional<T>`), `some`, `every`, `includes`.
 - `slice(start, end)`, `concat(...arrays)` y `flatMap<U>(callback)`.
-- `sort(comparator)` in-place. A diferencia de JavaScript, el comparador es
-  obligatorio; `sort()` sin argumentos todavía no está soportado.
+- `sort(comparator)` in-place. En stage 0 el comparador es obligatorio
+  (`Array.sort espera 1 argumento(s), recibió 0`); el frontend nativo acepta
+  `sort()` sin comparador.
 
 ### Operadores
 
@@ -193,6 +207,7 @@ cíclicos y las identidades de símbolo universales siguen pendientes.
 
 - `Result<T>`, `Optional<T>`, `Task<T>` (Promise C++).
 - `Map<T>`, `Set<T>` con `forEach`, `has`, `get`, `set`, `delete`, `size`.
+  `Map.get` devuelve `Optional<T>`, así que se consume con `??` o `.value()`.
 - `etS::concat` para strings heterogéneos.
 - `numberToString`, `length`, `charAt`, `concat`.
 - **Memory Model v2 (V22)**: `ptr<T>` (`std::unique_ptr<T>`),
@@ -278,6 +293,8 @@ que el dialecto aún no implementa. **Se aceptan contribuciones** en estas
   comparación es con `==`: el dialecto rechaza `===` por diseño.
 - Exhaustiveness checking con `never` — el dialecto no valida la rama `_ =>` por cobertura exhaustiva; sigue siendo pattern matching por igualdad.
 - Type predicates `x is T`.
+- `as const` (assertion de literal). Rechazada por los dos parsers:
+  `PARSER_ERROR: Se esperaba un tipo`.
 
 ### Clases y objetos
 
@@ -421,6 +438,26 @@ Siguen pendientes:
 
 ---
 
+### Límites del dialecto que no son features pendientes
+
+Estas construcciones se rechazan en los dos pipelines por contrato del dialecto,
+no porque falte implementarlas. No son features de TypeScript pendientes:
+
+- **Invocar el resultado de una llamada** (`outer()()`). Solo se puede invocar
+  un identificador o un binding: `const f = outer(); f()` sí funciona.
+  Diagnóstico: `Solo se pueden invocar funciones por nombre`.
+- **Sobrecargas al estilo TypeScript** (firmas de sobrecarga seguidas de una
+  implementación separada). La firma de la implementación cuenta como
+  candidata extra y la llamada queda ambigua. El idioma del dialecto son
+  **varias declaraciones completas** con la misma firma. Diagnóstico:
+  `Llamada ambigua entre sobrecargas`.
+- **`reduce` con el orden de JavaScript** (`reduce(callback, init)`). El dialecto
+  invierte los argumentos: `reduce(init, callback)`.
+- **`Map` y `Set` inmutables.** Un `const m = new Map<…>()` no se puede mutar;
+  hay que declararlo con `let`. Diagnóstico: `Destino inmutable 'm'`.
+
+
+
 ## 🧱 Estado del frontend nativo
 
 El frontend nativo (`bootstrap/`) cubre todas las capas del dialecto —lexer,
@@ -546,11 +583,23 @@ sección.
 
 El check detecta algunas contradicciones y referencias rotas, pero no puede
 demostrar que toda la documentación sea correcta ni exigir que cada nodo se
-mencione literalmente. En concreto, contrasta **solo la sección de rechazos**
-contra el inventario del código: una feature listada como pendiente puede
-estar implementada sin que el check lo detecte, y esa comprobación es
-responsabilidad de la revisión humana y de las pruebas, que siguen siendo la
-fuente principal de verdad.
+mencione literalmente.
+
+Sobre la sección de rechazos el contraste es **automático**: cualquier token
+que exista como nodo AST, `TokenKind`, keyword o ejemplo no puede figurar
+como rechazado.
+
+Sobre la sección de pendientes el contraste es **explícito y acotado**: el
+script mantiene una lista corta de features que el frontend nativo ya
+implementa (cada entrada cita su fila en `bootstrap/PENDING.md`) y avisa si
+alguna vuelve a declararse pendiente sin acotarse a stage 0. No se cruza el
+inventario completo de forma automática porque la sección es prosa que puede
+mencionar una feature implementada para contrastarla, y un cruce por palabras
+produciría falsos positivos. Ampliar esa lista es trabajo de quien conoce el
+inventario; añadir una feature nueva al dialecto implica revisarla.
+
+El resto sigue siendo responsabilidad de la revisión humana y de las pruebas,
+que son la fuente principal de verdad.
 
 Para las afirmaciones sobre el frontend nativo, las fuentes de verdad son
 [`bootstrap/PENDING.md`](./bootstrap/PENDING.md) (inventario de 49 filas),
@@ -568,4 +617,6 @@ node --experimental-strip-types scripts/check-docs-sync.ts
 ```
 
 El test `test/unit/docs-sync.test.ts` lo invoca automáticamente y falla el
-build cuando detecta una contradicción cubierta por esas reglas.
+build cuando detecta una contradicción cubierta por esas reglas. También
+ejercita la regla de "implementada como pendiente" en ambos sentidos, para que
+el guard no se pudra en silencio.

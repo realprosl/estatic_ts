@@ -58,6 +58,29 @@ test("codegen native: constructor parameter properties initialize access and rea
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("codegen native: Map.get devuelve Optional<T> y no materializa std::variant<T, void>", () => {
+  // El runtime devuelve `std::optional<V>` y el dialecto lo tipa como
+  // `Optional<V>`. Sin el envuelto `ets::Optional<V>::of(...)` el valor se
+  // emitia como `std::variant<V, void>`, que no es C++ valido.
+  const source = [
+    'function f():number{',
+    'let m: Map<string, number> = new Map<string, number>();',
+    'm.set("a",1);',
+    'const v: Optional<number> = m.get("a");',
+    'return v.valueOr(0);',
+    '}',
+    'print(f());',
+  ].join("\n");
+  const output = compile(source).cpp, dir = mkdtempSync(join(tmpdir(), "ets-map-get-optional-"));
+  try {
+    const file = join(dir, "main.cpp"), binary = join(dir, "main"); writeFileSync(file, output);
+    execFileSync(process.env.CXX ?? "g++", ["-std=c++20", "-O0", "-pthread", "-fno-exceptions", `-I${compilerRoot}`, file, "-o", binary], { encoding: "utf8", timeout: 120000, env: { ...process.env, TMPDIR: dir } });
+    assert.equal(execFileSync(binary, [], { encoding: "utf8", timeout: 5000 }), "1\n");
+    assert.match(output, /ets::Optional<double>::of/);
+    assert.doesNotMatch(output, /std::variant<\s*double\s*,\s*void\s*>/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("codegen native: nested templates shield strings, comments and escaped interpolation", () => {
   const source = [
     'let value:number=7;',

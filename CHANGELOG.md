@@ -18,6 +18,52 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 - `satisfies` conserva el tipo de la expresión, incluido al comprobarla contra
   un union o un tipo numérico más amplio.
 
+### Fixed
+
+- `Map.get` devuelve `Optional<T>` en lugar de `T | void`. La unión `T | void`
+  no tiene representación válida en C++ (`std::variant` no admite `void`), así
+  que usar el valor de `Map.get` generaba C++ que no compilaba en los dos
+  pipelines: `std::variant<V, void>` con `error: forming reference to void`. El
+  runtime ya exponía `std::optional<V>` y el emisor del IR ya generaba
+  `ets::Optional<V>::of(...)`; era el tipado del frontend el que no cuadraba.
+  Ahora `m.get(k) ?? 0` y `m.get(k).value()` funcionan, y el diagnóstico para un
+  uso incorrecto pasa a ser `Tipo 'Optional<number>' incompatible con 'number'`.
+- Los diagnósticos del frontend nativo ya no filtran identificadores internos.
+  Los tipos nominales (`#<symbolId>`) y los parámetros de tipo (`@<symbolId>`)
+  se mostraban literally en los mensajes: `El tipo '#218' no declara el miembro
+  'zzz'`. Ahora se sustituyen por el nombre del símbolo (`El tipo 'Point' no
+  declara el miembro 'zzz'`), igual que hace stage 0.
+- Stage 0 ya no emite C++ inválido cuando el patrón de un `match` de dos
+  argumentos es incompatible con el subject. Antes comparaba la unión con el
+  string del patrón (`no match for 'operator=='`) y el error aflora en g++; ahora
+  es un diagnóstico del type-checker (`Se esperaba Shape, pero se obtuvo string`).
+  El frontend nativo ya rechazaba ese caso.
+
+### Documentation
+
+- La sintaxis de parameter packs es `<...T>`, no `<T...>`: la forma documentada
+  no la aceptaba ningún pipeline.
+- `match` tiene dos formas. En la de dos argumentos el patrón se compara contra
+  el **valor** del subject o selecciona por **tipo** (`whenType<T>`); en la de
+  tres, el patrón es el nombre de la **variante** de una unión con discriminador.
+- Se declara la arquitectura del proyecto: **stage 0 es un bootstrap** (compila
+  el dialecto a nativo) y el **frontend nativo es la implementación de
+  referencia**. Las diferencias entre ambos pipelines son esperadas, no errores.
+- Se documentan cuatro límites del dialecto que no estaban en ninguna tabla:
+  invocar el resultado de una llamada, las sobrecargas al estilo TypeScript, el
+  orden invertido de `reduce` y la mutabilidad de `Map`/`Set`.
+- `as const` figura como rechazada por los dos parsers.
+
+### Tests
+
+- `check-docs-sync` gana una regla `implemented-as-pending`: una feature que el
+  frontend nativo ya implementa no puede declararse pendiente sin acotarse a
+  stage 0. La lista es explícita y cita su fila en `bootstrap/PENDING.md`; no se
+  cruza el inventario completo porque la sección es prosa y daría falsos
+  positivos. El test ejercita la regla en ambos sentidos.
+- Regresiones para el tipado de `Map.get`, los diagnósticos sin ids internos y
+  el rechazo del patrón de `match` incompatible en stage 0.
+
 ### Added
 
 - IR nativo `ets-ir-2` en `bootstrap/ir/`: lowering desde el grafo de módulos y
