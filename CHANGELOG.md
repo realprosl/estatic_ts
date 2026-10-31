@@ -7,7 +7,7 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 ### En desarrollo: cierre del frontend nativo e IR
 
 - Registro de pendientes y criterios de cierre en `bootstrap/PENDING.md`
-  (49 filas: 29 implementadas, 13 restringidas y 7 obligaciones pendientes).
+  (72 filas: 29 implementadas, 13 restringidas y 30 obligaciones pendientes).
   El IR ya no está bloqueado; el cierre global del lenguaje sigue pendiente.
 - `audit:bootstrap`: 83 obligaciones de aceptación/rechazo sobre proyectos
   comprobados por el ejecutable nativo, 83/83 satisfechas. Una falta de
@@ -38,6 +38,41 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
   string del patrón (`no match for 'operator=='`) y el error aflora en g++; ahora
   es un diagnóstico del type-checker (`Se esperaba Shape, pero se obtuvo string`).
   El frontend nativo ya rechazaba ese caso.
+
+### Changed
+
+- La frontera del dialecto queda reducida a **tres exclusiones**, que no son
+  carencias de implementacion sino decisiones de diseno:
+  1. **Insercion de metodos dinamicos de clase despues de la declaracion**
+     (estilo *declaration merging* o *prototype augmentation*). Los tipos son
+     nominales y cerrados: su forma se fija en la declaracion y no se reabre
+     desde fuera.
+  2. **Excepciones** (`throw`/`try`/`catch`): rompen RAII. El dialecto modela el
+     error con `Result<T, E>`.
+  3. **Herencia** (`extends`/`implements`): el polimorfismo dinamico requiere
+     vtable, incompatible con las semanticas de valor del dialecto.
+  4. **Tipado dinamico general** (`Object`, `any`, `unknown`): abrirlo exige
+     revisar el tipado cerrado del dialecto, del que dependen los ids de simbolo
+     unicos, el aislamiento entre modulos y las comprobaciones de ownership.
+  5. **`eval`**: seguridad y rendimiento.
+- El **resto** de la tabla de rechazos pasa a implementarse: dynamic typing
+  (`Object`, `any`, `unknown`), `===`/`!==`, `>>>`, `eval`, `arguments`,
+  `function*`, tagged templates, dynamic imports, object spread, exponenciacion,
+  regex literales, destructuring anidado/rest y `<T>x`. Se recogen como
+  obligaciones T20-T32 en `bootstrap/PENDING.md`, que pasa de 61 a 74 filas
+  (29 implementadas, 13 restringidas y 32 pendientes).
+- La sintaxis de los `const` type parameters es `<const T>`, con el modificador
+  antes del nombre, no `<T const>`. Es el mismo criterio que los packs
+  (`<...T>`); la forma documentada no la aceptaba ningun pipeline.
+
+
+- La frontera del dialecto queda explícita. Se **rechaza por diseño** la
+  ampliación dinámica de tipos ya declarados (añadir métodos a un objeto o a una
+  clase desde fuera de su declaración, estilo *declaration merging*): los tipos
+  son nominales y cerrados, su forma se fija en la declaración y no puede
+  reabrirse desde fuera.
+- La herencia y las excepciones **siguen rechazadas por diseño**, junto con el
+  resto de la tabla. No pasan al inventario de pendientes.
 
 ### Documentation
 
