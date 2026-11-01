@@ -6,7 +6,7 @@ import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { root } from "../root.ts";
-import { runtimeArchive } from "../build/runtime-cache.ts";
+import { runtimeArchive } from "../../runtime/build/runtime-cache.ts";
 import { generateCppFromIr, type IrCppResult } from "../../src/codegen/ir/cpp-generator.ts";
 import type { IrProject } from "../../src/codegen/ir/model.ts";
 
