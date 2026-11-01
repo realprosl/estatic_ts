@@ -73,7 +73,7 @@ jobs:
           node --experimental-strip-types --check src/modules/runtime-backends.ts
           node --experimental-strip-types --check backend/ir/cpp-generator.ts
           node --experimental-strip-types --check backend/ir/runtime-calls.ts
-          node --experimental-strip-types --check backend/ir/named-types.ts
+          node --experimental-strip-types --input-type=module -e 'import "./backend/ir/named-types.ts"'
 
   regression:
     name: Bootstrap and codegen regression
