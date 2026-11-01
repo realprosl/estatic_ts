@@ -60,3 +60,7 @@ Este documento fija el contrato de trabajo. **Todavía no implementa** la extrac
 La carpeta `runtime/` **ya existe** y contiene el runtime C++ compartido (`runtime/ets_runtime.hpp`, `runtime/runtime_ets_libuv.cpp`, etc.). No se debe crear otra ni moverla a ciegas. La separación pendiente afecta principalmente a dependencias de `bootstrap/` hacia `src/`, a los drivers de build y a la delimitación de los servicios del runtime. `bootstrap/build/runtime-cache.ts` ya compila unidades desde `runtime/` y `src/codegen/ir/cpp-generator.ts` incluye cabeceras `runtime/`.
 
 La primera implementación de aislamiento es `scripts/check-runtime-boundaries.sh`: detecta includes C++ desde `runtime/` hacia `bootstrap/`, `src/`, `seed/` o legacy. Este control es limitado: no verifica dependencias transitivas, enlazado, includes relativos sin prefijo ni equivalencia funcional. Debe ampliarse antes de declarar completa la fase 1.
+
+## Implementación incremental añadida
+
+La lógica de construcción y caché de archivos `.a` del runtime se trasladó de `bootstrap/build/runtime-cache.ts` a `runtime/build/runtime-cache.ts`. La ruta antigua se conserva como fachada de reexportación para no romper consumidores existentes. El nuevo módulo calcula la raíz del repositorio desde su propia ubicación y ya no importa `bootstrap/root.ts`. No se alteraron intencionadamente las claves de caché ni los algoritmos de compilación. **Pendiente:** ejecutar tests de runtime, bootstrap y builds reales; la refactorización no se considera validada solo por los commits.
