@@ -1594,7 +1594,10 @@ export class NativeChecker {
       }
       const operand: string = memoryValue(this.expression(module,bindingChild(n,EdgeRole.Operand),"")); const op: string = n.get(AttributeKind.Operator);
       if (op == "typeof") return "string";
-      if (op == "!") { this.requireType(module,id,operand,"boolean"); return "boolean"; }
+      if (op == "!") {
+        if (!this.compatible(operand,"boolean")) this.report(module,id,"El operador '!' requiere un operando boolean, pero recibió '" + this.displayType(operand) + "'. Compara el valor explícitamente (por ejemplo, texto.length == 0).");
+        return "boolean";
+      }
       if (!numericType(operand) && operand != "!error") this.report(module,id,"Operador numérico sobre '" + operand + "'");
       if (op == "~" && ["f32","f64"].includes(operand)) this.report(module,id,"Los operadores bitwise requieren operandos enteros");
       return nativeUnaryPromotion(operand);
