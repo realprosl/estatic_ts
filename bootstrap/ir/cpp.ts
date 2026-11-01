@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import { root } from "../root.ts";
 import { runtimeArchive } from "../../runtime/build/runtime-cache.ts";
 import { generateCppFromIr, type IrCppResult } from "../../src/codegen/ir/cpp-generator.ts";
-import type { IrProject } from "../../src/codegen/ir/model.ts";
+import type { IrProject } from "../../shared/ir/model.ts";
 
 export async function buildIrFrontend(directory=join(root,"build/bootstrap/ir-cpp")):Promise<string> {
   if(existsSync(join(root,"installation.json"))){
