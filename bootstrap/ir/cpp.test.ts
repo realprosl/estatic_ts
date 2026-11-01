@@ -7,7 +7,8 @@ import { createServer } from "node:http";
 import { once } from "node:events";
 import { buildLoader, root } from "../modules/build.ts";
 import { nativeIr, buildIrCpp as referenceBuild } from "./cpp.ts";
-import { generateCppFromIr as referenceCpp } from "../../src/codegen/ir/cpp-generator.ts";
+import { generateCppFromIr as referenceCpp, IrCppGenerator } from "../../src/codegen/ir/cpp-generator.ts";
+import { IrCodegenError } from "../../src/codegen/ir/model.ts";
 const nativeProjects=new WeakMap<object,Parameters<typeof referenceCpp>[0]>();
 function generateCppFromIr(project:Parameters<typeof referenceCpp>[0]):ReturnType<typeof referenceCpp>{
  let result:ReturnType<typeof referenceCpp>;
@@ -102,6 +103,18 @@ test("IR C++ rejects unsuccessful projects and unsupported capabilities before e
  const p=ir('print(1);');p.success=false;assert.throws(()=>generateCppFromIr(p),/success:true/);p.success=true;p.functions[0].blocks[0].instructions[0].op="backendEscape";assert.throws(()=>generateCppFromIr(p),/Capacidad/);
  assert.throws(()=>generateCppFromIr(ir('class C{x:number=1;}print(new C());')),/contrato de impresión/);
  p.annotations=[{name:"cpp_type",source:p.functions[0].source,target:p.functions[0].source,arguments:["External"]}];assert.throws(()=>generateCppFromIr(p),/ABI externo/);
+});
+
+test("IR C++ explains unsupported Result<void> before invoking the C++ compiler",()=>{
+ const project=ir('print(1);');
+ const voidId=project.types.indexOf("void");
+ const stringId=project.types.indexOf("string");
+ assert.notEqual(voidId,-1);
+ assert.notEqual(stringId,-1);
+ const id=project.types.length;
+ project.types.push("Result<void>");
+ project.typeDefinitions.push({kind:"Result",arguments:[voidId,stringId],fields:[],names:[],variants:[],numericKind:"",bits:0,signed:false,resource:false,length:0,tag:"",discriminator:"",discriminatorType:0,discriminatorValue:""});
+ assert.throws(()=>new IrCppGenerator(project).type(id),error=>error instanceof IrCodegenError && /Result<void>/.test(error.message) && /std::optional<T>/.test(error.message));
 });
 
 test("IR C++ dispatches namespace function identities",()=>assert.equal(execute('import * as ns from "./dep";print(ns.get());',{"dep.ets":'export function get():number{return 4;}'}),"4\n"));
