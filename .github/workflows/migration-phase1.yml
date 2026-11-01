@@ -1,0 +1,71 @@
+name: Migration phase 1 regression
+on:
+  pull_request:
+    paths:
+      - 'bootstrap/**'
+      - 'runtime/**'
+      - 'shared/**'
+      - 'src/codegen/ir/**'
+      - 'src/config/**'
+      - 'src/project/**'
+      - 'scripts/check-runtime-boundaries.sh'
+      - '.github/workflows/migration-phase1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Runtime and IR boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+      - name: Verify dependency direction
+        run: bash scripts/check-runtime-boundaries.sh
+      - name: Verify old/new runtime and IR entrypoints
+        run: |
+          node --experimental-strip-types --input-type=module -e '
+            import * as oldRuntime from "./bootstrap/build/runtime-cache.ts";
+            import * as runtime from "./runtime/build/runtime-cache.ts";
+            import * as oldIr from "./src/codegen/ir/model.ts";
+            import * as ir from "./shared/ir/model.ts";
+            for (const name of ["runtimeArchive", "runtimeFlags", "precompileRuntime"]) {
+              if (oldRuntime[name] !== runtime[name]) throw new Error("Runtime facade mismatch: " + name);
+            }
+            if (oldIr.IrCodegenError !== ir.IrCodegenError) throw new Error("IR facade mismatch");
+            if (new ir.IrCodegenError("test").code !== "IR_CPP_UNSUPPORTED") throw new Error("IR diagnostic changed");
+          '
+      - name: Syntax checks
+        run: |
+          node --experimental-strip-types --check bootstrap/cli.ts
+          node --experimental-strip-types --check bootstrap/ir/cpp.ts
+          node --experimental-strip-types --check runtime/build/runtime-cache.ts
+          node --experimental-strip-types --check shared/ir/model.ts
+
+  regression:
+    name: Bootstrap and codegen regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+      - name: Compiler versions
+        run: |
+          node --version
+          g++ --version | head -n 1
+      - name: IR and native backend tests
+        run: |
+          node --experimental-strip-types --test --test-concurrency=1 bootstrap/ir/ir.test.ts bootstrap/ir/cpp.test.ts bootstrap/ir/native.test.ts
+      - name: CLI and runtime integration tests
+        run: |
+          node --experimental-strip-types --test --test-concurrency=1 bootstrap/cli.test.ts test/unit/runtime-backends.test.ts test/unit/cpp-types.test.ts test/unit/codegen.test.ts
+      - name: Frontend compatibility tests
+        run: |
+          node --experimental-strip-types --test --test-concurrency=1 bootstrap/lexer/lexer.test.ts bootstrap/parser/parser.test.ts bootstrap/binder/binder.test.ts bootstrap/checker/checker.test.ts
