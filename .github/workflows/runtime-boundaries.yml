@@ -3,6 +3,10 @@ on:
   pull_request:
     paths:
       - 'runtime/**'
+      - 'shared/ir/**'
+      - 'src/codegen/ir/model.ts'
+      - 'bootstrap/cli.ts'
+      - 'bootstrap/ir/cpp.ts'
       - 'bootstrap/build/**'
       - 'scripts/check-runtime-boundaries.sh'
       - '.github/workflows/runtime-boundaries.yml'
@@ -30,3 +34,14 @@ jobs:
               throw new Error("Runtime flags contract changed");
             }
           '
+      - name: Verify shared IR contract and compatibility facade
+        run: |
+          node --experimental-strip-types --input-type=module -e '
+            import { IrCodegenError as shared } from "./shared/ir/model.ts";
+            import { IrCodegenError as legacy } from "./src/codegen/ir/model.ts";
+            if (shared !== legacy) throw new Error("IR contract facade changed identity");
+            const error = new legacy("unsupported");
+            if (error.code !== "IR_CPP_UNSUPPORTED") throw new Error("IR error contract changed");
+          '
+          node --experimental-strip-types --check bootstrap/cli.ts
+          node --experimental-strip-types --check bootstrap/ir/cpp.ts
