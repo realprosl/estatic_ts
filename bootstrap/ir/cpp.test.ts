@@ -98,6 +98,11 @@ for(const [name,source,expected] of [
  ["detached task drain",'async function f():Promise<void>{await sleep(1);print("done");}spawn(f());',"done\n"],
  ["Result",'function f():Result<number>{return ok(4);}const r=f();if(r.isOk())print(r.value());',"4\n"],
 ] as const)test(`IR C++ executes ${name}`,()=>assert.equal(execute(source),expected));
+test("IR C++ preserves escaped and template literal newlines",()=>{
+ assert.equal(execute('print("A\\nB");print(\`C\\nD\`);'),"A\nB\nC\nD\n");
+ assert.equal(execute('print(\`C\nD\`);'),"C\nD\n");
+});
+
 test("IR C++ initializes imported modules once",()=>assert.equal(execute('import {get} from "./dep";print(get());',{"dep.ets":'export let n=3;export function get():number{return n;}print("dep");'}),"dep\n3\n"));
 test("IR C++ rejects unsuccessful projects and unsupported capabilities before emission",()=>{
  const p=ir('print(1);');p.success=false;assert.throws(()=>generateCppFromIr(p),/success:true/);p.success=true;p.functions[0].blocks[0].instructions[0].op="backendEscape";assert.throws(()=>generateCppFromIr(p),/Capacidad/);
