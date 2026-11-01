@@ -46,11 +46,16 @@ jobs:
             import * as terminal from "./shared/runtime/terminal-methods.ts";
             import * as stage0Backends from "./src/modules/runtime-backends.ts";
             import * as sharedBackends from "./shared/runtime/runtime-backends.ts";
+            import { irCppNamedType } from "./backend/ir/named-types.ts";
+            import { cppType } from "./src/codegen/cpp-types.ts";
             for (const name of ["runtimeArchive", "runtimeFlags", "precompileRuntime"]) {
               if (oldRuntime[name] !== runtime[name]) throw new Error("Runtime facade mismatch: " + name);
             }
             if (oldBackend.IrCppGenerator !== backend.IrCppGenerator || oldBackend.generateCppFromIr !== backend.generateCppFromIr) throw new Error("Backend facade mismatch");
             if (oldCallees.fileCalleeMap !== callees.fileCalleeMap || oldCallees.etsNetworkCalleeMap !== callees.etsNetworkCalleeMap) throw new Error("Runtime callees facade mismatch");
+            for (const name of ["number","string","boolean","void","i8","i16","i32","i64","u8","u16","u32","u64","f32","f64","Console","Request","Response","HttpClientResponse","JsonValue","Regex","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","FileReader","Server","Timer","FsWatcher","FsEvent"]) {
+              if (irCppNamedType(name) !== cppType(name)) throw new Error("IR named type mismatch: " + name);
+            }
             if (stage0Backends.runtimeBackendsForCalls !== sharedBackends.runtimeBackendsForCalls) throw new Error("Backend selection facade mismatch");
             if (oldTerminal.TERMINAL_METHODS !== terminal.TERMINAL_METHODS) throw new Error("Terminal facade mismatch");
             if (oldIr.IrCodegenError !== ir.IrCodegenError) throw new Error("IR facade mismatch");
@@ -68,6 +73,7 @@ jobs:
           node --experimental-strip-types --check src/modules/runtime-backends.ts
           node --experimental-strip-types --check backend/ir/cpp-generator.ts
           node --experimental-strip-types --check backend/ir/runtime-calls.ts
+          node --experimental-strip-types --check backend/ir/named-types.ts
 
   regression:
     name: Bootstrap and codegen regression
