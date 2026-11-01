@@ -1012,6 +1012,22 @@ export class Parser {
     }
     return operand;
   }
+  // A `<` after a member access is a comparison unless the matching `>` is
+  // followed by a call: `obj.method<T>(x)` keeps its type arguments, while
+  // `obj.field < 5` stays a comparison. Identifiers use the same lookahead.
+  genericMethodFollower(): string {
+    if (!this.check("<")) return "";
+    let depth: number = 0;
+    let cursor: number = 0;
+    while (this.peek(cursor).kind != "eof") {
+      const kind: string = this.peek(cursor).kind;
+      if (kind == "<") depth = depth + 1;
+      else if (kind == ">") { depth = depth - 1; if (depth == 0) return this.peek(cursor + 1).kind; }
+      else if (kind == ";" || kind == "newline" || kind == "{" || kind == "}" || kind == ")") return "";
+      cursor = cursor + 1;
+    }
+    return "";
+  }
   genericFollower(): string {
     if (!this.check("<")) return "";
     let depth: number = 0; let cursor: number = 0;
@@ -1065,7 +1081,7 @@ export class Parser {
         if (this.check("delete") || this.check("default")) member = this.take(); else member = this.expect("identifier");
         const parent: number = this.add(NodeKind.MemberExpression, this.node(result).start, member);
         this.edge(parent, EdgeRole.Object, result); this.attr(parent, AttributeKind.Optional, optional ? "true" : "false");
-        if (this.check("<")) this.typeArguments(parent);
+        if (this.check("<") && this.genericMethodFollower() == "(") this.typeArguments(parent);
         if (this.accept("(")) {
           this.setKind(parent, NodeKind.MemberCallExpression); this.attr(parent, AttributeKind.Method, member.lexeme);
           this.argumentsInto(parent, EdgeRole.Args, ")"); this.setEnd(parent, this.previous());

@@ -1157,3 +1157,22 @@ test("bootstrap parser accepts local declarations and result checks inside forEa
   const result = parity(source);
   assert.ok(result.nodes.some(node => node.kind === "VariableDeclaration" && node.attributes.some(attr => attr.name === "name" && attr.value === "res")));
 });
+
+test("bootstrap parser keeps a member comparison and a generic method call", () => {
+  // `<` after a member access is a comparison unless the matching `>` is
+  // followed by a call: stage 0 and the native frontend must agree on both.
+  const comparison = [
+    "class P{x:number;y:number;}",
+    "function f(p:P,q:P):boolean{",
+    "  if(p.x<5){return true;}",
+    "  if(p.x<q.y){return true;}",
+    "  return false;",
+    "}",
+  ].join("\n");
+  parity(comparison);
+  const generic = [
+    "const numbers:number[]=[1,2];",
+    "const strings:string[]=numbers.map<string>((x:number):string=>\"x\");",
+  ].join("\n");
+  parity(generic);
+});
