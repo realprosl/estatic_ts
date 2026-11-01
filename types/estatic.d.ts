@@ -202,9 +202,6 @@ declare global {
     // Cierra el descriptor. Despues de esto el reader ya no es usable.
     close(): void;
   }
-  class Promise<T> extends Sealed {
-    private readonly _brand: symbol;
-  }
   /** Handle de un timer de libuv. */
   interface Timer {
     valid(): boolean;
