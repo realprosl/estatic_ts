@@ -56,6 +56,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.23.4'
+      - name: Install native compilation prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libuv1-dev libcurl4-openssl-dev libssl-dev libdrogon-dev libtrantor-dev libjsoncpp-dev uuid-dev zlib1g-dev
+          test -f /usr/include/uv.h
+          test -f /usr/include/drogon/drogon.h
       - name: Compiler versions
         run: |
           node --version
