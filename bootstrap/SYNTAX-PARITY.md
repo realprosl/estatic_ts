@@ -16,7 +16,7 @@ de esta entrega.
 Reproducir: `npm run audit:bootstrap:syntax`. Actualizar este documento y
 `bootstrap/audit/syntax-parity.json`: añadir `-- --write`.
 
-Casos nombrados: **76/76** con el resultado esperado.
+Casos nombrados: **78/78** con el resultado esperado.
 Corpus físico: **132/132** archivos aceptados por el
 parser ETS, **132/132** por el cargador/parser TS.
 Archivos aceptados antes y rechazados ahora: **0**.
@@ -58,6 +58,8 @@ Estas muestras no constituyen una equivalencia formal para cualquier entrada.
 | parameter-properties | Declaraciones | Sí | Sí | conservada |
 | composition | Declaraciones | Sí | Sí | conservada |
 | generic-classes | Genéricos | Sí | Sí | conservada |
+| member-comparison | Operadores | Sí | Sí | conservada. `<` tras un member access es comparacion salvo que el `>` este seguido de una llamada. |
+| generic-method-call | Genéricos | Sí | Sí | conservada. Los type arguments de un metodo siguen vivo cuando la llamada los sigue. |
 | generic-functions | Genéricos | Sí | Sí | conservada |
 | generic-aliases | Genéricos | Sí | Sí | conservada |
 | function-packs | Genéricos | Sí | Sí | conservada |
