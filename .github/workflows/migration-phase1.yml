@@ -2,6 +2,7 @@ name: Migration phase 1 regression
 on:
   pull_request:
     paths:
+      - 'backend/**'
       - 'bootstrap/**'
       - 'runtime/**'
       - 'shared/**'
@@ -33,10 +34,13 @@ jobs:
             import * as oldRuntime from "./bootstrap/build/runtime-cache.ts";
             import * as runtime from "./runtime/build/runtime-cache.ts";
             import * as oldIr from "./src/codegen/ir/model.ts";
+            import * as oldBackend from "./src/codegen/ir/cpp-generator.ts";
+            import * as backend from "./backend/ir/cpp-generator.ts";
             import * as ir from "./shared/ir/model.ts";
             for (const name of ["runtimeArchive", "runtimeFlags", "precompileRuntime"]) {
               if (oldRuntime[name] !== runtime[name]) throw new Error("Runtime facade mismatch: " + name);
             }
+            if (oldBackend.IrCppGenerator !== backend.IrCppGenerator || oldBackend.generateCppFromIr !== backend.generateCppFromIr) throw new Error("Backend facade mismatch");
             if (oldIr.IrCodegenError !== ir.IrCodegenError) throw new Error("IR facade mismatch");
             if (new ir.IrCodegenError("test").code !== "IR_CPP_UNSUPPORTED") throw new Error("IR diagnostic changed");
           '
@@ -46,6 +50,8 @@ jobs:
           node --experimental-strip-types --check bootstrap/ir/cpp.ts
           node --experimental-strip-types --check runtime/build/runtime-cache.ts
           node --experimental-strip-types --check shared/ir/model.ts
+          node --experimental-strip-types --check backend/ir/cpp-generator.ts
+          node --experimental-strip-types --check backend/ir/runtime-calls.ts
 
   regression:
     name: Bootstrap and codegen regression
