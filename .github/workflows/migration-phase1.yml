@@ -7,6 +7,8 @@ on:
       - 'runtime/**'
       - 'shared/**'
       - 'src/codegen/ir/**'
+      - 'src/codegen/runtime-callees.ts'
+      - 'src/semantic/terminal-methods.ts'
       - 'src/config/**'
       - 'src/project/**'
       - 'scripts/check-runtime-boundaries.sh'
@@ -37,10 +39,16 @@ jobs:
             import * as oldBackend from "./src/codegen/ir/cpp-generator.ts";
             import * as backend from "./backend/ir/cpp-generator.ts";
             import * as ir from "./shared/ir/model.ts";
+            import * as oldCallees from "./src/codegen/runtime-callees.ts";
+            import * as callees from "./shared/runtime/runtime-callees.ts";
+            import * as oldTerminal from "./src/semantic/terminal-methods.ts";
+            import * as terminal from "./shared/runtime/terminal-methods.ts";
             for (const name of ["runtimeArchive", "runtimeFlags", "precompileRuntime"]) {
               if (oldRuntime[name] !== runtime[name]) throw new Error("Runtime facade mismatch: " + name);
             }
             if (oldBackend.IrCppGenerator !== backend.IrCppGenerator || oldBackend.generateCppFromIr !== backend.generateCppFromIr) throw new Error("Backend facade mismatch");
+            if (oldCallees.fileCalleeMap !== callees.fileCalleeMap || oldCallees.etsNetworkCalleeMap !== callees.etsNetworkCalleeMap) throw new Error("Runtime callees facade mismatch");
+            if (oldTerminal.TERMINAL_METHODS !== terminal.TERMINAL_METHODS) throw new Error("Terminal facade mismatch");
             if (oldIr.IrCodegenError !== ir.IrCodegenError) throw new Error("IR facade mismatch");
             if (new ir.IrCodegenError("test").code !== "IR_CPP_UNSUPPORTED") throw new Error("IR diagnostic changed");
           '
@@ -50,6 +58,8 @@ jobs:
           node --experimental-strip-types --check bootstrap/ir/cpp.ts
           node --experimental-strip-types --check runtime/build/runtime-cache.ts
           node --experimental-strip-types --check shared/ir/model.ts
+          node --experimental-strip-types --check shared/runtime/runtime-callees.ts
+          node --experimental-strip-types --check shared/runtime/terminal-methods.ts
           node --experimental-strip-types --check backend/ir/cpp-generator.ts
           node --experimental-strip-types --check backend/ir/runtime-calls.ts
 
