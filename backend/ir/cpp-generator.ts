@@ -1,4 +1,4 @@
-import { cppType } from "../../src/codegen/cpp-types.ts";
+import { irCppNamedType } from "./named-types.ts";
 import { IrCodegenError, type IrProject, type IrType, type IrFunction, type IrInstruction, type IrSource } from "../../shared/ir/model.ts";
 import { emitRuntimeCall } from "./runtime-calls.ts";
 import type { RuntimeBackends } from "../../shared/runtime/runtime-backends.ts";
@@ -20,7 +20,7 @@ export class IrCppGenerator {
     const s=this.shape(id), a=s.arguments, t=(n:number)=>this.type(n);
     if(recordKinds.has(s.kind)||sumKinds.has(s.kind))return `ir_t${id}`;
     switch(s.kind) {
-      case "scalar": return cppType(this.project.types[id]);
+      case "scalar": return irCppNamedType(this.project.types[id]);
       case "enum": return t(a[0]);
       case "ptr": case "constPtr": return `std::unique_ptr<${s.kind==="constPtr"?"const ":""}${t(a[0])}>`;
       case "ref": case "constRef": return `${s.kind==="constRef"?"const ":""}${t(a[0])}*`;
@@ -52,7 +52,7 @@ export class IrCppGenerator {
         if(["JsonValue","Console","Regex","Request","Response","HttpClientResponse","FileReader","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","Server","Timer","FsWatcher","FsEvent"].includes(name)) {
           if(name==="Regex")this.headers.add("runtime/ets_regex.hpp");
           else if(!["JsonValue","Console"].includes(name)){this.headers.add("runtime/ets_runtime_full.hpp");this.backends.libuv=true;}
-          return cppType(name);
+          return irCppNamedType(name);
         }
       }
     }
