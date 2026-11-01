@@ -20,6 +20,19 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Los statements de un callback se separan por salto de linea. El lexer suprime
+  el token `newline` dentro de parentesis y corchetes, asi que dentro de
+  `f(x => { ... })` no habia token de fin de sentencia y ambos parsers
+  rechazaban `const res = f(x)` seguido de `if(res) { ... }`. Ahora los dos
+  pipelines aplican ASI por numero de linea fisica: stage 0
+  (`src/parser/parser.ts`) y el frontend nativo (`bootstrap/parser/parser.ets`)
+  aceptan el mismo fuente y construyen el mismo AST. Queda cubierto por el
+  contrato `callback-asi` de `bootstrap/audit/syntax-parity.ts` y por los tests
+  de paridad de `bootstrap/parser/parser.test.ts`.
+- Un `return` sin valor acepta las mismas formas en los dos pipelines. Stage 0
+  exigia `;` o una expresion, de modo que `return` seguido del cierre del bloque
+  daba `Se esperaba una expresion`; ahora se acepta igual que en el frontend
+  nativo (`return` antes de `}` o de un salto de linea).
 - `Map.get` devuelve `Optional<T>` en lugar de `T | void`. La unión `T | void`
   no tiene representación válida en C++ (`std::variant` no admite `void`), así
   que usar el valor de `Map.get` generaba C++ que no compilaba en los dos

@@ -2,7 +2,7 @@ export interface SyntaxCase {
   id: string; area: string; source: string; files?: Record<string,string>;
   native: boolean; note?: string;
 }
-const yes=(id:string,area:string,source:string,files?:Record<string,string>):SyntaxCase=>({id,area,source,files,native:true});
+const yes=(id:string,area:string,source:string,files?:Record<string,string>,note?:string):SyntaxCase=>({id,area,source,files,native:true,note});
 const no=(id:string,area:string,source:string):SyntaxCase=>({id,area,source,native:false});
 export const syntaxCases:SyntaxCase[]=[
   yes('declarations','Básicos','const n:number=1;let s:string="x";let b:boolean=true;'),
@@ -29,6 +29,8 @@ export const syntaxCases:SyntaxCase[]=[
   yes('function-packs','Genéricos','function f<...Ts>(...values:Ts):void{}f(1,"x");'),
   yes('class-pack-grammar','Genéricos','class C<...Ts>{}',undefined),
   yes('functions-arrows','Funciones','function f(x:number):number{return x;}const g=(x:number):number=>{return f(x);};'),
+  yes('callback-asi','Funciones','function f(x:string):boolean{return true;}const tasks=["a"];tasks.forEach((task:string)=>{\n  const res=f(task)\n  if(res){print(task)}\n});',undefined,'Los statements de un callback se separan por salto de linea: el lexer suprime el token newline dentro de parentesis, asi que ambos parsers aplican ASI por numero de linea.'),
+
   yes('nested-functions','Funciones','function f(x:number):number{function g():number{return x;}return g();}'),
   yes('optional-default-parameters','Funciones','function f(x:number=1,y?:string):number{return x;}'),
   yes('out-parameters','Funciones','function f(out x:number):void{x=2;}let n=1;f(n);'),

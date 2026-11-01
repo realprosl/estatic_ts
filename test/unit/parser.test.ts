@@ -19,6 +19,24 @@ function firstStatement(source: string): unknown {
   return ast.statements[0];
 }
 
+test("parser: los statements de un callback se separan por salto de linea", () => {
+  const source = [
+    "function addTaskGoogle(task:string):boolean { return true }",
+    'const tasks = ["one", "two"]',
+    "let added = false",
+    "tasks.forEach((task:string) => {",
+    "  const res = addTaskGoogle(task)",
+    "  if(res) { added = true }",
+    "})",
+    'if(added) { print("added") }',
+  ].join("\n");
+  const program = parse(source) as any;
+  assert.equal(program.statements.length, 5);
+  const callback = program.statements[3].expression.args[0];
+  assert.equal(callback.kind, "ArrowFunctionExpression");
+  assert.equal(callback.body.statements.length, 2);
+});
+
 for (const [name, source] of templateCases) test(`parser templates: ${name}`, () => {
   const statement = firstStatement(source + ";") as any;
   assert.equal(statement.expression.kind, "TemplateLiteralExpression");

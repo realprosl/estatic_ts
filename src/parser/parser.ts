@@ -847,7 +847,9 @@ export class Parser {
   }
 
   private returnStatement(keyword: Token): Statement {
-    const value = this.check(";") ? undefined : this.expression();
+    // A `return` without a value may be followed by the end of the block or a
+    // line break; the native frontend accepts the same forms.
+    const value = (this.check(";") || this.check("newline") || this.check("}") || this.check("eof")) ? undefined : this.expression();
     const end = this.consumeStatementTerminator("Se esperaba ';' después de return");
     return { kind: "ReturnStatement", value, span: span(keyword.span.start, end.span.end) };
   }
@@ -1444,6 +1446,12 @@ export class Parser {
   private consumeStatementTerminator(message: string): Token {
     if (this.check(";")) return this.advance();
     if (this.check("newline")) return this.advance();
+    // ASI: some token transports omit explicit newline tokens (inside
+    // parentheses and brackets). A physical line break between the previous
+    // token and the next statement still terminates it.
+    const previousToken: Token = this.previous();
+    const nextToken: Token = this.peek();
+    if (previousToken.span.end.line < nextToken.span.start.line) return previousToken;
     // En arms de match estilo `Type.Variant(x) => ...,` la coma o cierre
     // de `}` tambien actua como separador entre arms.
     if (this.check("}") || this.check("eof") || this.check(",")) return this.peek();
