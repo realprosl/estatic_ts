@@ -199,7 +199,50 @@ private:
                     case 'n': out.push_back('\n'); break;
                     case 'r': out.push_back('\r'); break;
                     case 't': out.push_back('\t'); break;
-                    case 'u': out.push_back('?'); pos += 4; break;
+                    case 'u': {
+                        auto hex4 = [&](std::size_t start, unsigned& code) -> bool {
+                            if (start + 4 > input.size()) return false;
+                            code = 0;
+                            for (std::size_t j = 0; j < 4; ++j) {
+                                const char c = input[start + j];
+                                unsigned digit;
+                                if (c >= '0' && c <= '9') digit = static_cast<unsigned>(c - '0');
+                                else if (c >= 'a' && c <= 'f') digit = static_cast<unsigned>(c - 'a' + 10);
+                                else if (c >= 'A' && c <= 'F') digit = static_cast<unsigned>(c - 'A' + 10);
+                                else return false;
+                                code = (code << 4) | digit;
+                            }
+                            return true;
+                        };
+                        unsigned code = 0;
+                        if (!hex4(pos + 2, code)) { error = "invalid unicode escape"; return ets_json_value(); }
+                        pos += 4;
+                        if (code >= 0xd800 && code <= 0xdbff) {
+                            unsigned low = 0;
+                            if (pos + 8 > input.size() || input[pos + 2] != '\\\\' || input[pos + 3] != 'u' || !hex4(pos + 4, low) || low < 0xdc00 || low > 0xdfff) {
+                                error = "invalid unicode surrogate pair"; return ets_json_value();
+                            }
+                            code = 0x10000 + ((code - 0xd800) << 10) + (low - 0xdc00);
+                            pos += 6;
+                        } else if (code >= 0xdc00 && code <= 0xdfff) {
+                            error = "invalid unicode surrogate"; return ets_json_value();
+                        }
+                        if (code < 0x80) out.push_back(static_cast<char>(code));
+                        else if (code < 0x800) {
+                            out.push_back(static_cast<char>(0xc0 | (code >> 6)));
+                            out.push_back(static_cast<char>(0x80 | (code & 0x3f)));
+                        } else if (code < 0x10000) {
+                            out.push_back(static_cast<char>(0xe0 | (code >> 12)));
+                            out.push_back(static_cast<char>(0x80 | ((code >> 6) & 0x3f)));
+                            out.push_back(static_cast<char>(0x80 | (code & 0x3f)));
+                        } else {
+                            out.push_back(static_cast<char>(0xf0 | (code >> 18)));
+                            out.push_back(static_cast<char>(0x80 | ((code >> 12) & 0x3f)));
+                            out.push_back(static_cast<char>(0x80 | ((code >> 6) & 0x3f)));
+                            out.push_back(static_cast<char>(0x80 | (code & 0x3f)));
+                        }
+                        break;
+                    }
                     default: error = "invalid escape"; return ets_json_value();
                 }
                 pos += 2;
