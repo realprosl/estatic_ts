@@ -10,7 +10,7 @@ import { performance } from "node:perf_hooks";
 import { CliProgress, phase, presentation, type ProgressEvent } from "./cli-progress.ts";
 import { root } from "./root.ts";
 import { buildIrFrontend, nativeIr, buildIrCpp } from "./ir/cpp.ts";
-import { generateCppFromIr, IrCppGenerator } from "../src/codegen/ir/cpp-generator.ts";
+import { generateCppFromIr, IrCppGenerator } from "../backend/ir/cpp-generator.ts";
 import type { IrProject } from "../shared/ir/model.ts";
 import { loadConfig } from "../src/config/project-config.ts";
 import { initializeProject, updateProjectTypes } from "../src/project/init-project.ts";
