@@ -219,7 +219,7 @@ private:
                         pos += 4;
                         if (code >= 0xd800 && code <= 0xdbff) {
                             unsigned low = 0;
-                            if (pos + 8 > input.size() || input[pos + 2] != '\\\\' || input[pos + 3] != 'u' || !hex4(pos + 4, low) || low < 0xdc00 || low > 0xdfff) {
+                            if (pos + 8 > input.size() || input[pos + 2] != '\\' || input[pos + 3] != 'u' || !hex4(pos + 4, low) || low < 0xdc00 || low > 0xdfff) {
                                 error = "invalid unicode surrogate pair"; return ets_json_value();
                             }
                             code = 0x10000 + ((code - 0xd800) << 10) + (low - 0xdc00);
