@@ -16,7 +16,7 @@ de esta entrega.
 Reproducir: `npm run audit:bootstrap:syntax`. Actualizar este documento y
 `bootstrap/audit/syntax-parity.json`: añadir `-- --write`.
 
-Casos nombrados: **75/75** con el resultado esperado.
+Casos nombrados: **76/76** con el resultado esperado.
 Corpus físico: **132/132** archivos aceptados por el
 parser ETS, **132/132** por el cargador/parser TS.
 Archivos aceptados antes y rechazados ahora: **0**.
@@ -63,6 +63,7 @@ Estas muestras no constituyen una equivalencia formal para cualquier entrada.
 | function-packs | Genéricos | Sí | Sí | conservada |
 | class-pack-grammar | Genéricos | Sí | Sí | conservada |
 | functions-arrows | Funciones | Sí | Sí | conservada |
+| callback-asi | Funciones | Sí | Sí | conservada. Los statements de un callback se separan por salto de linea: el lexer suprime el token newline dentro de parentesis, asi que ambos parsers aplican ASI por numero de linea. |
 | nested-functions | Funciones | Sí | Sí | conservada |
 | optional-default-parameters | Funciones | Sí | Sí | conservada |
 | out-parameters | Funciones | Sí | Sí | conservada |

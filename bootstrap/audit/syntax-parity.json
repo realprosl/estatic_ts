@@ -1,6 +1,6 @@
 {
-  "cases": 75,
-  "passed": 75,
+  "cases": 76,
+  "passed": 76,
   "results": [
     {
       "id": "declarations",
@@ -328,6 +328,18 @@
       "oldDiagnostics": [],
       "nativeDiagnostics": [],
       "note": ""
+    },
+    {
+      "id": "callback-asi",
+      "area": "Funciones",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": "Los statements de un callback se separan por salto de linea: el lexer suprime el token newline dentro de parentesis, asi que ambos parsers aplican ASI por numero de linea."
     },
     {
       "id": "nested-functions",

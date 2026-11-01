@@ -133,7 +133,9 @@ export class Parser {
   terminator(): ParserToken {
     if (this.check(";") || this.check("newline")) return this.take();
     // ASI: preserve a physical line break when the token stream omits newlines.
-    if (this.previous().endLine < this.peek(0).line) return this.previous();
+    const previousLine: number = this.previous().endLine;
+    const nextLine: number = this.peek(0).line;
+    if (previousLine < nextLine) return this.previous();
     if (!this.check("}") && !this.check("eof") && !this.check(",")) this.report("Se esperaba un terminador de sentencia");
     return this.peek(0);
   }

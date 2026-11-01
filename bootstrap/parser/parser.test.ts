@@ -1153,7 +1153,7 @@ test("bootstrap parser accepts local declarations and result checks inside forEa
     "})",
     "if(added) { print(\"added\") }",
   ].join("\n");
-  const result = native(source);
-  assert.deepEqual(result.diagnostics, []);
+  // Stage 0 accepts the same source: both parsers must agree on the AST.
+  const result = parity(source);
   assert.ok(result.nodes.some(node => node.kind === "VariableDeclaration" && node.attributes.some(attr => attr.name === "name" && attr.value === "res")));
 });
