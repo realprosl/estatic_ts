@@ -41,19 +41,6 @@ const IOURING_CALLEES = new Set<string>([
   "ioUringRead", "ioUringWrite",
 ]);
 
-/**
- * Recorre el AST y devuelve los backends que el programa necesita.
- * Pura, sin side effects. Llamada por compileFile() para popular
- * ModuleCompilationResult.runtimeBackends.
- */
-export function detectRuntimeBackends(program: Program): RuntimeBackends {
-  const used = new Set<string>();
-  for (const stmt of program.statements) {
-    collectCalls(stmt, used);
-  }
-  return runtimeBackendsForCalls(used);
-}
-
 /** Shared by AST and IR consumers; input is resolved runtime function names. */
 export function runtimeBackendsForCalls(callees: Iterable<string>): RuntimeBackends {
   const used=new Set(callees);
