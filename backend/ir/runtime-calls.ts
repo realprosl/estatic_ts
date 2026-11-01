@@ -1,6 +1,6 @@
 import { TERMINAL_METHODS } from "../../shared/runtime/terminal-methods.ts";
 import { fileCalleeMap, regexCalleeMap, netCalleeMap, asyncCalleeMap, etsNetworkCalleeMap } from "../../shared/runtime/runtime-callees.ts";
-import { runtimeBackendsForCalls } from "../../src/modules/runtime-backends.ts";
+import { runtimeBackendsForCalls } from "../../shared/runtime/runtime-backends.ts";
 import type { IrCppGenerator } from "./cpp-generator.ts";
 import type { IrFunction, IrInstruction } from "../../shared/ir/model.ts";
 
