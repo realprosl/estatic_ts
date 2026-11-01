@@ -14,6 +14,23 @@ import { finishBorrows } from "./borrows";
 import { preserveContracts } from "./contracts";
 import { verifyIr } from "./verify";
 
+// Template parts retain raw source text in the AST. Cook each part once at
+// the IR boundary, using the same escape rules as ordinary string literals.
+function templateValue(raw: string): string {
+  let value: string = "";
+  for (let at: number = 0; at < raw.length; at = at+1) {
+    let c: string = raw.slice(at,at+1);
+    if (c == "\\" && at+1 < raw.length) {
+      at = at+1; c = raw.slice(at,at+1);
+      if (c == "n") c = "\n";
+      else if (c == "t") c = "\t";
+      else if (c == "r") c = "\r";
+    }
+    value = value+c;
+  }
+  return value;
+}
+
 function irIndex(values: number[], value: number): number { for (let i: number = 0; i < values.length; i = i+1) if (values[i] == value) return i; return -1; }
 
 function memoryMode(text: string): string { const base: string = genericBase(text); return ["ptr","constPtr","ref","constRef","readonly"].includes(base) ? base : ""; }
@@ -410,7 +427,7 @@ export class IrLowering {
     if (kind == NodeKind.IndexExpression) return this.emit("load",typeId,[],this.rootPlace(id),-1,"",id);
     if (kind == NodeKind.MemberExpression) return this.memberValue(id,typeId);
     if (kind == NodeKind.TemplateLiteralExpression) {
-      let values: number[] = []; for (const e of n.edges) if (e.role == EdgeRole.Parts) values.push(this.emit("constant",this.typeId("string",id),[],-1,-1,this.node(e.node).get(AttributeKind.Value),e.node)); else if (e.role == EdgeRole.Expressions) values.push(this.convert(this.expression(e.node),this.typeId("string",id),e.node));
+      let values: number[] = []; for (const e of n.edges) if (e.role == EdgeRole.Parts) values.push(this.emit("constant",this.typeId("string",id),[],-1,-1,templateValue(this.node(e.node).get(AttributeKind.Value)),e.node)); else if (e.role == EdgeRole.Expressions) values.push(this.convert(this.expression(e.node),this.typeId("string",id),e.node));
       let result: number = values[0]; for (let at: number = 1; at < values.length; at = at+1) result = this.emit("binary",typeId,[result,values[at]],-1,-1,"+",id); return result;
     }
     if (kind == NodeKind.IdentifierExpression) return this.functionIdentifier(id,typeId);

@@ -103,6 +103,11 @@ test("IR C++ preserves escaped and template literal newlines",()=>{
  assert.equal(execute('print(\`C\nD\`);'),"C\nD\n");
 });
 
+test("IR C++ cooks template escapes once around interpolations",()=>{
+ assert.equal(execute('const n=7;print(`A\\n${n}\\tB\\rC`);'),"A\n7\tB\rC\n");
+ assert.equal(execute('print(`a\\\\n b\\` c\\${name}`);'),"a\\n b` c${name}\n");
+});
+
 test("IR C++ initializes imported modules once",()=>assert.equal(execute('import {get} from "./dep";print(get());',{"dep.ets":'export let n=3;export function get():number{return n;}print("dep");'}),"dep\n3\n"));
 test("IR C++ rejects unsuccessful projects and unsupported capabilities before emission",()=>{
  const p=ir('print(1);');p.success=false;assert.throws(()=>generateCppFromIr(p),/success:true/);p.success=true;p.functions[0].blocks[0].instructions[0].op="backendEscape";assert.throws(()=>generateCppFromIr(p),/Capacidad/);
