@@ -243,25 +243,19 @@ del dialecto (RAII puro, sin vtable, sin tipado dinámico).
 
 | Feature rechazada | Razón |
 |---|---|
-| `Object`, `any`, `unknown` como tipos dinámicos generales | Sin tipado dinámico abierto; para datos externos se usa `JsonValue` o tipos explícitos |
 | `throw` / `try` / `catch` | Rompe RAII — usar `Result<T, E>` |
 | Herencia (`extends`, `implements`) | Polimorfismo dinámico requiere vtable |
-| `>>>`, `===`, `!==` | Operadores ambiguos o coerción no deseada en C++ |
-| `arguments` | C++ no tiene arguments object — usar rest (`...args`) |
+| `Object`, `any` y `unknown` como tipos dinámicos generales | Sin tipado dinámico abierto; para datos externos se usa `JsonValue` o tipos explícitos |
 | `eval` | Seguridad + rendimiento |
-| `function*` (generadores) | Lazy iteration no encaja con RAII — usar async/Promise |
-| Tagged templates (`tag\`...\``) | Sin uso idiomático claro en el dialecto |
-| Dynamic imports (`import("...")`) | El grafo de módulos se resuelve estáticamente durante la compilación |
-| Object spread (`{ ...obj }`) | Sin semántica fijada para el spread de objetos |
-| Exponenciación numérica (`**` y notación `1.5e2`) | Fuera del inventario de operadores `+ - * / %` |
-| Regex literales (`/patrón/flags`) | El runtime no define un tipo de regex |
-| Destructuring anidado y destructuring rest | El dialecto cubre destructuring plano |
+| **Inserción de métodos dinámicos de clase después de la declaración** (añadir métodos a un objeto o a una clase ya declarada desde fuera, estilo *declaration merging* o *prototype augmentation*) | Los tipos del dialecto son nominales y cerrados: un tipo se declara una vez y su forma es fija. Abrirlo rompería el tipado nominal, la unicidad de los ids de símbolo y el aislamiento entre módulos |
 
-Las cuatro últimas filas se rechazan **tanto en stage 0 como en el frontend
-nativo**: son formas excluidas del dialecto, no lagging de una de las dos
-implementaciones. La matriz reproducible está en
-[`bootstrap/SYNTAX-PARITY.md`](./bootstrap/SYNTAX-PARITY.md) y los casos en
-[`bootstrap/audit/syntax-cases.ts`](./bootstrap/audit/syntax-cases.ts).
+Estas cinco exclusiones son la **frontera del dialecto** y no carencias de
+implementación: se mantienen aunque el resto de TypeScript se incorpore.
+
+El **resto** de las formas que esta tabla rechazaba (`===`/`!==`, `>>>`,
+`arguments`, `function*`, tagged templates, dynamic imports, object spread,
+exponenciación, regex, destructuring anidado/rest y `<T>x`) pasa a la sección de
+pendientes: se implementarán.
 
 ---
 
@@ -273,11 +267,9 @@ que el dialecto aún no implementa. **Se aceptan contribuciones** en estas
 
 ### Sistema de tipos avanzado
 
-- `<T>x` type assertions (forma angle-bracket) — rechazada por el parser de
-  stage 0 y por el nativo. La forma `expr as T` **sí** está implementada en
-  ambos: el frontend nativo la comprueba y rechaza los casts que borren o
-  fabricate ownership (`E4101`). Se prefiere `match` para narrowing.
-- `const` type parameters (`<T const>`).
+- `const` type parameters (`<const T>`). El modificador va **antes** del nombre,
+  igual que los packs (`<...T>`); la forma `<T const>` no la acepta ningún
+  pipeline.
 - Conditional types (`T extends U ? X : Y`) en tipos.
 - Mapped types (`{ [K in keyof T]: V }`).
 - `keyof T` operator.
@@ -299,7 +291,9 @@ que el dialecto aún no implementa. **Se aceptan contribuciones** en estas
 ### Clases y objetos
 
 - Getters / setters (`get` / `set`).
-- Clases y métodos `abstract`.
+- Clases y métodos `abstract` — sin herencia no tienen utilidad: una clase abstracta
+  no se puede instanciar y sus métodos no tienen cuerpo. Depende de una decisión
+  sobre la herencia.
 - Index signatures `[key: string]: T`.
 - Override de métodos (no aplica — sin herencia).
 
@@ -438,6 +432,24 @@ Siguen pendientes:
 
 ---
 
+### Features de TypeScript aún no incorporadas
+
+Estas formas estaban antes en la tabla de rechazos y pasan a implementarse:
+
+- **Igualdad estricta**: `===` y `!==`.
+- **Desplazamiento sin signo**: `>>>`.
+- **Exponenciación numérica**: el operador `**` y la notación `1.5e2`.
+- **Object spread**: `{ ...obj }`.
+- **Regex literales**: `/patrón/flags`. El runtime ya tiene `runtime/ets_regex.hpp`.
+- **Destructuring anidado** y **destructuring rest**.
+- **Tagged templates**: `` tag`...` ``.
+- **Dynamic imports**: `import("...")`. Hoy el grafo de módulos se resuelve
+  estáticamente en compilación.
+- **Generadores**: `function*`.
+- **`arguments`**.
+- **Type assertions en forma angle-bracket**: `<T>x`. La forma `expr as T` sí
+  está soportada.
+
 ### Límites del dialecto que no son features pendientes
 
 Estas construcciones se rechazan en los dos pipelines por contrato del dialecto,
@@ -464,8 +476,8 @@ El frontend nativo (`bootstrap/`) cubre todas las capas del dialecto —lexer,
 parser, cargador, expansión, binder, checker, seguridad, efectos, comptime y
 procedencia— y entrega `ets-checked-2`. No es un prototipo, pero tampoco es el
 cierre del lenguaje: su inventario vigente está en
-[`bootstrap/PENDING.md`](./bootstrap/PENDING.md), con 49 filas clasificadas en
-**29 implementadas, 13 restringidas y 7 obligaciones pendientes**. Lo que sigue
+[`bootstrap/PENDING.md`](./bootstrap/PENDING.md), con 72 filas clasificadas en
+**29 implementadas, 13 restringidas y 30 obligaciones pendientes**. Lo que sigue
 son los límites que el frontend nativo impone y que este documento no describe
 en las secciones de stage 0.
 
@@ -602,7 +614,7 @@ El resto sigue siendo responsabilidad de la revisión humana y de las pruebas,
 que son la fuente principal de verdad.
 
 Para las afirmaciones sobre el frontend nativo, las fuentes de verdad son
-[`bootstrap/PENDING.md`](./bootstrap/PENDING.md) (inventario de 49 filas),
+[`bootstrap/PENDING.md`](./bootstrap/PENDING.md) (inventario de 72 filas),
 [`bootstrap/SYNTAX-PARITY.md`](./bootstrap/SYNTAX-PARITY.md) (paridad de
 sintaxis), [`bootstrap/ir/README.md`](./bootstrap/ir/README.md) y
 [`bootstrap/ir/CPP.md`](./bootstrap/ir/CPP.md) (IR y backend). Un doc fechado
