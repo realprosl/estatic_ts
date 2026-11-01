@@ -1,7 +1,7 @@
 import { cppType } from "../../src/codegen/cpp-types.ts";
 import { IrCodegenError, type IrProject, type IrType, type IrFunction, type IrInstruction, type IrSource } from "../../shared/ir/model.ts";
 import { emitRuntimeCall } from "./runtime-calls.ts";
-import type { RuntimeBackends } from "../../src/modules/runtime-backends.ts";
+import type { RuntimeBackends } from "../../shared/runtime/runtime-backends.ts";
 
 export interface IrCppResult { cpp: string; headers: string[]; runtimeBackends: RuntimeBackends; capabilities: string[] }
 const recordKinds = new Set(["record","interface","intersection","variant"]);
