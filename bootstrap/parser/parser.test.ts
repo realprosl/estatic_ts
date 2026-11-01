@@ -1141,3 +1141,19 @@ test('native legacy union preserves generic parameters and spans', () => {
 test('native union rejects two generic parameter lists', () => {
   assert.ok(native('union<T> U<V> = Some(T)|None;').diagnostics.some(d => /una lista/.test(d.message)));
 });
+
+test("bootstrap parser accepts local declarations and result checks inside forEach callbacks", () => {
+  const source = [
+    "function addTaskGoogle(task:string):boolean { return true }",
+    "const tasks = [\"one\", \"two\"]",
+    "let added = false",
+    "tasks.forEach((task:string) => {",
+    "  const res = addTaskGoogle(task)",
+    "  if(res) { added = true }",
+    "})",
+    "if(added) { print(\"added\") }",
+  ].join("\n");
+  const result = native(source);
+  assert.deepEqual(result.diagnostics, []);
+  assert.ok(result.nodes.some(node => node.kind === "VariableDeclaration" && node.attributes.some(attr => attr.name === "name" && attr.value === "res")));
+});
