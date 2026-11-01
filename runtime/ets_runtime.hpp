@@ -194,11 +194,11 @@ private:
                     case '"': out.push_back('"'); break;
                     case '\\': out.push_back('\\'); break;
                     case '/': out.push_back('/'); break;
-                    case '\b': out.push_back('\b'); break;
-                    case '\f': out.push_back('\f'); break;
-                    case '\n': out.push_back('\n'); break;
-                    case '\r': out.push_back('\r'); break;
-                    case '\t': out.push_back('\t'); break;
+                    case 'b': out.push_back('\b'); break;
+                    case 'f': out.push_back('\f'); break;
+                    case 'n': out.push_back('\n'); break;
+                    case 'r': out.push_back('\r'); break;
+                    case 't': out.push_back('\t'); break;
                     case 'u': out.push_back('?'); pos += 4; break;
                     default: error = "invalid escape"; return ets_json_value();
                 }
