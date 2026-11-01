@@ -54,3 +54,9 @@ El C++ generado solo es una semilla válida si implementa realmente el compilado
 
 ## Pendiente de esta PR inicial
 Este documento fija el contrato de trabajo. **Todavía no implementa** la extracción, la generación de semilla ni las pruebas; esas modificaciones requieren inspección y validación del árbol completo.
+
+## Hallazgo de la fase 1
+
+La carpeta `runtime/` **ya existe** y contiene el runtime C++ compartido (`runtime/ets_runtime.hpp`, `runtime/runtime_ets_libuv.cpp`, etc.). No se debe crear otra ni moverla a ciegas. La separación pendiente afecta principalmente a dependencias de `bootstrap/` hacia `src/`, a los drivers de build y a la delimitación de los servicios del runtime. `bootstrap/build/runtime-cache.ts` ya compila unidades desde `runtime/` y `src/codegen/ir/cpp-generator.ts` incluye cabeceras `runtime/`.
+
+La primera implementación de aislamiento es `scripts/check-runtime-boundaries.sh`: detecta includes C++ desde `runtime/` hacia `bootstrap/`, `src/`, `seed/` o legacy. Este control es limitado: no verifica dependencias transitivas, enlazado, includes relativos sin prefijo ni equivalencia funcional. Debe ampliarse antes de declarar completa la fase 1.
