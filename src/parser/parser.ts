@@ -1158,7 +1158,7 @@ export class Parser {
         // es siempre un nombre de método.
         const member = this.check("delete") || this.check("default") ? this.advance() : this.consume("identifier", "Se esperaba el nombre del miembro");
         const typeArguments: TypeName[] = [];
-        if (this.match("<")) {
+        if (this.check("<") && this.genericMethodFollower() === "(" && this.match("<")) {
           do { typeArguments.push(this.typeName()); } while (this.match(","));
           this.consume(">", "Se esperaba '>' después de los argumentos de tipo del método");
         }
@@ -1403,6 +1403,20 @@ export class Parser {
     if (!subParser.check("eof")) subParser.error(subParser.peek(), "Se esperaba fin de interpolación");
     if (subParser.diagnostics.length) throw new DiagnosticError(subParser.diagnostics);
     return expression;
+  }
+  // A `<` after a member access is a comparison unless the matching `>` is
+  // followed by a call: `obj.method<T>(x)` keeps its type arguments, while
+  // `obj.field < 5` stays a comparison. Identifiers use the same lookahead.
+  private genericMethodFollower(): TokenKind {
+    if (!this.check("<")) return "eof";
+    let depth = 0;
+    for (let index = this.current; index < this.tokens.length; index++) {
+      const kind = this.tokens[index].kind;
+      if (kind === "<") depth++;
+      else if (kind === ">") { depth--; if (depth === 0) return this.tokens[index + 1]?.kind ?? "eof"; }
+      else if (kind === ";" || kind === "newline" || kind === "{" || kind === "}" || kind === ")") return "eof";
+    }
+    return "eof";
   }
   private isGenericCall(): boolean { return this.isGenericFollowedBy("("); }
   // V1.2: igual que `isGenericCall` pero acepta `.` después de `>`, para

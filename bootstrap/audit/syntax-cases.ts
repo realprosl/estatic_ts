@@ -24,6 +24,9 @@ export const syntaxCases:SyntaxCase[]=[
   yes('parameter-properties','Declaraciones','class C{constructor(public x:number,private y:string="x",readonly z:number=1){}}'),
   yes('composition','Declaraciones','class C{x:number;y:string;}const c=new C(1,"x");'),
   yes('generic-classes','Genéricos','class C<T=number>{value:T;}const c=new C<number>(1);'),
+  yes('member-comparison','Operadores','class P{x:number;y:number;}function f(p:P,q:P):boolean{if(p.x<5){return true;}if(p.x<q.y){return true;}return false;}',undefined,'`<` tras un member access es comparacion salvo que el `>` este seguido de una llamada.'),
+  yes('generic-method-call','Genéricos','const numbers:number[]=[1,2];const strings:string[]=numbers.map<string>((x:number):string=>"x");',undefined,'Los type arguments de un metodo siguen vivo cuando la llamada los sigue.'),
+
   yes('generic-functions','Genéricos','interface I{x:number;}function f<T extends I>(x:T):number{return x.x;}'),
   yes('generic-aliases','Genéricos','type Pair<T=number> =[T,T];const p:Pair<number> =[1,2];'),
   yes('function-packs','Genéricos','function f<...Ts>(...values:Ts):void{}f(1,"x");'),

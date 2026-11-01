@@ -387,3 +387,25 @@ for (const source of ['@tag if(true){}','@tag type X=number;','@tag enum E{A}','
   test(`parser decorators: rejects annotations that would be discarded: ${source}`, () => {
     assert.throws(() => parse(source), (error:any) => error instanceof DiagnosticError && error.diagnostics.some(d => d.message.includes('decoradores')));
   });
+test("parser: `<` tras un member access es comparacion salvo generic method call", () => {
+  const comparison = parse([
+    "class P{x:number;y:number;}",
+    "function f(p:P,q:P):boolean{",
+    "  if(p.x<5){return true;}",
+    "  if(p.x<q.y){return true;}",
+    "  return false;",
+    "}",
+  ].join("\n")) as any;
+  const body = comparison.statements[1].body;
+  assert.equal(body.statements[0].kind, "IfStatement");
+  assert.equal(body.statements[1].kind, "IfStatement");
+  const generic = parse([
+    "const numbers:number[]=[1,2];",
+    "const strings:string[]=numbers.map<string>((x:number):string=>\"x\");",
+  ].join("\n")) as any;
+  const call = generic.statements[1].initializer;
+  assert.equal(call.kind, "MemberCallExpression");
+  assert.equal(call.typeArguments.length, 1);
+  assert.equal(call.typeArguments[0], "string");
+});
+

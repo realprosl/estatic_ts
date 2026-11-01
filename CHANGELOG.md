@@ -20,6 +20,16 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `<` tras un member access ya no se interpreta siempre como type arguments. Los
+  dos parsers trataban cualquier `objeto.campo < ...` como una llamada generica,
+  asi que comparar un campo (`p.x < 5`) era un error de parseo en los dos
+  pipelines. Ahora el `<` solo abre type arguments cuando el `>` que lo cierra va
+  seguido de una llamada: `obj.method<T>(x)` conserva sus type arguments y
+  `obj.field < 5` se queda como comparacion. El lookahead es el mismo que ya
+  usaban los identificadores (`isGenericFollowedBy` / `genericFollower`), ahora
+  tambien en la rama de member access de `src/parser/parser.ts` y
+  `bootstrap/parser/parser.ets`. Cubierto por los contratos `member-comparison`
+  y `generic-method-call` de `bootstrap/audit/syntax-parity.ts`.
 - Los statements de un callback se separan por salto de linea. El lexer suprime
   el token `newline` dentro de parentesis y corchetes, asi que dentro de
   `f(x => { ... })` no habia token de fin de sentencia y ambos parsers

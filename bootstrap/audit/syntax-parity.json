@@ -1,6 +1,6 @@
 {
-  "cases": 76,
-  "passed": 76,
+  "cases": 78,
+  "passed": 78,
   "results": [
     {
       "id": "declarations",
@@ -268,6 +268,30 @@
       "oldDiagnostics": [],
       "nativeDiagnostics": [],
       "note": ""
+    },
+    {
+      "id": "member-comparison",
+      "area": "Operadores",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": "`<` tras un member access es comparacion salvo que el `>` este seguido de una llamada."
+    },
+    {
+      "id": "generic-method-call",
+      "area": "Genéricos",
+      "stage0Direct": true,
+      "stage0": true,
+      "native": true,
+      "status": "conservada",
+      "passed": true,
+      "oldDiagnostics": [],
+      "nativeDiagnostics": [],
+      "note": "Los type arguments de un metodo siguen vivo cuando la llamada los sigue."
     },
     {
       "id": "generic-functions",
