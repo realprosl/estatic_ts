@@ -132,7 +132,9 @@ export class Parser {
   skipNewlines(): void { while (this.accept("newline")) {} }
   terminator(): ParserToken {
     if (this.check(";") || this.check("newline")) return this.take();
-    // ASI: some token transports omit explicit newline tokens. A physical line break\n    // between the previous token and the next statement still terminates it.\n    if (this.previous().endLine < this.peek(0).line) return this.previous();\n    if (!this.check("}") && !this.check("eof") && !this.check(",")) this.report("Se esperaba un terminador de sentencia");
+    // ASI: preserve a physical line break when the token stream omits newlines.
+    if (this.previous().endLine < this.peek(0).line) return this.previous();
+    if (!this.check("}") && !this.check("eof") && !this.check(",")) this.report("Se esperaba un terminador de sentencia");
     return this.peek(0);
   }
   parseProgram(): ParseResult {
