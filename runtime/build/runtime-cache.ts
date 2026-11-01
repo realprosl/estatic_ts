@@ -3,7 +3,9 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, 
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { root } from "../../bootstrap/root.ts";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 export type RuntimeUnit = "libuv" | "httplib";
 interface Manifest { dependencies: {path:string; hash:string}[]; archiveHash:string }
