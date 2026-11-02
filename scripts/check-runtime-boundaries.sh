@@ -14,15 +14,14 @@ if grep -RInE --include='*.hpp' --include='*.h' --include='*.cpp'   '^[[:space:]
   echo "ERROR: runtime depends on seed or legacy" >&2
   exit 1
 fi
-# The native IR implementation must never import historical Stage0 modules.
-# Stage0 facades may depend on backend/, but dependency direction is one-way.
-if grep -RInE --include='*.ts' '^[[:space:]]*(import|export)[[:space:]]|import[[:space:]]*\\(' backend/ir bootstrap/ir | grep -E 'src/'; then
-  echo "ERROR: native IR backend or bridge imports Stage0 src/" >&2
+# All native TypeScript compiler modules must be independent of Stage0.
+# Exclude test fixtures: they may intentionally exercise compatibility facades.
+# Match both static imports/reexports and dynamic imports; ignore comments.
+if grep -RInE --include='*.ts' --exclude='*.test.ts' \
+  '^[[:space:]]*(import|export)[[:space:]]|import[[:space:]]*\\(' bootstrap backend \
+  | grep -E '(from[[:space:]]*|import[[:space:]]*\\()["\x27][^"\x27]*src/'; then
+  echo "ERROR: native bootstrap/backend imports Stage0 src/" >&2
   exit 1
 fi
-if grep -nE '^[[:space:]]*(import|export)[[:space:]].*src/' bootstrap/cli.ts; then
-  echo "ERROR: bootstrap CLI imports Stage0 src/" >&2
-  exit 1
-fi
-echo "Native IR and bootstrap CLI dependency boundary: OK"
+echo "Native compiler dependency boundary: OK"
 echo "Runtime dependency boundary: OK"
