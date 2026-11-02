@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { initializeProject } from "../src/project/init-project.ts";
+import { initializeProject } from "../shared/project/init-project.ts";
 import { buildNativeCompiler } from "./build/native-compiler.ts";
 import { root } from "./root.ts";
 import { buildIrFrontend } from "./ir/cpp.ts";
