@@ -69,6 +69,25 @@ test("bootstrap CLI verbose init keeps stdout valid JSON",()=>{
   const p=command(["--verbose","init",join(dir,"project")]);assert.equal(p.status,0,p.stderr);
   assert.equal(JSON.parse(p.stdout).directory,join(dir,"project"));assert.match(p.stderr,/Creando proyecto/);
 });
+test("bootstrap CLI shared version reports the compiler package version",()=>{
+  const p=command(["--version"]);
+  assert.equal(p.status,0,p.stderr);
+  assert.match(p.stdout,/^estatic [^\\n]+ \\(bootstrap IR → C\\+\\+20\\)\\n$/);
+});
+test("bootstrap CLI shared project templates and type updates preserve existing files",()=>{
+  const project=join(dir,"shared-project");
+  const init=command(["init",project]);
+  assert.equal(init.status,0,init.stderr);
+  const config=join(project,"estatic.config.ts");
+  const declarations=join(project,"types/estatic.d.ts");
+  assert.ok(existsSync(config));
+  assert.ok(existsSync(declarations));
+  const unchanged=command(["update-types",project]);
+  assert.equal(unchanged.status,0,unchanged.stderr);
+  assert.ok(!existsSync(declarations+".bak"));
+  const conflict=command(["init",project]);
+  assert.notEqual(conflict.status,0,"init must refuse to overwrite an existing project");
+});
 test("bootstrap CLI spinner animates during blocking C++ compilation in a real PTY",()=>{
   const input=source("animated",'print("animated");'),compiler=join(dir,"slow-cxx");
   writeFileSync(compiler,'#!/bin/sh\nsleep 0.3\nexec g++ "$@"\n');chmodSync(compiler,0o755);
