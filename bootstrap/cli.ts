@@ -12,9 +12,9 @@ import { root } from "./root.ts";
 import { buildIrFrontend, nativeIr, buildIrCpp } from "./ir/cpp.ts";
 import { generateCppFromIr, IrCppGenerator } from "../backend/ir/cpp-generator.ts";
 import type { IrProject } from "../shared/ir/model.ts";
-import { loadConfig } from "../src/config/project-config.ts";
-import { initializeProject, updateProjectTypes } from "../src/project/init-project.ts";
-import { getTs2cppVersionLabel } from "../src/core/ts2cpp-version.ts";
+import { loadConfig } from "../shared/project/project-config.ts";
+import { initializeProject, updateProjectTypes } from "../shared/project/init-project.ts";
+import { getTs2cppVersionLabel } from "../shared/core/ts2cpp-version.ts";
 
 const help=`Uso: etsc init [directorio]
      etsc build [entrada.ts|entrada.ets] [opciones]
