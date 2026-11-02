@@ -17,7 +17,7 @@ export async function buildIrFrontend(directory=join(root,"build/bootstrap/ir-cp
     return binary;
   }
   const hash=createHash("sha256").update(root).update(process.platform).update(process.arch).update(process.env.CXX??"g++");
-  for(const folder of ["src","bootstrap","runtime"])for(const path of readdirSync(join(root,folder),{recursive:true}).map(String).filter(p=>/\.(ts|ets|hpp|cpp)$/.test(p)&&!p.endsWith(".test.ts")).sort())hash.update(folder+"/"+path).update(readFileSync(join(root,folder,path)));
+  for(const folder of ["src","bootstrap","runtime","shared","backend"])for(const path of readdirSync(join(root,folder),{recursive:true}).map(String).filter(p=>/\.(ts|ets|hpp|cpp)$/.test(p)&&!p.endsWith(".test.ts")).sort())hash.update(folder+"/"+path).update(readFileSync(join(root,folder,path)));
   hash.update(readFileSync(join(root,"package.json")));
   const identity=hash.digest("hex"),stamp=join(directory,"frontend.sha256"),binary=join(directory,"modules-demo");
   if(existsSync(binary)&&existsSync(stamp)&&readFileSync(stamp,"utf8")===identity)return binary;
