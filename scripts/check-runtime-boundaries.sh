@@ -20,7 +20,7 @@ fi
 violations="$(grep -RInE --include='*.ts' --exclude='*.test.ts' \
   '^[[:space:]]*(import|export)[[:space:]]|import[[:space:]]*[(]' bootstrap backend \
   | grep -E 'src/' \
-  | grep -v -E '^bootstrap/modules/build[.]ts:[0-9]+:' || true)\"
+  | grep -v -E '^bootstrap/modules/build[.]ts:[0-9]+:' || true)"
 if [[ -n "$violations" ]]; then
   echo "$violations" >&2
   echo "ERROR: native bootstrap/backend imports Stage0 src/ outside the host-only builder" >&2
