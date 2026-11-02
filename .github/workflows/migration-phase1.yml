@@ -141,6 +141,9 @@ jobs:
               }
             } finally { rmSync(dir, { recursive: true, force: true }); }
           '
+      - name: Installed native compiler integration
+        run: |
+          node --experimental-strip-types --test --test-concurrency=1 bootstrap/install.test.ts
       - name: Frontend compatibility tests
         run: |
           node --experimental-strip-types --test --test-concurrency=1 bootstrap/lexer/lexer.test.ts bootstrap/parser/parser.test.ts bootstrap/binder/binder.test.ts bootstrap/checker/checker.test.ts
