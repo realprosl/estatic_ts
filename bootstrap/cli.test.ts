@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { CliProgress, phase, presentation } from "./cli-progress.ts";
 import { buildIrFrontend } from "./ir/cpp.ts";
 import { root } from "./root.ts";
+import { getTs2cppVersionLabel } from "../shared/core/ts2cpp-version.ts";
 
 function capture(tty: boolean, env: NodeJS.ProcessEnv={}, verbose=true, enabled=true) {
   let output="";
@@ -72,7 +73,7 @@ test("bootstrap CLI verbose init keeps stdout valid JSON",()=>{
 test("bootstrap CLI shared version reports the compiler package version",()=>{
   const p=command(["--version"]);
   assert.equal(p.status,0,p.stderr);
-  assert.match(p.stdout,/^estatic [^\\n]+ \\(bootstrap IR → C\\+\\+20\\)\\n$/);
+  assert.equal(p.stdout.trim(), `${getTs2cppVersionLabel()} (bootstrap IR → C++20)`);
 });
 test("bootstrap CLI shared project templates and type updates preserve existing files",()=>{
   const project=join(dir,"shared-project");
