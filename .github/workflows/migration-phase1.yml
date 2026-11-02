@@ -44,6 +44,17 @@ jobs:
           fi
           rm "$probe"
           bash scripts/check-runtime-boundaries.sh
+      - name: Prove shared contract guard rejects Stage0 imports
+        run: |
+          probe=shared/runtime/__stage0_boundary_probe.ts
+          trap 'rm -f "$probe"' EXIT
+          printf 'import { compileFile } from "../../src/modules/module-loader.ts";\\n' > "$probe"
+          if bash scripts/check-runtime-boundaries.sh; then
+            echo "Boundary guard failed to detect a shared-to-Stage0 import" >&2
+            exit 1
+          fi
+          rm "$probe"
+          bash scripts/check-runtime-boundaries.sh
       - name: Verify old/new runtime and IR entrypoints
         run: |
           node --experimental-strip-types --input-type=module -e '
