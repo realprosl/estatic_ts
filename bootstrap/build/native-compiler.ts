@@ -4,7 +4,7 @@ import {join} from "node:path";
 import {spawnSync} from "node:child_process";
 import {root} from "../root.ts";
 import {nativeTables} from "./native-tables.ts";
-import {getTs2cppVersionLabel} from "../../src/core/ts2cpp-version.ts";
+import {getTs2cppVersionLabel} from "../../shared/core/ts2cpp-version.ts";
 export function buildNativeCompiler(directory=join(root,"build/bootstrap/etsc"),cxx=process.env.CXX??"g++"):string {
  mkdirSync(directory,{recursive:true});nativeTables(join(directory,"native-tables.hpp"));
  writeFileSync(join(directory,"install_config.hpp"),`#define ESTC_PLATFORM ${JSON.stringify(process.platform)}\n#define ESTC_ARCH ${JSON.stringify(process.arch)}\n#define ESTC_VERSION ${JSON.stringify(getTs2cppVersionLabel().replace(/^estatic/,"etsc"))}\n`);
