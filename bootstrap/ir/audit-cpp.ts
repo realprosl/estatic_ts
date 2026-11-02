@@ -2,7 +2,7 @@ import { mkdtempSync, readdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { buildLoader, root } from "../modules/build.ts";
 import { nativeIr, buildIrCpp } from "./cpp.ts";
-import { generateCppFromIr } from "../../src/codegen/ir/cpp-generator.ts";
+import { generateCppFromIr } from "../../backend/ir/cpp-generator.ts";
 const directory=mkdtempSync(join(root,"build-ir-cpp-audit-"));
 try {
  const binary=process.env.ESTATIC_IR_BINARY??await buildLoader(join(directory,"lower"),"bootstrap/ir/demo.ets",true);
