@@ -123,6 +123,24 @@ jobs:
       - name: CLI and runtime integration tests
         run: |
           node --experimental-strip-types --test --test-concurrency=1 bootstrap/cli.test.ts test/unit/runtime-backends.test.ts test/unit/cpp-types.test.ts test/unit/codegen.test.ts
+      - name: Installer and native table smoke checks
+        run: |
+          node --experimental-strip-types bootstrap/install.ts --help
+          node --experimental-strip-types --input-type=module -e '
+            import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+            import { tmpdir } from "node:os";
+            import { join } from "node:path";
+            import { nativeTables } from "./bootstrap/build/native-tables.ts";
+            const dir = mkdtempSync(join(tmpdir(), "estc-native-tables-"));
+            try {
+              const path = join(dir, "native-tables.hpp");
+              nativeTables(path);
+              const content = readFileSync(path, "utf8");
+              for (const name of ["nativeTypes", "fileCalls", "networkCalls", "terminalMethods", "backend_libuv"]) {
+                if (!content.includes(name)) throw new Error("Missing native table: " + name);
+              }
+            } finally { rmSync(dir, { recursive: true, force: true }); }
+          '
       - name: Frontend compatibility tests
         run: |
           node --experimental-strip-types --test --test-concurrency=1 bootstrap/lexer/lexer.test.ts bootstrap/parser/parser.test.ts bootstrap/binder/binder.test.ts bootstrap/checker/checker.test.ts
