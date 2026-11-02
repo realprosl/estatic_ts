@@ -20,5 +20,9 @@ if grep -RInE --include='*.ts' '^[[:space:]]*(import|export)[[:space:]]|import[[
   echo "ERROR: native IR backend or bridge imports Stage0 src/" >&2
   exit 1
 fi
-echo "Native IR dependency boundary: OK"
+if grep -nE '^[[:space:]]*(import|export)[[:space:]].*src/' bootstrap/cli.ts; then
+  echo "ERROR: bootstrap CLI imports Stage0 src/" >&2
+  exit 1
+fi
+echo "Native IR and bootstrap CLI dependency boundary: OK"
 echo "Runtime dependency boundary: OK"
