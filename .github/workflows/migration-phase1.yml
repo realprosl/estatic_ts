@@ -10,6 +10,8 @@ on:
       - 'src/codegen/runtime-callees.ts'
       - 'src/semantic/terminal-methods.ts'
       - 'src/modules/runtime-backends.ts'
+      - 'shared/project/**'
+      - 'shared/core/**'
       - 'src/config/**'
       - 'src/project/**'
       - 'scripts/check-runtime-boundaries.sh'
@@ -35,6 +37,12 @@ jobs:
         run: |
           node --experimental-strip-types --input-type=module -e '
             import * as oldRuntime from "./bootstrap/build/runtime-cache.ts";
+            import * as oldConfig from "./src/config/project-config.ts";
+            import * as config from "./shared/project/project-config.ts";
+            import * as oldProject from "./src/project/init-project.ts";
+            import * as project from "./shared/project/init-project.ts";
+            import * as oldVersion from "./src/core/ts2cpp-version.ts";
+            import * as version from "./shared/core/ts2cpp-version.ts";
             import * as runtime from "./runtime/build/runtime-cache.ts";
             import * as oldIr from "./src/codegen/ir/model.ts";
             import * as oldBackend from "./src/codegen/ir/cpp-generator.ts";
@@ -51,6 +59,9 @@ jobs:
             for (const name of ["runtimeArchive", "runtimeFlags", "precompileRuntime"]) {
               if (oldRuntime[name] !== runtime[name]) throw new Error("Runtime facade mismatch: " + name);
             }
+            if (oldConfig.loadConfig !== config.loadConfig || oldConfig.findConfig !== config.findConfig) throw new Error("Config facade mismatch");
+            if (oldProject.initializeProject !== project.initializeProject || oldProject.updateProjectTypes !== project.updateProjectTypes || oldProject.readCanonicalEstaticTypes !== project.readCanonicalEstaticTypes) throw new Error("Project facade mismatch");
+            if (oldVersion.getTs2cppVersionLabel !== version.getTs2cppVersionLabel || oldVersion.getTs2cppVersion !== version.getTs2cppVersion) throw new Error("Version facade mismatch");
             if (oldBackend.IrCppGenerator !== backend.IrCppGenerator || oldBackend.generateCppFromIr !== backend.generateCppFromIr) throw new Error("Backend facade mismatch");
             if (oldCallees.fileCalleeMap !== callees.fileCalleeMap || oldCallees.etsNetworkCalleeMap !== callees.etsNetworkCalleeMap) throw new Error("Runtime callees facade mismatch");
             for (const name of ["number","string","boolean","void","i8","i16","i32","i64","u8","u16","u32","u64","f32","f64","Console","Request","Response","HttpClientResponse","JsonValue","Regex","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","FileReader","Server","Timer","FsWatcher","FsEvent"]) {
@@ -67,6 +78,7 @@ jobs:
           node --experimental-strip-types --check bootstrap/ir/cpp.ts
           node --experimental-strip-types --check runtime/build/runtime-cache.ts
           node --experimental-strip-types --check shared/ir/model.ts
+          node --experimental-strip-types --input-type=module -e 'await Promise.all([import("./shared/project/project-config.ts"),import("./shared/project/init-project.ts"),import("./shared/core/ts2cpp-version.ts")])'
           node --experimental-strip-types --check shared/runtime/runtime-callees.ts
           node --experimental-strip-types --check shared/runtime/terminal-methods.ts
           node --experimental-strip-types --check shared/runtime/runtime-backends.ts
