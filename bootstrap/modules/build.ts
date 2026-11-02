@@ -10,7 +10,7 @@ export async function buildLoader(directory: string, entry = "bootstrap/modules/
   mkdirSync(directory, { recursive: true });
   // Bind persisted syntax to all stage-0/native sources used by this build.
   const hash = createHash("sha256");
-  const sources = ["package.json", ...["src", "runtime", "bootstrap"].flatMap(folder =>
+  const sources = ["package.json", ...["src", "runtime", "bootstrap", "shared", "backend"].flatMap(folder =>
     readdirSync(join(root, folder), { recursive: true }).map(String)
       .filter(file => /\.(ts|ets|hpp)$/.test(file) && !/\.test\.ts$/.test(file))
       .map(file => `${folder}/${file}`))].sort();
