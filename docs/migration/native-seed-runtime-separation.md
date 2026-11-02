@@ -1,6 +1,6 @@
 # Migración: semilla C++ congelada y separación del runtime
 
-Estado: propuesta de implementación; **no activar ni eliminar Stage 0 hasta validar la cadena**.
+Estado: fase 1 de separación implementada parcialmente y cubierta por CI; **no activar ni eliminar Stage 0 hasta validar la cadena de autoalojamiento**.
 
 ## Objetivo
 - Generar una sola vez, con el Stage 0 actual, el C++ de `bootstrap/` y congelarlo en `seed/generated/`.
@@ -52,8 +52,8 @@ Mantener snapshot C++ y binarios de cada versión estable, checksums, toolchain 
 ## Riesgos
 El C++ generado solo es una semilla válida si implementa realmente el compilador necesario y no necesita servicios Node. Una semilla antigua puede dejar de aceptar sintaxis futura; conservar compiladores intermedios y una política de compatibilidad de fuentes.
 
-## Pendiente de esta PR inicial
-Este documento fija el contrato de trabajo. **Todavía no implementa** la extracción, la generación de semilla ni las pruebas; esas modificaciones requieren inspección y validación del árbol completo.
+## Alcance actual de la PR #52
+La fase 1 ya ha extraído los contratos IR, backend TypeScript, mapas de llamadas, configuración y utilidades compartidas hacia `shared/` y `backend/`, conservando fachadas de compatibilidad en `src/`. La caché del runtime reside en `runtime/build/`. Las comprobaciones de CI cubren contratos, límites de imports, regresión de IR/CLI y una instalación nativa aislada que funciona sin Node en tiempo de ejecución. **No se ha generado una semilla `seed/`, ni se ha demostrado Stage 1 → Stage 2, ni se ha archivado Stage0.**
 
 ## Hallazgo de la fase 1
 
@@ -64,3 +64,13 @@ La primera implementación de aislamiento es `scripts/check-runtime-boundaries.s
 ## Implementación incremental añadida
 
 La lógica de construcción y caché de archivos `.a` del runtime se trasladó de `bootstrap/build/runtime-cache.ts` a `runtime/build/runtime-cache.ts`. La ruta antigua se conserva como fachada de reexportación para no romper consumidores existentes. El nuevo módulo calcula la raíz del repositorio desde su propia ubicación y ya no importa `bootstrap/root.ts`. No se alteraron intencionadamente las claves de caché ni los algoritmos de compilación. **Pendiente:** ejecutar tests de runtime, bootstrap y builds reales; la refactorización no se considera validada solo por los commits.
+
+## Estado de dependencias y siguientes puertas (noviembre de 2026)
+
+- `bootstrap/modules/build.ts` es el adaptador explícito de construcción con Stage0: importa `src/modules/module-loader.ts` para generar el frontend inicial. No es una dependencia del ejecutable nativo instalado.
+- `bootstrap/build/native-compiler.ts` todavía compila `src/codegen/ir/native/generator.cpp`. Extraer ese generador C++ a una ruta canónica de `backend/` requiere revisar includes, consumidores y compatibilidad antes de moverlo.
+- Las herramientas de auditoría de lexer, parser, binder y checker pueden importar Stage0 para pruebas comparativas. No deben confundirse con módulos de producción.
+- `scripts/check-runtime-boundaries.sh` protege imports directos de Stage0 desde los módulos de producción enumerados de `bootstrap/` y desde `backend/ir/` y `shared/`. La CI inyecta imports prohibidos temporalmente para comprobar que el guard falla. Esta comprobación textual **no demuestra** la ausencia de dependencias transitivas.
+- El test `bootstrap/install.test.ts` valida instalación y ejecución del compilador nativo fuera del checkout. Superarlo no demuestra que la construcción inicial sea independiente de Stage0.
+
+**Próximos hitos:** inventariar y mover el generador C++ nativo, auditar la cadena de construcción y después definir el snapshot de semilla reproducible. No fusionar ni iniciar `seed/` solo por tener la CI en verde.
