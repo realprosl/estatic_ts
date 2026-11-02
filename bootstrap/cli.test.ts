@@ -1,6 +1,6 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, chmodSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, chmodSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -69,6 +69,30 @@ test("bootstrap CLI verbose reports errors without hanging or claiming success",
 test("bootstrap CLI verbose init keeps stdout valid JSON",()=>{
   const p=command(["--verbose","init",join(dir,"project")]);assert.equal(p.status,0,p.stderr);
   assert.equal(JSON.parse(p.stdout).directory,join(dir,"project"));assert.match(p.stderr,/Creando proyecto/);
+});
+test("bootstrap CLI verified IR can be emitted, replayed and executed",()=>{
+  const input=source("roundtrip",'print("roundtrip");');
+  const ir=join(dir,"roundtrip.ir.json");
+  const cpp=join(dir,"roundtrip.cpp");
+  const binary=join(dir,"roundtrip.bin");
+  const emit=command([input,"--frontend",frontend,"--check","--emit-ir",ir]);
+  assert.equal(emit.status,0,emit.stderr);
+  const project=JSON.parse(readFileSync(ir,"utf8"));
+  assert.equal(project.format,"ets-ir-2");
+  assert.equal(project.success,true);
+  assert.deepEqual(project.diagnostics,[]);
+  const replay=command(["--from-ir",ir,"-o",cpp,"--build","--binary",binary]);
+  assert.equal(replay.status,0,replay.stderr);
+  assert.ok(existsSync(cpp));
+  assert.ok(existsSync(binary));
+  const run=spawnSync(binary,[],{encoding:"utf8",timeout:15000});
+  assert.equal(run.status,0,run.stderr);
+  assert.equal(run.stdout,"roundtrip\\n");
+  const invalid=join(dir,"invalid-roundtrip.ir.json");
+  writeFileSync(invalid,JSON.stringify({...project,success:false}));
+  const reject=command(["--from-ir",invalid,"--check"]);
+  assert.notEqual(reject.status,0);
+  assert.match(reject.stderr,/ets-ir-2 verificado/);
 });
 test("bootstrap CLI shared version reports the compiler package version",()=>{
   const p=command(["--version"]);
