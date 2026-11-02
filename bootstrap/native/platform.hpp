@@ -1,5 +1,5 @@
 #pragma once
-#include "src/codegen/ir/native/model.hpp"
+#include "backend/ir/native/model.hpp"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
