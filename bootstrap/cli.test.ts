@@ -87,7 +87,7 @@ test("bootstrap CLI verified IR can be emitted, replayed and executed",()=>{
   assert.ok(existsSync(binary));
   const run=spawnSync(binary,[],{encoding:"utf8",timeout:15000});
   assert.equal(run.status,0,run.stderr);
-  assert.equal(run.stdout,"roundtrip\\n");
+  assert.equal(run.stdout,"roundtrip\n");
   const invalid=join(dir,"invalid-roundtrip.ir.json");
   writeFileSync(invalid,JSON.stringify({...project,success:false}));
   const reject=command(["--from-ir",invalid,"--check"]);
