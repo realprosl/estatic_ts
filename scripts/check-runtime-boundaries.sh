@@ -14,13 +14,16 @@ if grep -RInE --include='*.hpp' --include='*.h' --include='*.cpp'   '^[[:space:]
   echo "ERROR: runtime depends on seed or legacy" >&2
   exit 1
 fi
-# All native TypeScript compiler modules must be independent of Stage0.
-# Exclude test fixtures: they may intentionally exercise compatibility facades.
-# Match both static imports/reexports and dynamic imports; ignore comments.
-if grep -RInE --include='*.ts' --exclude='*.test.ts' \
+# Native compiler modules must not import Stage0. The single explicit exception
+# is the host-only Stage0 builder used to compile the initial ETS frontend.
+# Check import/export statements and dynamic imports, not comments.
+violations="$(grep -RInE --include='*.ts' --exclude='*.test.ts' \
   '^[[:space:]]*(import|export)[[:space:]]|import[[:space:]]*\\(' bootstrap backend \
-  | grep -E '(from[[:space:]]*|import[[:space:]]*\\()["\x27][^"\x27]*src/'; then
-  echo "ERROR: native bootstrap/backend imports Stage0 src/" >&2
+  | grep -E 'src/' \
+  | grep -v -E '^bootstrap/modules/build\\.ts:[0-9]+:' || true)"
+if [[ -n "$violations" ]]; then
+  echo "$violations" >&2
+  echo "ERROR: native bootstrap/backend imports Stage0 src/ outside the host-only builder" >&2
   exit 1
 fi
 echo "Native compiler dependency boundary: OK"
