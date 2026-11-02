@@ -21,10 +21,11 @@ fi
 violations="$(grep -nE '^[[:space:]]*(import|export)[[:space:]]|import[[:space:]]*[(]' \
   bootstrap/cli.ts bootstrap/install.ts bootstrap/build/native-compiler.ts \
   bootstrap/build/native-tables.ts bootstrap/ir/cpp.ts backend/ir/*.ts \
+  shared/ir/*.ts shared/runtime/*.ts shared/project/*.ts shared/core/*.ts \
   | grep 'src/' || true)"
 if [[ -n "$violations" ]]; then
   echo "$violations" >&2
-  echo "ERROR: production native bootstrap/backend imports Stage0 src/" >&2
+  echo "ERROR: production native bootstrap/backend/shared imports Stage0 src/" >&2
   exit 1
 fi
 echo "Native compiler dependency boundary: OK"
