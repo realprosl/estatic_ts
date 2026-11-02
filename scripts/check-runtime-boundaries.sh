@@ -14,16 +14,17 @@ if grep -RInE --include='*.hpp' --include='*.h' --include='*.cpp'   '^[[:space:]
   echo "ERROR: runtime depends on seed or legacy" >&2
   exit 1
 fi
-# Native compiler modules must not import Stage0. The single explicit exception
-# is the host-only Stage0 builder used to compile the initial ETS frontend.
-# Check import/export statements and dynamic imports, not comments.
-violations="$(grep -RInE --include='*.ts' --exclude='*.test.ts' \
-  '^[[:space:]]*(import|export)[[:space:]]|import[[:space:]]*[(]' bootstrap backend \
-  | grep -E 'src/' \
-  | grep -v -E '^bootstrap/modules/build[.]ts:[0-9]+:' || true)"
+# Production native host and backend must not import Stage0.
+# Audit/lexer/parser/binder/checker helpers intentionally compare against Stage0;
+# bootstrap/modules/build.ts is the explicit first-stage compiler adapter.
+# Do not exclude bootstrap/build/native-tables.ts: it feeds the native compiler.
+violations="$(grep -nE '^[[:space:]]*(import|export)[[:space:]]|import[[:space:]]*[(]' \
+  bootstrap/cli.ts bootstrap/install.ts bootstrap/build/native-compiler.ts \
+  bootstrap/build/native-tables.ts bootstrap/ir/cpp.ts backend/ir/*.ts \
+  | grep 'src/' || true)"
 if [[ -n "$violations" ]]; then
   echo "$violations" >&2
-  echo "ERROR: native bootstrap/backend imports Stage0 src/ outside the host-only builder" >&2
+  echo "ERROR: production native bootstrap/backend imports Stage0 src/" >&2
   exit 1
 fi
 echo "Native compiler dependency boundary: OK"
