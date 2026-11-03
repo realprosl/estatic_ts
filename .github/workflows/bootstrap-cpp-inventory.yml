@@ -1,0 +1,76 @@
+name: Inventario C++ de bootstrap (Stage 0)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/**'
+      - 'bootstrap/**'
+      - '.github/workflows/bootstrap-cpp-inventory.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Transpilar entradas de bootstrap con src/
+        shell: bash
+        run: |
+          node --experimental-strip-types --input-type=module <<'NODE'
+          import { mkdirSync, writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          import { compileFile } from './src/modules/module-loader.ts';
+
+          const entries = {
+            lexer: 'bootstrap/lexer/demo.ets',
+            parser: 'bootstrap/parser/demo.ets',
+            frontend: 'bootstrap/frontend/demo.ets',
+            modules: 'bootstrap/modules/demo.ets',
+            binder: 'bootstrap/binder/demo.ets',
+            checker: 'bootstrap/checker/demo.ets',
+            ir: 'bootstrap/ir/demo.ets',
+          };
+          const files = [];
+          for (const [name, entry] of Object.entries(entries)) {
+            const directory = join('build/bootstrap', name);
+            mkdirSync(directory, { recursive: true });
+            const result = await compileFile(entry, { baseDirectory: process.cwd() });
+            const header = join(directory, 'estatic_common.hpp');
+            writeFileSync(header, result.externalHeaders.join('\n') + '\n' + result.header);
+            files.push(header);
+            for (const [index, module] of result.modules.entries()) {
+              const path = join(directory, `unit-${index}.cpp`);
+              writeFileSync(path, module.cpp);
+              files.push(path);
+            }
+            const unity = join(directory, 'unity.cpp');
+            const headerBody = result.header.split('\n').filter(line => line.trim() !== '#pragma once').join('\n');
+            const bodies = result.modules.map(module => module.cpp.split('\n').filter(line => !line.includes('#include "estatic_common.hpp"')).join('\n'));
+            writeFileSync(unity, [headerBody, result.externalHeaders.join('\n'), ...bodies].join('\n'));
+            files.push(unity);
+            console.log(`${name}: ${result.modules.length} unidades C++`);
+          }
+          files.sort();
+          const report = ['# Archivos generados por src/ al transpilar bootstrap/', '', `Total: **${files.length}** archivos`, '', ...files.map(file => '- `' + file + '`'), ''];
+          writeFileSync('build/bootstrap/cpp-inventory.md', report.join('\n'));
+          console.log(report.join('\n'));
+          NODE
+      - name: Publicar inventario en resumen de Actions
+        run: cat build/bootstrap/cpp-inventory.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Guardar fuentes generadas
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-stage0-cpp
+          path: |
+            build/bootstrap/**/*.cpp
+            build/bootstrap/**/*.hpp
+            build/bootstrap/**/*.h
+            build/bootstrap/cpp-inventory.md
+          if-no-files-found: error
