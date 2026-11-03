@@ -1,0 +1,62 @@
+name: Verificar ZIP C++ bootstrap autónomo
+
+on:
+  workflow_run:
+    workflows:
+      - Generar fuentes C++ del compilador bootstrap
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'ID de la ejecución generadora (vacío = última exitosa)'
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  verify:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Instalar dependencias C++ (sin Node)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
+      - name: Descargar exclusivamente el artifact de la Action generadora
+        uses: actions/download-artifact@v4
+        with:
+          name: etsc-bootstrap-cpp-sources
+          path: package
+          run-id: ${{ inputs.run_id || github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Confirmar que el ZIP no incluye binarios
+        run: |
+          set -euo pipefail
+          test -f package/frontend/unity.cpp
+          test -f package/bootstrap/native/driver.cpp
+          test -f package/src/codegen/ir/native/generator.cpp
+          if find package -type f \( -name '*.ets' -o -name '*.ts' -o -name '*.o' -o -name '*.a' -o -name '*.so' \) | grep .; then exit 1; fi
+          if find package -type f -exec file {} + | grep -E 'ELF.*(executable|shared object)'; then exit 1; fi
+      - name: Reconstruir ambos ejecutables usando solo el ZIP
+        run: |
+          cd package
+          ./build-all.sh
+          ./native/etsc --version
+          test -x native/frontend
+      - name: Probar compilación nativa de una fuente de bootstrap
+        run: |
+          cd package
+          export ESTC_ROOT="$PWD"
+          mkdir -p selftest
+          cat > selftest/hello.ets <<'ETS'
+          console.log("Bootstrap nativo OK");
+          ETS
+          ./native/etsc build selftest/hello.ets -o selftest/hello.cpp --binary selftest/hello --no-progress
+          test -s selftest/hello.cpp
+          test -x selftest/hello
+          ./selftest/hello
+          echo 'ZIP reconstruido desde C++ y compilación ETS nativa: OK' >> "$GITHUB_STEP_SUMMARY"
