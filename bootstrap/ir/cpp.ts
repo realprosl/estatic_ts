@@ -6,6 +6,7 @@ import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { root } from "../root.ts";
+import { verifiedFrontend } from "../build/frontend-artifact.ts";
 import { runtimeArchive } from "../../runtime/build/runtime-cache.ts";
 import { generateCppFromIr, type IrCppResult } from "../../backend/ir/cpp-generator.ts";
 import type { IrProject } from "../../shared/ir/model.ts";
@@ -15,9 +16,7 @@ export async function buildIrFrontend(directory=join(root,"build/bootstrap/ir-cp
   // The installer also exposes --frontend; this override serves direct bootstrap users.
   const prebuilt=process.env.ESTATIC_BOOTSTRAP_FRONTEND;
   if(prebuilt){
-    const binary=resolve(prebuilt);
-    if(!existsSync(binary))throw new Error(`Frontend precompilado inexistente: ${binary}`);
-    return binary;
+    return verifiedFrontend(prebuilt);
   }
   if(existsSync(join(root,"installation.json"))){
     const binary=join(root,"native/frontend");
