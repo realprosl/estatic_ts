@@ -14,7 +14,7 @@ export async function install(argv:string[]):Promise<void> {
   let prefix="/usr/local",cxx=process.env.CXX??"g++",frontend="";
   for(let at=0;at<argv.length;at++){
     if(argv[at]==="--help"||argv[at]==="-h"){
-      console.log("Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario]\nConstruye el frontend con src/, precompila libuv/httplib e instala etsc.\nRequisitos: Node >=22.6, C++20, ar y las dependencias del runtime.\nNode sólo se usa durante el bootstrap y la instalación; etsc es nativo.");return;
+      console.log("Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario]\nConstruye el frontend con Stage0 si no se proporciona --frontend o ESTATIC_BOOTSTRAP_FRONTEND, precompila libuv/httplib e instala etsc.\nRequisitos: Node >=22.6, C++20, ar y las dependencias del runtime.\nNode sólo se usa durante el bootstrap y la instalación; etsc es nativo.");return;
     }
     const flag=argv[at];if(!["--prefix","--cxx","--frontend"].includes(flag)||!argv[at+1]||argv[at+1].startsWith("-"))throw new Error(`Opción inválida o sin valor: ${flag}`);
     const value=argv[++at];if(flag==="--prefix")prefix=resolve(value);else if(flag==="--cxx")cxx=value;else frontend=resolve(value);
@@ -41,7 +41,7 @@ export async function install(argv:string[]):Promise<void> {
   const legacyEstc=join(prefix,"bin/estc");let ownedEstc=false;
   try{const old=JSON.parse(readFileSync(join(current,"installation.json"),"utf8"));ownedEstc=old.format==="estc-install-1"&&existsSync(legacyEstc)&&old.commandHash===digest(legacyEstc);}catch{}
   // Finish compilation in the clone before attempting publication to the prefix.
-  console.log("==> Construyendo el frontend nativo mediante src/");
+  console.log(frontend||process.env.ESTATIC_BOOTSTRAP_FRONTEND?"==> Usando frontend nativo precompilado":"==> Construyendo frontend inicial mediante Stage0");
   const native=frontend||await buildIrFrontend();
   if(!existsSync(native))throw new Error(`Frontend inexistente: ${native}`);
   console.log("==> Precompilando runtime (libuv, red y cpp-httplib)");
