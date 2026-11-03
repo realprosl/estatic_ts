@@ -68,3 +68,7 @@ test('native @cppgen rejects return type mismatch through the C++ compiler',()=>
 test('frontend rejects malformed annotations and cppgen expression uses',()=>{
  for(const source of ['@include(42)\nprint(1);', '@include("a", "b")\nprint(1);', '@cppgen("bad") function code(s:string):string{return s;}', identity+'const x=code("1");'])assert.throws(()=>ir(source),/Native IR failed/);
 });
+test('native bootstrap path builtins have runtime contracts',()=>{
+ const out=execute('print(normalizePath("sample.ets"));print(pathDirectory(normalizePath("sample.ets")));print(resolveProjectPath(normalizePath("config.json"),"source.ets"));print(resolveImportPath(normalizePath("main.ets"),"./missing"));print(compilerRoot().length>0);');
+ assert.equal(out,root+'/sample.ets\n'+root+'\n'+root+'/source.ets\n'+root+'/missing.ets\n1\n');
+});

@@ -5,7 +5,7 @@ import type { IrCppGenerator } from "./cpp-generator.ts";
 import type { IrFunction, IrInstruction } from "./model.ts";
 
 export const globalCalls=new Set([
-  "argument","argumentCount","exitProcess","length","numberToString","jsonIsNull","jsonIsString","jsonIsNumber","jsonIsBool","jsonIsArray","jsonIsObject","jsonArrayLength","jsonArrayGet","jsonObjectGet","jsonObjectKeys","jsonAsString","jsonAsNumber","jsonAsBool","jsonEscape","fileExists","readFile","writeFile","appendFile","copyFile","moveFile","removeFile","readFileAsync","writeFileAsync","appendFileAsync","copyFileAsync","moveFileAsync","removeFileAsync","fileExistsAsync","fail","hasError","clearError",
+  "normalizePath","compilerRoot","resolveImportPath","pathDirectory","resolveProjectPath","argument","argumentCount","exitProcess","length","numberToString","jsonIsNull","jsonIsString","jsonIsNumber","jsonIsBool","jsonIsArray","jsonIsObject","jsonArrayLength","jsonArrayGet","jsonObjectGet","jsonObjectKeys","jsonAsString","jsonAsNumber","jsonAsBool","jsonEscape","fileExists","readFile","writeFile","appendFile","copyFile","moveFile","removeFile","readFileAsync","writeFileAsync","appendFileAsync","copyFileAsync","moveFileAsync","removeFileAsync","fileExistsAsync","fail","hasError","clearError",
 ]);
 export const asyncCalls=new Set(["sleep","delay","spawn","cancel","cancellationToken","createCancellation","isCancelled","taskResolve","promiseAll","promiseRace","all","race","timeout","retry"]);
 export const stringMethods=new Set(["charAt","charCodeAt","indexOf","lastIndexOf","includes","startsWith","endsWith","slice","substring","substr","split","trim","trimStart","trimEnd","toUpperCase","toLowerCase","repeat","replace","replaceAll","localeCompare","toString"]);

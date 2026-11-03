@@ -43,6 +43,10 @@ headers, los fuentes ETS y el IR de `--from-ir` deben ser de confianza. No se
 deben compilar documentos IR enviados por terceros sin revisar. La validación
 estructural no puede demostrar la seguridad del C++ literal.
 
+Los helpers existentes `normalizePath`, `compilerRoot`, `resolveImportPath`,
+`pathDirectory` y `resolveProjectPath` se publican también en los contratos
+runtime del backend; el cargador de módulos los necesita para self-hosting.
+
 `npm run test:bootstrap:ir:annotations` verifica rutas, deduplicación, orden,
 parámetros, retornos, las seis funciones reales de `platform.ets` y rechazos
 controlados. `bootstrap-native-selfhost.yml` reconstruye frontend y backend
