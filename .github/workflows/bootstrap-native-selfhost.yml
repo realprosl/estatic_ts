@@ -1,4 +1,4 @@
-name: Compilador bootstrap nativo C++ (autocompilacion)
+name: Generar fuentes C++ del compilador bootstrap
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  native-selfhost:
+  generate:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -21,77 +21,69 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Dependencias C++ nativas
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
-      - name: Generar frontend C++ con Stage 0 y compilar etsc nativo
+      - name: Generar frontend C++ y tablas nativas
         run: |
           node --experimental-strip-types --input-type=module <<'NODE'
-          import { buildIrFrontend } from './bootstrap/ir/cpp.ts';
-          import { buildNativeCompiler } from './bootstrap/build/native-compiler.ts';
-          console.log('Frontend nativo:', await buildIrFrontend());
-          console.log('Compilador nativo:', buildNativeCompiler());
+          import { mkdirSync, writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          import { compileFile } from './src/modules/module-loader.ts';
+          import { nativeTables } from './bootstrap/build/native-tables.ts';
+          import { getTs2cppVersionLabel } from './src/core/ts2cpp-version.ts';
+          const dir = 'dist/etsc-bootstrap-cpp';
+          const out = join(dir, 'frontend');
+          mkdirSync(out, { recursive: true });
+          const result = await compileFile('bootstrap/ir/demo.ets', { baseDirectory: process.cwd() });
+          writeFileSync(join(out, 'estatic_common.hpp'), result.externalHeaders.join('\n')+'\n'+result.header);
+          for (const [i, module] of result.modules.entries()) writeFileSync(join(out, `unit-${i}.cpp`), module.cpp);
+          const header = result.header.split('\n').filter(x => x.trim() !== '#pragma once').join('\n');
+          const bodies = result.modules.map(m => m.cpp.split('\n').filter(x => !x.includes('#include "estatic_common.hpp"')).join('\n'));
+          writeFileSync(join(out, 'unity.cpp'), [header, result.externalHeaders.join('\n'), ...bodies].join('\n'));
+          const nativeDir = join(dir, 'build/bootstrap/etsc');
+          mkdirSync(nativeDir, { recursive: true });
+          nativeTables(join(nativeDir, 'native-tables.hpp'));
+          writeFileSync(join(nativeDir, 'install_config.hpp'), `#define ESTC_PLATFORM "linux"\n#define ESTC_ARCH "portable"\n#define ESTC_VERSION ${JSON.stringify(getTs2cppVersionLabel().replace(/^estatic/,'etsc'))}\n`);
+          console.log(`Generadas ${result.modules.length} unidades frontend C++`);
           NODE
-      - name: Preparar fuentes C++ portables y distribución
+      - name: Copiar dependencias y script de compilación
         run: |
-          mkdir -p dist/etsc-bootstrap-cpp/src/codegen/ir/native
-          mkdir -p dist/etsc-bootstrap-cpp/bootstrap/native
-          mkdir -p dist/etsc-bootstrap-cpp/build/bootstrap/etsc
-          mkdir -p dist/etsc-bootstrap-cpp/native
-          cp -a src/codegen/ir/native/. dist/etsc-bootstrap-cpp/src/codegen/ir/native/
-          cp -a bootstrap/native/. dist/etsc-bootstrap-cpp/bootstrap/native/
-          cp -a runtime dist/etsc-bootstrap-cpp/runtime
-          cp -a templates dist/etsc-bootstrap-cpp/templates
-          cp -a types dist/etsc-bootstrap-cpp/types
-          cp build/bootstrap/etsc/{native-tables.hpp,install_config.hpp} dist/etsc-bootstrap-cpp/build/bootstrap/etsc/
-          cp build/bootstrap/etsc/etsc dist/etsc-bootstrap-cpp/native/etsc
-          cp build/bootstrap/ir-cpp/modules-demo dist/etsc-bootstrap-cpp/native/frontend
-          cat > dist/etsc-bootstrap-cpp/build-compiler.sh <<'SH'
+          set -euo pipefail
+          d=dist/etsc-bootstrap-cpp
+          mkdir -p "$d/src/codegen/ir" "$d/bootstrap"
+          cp -a src/codegen/ir/native "$d/src/codegen/ir/"
+          cp -a bootstrap/native "$d/bootstrap/"
+          cp -a bootstrap/modules "$d/bootstrap/"
+          cp -a runtime "$d/"
+          cp -a templates "$d/"
+          cp -a types "$d/"
+          cat > "$d/build-all.sh" <<'SH'
           #!/usr/bin/env bash
           set -euo pipefail
           cd "$(dirname "$0")"
           mkdir -p native
+          g++ -std=c++20 -O0 -pthread -fno-exceptions -I. -Ifrontend \
+            '-DESTATIC_FRONTEND_ID="portable"' frontend/unity.cpp -o native/frontend
           g++ -std=c++20 -O2 -I. -Ibuild/bootstrap/etsc \
             bootstrap/native/driver.cpp src/codegen/ir/native/generator.cpp \
             -lcrypto -o native/etsc
           SH
-          chmod +x dist/etsc-bootstrap-cpp/build-compiler.sh
-          cat > dist/etsc-bootstrap-cpp/README.md <<'MD'
-          # Compilador Estatic nativo (Linux C++20)
-          Compilar el driver y backend C++ sin Node: `./build-compiler.sh`.
-          El frontend nativo `native/frontend` fue generado previamente por Stage 0
-          desde `bootstrap/ir/demo.ets`; es necesario para analizar fuentes ETS.
-          Para usar el compilador: `export ESTC_ROOT="$(pwd)"` y
+          chmod +x "$d/build-all.sh"
+          cat > "$d/README.md" <<'MD'
+          # Fuentes C++ del compilador bootstrap
+          Este paquete NO contiene binarios precompilados, Node.js ni fuentes TypeScript.
+          En Linux, con g++ C++20 y cabeceras OpenSSL, ejecutar `./build-all.sh`.
+          Se generan `native/frontend` y `native/etsc`.
+          Para compilar Estatic: `export ESTC_ROOT="$(pwd)"` y
           `./native/etsc build proyecto/main.ets --no-progress`.
-          Requiere g++ C++20 y OpenSSL de desarrollo; otras bibliotecas pueden
-          ser necesarias según los backends del proyecto.
-          Esta distribución es para Linux x86_64; no es un binario universal.
+          La portabilidad a otros sistemas requiere adaptar las interfaces POSIX.
           MD
-          (cd dist/etsc-bootstrap-cpp && find . -type f | sort > files.txt)
-      - name: Verificar recompilación C++ aislada sin Node ni src TypeScript
-        run: |
-          cd dist/etsc-bootstrap-cpp
-          rm native/etsc
-          ./build-compiler.sh
-          ./native/etsc --version
-          test -x native/frontend
-      - name: Probar compilación de bootstrap usando solo el compilador nativo
-        shell: bash
-        run: |
-          export ESTC_ROOT="$GITHUB_WORKSPACE/dist/etsc-bootstrap-cpp"
-          mkdir -p build/selfhost
-          "$ESTC_ROOT/native/etsc" build bootstrap/ir/demo.ets \
-            -o build/selfhost/bootstrap-ir.cpp \
-            --binary build/selfhost/bootstrap-ir \
-            --no-progress
-          test -s build/selfhost/bootstrap-ir.cpp
-          test -x build/selfhost/bootstrap-ir
-          echo 'Compilación nativa de bootstrap/ir/demo.ets: OK' >> "$GITHUB_STEP_SUMMARY"
-      - name: Subir paquete portable
-        if: always()
+          (cd "$d" && find . -type f | sort > files.txt)
+          if find "$d" -type f \( -name '*.ets' -o -name '*.ts' -o -name '*.o' -o -name '*.a' -o -name '*.so' \) | grep .; then
+            echo 'El paquete contiene fuentes no portables o artefactos compilados' >&2
+            exit 1
+          fi
+      - name: Publicar ZIP de fuentes C++ sin binarios
         uses: actions/upload-artifact@v4
         with:
-          name: etsc-bootstrap-native-cpp
+          name: etsc-bootstrap-cpp-sources
           path: dist/etsc-bootstrap-cpp/
-          if-no-files-found: warn
+          if-no-files-found: error
