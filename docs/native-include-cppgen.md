@@ -46,9 +46,14 @@ estructural no puede demostrar la seguridad del C++ literal.
 Los helpers existentes `normalizePath`, `compilerRoot`, `resolveImportPath`,
 `pathDirectory` y `resolveProjectPath` se publican también en los contratos
 runtime del backend; el cargador de módulos los necesita para self-hosting.
+También se conectan `string.padStart` y `string.padEnd`, usados por el evaluador.
+Las colecciones recibidas por `out` o `ref` se desreferencian antes de tomar
+su dirección para una operación mutante; así el checker conserva la misma
+colección y produce un IR válido al compilarse a sí mismo.
 
 `npm run test:bootstrap:ir:annotations` verifica rutas, deduplicación, orden,
 parámetros, retornos, las seis funciones reales de `platform.ets` y rechazos
 controlados. `bootstrap-native-selfhost.yml` reconstruye frontend y backend
-exclusivamente desde el paquete C++, compila los siete demos con esos binarios
+exclusivamente desde el paquete C++ (frontend con `-O1` para que el análisis
+del compilador sea viable), compila los siete demos con esos binarios
 y ejecuta además las pruebas de contratos usando el frontend reconstruido.

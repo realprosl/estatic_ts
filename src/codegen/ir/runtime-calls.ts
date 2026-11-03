@@ -8,7 +8,7 @@ export const globalCalls=new Set([
   "normalizePath","compilerRoot","resolveImportPath","pathDirectory","resolveProjectPath","argument","argumentCount","exitProcess","length","numberToString","jsonIsNull","jsonIsString","jsonIsNumber","jsonIsBool","jsonIsArray","jsonIsObject","jsonArrayLength","jsonArrayGet","jsonObjectGet","jsonObjectKeys","jsonAsString","jsonAsNumber","jsonAsBool","jsonEscape","fileExists","readFile","writeFile","appendFile","copyFile","moveFile","removeFile","readFileAsync","writeFileAsync","appendFileAsync","copyFileAsync","moveFileAsync","removeFileAsync","fileExistsAsync","fail","hasError","clearError",
 ]);
 export const asyncCalls=new Set(["sleep","delay","spawn","cancel","cancellationToken","createCancellation","isCancelled","taskResolve","promiseAll","promiseRace","all","race","timeout","retry"]);
-export const stringMethods=new Set(["charAt","charCodeAt","indexOf","lastIndexOf","includes","startsWith","endsWith","slice","substring","substr","split","trim","trimStart","trimEnd","toUpperCase","toLowerCase","repeat","replace","replaceAll","localeCompare","toString"]);
+export const stringMethods=new Set(["charAt","charCodeAt","indexOf","lastIndexOf","includes","startsWith","endsWith","slice","substring","substr","split","trim","trimStart","trimEnd","toUpperCase","toLowerCase","repeat","padStart","padEnd","replace","replaceAll","localeCompare","toString"]);
 export const objectMethods:Record<string,Set<string>>={
   "!Math":new Set(["floor","ceil","round","abs","sqrt","pow","min","max","random"]),
   "!Date":new Set(["now","utc"]), "!JSON":new Set(["parse","stringify","parseValue","stringifyBool","stringifyNumber","stringifyValue"]),

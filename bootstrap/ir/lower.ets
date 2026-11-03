@@ -811,12 +811,12 @@ export class IrLowering {
       const method = this.binding.symbols[member]; const declaration = this.graph.modules[method.module].cached.result.ast.nodes[method.node];
       return this.call(id,typeId,declaration.get(AttributeKind.IsStatic) == "true" ? -1 : this.unwrappedPlace(receiver,this.typeId(memoryValue(this.resolved(this.checked.files[this.module].receivers[id])),id)));
     }
-    const name: string = n.get(AttributeKind.Method); const receiverType: string = this.resolved(this.checked.files[this.module].receivers[id]);
+    const name: string = n.get(AttributeKind.Method); const receiverType: string = memoryValue(this.resolved(this.checked.files[this.module].receivers[id]));
     let operands: number[] = []; let effects: string[] = ["runtime"];
     const receiverSymbol: number = this.reference(receiver);
     if (!(receiverSymbol >= 0 && (this.binding.symbols[receiverSymbol].module) < 0 && this.node(receiver).kind == NodeKind.IdentifierExpression) && receiverType != "namespace" && !receiverType.startsWith("class:") && !receiverType.startsWith("!")) {
       if (receiverType == "Server" || ["push","pop","sort","set","add","delete","clear"].includes(name)) {
-        const p: number = this.materialize(receiver); operands.push(this.emit("address",this.typeId("ref<"+receiverType+">",id),[],p,-1,"",id)); effects.push("mutate");
+        const p: number = this.unwrappedPlace(receiver,this.typeId(receiverType,id)); operands.push(this.emit("address",this.typeId("ref<"+receiverType+">",id),[],p,-1,"",id)); effects.push("mutate");
       } else {
         const actual: number = this.typeId(this.checked.files[this.module].types[receiver],receiver);
         if (this.result.typeDefinitions[actual].resource && [NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.node(receiver).kind)) operands.push(this.emit("borrow",this.typeId("constRef<"+this.result.types[actual]+">",id),[],this.rootPlace(receiver),-1,"constRef",id));
