@@ -16,11 +16,13 @@ if grep -RInE --include='*.hpp' --include='*.h' --include='*.cpp'   '^[[:space:]
 fi
 # Production native host and backend must not import Stage0.
 # Audit/lexer/parser/binder/checker helpers intentionally compare against Stage0;
-# bootstrap/modules/build.ts is the explicit first-stage compiler adapter.
+# bootstrap/stage0/ is the explicit first-stage compiler adapter.
 # Do not exclude bootstrap/build/native-tables.ts: it feeds the native compiler.
 violations="$(grep -nE '^[[:space:]]*(import|export)[[:space:]]|import[[:space:]]*[(]' \
   bootstrap/cli.ts bootstrap/install.ts bootstrap/build/native-compiler.ts \
-  bootstrap/build/native-tables.ts bootstrap/ir/cpp.ts backend/ir/*.ts \
+  bootstrap/build/native-tables.ts bootstrap/build/frontend-artifact.ts \
+  bootstrap/ir/cpp.ts bootstrap/cli-progress.ts bootstrap/frontend/*.ts \
+  backend/ir/*.ts \
   shared/ir/*.ts shared/runtime/*.ts shared/project/*.ts shared/core/*.ts shared/ast/*.ts \
   | grep 'src/' || true)"
 if [[ -n "$violations" ]]; then
