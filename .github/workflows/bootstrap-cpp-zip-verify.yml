@@ -5,6 +5,11 @@ on:
     workflows:
       - Generar fuentes C++ del compilador bootstrap
     types: [completed]
+  workflow_call:
+    inputs:
+      run_id:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       run_id:
