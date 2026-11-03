@@ -4,6 +4,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { initializeProject } from "../shared/project/init-project.ts";
 import { buildNativeCompiler } from "./build/native-compiler.ts";
+import { verifiedFrontend } from "./build/frontend-artifact.ts";
 import { root } from "./root.ts";
 import { buildIrFrontend } from "./ir/cpp.ts";
 import { precompileRuntime } from "./build/runtime-cache.ts";
@@ -14,7 +15,7 @@ export async function install(argv:string[]):Promise<void> {
   let prefix="/usr/local",cxx=process.env.CXX??"g++",frontend="";
   for(let at=0;at<argv.length;at++){
     if(argv[at]==="--help"||argv[at]==="-h"){
-      console.log("Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario]\nConstruye el frontend con Stage0 si no se proporciona --frontend o ESTATIC_BOOTSTRAP_FRONTEND, precompila libuv/httplib e instala etsc.\nRequisitos: Node >=22.6, C++20, ar y las dependencias del runtime.\nNode sólo se usa durante el bootstrap y la instalación; etsc es nativo.");return;
+      console.log("Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario]\nConstruye el frontend con Stage0 si no se proporciona --frontend o ESTATIC_BOOTSTRAP_FRONTEND (SHA-256 opcional: ESTATIC_BOOTSTRAP_FRONTEND_SHA256), precompila libuv/httplib e instala etsc.\nRequisitos: Node >=22.6, C++20, ar y las dependencias del runtime.\nNode sólo se usa durante el bootstrap y la instalación; etsc es nativo.");return;
     }
     const flag=argv[at];if(!["--prefix","--cxx","--frontend"].includes(flag)||!argv[at+1]||argv[at+1].startsWith("-"))throw new Error(`Opción inválida o sin valor: ${flag}`);
     const value=argv[++at];if(flag==="--prefix")prefix=resolve(value);else if(flag==="--cxx")cxx=value;else frontend=resolve(value);
@@ -42,7 +43,7 @@ export async function install(argv:string[]):Promise<void> {
   try{const old=JSON.parse(readFileSync(join(current,"installation.json"),"utf8"));ownedEstc=old.format==="estc-install-1"&&existsSync(legacyEstc)&&old.commandHash===digest(legacyEstc);}catch{}
   // Finish compilation in the clone before attempting publication to the prefix.
   console.log(frontend||process.env.ESTATIC_BOOTSTRAP_FRONTEND?"==> Usando frontend nativo precompilado":"==> Construyendo frontend inicial mediante Stage0");
-  const native=frontend||await buildIrFrontend();
+  const native=frontend?verifiedFrontend(frontend):await buildIrFrontend();
   if(!existsSync(native))throw new Error(`Frontend inexistente: ${native}`);
   console.log("==> Precompilando runtime (libuv, red y cpp-httplib)");
   const archives=precompileRuntime(cxx);
