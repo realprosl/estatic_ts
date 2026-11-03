@@ -104,3 +104,13 @@ ESTATIC_NO_STAGE0=1 ESTATIC_BOOTSTRAP_FRONTEND=/ruta/al/frontend node --experime
 ```
 
 Este modo demuestra ausencia de *fallback* a Stage0 durante esa invocación, pero no demuestra todavía que el frontend suministrado se haya reconstruido a sí mismo.
+
+### Reconstrucción experimental nativo → nativo
+
+Se añadió `bootstrap/rebuild-frontend.ts` como ruta de implementación, independiente de imports de Stage0. Recibe un frontend nativo preexistente, un archivo fuente ETS y una ruta de salida; invoca el frontend para obtener IR, genera C++ mediante `backend/ir/cpp-generator.ts`, compila el resultado y escribe un manifiesto de procedencia con las huellas de entrada y salida:
+
+```bash
+node --experimental-strip-types bootstrap/rebuild-frontend.ts /ruta/frontend bootstrap/ir/demo.ets build/rebuilt-frontend
+```
+
+**Estado experimental:** todavía no se ha demostrado que `bootstrap/ir/demo.ets` pueda reconstruirse íntegramente con este camino ni que el resultado acepte y emita el mismo IR. No se considera una cadena Stage1 → Stage2 verificada; se requiere una ejecución real y comparación funcional antes de producir `seed/`.
