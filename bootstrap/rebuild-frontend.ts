@@ -2,6 +2,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { verifiedFrontend } from "./build/frontend-artifact.ts";
 import { buildIrCpp, nativeIr } from "./ir/cpp.ts";
 import { generateCppFromIr } from "../backend/ir/cpp-generator.ts";
@@ -27,7 +28,7 @@ export function rebuildFrontend(sourceFrontend: string, entry: string, output: s
   }, null, 2) + "\n");
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname)) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [frontend, entry, output, cxx] = process.argv.slice(2);
   if (!frontend || !entry || !output) {
     console.error("Uso: rebuild-frontend.ts <frontend-nativo> <fuente.ets> <salida> [cxx]");
