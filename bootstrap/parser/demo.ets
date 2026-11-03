@@ -25,7 +25,7 @@ function decodeToken(record: string): ParserToken {
 }
 function demonstrateParser(tokens: ParserToken[]): void { print(inspectAst(tokens)); }
 
-const tokens: ParserToken[] = [];
+let tokens: ParserToken[] = [];
 if (argumentCount() == 2 && argument(1) == "--empty") {
   // Exercise the public empty-input contract without selecting the demo.
 } else if (argumentCount() > 1) {
