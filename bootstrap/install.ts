@@ -12,15 +12,17 @@ import { precompileRuntime } from "./build/runtime-cache.ts";
 const folders=["runtime","types"];
 const digest=(file:string)=>createHash("sha256").update(readFileSync(file)).digest("hex");
 export async function install(argv:string[]):Promise<void> {
-  let prefix="/usr/local",cxx=process.env.CXX??"g++",frontend="";
+  let prefix="/usr/local",cxx=process.env.CXX??"g++",frontend="",noStage0=false;
   for(let at=0;at<argv.length;at++){
     if(argv[at]==="--help"||argv[at]==="-h"){
-      console.log("Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario]\nConstruye el frontend con Stage0 si no se proporciona --frontend o ESTATIC_BOOTSTRAP_FRONTEND (SHA-256 opcional: ESTATIC_BOOTSTRAP_FRONTEND_SHA256), precompila libuv/httplib e instala etsc.\nRequisitos: Node >=22.6, C++20, ar y las dependencias del runtime.\nNode sólo se usa durante el bootstrap y la instalación; etsc es nativo.");return;
+      console.log("Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario] [--no-stage0]\nConstruye el frontend con Stage0 si no se proporciona --frontend o ESTATIC_BOOTSTRAP_FRONTEND (SHA-256 opcional: ESTATIC_BOOTSTRAP_FRONTEND_SHA256), precompila libuv/httplib e instala etsc.\nRequisitos: Node >=22.6, C++20, ar y las dependencias del runtime.\nNode sólo se usa durante el bootstrap y la instalación; etsc es nativo.");return;
     }
+    if(argv[at]==="--no-stage0"){noStage0=true;continue;}
     const flag=argv[at];if(!["--prefix","--cxx","--frontend"].includes(flag)||!argv[at+1]||argv[at+1].startsWith("-"))throw new Error(`Opción inválida o sin valor: ${flag}`);
     const value=argv[++at];if(flag==="--prefix")prefix=resolve(value);else if(flag==="--cxx")cxx=value;else frontend=resolve(value);
   }
   if(Number(process.versions.node.split(".")[0])<22 || Number(process.versions.node.split(".")[0])===22&&Number(process.versions.node.split(".")[1])<6)throw new Error("Se requiere Node >=22.6");
+  if(noStage0 && !(frontend||process.env.ESTATIC_BOOTSTRAP_FRONTEND))throw new Error("--no-stage0 requiere --frontend o ESTATIC_BOOTSTRAP_FRONTEND; no se ejecutará el compilador histórico");
   process.env.CXX=cxx;
   const library=join(prefix,"lib/estc"),current=join(library,"current"),destination=join(prefix,"bin/etsc");
   let oldPointer:string|undefined;
