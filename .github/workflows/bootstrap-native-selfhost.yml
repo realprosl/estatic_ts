@@ -89,11 +89,39 @@ jobs:
           path: dist/etsc-bootstrap-cpp/
           if-no-files-found: error
 
-  verify-selfhost:
-    needs: generate
-    permissions:
-      actions: read
-      contents: read
-    uses: ./.github/workflows/bootstrap-cpp-zip-verify.yml
-    with:
-      run_id: ${{ github.run_id }}
+      - name: Descargar ZIP publicado para verificarlo de forma aislada
+        uses: actions/download-artifact@v4
+        with:
+          name: etsc-bootstrap-cpp-sources
+          path: package
+      - name: Comprobar que el ZIP no contiene binarios precompilados
+        run: |
+          set -euo pipefail
+          test -f package/frontend/unity.cpp
+          test -f package/bootstrap/native/driver.cpp
+          test -f package/src/codegen/ir/native/generator.cpp
+          if find package -type f \( -name '*.ets' -o -name '*.ts' -a ! -name '*.d.ts' -o -name '*.o' -o -name '*.a' -o -name '*.so' \) | grep .; then exit 1; fi
+          if find package -type f -exec file {} + | grep -E 'ELF.*(executable|shared object)'; then exit 1; fi
+      - name: Reconstruir frontend y backend exclusivamente desde el ZIP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev libcurl4-openssl-dev libuv1-dev
+          cd package
+          ./build-all.sh
+          test -x native/frontend
+          test -x native/etsc
+      - name: Autocompilar los siete componentes reales de bootstrap
+        run: |
+          set -euo pipefail
+          export ESTC_ROOT="$GITHUB_WORKSPACE/package"
+          mkdir -p "$GITHUB_WORKSPACE/selfhost"
+          for component in lexer parser frontend modules binder checker ir; do
+            echo "::group::bootstrap/$component"
+            "$ESTC_ROOT/native/etsc" build "bootstrap/$component/demo.ets" \
+              -o "$GITHUB_WORKSPACE/selfhost/$component.cpp" \
+              --binary "$GITHUB_WORKSPACE/selfhost/$component" --no-progress
+            test -s "$GITHUB_WORKSPACE/selfhost/$component.cpp"
+            test -x "$GITHUB_WORKSPACE/selfhost/$component"
+            echo "OK: bootstrap/$component/demo.ets" >> "$GITHUB_STEP_SUMMARY"
+            echo "::endgroup::"
+          done
