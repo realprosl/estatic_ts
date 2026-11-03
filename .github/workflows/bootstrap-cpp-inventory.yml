@@ -70,6 +70,8 @@ jobs:
           mkdir -p portable/build
           cp -a build/bootstrap portable/build/
           cp -a runtime portable/runtime
+          # El C++ generado incluye cabeceras propias de bootstrap/ (por ejemplo platform.hpp).
+          cp -a bootstrap portable/bootstrap
           cat > portable/build-all.sh <<'SH'
           #!/usr/bin/env bash
           set -euo pipefail
@@ -87,16 +89,16 @@ jobs:
           cat > portable/README.md <<'MD'
           # Bootstrap C++ portable (Stage 0)
           
-          Contiene los C++ generados desde bootstrap/ por src/ y el runtime/ del repositorio.
+          Contiene los C++ generados desde bootstrap/ por src/ y el runtime/ y las cabeceras de bootstrap/ del repositorio.
           En Linux con g++ compatible con C++20, ejecuta `./build-all.sh` desde esta carpeta.
           Cada componente es un ejecutable separado: no enlaces varios `unity.cpp` juntos.
           Los `unit-N.cpp` se conservan para inspección y compilación por unidades,
           pero `build-all.sh` usa exclusivamente `unity.cpp`.
-          Este paquete incluye el runtime completo para preservar los includes;
+          Este paquete incluye runtime/ y bootstrap/ para preservar los includes;
           algunas plataformas pueden requerir dependencias del sistema adicionales.
           No incluye ni necesita src/ ni los archivos .ets para compilar los C++ generados.
           MD
-          (cd portable && find build runtime -type f \
+          (cd portable && find build runtime bootstrap -type f \
             \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' \) | sort > cpp-files.txt)
       - name: Verificar compilación aislada con g++
         shell: bash
