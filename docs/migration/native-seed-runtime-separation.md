@@ -93,3 +93,14 @@ Para fijar la identidad del artefacto de entrada, se puede definir `ESTATIC_BOOT
 ## Auditoría de dependencias pendiente de cierre
 
 El control de CI cubre ahora también `bootstrap/frontend/*.ts`, `bootstrap/cli-progress.ts` y `bootstrap/build/frontend-artifact.ts`, además de los módulos nativos, backend y shared ya protegidos. El control actual es textual y detecta imports directos a `src/`; **no calcula el cierre transitivo del grafo de módulos** ni verifica imports dinámicos que construyan rutas en tiempo de ejecución. Por tanto, no se considera completada la auditoría transitiva y no se autoriza iniciar `seed/` todavía. El único adaptador histórico autorizado para compilar el frontend inicial es `bootstrap/stage0/`.
+
+### Modo estricto sin Stage0
+
+Para impedir que una construcción recurra silenciosamente al compilador histórico, `bootstrap/ir/cpp.ts` respeta `ESTATIC_NO_STAGE0=1`: si no hay frontend nativo externo o instalado, termina con error antes de importar `bootstrap/stage0/`. El instalador ofrece `--no-stage0`, que exige `--frontend` o `ESTATIC_BOOTSTRAP_FRONTEND` y propaga esa política:
+
+```bash
+node --experimental-strip-types bootstrap/install.ts --prefix /ruta/instalacion --no-stage0 --frontend /ruta/al/frontend
+ESTATIC_NO_STAGE0=1 ESTATIC_BOOTSTRAP_FRONTEND=/ruta/al/frontend node --experimental-strip-types bootstrap/ir/cpp.ts programa.ets -o programa.cpp
+```
+
+Este modo demuestra ausencia de *fallback* a Stage0 durante esa invocación, pero no demuestra todavía que el frontend suministrado se haya reconstruido a sí mismo.
