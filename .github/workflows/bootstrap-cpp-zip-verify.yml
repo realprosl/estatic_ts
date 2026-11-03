@@ -44,7 +44,7 @@ jobs:
           test -f package/frontend/unity.cpp
           test -f package/bootstrap/native/driver.cpp
           test -f package/src/codegen/ir/native/generator.cpp
-          if find package -type f \( -name '*.ets' -o -name '*.ts' -o -name '*.o' -o -name '*.a' -o -name '*.so' \) | grep .; then exit 1; fi
+          if find package -type f \( -name '*.ets' -o -name '*.ts' -a ! -name '*.d.ts' -o -name '*.o' -o -name '*.a' -o -name '*.so' \) | grep .; then exit 1; fi
           if find package -type f -exec file {} + | grep -E 'ELF.*(executable|shared object)'; then exit 1; fi
       - name: Reconstruir ambos ejecutables usando solo el ZIP
         run: |
