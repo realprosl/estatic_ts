@@ -1,0 +1,97 @@
+name: Compilador bootstrap nativo C++ (autocompilacion)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/**'
+      - 'bootstrap/**'
+      - 'runtime/**'
+      - '.github/workflows/bootstrap-native-selfhost.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native-selfhost:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Dependencias C++ nativas
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
+      - name: Generar frontend C++ con Stage 0 y compilar etsc nativo
+        run: |
+          node --experimental-strip-types --input-type=module <<'NODE'
+          import { buildIrFrontend } from './bootstrap/ir/cpp.ts';
+          import { buildNativeCompiler } from './bootstrap/build/native-compiler.ts';
+          console.log('Frontend nativo:', await buildIrFrontend());
+          console.log('Compilador nativo:', buildNativeCompiler());
+          NODE
+      - name: Preparar fuentes C++ portables y distribución
+        run: |
+          mkdir -p dist/etsc-bootstrap-cpp/src/codegen/ir/native
+          mkdir -p dist/etsc-bootstrap-cpp/bootstrap/native
+          mkdir -p dist/etsc-bootstrap-cpp/build/bootstrap/etsc
+          mkdir -p dist/etsc-bootstrap-cpp/native
+          cp -a src/codegen/ir/native/. dist/etsc-bootstrap-cpp/src/codegen/ir/native/
+          cp -a bootstrap/native/. dist/etsc-bootstrap-cpp/bootstrap/native/
+          cp -a runtime dist/etsc-bootstrap-cpp/runtime
+          cp -a templates dist/etsc-bootstrap-cpp/templates
+          cp -a types dist/etsc-bootstrap-cpp/types
+          cp build/bootstrap/etsc/{native-tables.hpp,install_config.hpp} dist/etsc-bootstrap-cpp/build/bootstrap/etsc/
+          cp build/bootstrap/etsc/etsc dist/etsc-bootstrap-cpp/native/etsc
+          cp build/bootstrap/ir-cpp/modules-demo dist/etsc-bootstrap-cpp/native/frontend
+          cat > dist/etsc-bootstrap-cpp/build-compiler.sh <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          cd "$(dirname "$0")"
+          mkdir -p native
+          g++ -std=c++20 -O2 -I. -Ibuild/bootstrap/etsc \
+            bootstrap/native/driver.cpp src/codegen/ir/native/generator.cpp \
+            -lcrypto -o native/etsc
+          SH
+          chmod +x dist/etsc-bootstrap-cpp/build-compiler.sh
+          cat > dist/etsc-bootstrap-cpp/README.md <<'MD'
+          # Compilador Estatic nativo (Linux C++20)
+          Compilar el driver y backend C++ sin Node: `./build-compiler.sh`.
+          El frontend nativo `native/frontend` fue generado previamente por Stage 0
+          desde `bootstrap/ir/demo.ets`; es necesario para analizar fuentes ETS.
+          Para usar el compilador: `export ESTC_ROOT="$(pwd)"` y
+          `./native/etsc build proyecto/main.ets --no-progress`.
+          Requiere g++ C++20 y OpenSSL de desarrollo; otras bibliotecas pueden
+          ser necesarias según los backends del proyecto.
+          Esta distribución es para Linux x86_64; no es un binario universal.
+          MD
+          (cd dist/etsc-bootstrap-cpp && find . -type f | sort > files.txt)
+      - name: Verificar recompilación C++ aislada sin Node ni src TypeScript
+        run: |
+          cd dist/etsc-bootstrap-cpp
+          rm native/etsc
+          ./build-compiler.sh
+          ./native/etsc --version
+          test -x native/frontend
+      - name: Probar compilación de bootstrap usando solo el compilador nativo
+        shell: bash
+        run: |
+          export ESTC_ROOT="$GITHUB_WORKSPACE/dist/etsc-bootstrap-cpp"
+          mkdir -p build/selfhost
+          "$ESTC_ROOT/native/etsc" build bootstrap/ir/demo.ets \
+            -o build/selfhost/bootstrap-ir.cpp \
+            --binary build/selfhost/bootstrap-ir \
+            --no-progress
+          test -s build/selfhost/bootstrap-ir.cpp
+          test -x build/selfhost/bootstrap-ir
+          echo 'Compilación nativa de bootstrap/ir/demo.ets: OK' >> "$GITHUB_STEP_SUMMARY"
+      - name: Subir paquete portable
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: etsc-bootstrap-native-cpp
+          path: dist/etsc-bootstrap-cpp/
+          if-no-files-found: warn
