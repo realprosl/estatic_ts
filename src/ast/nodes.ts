@@ -1,7 +1,8 @@
 import type { Span, GeneratedSource } from "../core/span.ts";
+import type { TypeName } from "../../shared/ast/type-name.ts";
+export type { TypeName } from "../../shared/ast/type-name.ts";
 
 export type PrimitiveType = "number" | "string" | "boolean" | "void" | "undefined" | "object";
-export type TypeName = string;
 export type ParameterPassing = "value" | "out";
 // V22 (Memory Model v2): los antiguos `automatic`, `mut`, `move` ya no
 // existen. Ver src/semantic/diagnostics.ts E4400-E4405.
