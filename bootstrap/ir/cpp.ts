@@ -24,7 +24,8 @@ export async function buildIrFrontend(
         "Instalación incompleta: falta native/frontend; vuelve a ejecutar install.sh",
       );
     }
-    return binary;
+    const manifest=JSON.parse(readFileSync(join(root,"installation.json"),"utf8"));
+    return verifiedFrontend(binary,manifest.frontendSha256);
   }
   // La compilación histórica queda aislada en bootstrap/stage0/.
   const { buildStage0Frontend } =
