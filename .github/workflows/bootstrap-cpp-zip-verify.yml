@@ -53,7 +53,7 @@ jobs:
       - name: Reconstruir ambos ejecutables usando solo el ZIP
         run: |
           cd package
-          ./build-all.sh
+          bash ./build-all.sh
           ./native/etsc --version
           test -x native/frontend
       - name: Recompilar los siete componentes de bootstrap con el compilador del ZIP
