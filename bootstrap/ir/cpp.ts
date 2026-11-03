@@ -11,6 +11,14 @@ import { generateCppFromIr, type IrCppResult } from "../../backend/ir/cpp-genera
 import type { IrProject } from "../../shared/ir/model.ts";
 
 export async function buildIrFrontend(directory=join(root,"build/bootstrap/ir-cpp")):Promise<string> {
+  // A prebuilt native frontend bypasses Stage0 completely, even in a source checkout.
+  // The installer also exposes --frontend; this override serves direct bootstrap users.
+  const prebuilt=process.env.ESTATIC_BOOTSTRAP_FRONTEND;
+  if(prebuilt){
+    const binary=resolve(prebuilt);
+    if(!existsSync(binary))throw new Error(`Frontend precompilado inexistente: ${binary}`);
+    return binary;
+  }
   if(existsSync(join(root,"installation.json"))){
     const binary=join(root,"native/frontend");
     if(!existsSync(binary))throw new Error("Instalación incompleta: falta native/frontend; vuelve a ejecutar install.sh");
