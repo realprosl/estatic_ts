@@ -85,3 +85,7 @@ node --experimental-strip-types bootstrap/install.ts --prefix /ruta/instalacion 
 ```
 
 `buildIrFrontend()` consulta `ESTATIC_BOOTSTRAP_FRONTEND` antes de buscar una instalación o construir mediante Stage0. En ausencia de esta variable, conserva el comportamiento histórico. `--frontend` del instalador permite el mismo desacoplamiento explícito. **Esta vía consume un artefacto nativo preexistente; todavía no constituye una semilla reproducible ni demuestra self-hosting.**
+
+### Integridad del frontend precompilado
+
+Para fijar la identidad del artefacto de entrada, se puede definir `ESTATIC_BOOTSTRAP_FRONTEND_SHA256` con los 64 caracteres hexadecimales del SHA-256 del binario. Tanto `ESTATIC_BOOTSTRAP_FRONTEND` como `install.ts --frontend` verifican la huella antes de consumir el artefacto y fallan si no coincide. Si no se proporciona una huella, se conserva el comportamiento anterior, sin verificación criptográfica de identidad. Esto no sustituye una futura cadena de procedencia y reconstrucción de `seed/`.
