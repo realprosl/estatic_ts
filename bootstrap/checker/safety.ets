@@ -362,7 +362,7 @@ export class SafetyAnalyzer {
         else if (n.kind == NodeKind.MemberCallExpression && this.mutating(capture.module,id)) target = bindingChild(n,EdgeRole.Object);
         if (target >= 0 && this.root(capture.module,target) == capture.symbol) mutates = true;
       }
-      if (mutates || receiver) this.seeds.push(this.vertex(capture.module,capture.closure));
+      if (mutates || receiver) { const pendingPush = this.vertex(capture.module,capture.closure); this.seeds.push(pendingPush); }
       this.edge(this.symbolVertex(capture.symbol),this.vertex(capture.module,capture.closure));
     }
     for (let c: number = 0; c < this.result.captures.length; c = c + 1) if (this.seeds.includes(this.vertex(this.result.captures[c].module,this.result.captures[c].closure))) this.result.captures[c].mode = "reference";
@@ -422,13 +422,13 @@ export class SafetyAnalyzer {
       if (n.kind == NodeKind.VariableDeclaration || n.kind == NodeKind.UsingDeclaration) {
         const sid: number = this.binding.files[m].declarations[id]; const value: number = bindingChild(n,EdgeRole.Initializer);
         if (sid >= 0 && value >= 0) { this.edge(this.vertex(m,value),this.symbolVertex(sid)); stores.push(new LifetimeStore(m,id,this.vertex(m,value),this.binding.symbols[sid].scope)); }
-        if (sid >= 0 && this.owner(this.binding.symbols[sid].scope) < 0 && value >= 0) this.escapes.push(new EscapeSite(m,id,this.vertex(m,value),"almacenamiento global"));
+        if (sid >= 0 && this.owner(this.binding.symbols[sid].scope) < 0 && value >= 0) { const pendingPush = new EscapeSite(m,id,this.vertex(m,value),"almacenamiento global"); this.escapes.push(pendingPush); }
         for (const edge of n.edges) if (edge.role == EdgeRole.ArrayBindings || edge.role == EdgeRole.ObjectBindings) {
           const target: number = this.binding.files[m].declarations[edge.node]; const fallback: number = bindingChild(this.node(m,edge.node),EdgeRole.DefaultValue);
           if (target >= 0) {
             if (value >= 0) this.edge(this.vertex(m,value),this.symbolVertex(target));
             if (fallback >= 0) this.edge(this.vertex(m,fallback),this.symbolVertex(target));
-            if (this.owner(this.binding.symbols[target].scope) < 0) { if (value >= 0) this.escapes.push(new EscapeSite(m,edge.node,this.vertex(m,value),"binding global")); if (fallback >= 0) this.escapes.push(new EscapeSite(m,edge.node,this.vertex(m,fallback),"default global")); }
+            if (this.owner(this.binding.symbols[target].scope) < 0) { if (value >= 0) { const pendingPush = new EscapeSite(m,edge.node,this.vertex(m,value),"binding global"); this.escapes.push(pendingPush); } if (fallback >= 0) { const pendingPush = new EscapeSite(m,edge.node,this.vertex(m,fallback),"default global"); this.escapes.push(pendingPush); } }
           }
         }
       }
@@ -436,7 +436,7 @@ export class SafetyAnalyzer {
         const value: number = bindingChild(n,EdgeRole.Value); const target: number = this.root(m,bindingChild(n,EdgeRole.Target));
         if (target >= 0) {
           this.edge(this.vertex(m,value),this.symbolVertex(target)); stores.push(new LifetimeStore(m,id,this.vertex(m,value),this.binding.symbols[target].scope));
-          if (this.owner(this.binding.symbols[target].scope) != this.owner(this.binding.files[m].nodeScopes[id])) this.escapes.push(new EscapeSite(m,id,this.vertex(m,value),"almacenamiento fuera del ámbito de captura"));
+          if (this.owner(this.binding.symbols[target].scope) != this.owner(this.binding.files[m].nodeScopes[id])) { const pendingPush = new EscapeSite(m,id,this.vertex(m,value),"almacenamiento fuera del ámbito de captura"); this.escapes.push(pendingPush); }
         }
       }
       if (n.kind == NodeKind.MemberCallExpression && ["push","set","add"].includes(n.get(AttributeKind.Method))) {
@@ -478,11 +478,11 @@ export class SafetyAnalyzer {
       }
       if (n.kind == NodeKind.ReturnStatement) {
         const value: number = bindingChild(n,EdgeRole.Value);
-        if (value >= 0) this.escapes.push(new EscapeSite(m,id,this.vertex(m,value),"retorno"));
+        if (value >= 0) { const pendingPush = new EscapeSite(m,id,this.vertex(m,value),"retorno"); this.escapes.push(pendingPush); }
       }
       if (n.kind == NodeKind.ArrowFunctionExpression) {
         const body: number = bindingChild(n,EdgeRole.Body);
-        if (this.node(m,body).kind != NodeKind.BlockStatement) this.escapes.push(new EscapeSite(m,body,this.vertex(m,body),"retorno implícito"));
+        if (this.node(m,body).kind != NodeKind.BlockStatement) { const pendingPush = new EscapeSite(m,body,this.vertex(m,body),"retorno implícito"); this.escapes.push(pendingPush); }
       }
       if (n.kind == NodeKind.CallExpression || n.kind == NodeKind.MemberCallExpression || n.kind == NodeKind.NewExpression) {
         const knownPush: boolean = n.kind == NodeKind.MemberCallExpression && ["push","set","add"].includes(n.get(AttributeKind.Method));
@@ -490,7 +490,7 @@ export class SafetyAnalyzer {
         const localPush: boolean = root >= 0 && this.owner(this.binding.symbols[root].scope) == this.owner(this.binding.files[m].nodeScopes[id]);
         let argumentIndex: number = 0;
         if (!knownPush || !localPush) for (const edge of n.edges) if (edge.role == EdgeRole.Args) {
-          if ((knownPush && !localPush) || this.effects.canRetain(m,id,argumentIndex)) this.escapes.push(new EscapeSite(m,edge.node,this.vertex(m,edge.node),"callback retenido o retención no demostrada"));
+          if ((knownPush && !localPush) || this.effects.canRetain(m,id,argumentIndex)) { const pendingPush = new EscapeSite(m,edge.node,this.vertex(m,edge.node),"callback retenido o retención no demostrada"); this.escapes.push(pendingPush); }
           argumentIndex = argumentIndex + 1;
         }
       }
@@ -875,7 +875,7 @@ export class SafetyAnalyzer {
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (this.owner(this.binding.symbols[sid].scope) == owner) {
       state.slots[sid] = (this.binding.symbols[sid].kind == "receiver" ? 1 : 0); this.initializePath(state,"s" + numberToString(sid));
       const object: number = bindingChild(this.node(module,id),EdgeRole.Object);
-      if (this.binding.symbols[sid].kind == "receiver" && object >= 0) this.arguments.push(new SafetyArgument(sid,module,object,this.root(module,object)));
+      if (this.binding.symbols[sid].kind == "receiver" && object >= 0) { const pendingPush = new SafetyArgument(sid,module,object,this.root(module,object)); this.arguments.push(pendingPush); }
     }
     let next: number[] = active; next.push(owner);
     let parameterIndex: number = 0; let actualNodes: number[] = [];
@@ -911,7 +911,7 @@ export class SafetyAnalyzer {
     const breakStart: number = this.breaks.length; const continueStart: number = this.continues.length;
     if (phase != "creation") { if (this.node(target.module,body).kind == NodeKind.BlockStatement) this.walk(target.module,body,state,next); else this.expression(target.module,body,state,next); }
     if (state.exit == "") this.fieldsInitialized(target.module,target.node,state);
-    for (let at: number = returnStart; at < this.returns.length; at = at + 1) state = this.join(state,this.returns[at]);
+    for (let at: number = returnStart; at < this.returns.length; at = at + 1) { const incoming = this.returns[at]; state = this.join(state,incoming); }
     while (this.returns.length > returnStart) this.returns.pop(); if (phase != "resume") this.sites.pop();
     state.exit = "";
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (this.owner(this.binding.symbols[sid].scope) == owner) { state.slots[sid] = saved.slots[sid]; this.restorePaths(state,saved,sid); }
@@ -1067,8 +1067,8 @@ export class SafetyAnalyzer {
       if (iteration) { const sid: number = this.binding.files[module].declarations[bindingChild(n,EdgeRole.Binding)]; if (sid >= 0) { body.slots[sid] = 1; this.initializePath(body,"s"+numberToString(sid)); } }
       if (n.kind == NodeKind.ForOfStatement && n.get(AttributeKind.Await) == "true") this.awaitTasks(module,id,bindingChild(n,EdgeRole.Iterable),body,active);
       this.walk(module,bindingChild(n,EdgeRole.Body),body,active);
-      for (let at: number = breakStart; at < this.breaks.length; at = at + 1) exits = this.join(exits,this.breaks[at]);
-      for (let at: number = continueStart; at < this.continues.length; at = at + 1) body = this.join(body,this.continues[at]);
+      for (let at: number = breakStart; at < this.breaks.length; at = at + 1) { const incoming = this.breaks[at]; exits = this.join(exits,incoming); }
+      for (let at: number = continueStart; at < this.continues.length; at = at + 1) { const incoming = this.continues[at]; body = this.join(body,incoming); }
       while (this.breaks.length > breakStart) this.breaks.pop(); while (this.continues.length > continueStart) this.continues.pop();
       if (body.exit != "") break;
       this.expression(module,bindingChild(n,EdgeRole.Increment),body,active);
@@ -1119,7 +1119,7 @@ export class SafetyAnalyzer {
         const clause: AstNode = this.node(module,edge.node); if (clause.kind == NodeKind.DefaultClause) hasDefault = true;
         let body: SafetyState = this.join(entry,falling);
         for (const item of clause.edges) if (item.role == EdgeRole.Body) this.walk(module,item.node,body,active);
-        for (let at: number = breakStart; at < this.breaks.length; at = at + 1) exits = this.join(exits,this.breaks[at]);
+        for (let at: number = breakStart; at < this.breaks.length; at = at + 1) { const incoming = this.breaks[at]; exits = this.join(exits,incoming); }
         while (this.breaks.length > breakStart) this.breaks.pop();
         falling = body;
       }

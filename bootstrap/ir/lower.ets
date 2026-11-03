@@ -49,7 +49,7 @@ export class IrLowering {
     let source = new IrSource(record.id,record.sourceHash,this.graph.modules[this.module].file,id,n.start.offset,n.end.endOffset);
     if (n.generatedId != "") { source.generatedId = n.generatedId; source.generatedStart = n.generatedStart.offset; source.generatedEnd = n.generatedEnd.endOffset; } return source;
   }
-  fail(id: number, message: string): void { this.result.diagnostics.push(new IrIssue("IR_UNSUPPORTED",message,this.source(id))); }
+  fail(id: number, message: string): void { { const pendingPush = new IrIssue("IR_UNSUPPORTED",message,this.source(id)); this.result.diagnostics.push(pendingPush); } }
   resolved(text: string): string {
     for (let at: number = this.contextFrom.length-1; at >= 0; at = at-1) text = replaceType(text,this.contextFrom[at],this.contextTo[at]);
     if (this.currentFunction >= 0) for (let at: number = 0; at < this.result.functions[this.currentFunction].substitutionFrom.length; at = at+1) text = replaceType(text,this.result.functions[this.currentFunction].substitutionFrom[at],this.result.functions[this.currentFunction].substitutionTo[at]);
@@ -79,13 +79,13 @@ export class IrLowering {
       for (const e of declaration.edges) if (e.role == EdgeRole.TypeParameters) tokens.push("@"+numberToString(this.binding.files[owner.module].declarations[e.node]));
       if (kind == "enum") arguments.push(declaration.get(AttributeKind.Underlying));
       if (kind == "union") {
-        for (const e of declaration.edges) if (e.role == EdgeRole.Variants) this.result.typeDefinitions[index].variants.push(this.typeId("variant<"+text+","+numberToString(e.node)+">",id));
+        for (const e of declaration.edges) if (e.role == EdgeRole.Variants) { const pendingPush = this.typeId("variant<"+text+","+numberToString(e.node)+">",id); this.result.typeDefinitions[index].variants.push(pendingPush); }
         if (this.result.typeDefinitions[index].variants.length > 0) {
           const first: number = this.result.typeDefinitions[index].variants[0];
           for (let field: number = 0; field < this.result.typeDefinitions[first].names.length; field = field+1) {
             const name: string = this.result.typeDefinitions[first].names[field]; let fields: string[] = []; let common: boolean = true;
             for (const variant of this.result.typeDefinitions[index].variants) { let found: boolean = false; for (let at: number = 0; at < this.result.typeDefinitions[variant].names.length; at = at+1) if (this.result.typeDefinitions[variant].names[at] == name) { found = true; const text: string = this.result.types[this.result.typeDefinitions[variant].fields[at]]; if (!fields.includes(text)) fields.push(text); } if (!found) common = false; }
-            if (common) { this.result.typeDefinitions[index].names.push(name); this.result.typeDefinitions[index].fields.push(this.typeId(joinTypes(fields,"|"),id)); }
+            if (common) { this.result.typeDefinitions[index].names.push(name); { const pendingPush = this.typeId(joinTypes(fields,"|"),id); this.result.typeDefinitions[index].fields.push(pendingPush); } }
           }
         }
       }
@@ -105,13 +105,13 @@ export class IrLowering {
     }
     this.result.typeDefinitions[index].kind = kind;
     this.result.typeDefinitions[index].numericKind = irNumericKind(text); this.result.typeDefinitions[index].bits = irNumericWidth(text); this.result.typeDefinitions[index].isSigned = irNumericSigned(text);
-    for (let at: number = 0; at < arguments.length; at = at+1) { let argument: string = arguments[at]; if (argument.startsWith("...")) argument = argument.slice(3,argument.length); this.result.typeDefinitions[index].arguments.push(this.typeId(argument,id)); }
+    for (let at: number = 0; at < arguments.length; at = at+1) { let argument: string = arguments[at]; if (argument.startsWith("...")) argument = argument.slice(3,argument.length); { const pendingPush = this.typeId(argument,id); this.result.typeDefinitions[index].arguments.push(pendingPush); } }
     if (kind == "interface") {
       const owner = this.binding.symbols[nominal];
       for (const e of this.graph.modules[owner.module].cached.result.ast.nodes[owner.node].edges) if (e.role == EdgeRole.Methods) {
         const member: number = this.binding.files[owner.module].declarations[e.node];
         this.result.typeDefinitions[index].methods.push(this.binding.symbols[member].name);
-        this.result.typeDefinitions[index].methodTypes.push(this.typeId(this.memberType(text,member),id));
+        { const pendingPush = this.typeId(this.memberType(text,member),id); this.result.typeDefinitions[index].methodTypes.push(pendingPush); }
       }
     }
     if (kind == "intersection") for (const part of this.result.typeDefinitions[index].arguments) {
@@ -202,7 +202,7 @@ export class IrLowering {
     const symbol: number = this.binding.files[owner.module].declarations[nodeId]; this.result.typeDefinitions[index].symbolId = this.checked.symbolIds[symbol];
     let from: string[] = []; let to: string[] = genericArguments(parts[0]);
     for (const e of arena[owner.node].edges) if (e.role == EdgeRole.TypeParameters) from.push("@"+numberToString(this.binding.files[owner.module].declarations[e.node]));
-    this.result.typeDefinitions[index].names.push("kind"); this.result.typeDefinitions[index].fields.push(this.typeId("string",id));
+    this.result.typeDefinitions[index].names.push("kind"); { const pendingPush = this.typeId("string",id); this.result.typeDefinitions[index].fields.push(pendingPush); }
     const discriminator: number = bindingChild(node,EdgeRole.Discriminator);
     if (discriminator >= 0) {
       const name: string = arena[discriminator].get(AttributeKind.Field); this.result.typeDefinitions[index].discriminator = name; this.result.typeDefinitions[index].discriminatorValue = arena[discriminator].get(AttributeKind.Value); this.result.typeDefinitions[index].discriminatorType = this.typeId(arena[discriminator].get(AttributeKind.LiteralType),id);
@@ -211,11 +211,11 @@ export class IrLowering {
     let count: number = 0;
     for (const e of node.edges) if (e.role == EdgeRole.Bindings) {
       const field: number = this.binding.files[owner.module].declarations[e.node]; let input: string = this.checked.symbolTypes[field]; for (let at: number = 0; at < from.length && at < to.length; at = at+1) input = replaceType(input,from[at],to[at]);
-      this.result.typeDefinitions[index].names.push(arena[e.node].get(AttributeKind.Name)); this.result.typeDefinitions[index].fields.push(this.typeId(input,id)); count = count+1;
+      this.result.typeDefinitions[index].names.push(arena[e.node].get(AttributeKind.Name)); { const pendingPush = this.typeId(input,id); this.result.typeDefinitions[index].fields.push(pendingPush); } count = count+1;
     }
     if (count == 0 && node.get(AttributeKind.Payload) != "") {
       let payload: string = functionParams(this.checked.symbolTypes[symbol])[0]; for (let at: number = 0; at < from.length && at < to.length; at = at+1) payload = replaceType(payload,from[at],to[at]);
-      this.result.typeDefinitions[index].names.push("value"); this.result.typeDefinitions[index].fields.push(this.typeId(payload,id));
+      this.result.typeDefinitions[index].names.push("value"); { const pendingPush = this.typeId(payload,id); this.result.typeDefinitions[index].fields.push(pendingPush); }
     }
   }
   unionConstructor(id: number, typeId: number): number {
@@ -229,7 +229,7 @@ export class IrLowering {
     }
     const result: number = this.emit("variant",typeId,values,-1,-1,shape.tag,id); this.setNames(names); return result;
   }
-  newBlock(id: number): number { this.result.functions[this.currentFunction].blocks.push(new IrBlock(this.source(id))); return this.result.functions[this.currentFunction].blocks.length-1; }
+  newBlock(id: number): number { { const pendingPush = new IrBlock(this.source(id)); this.result.functions[this.currentFunction].blocks.push(pendingPush); } return this.result.functions[this.currentFunction].blocks.length-1; }
   open(): boolean { return this.result.functions[this.currentFunction].blocks[this.block].terminator == ""; }
   terminate(op: string, value: number, targets: number[], id: number): void {
     this.result.functions[this.currentFunction].blocks[this.block].terminator = op;
@@ -266,14 +266,14 @@ export class IrLowering {
     const global: number = irIndex(this.globalSymbols,symbol);
     if (global >= 0) {
       const p = this.result.globals[global]; this.symbols.push(symbol);
-      this.result.functions[this.currentFunction].places.push(new IrPlace(p.symbolId,p.typeId,global,false,this.source(id))); return this.symbols.length-1;
+      { const pendingPush = new IrPlace(p.symbolId,p.typeId,global,false,this.source(id)); this.result.functions[this.currentFunction].places.push(pendingPush); } return this.symbols.length-1;
     }
     this.fail(id,"Símbolo sin place local/global (captura o valor de función)"); return -1;
   }
   local(symbol: number, typeId: number, parameter: boolean, id: number): number {
     const place: number = this.symbols.length; this.symbols.push(symbol);
     const identity: string = symbol >= 0 ? this.checked.symbolIds[symbol] : "";
-    this.result.functions[this.currentFunction].places.push(new IrPlace(identity,typeId,-1,parameter,this.source(id)));
+    { const pendingPush = new IrPlace(identity,typeId,-1,parameter,this.source(id)); this.result.functions[this.currentFunction].places.push(pendingPush); }
     if (symbol >= 0) this.result.functions[this.currentFunction].places[place].name = this.binding.symbols[symbol].name;
     return place;
   }
@@ -495,12 +495,12 @@ export class IrLowering {
     this.result.functions[index].returns = this.typeId(functionReturn(signature),id); this.result.functions[index].bodyReturns = this.result.functions[index].returns;
     this.result.functions[index].asynchronous = n.get(AttributeKind.Async) == "true" || n.get(AttributeKind.IsAsync) == "true";
     if (this.result.functions[index].asynchronous && genericBase(functionReturn(signature)) == "Promise") this.result.functions[index].bodyReturns = this.typeId(genericArguments(functionReturn(signature))[0],id);
-    for (let p: number = 0; p < functionParams(signature).length; p = p+1) { let parameter: string = functionParams(signature)[p]; if (parameter.startsWith("...")) parameter = parameter.slice(3,parameter.length); this.result.functions[index].parameterTypes.push(this.typeId(parameter,id)); }
+    for (let p: number = 0; p < functionParams(signature).length; p = p+1) { let parameter: string = functionParams(signature)[p]; if (parameter.startsWith("...")) parameter = parameter.slice(3,parameter.length); { const pendingPush = this.typeId(parameter,id); this.result.functions[index].parameterTypes.push(pendingPush); } }
     if (receiver != "") { this.result.functions[index].receiverType = this.typeId("ref<"+memoryValue(receiver)+">",id); this.result.functions[index].parameterTypes = [this.result.functions[index].receiverType].concat(this.result.functions[index].parameterTypes); }
     for (const capture of this.checked.captures) if (capture.module == owner && capture.closure == id && !this.globalSymbols.includes(capture.symbol)) {
       const captured = this.binding.symbols[capture.symbol]; if (captured.kind == "FunctionDeclaration") continue;
       this.result.functions[index].captureSymbols.push(this.checked.symbolIds[capture.symbol]);
-      this.result.functions[index].captureTypes.push(this.typeId(this.checked.symbolTypes[capture.symbol],id));
+      { const pendingPush = this.typeId(this.checked.symbolTypes[capture.symbol],id); this.result.functions[index].captureTypes.push(pendingPush); }
       this.result.functions[index].captureModes.push(capture.mode);
     }
     this.module = previousModule; this.currentFunction = previousFunction; return index;
@@ -874,7 +874,7 @@ export class IrLowering {
   staticFields(id: number, collect: boolean): void {
     for (const e of this.node(id).edges) if (e.role == EdgeRole.Fields && this.node(e.node).get(AttributeKind.IsStatic) == "true") {
       const symbol: number = this.binding.files[this.module].declarations[e.node]; const typeId: number = this.typeId(this.checked.symbolTypes[symbol],e.node);
-      if (collect) { this.globalSymbols.push(symbol); this.result.globals.push(new IrPlace(this.checked.symbolIds[symbol],typeId,-1,false,this.source(e.node))); }
+      if (collect) { this.globalSymbols.push(symbol); { const pendingPush = new IrPlace(this.checked.symbolIds[symbol],typeId,-1,false,this.source(e.node)); this.result.globals.push(pendingPush); } }
       else { const initializer: number = bindingChild(this.node(e.node),EdgeRole.DefaultValue); if (initializer < 0) { this.fail(e.node,"Campo estático sin inicializador explícito"); continue; } const p: number = this.place(symbol,e.node); this.emit("store",-1,[this.convert(this.expression(initializer),typeId,e.node)],p,-1,"",e.node); }
     }
   }
@@ -961,7 +961,7 @@ export class IrLowering {
           this.checked.files[m].signatures.length != ast.nodes.length || this.checked.files[m].constantStates.length != ast.nodes.length ||
           this.checked.files[m].caseValues.length != ast.nodes.length || this.checked.files[m].matchCoverage.length != ast.nodes.length ||
           this.binding.files[m].parents.length != ast.nodes.length) {
-        this.result.diagnostics.push(new IrIssue("IR_INPUT","Tablas incompatibles con el AST",this.source(ast.root))); return this.result;
+        { const pendingPush = new IrIssue("IR_INPUT","Tablas incompatibles con el AST",this.source(ast.root)); this.result.diagnostics.push(pendingPush); } return this.result;
       }
       for (let id: number = 0; id < ast.nodes.length; id = id+1) {
         const target: number = this.binding.files[m].valueTargets[id]; const declaration: number = this.binding.files[m].declarations[id];
@@ -970,23 +970,23 @@ export class IrLowering {
         let valid: boolean = member >= -1 && member < this.binding.symbols.length && target >= -1 && target < this.binding.symbols.length && declaration >= -1 && declaration < this.binding.symbols.length;
         if (selected >= 0) { if (owner < 0 || owner >= this.graph.modules.length) valid = false; else if (selected >= this.graph.modules[owner].cached.result.ast.nodes.length) valid = false; }
         for (const e of ast.nodes[id].edges) if ((e.node) < 0 || e.node >= ast.nodes.length) valid = false;
-        if (!valid) { this.result.diagnostics.push(new IrIssue("IR_INPUT","Identidad de entrada inválida",this.source(id))); return this.result; }
+        if (!valid) { { const pendingPush = new IrIssue("IR_INPUT","Identidad de entrada inválida",this.source(id)); this.result.diagnostics.push(pendingPush); } return this.result; }
       }
       this.orderState.push(0);
       for (const edge of this.node(ast.root).edges) if (edge.role == EdgeRole.Statements) {
         if (this.node(edge.node).kind == NodeKind.ClassDeclaration) this.staticFields(edge.node,true);
         if (this.node(edge.node).kind == NodeKind.ExportDefaultDeclaration) {
           const expression: number = bindingChild(this.node(edge.node),EdgeRole.Declaration); if (this.node(expression).kind == NodeKind.ClassDeclaration) this.staticFields(expression,true); const symbol: number = this.binding.files[m].declarations[expression];
-          if (symbol >= 0 && ![NodeKind.FunctionDeclaration,NodeKind.ClassDeclaration].includes(this.node(expression).kind)) { this.globalSymbols.push(symbol); this.result.globals.push(new IrPlace(this.checked.symbolIds[symbol],this.typeId(this.checked.symbolTypes[symbol],expression),-1,false,this.source(expression))); }
+          if (symbol >= 0 && ![NodeKind.FunctionDeclaration,NodeKind.ClassDeclaration].includes(this.node(expression).kind)) { this.globalSymbols.push(symbol); { const pendingPush = new IrPlace(this.checked.symbolIds[symbol],this.typeId(this.checked.symbolTypes[symbol],expression),-1,false,this.source(expression)); this.result.globals.push(pendingPush); } }
         }
 
         if (this.node(edge.node).kind == NodeKind.VariableDeclaration || this.node(edge.node).kind == NodeKind.UsingDeclaration) {
           if (this.node(edge.node).get(AttributeKind.Pattern) != "") {
-            for (const item of this.node(edge.node).edges) if (item.role == EdgeRole.ArrayBindings || item.role == EdgeRole.ObjectBindings) { const binding: number = this.binding.files[m].declarations[item.node]; this.globalSymbols.push(binding); this.result.globals.push(new IrPlace(this.checked.symbolIds[binding],this.typeId(this.checked.files[m].types[item.node],item.node),-1,false,this.source(item.node))); }
+            for (const item of this.node(edge.node).edges) if (item.role == EdgeRole.ArrayBindings || item.role == EdgeRole.ObjectBindings) { const binding: number = this.binding.files[m].declarations[item.node]; this.globalSymbols.push(binding); { const pendingPush = new IrPlace(this.checked.symbolIds[binding],this.typeId(this.checked.files[m].types[item.node],item.node),-1,false,this.source(item.node)); this.result.globals.push(pendingPush); } }
             continue;
           }
           const symbol: number = this.binding.files[m].declarations[edge.node]; this.globalSymbols.push(symbol);
-          this.result.globals.push(new IrPlace(this.checked.symbolIds[symbol],this.typeId(this.checked.files[m].types[edge.node],edge.node),-1,false,this.source(edge.node)));
+          { const pendingPush = new IrPlace(this.checked.symbolIds[symbol],this.typeId(this.checked.files[m].types[edge.node],edge.node),-1,false,this.source(edge.node)); this.result.globals.push(pendingPush); }
         }
       }
     }
@@ -995,12 +995,12 @@ export class IrLowering {
     for (let m: number = 0; m < this.graph.modules.length; m = m+1) {
       this.module = m; const root: number = this.graph.modules[m].cached.result.ast.root; const record = this.checked.moduleRecords[m]; const index: number = this.result.functions.length;
       this.result.modules.push(new IrModule(record.id,record.sourceHash,record.file,index));
-      this.result.functions.push(new IrFunction("$init",record.id+":init",this.typeId("void",root),this.source(root)));
+      { const pendingPush = new IrFunction("$init",record.id+":init",this.typeId("void",root),this.source(root)); this.result.functions.push(pendingPush); }
       this.functionModules.push(m); this.functionNodes.push(root); if (record.file == this.graph.entry) this.result.entry = index;
     }
     for (let m: number = 0; m < this.graph.modules.length; m = m+1) {
       this.module = m; const root: number = this.graph.modules[m].cached.result.ast.root; this.result.modules[m].finalizer = this.result.functions.length;
-      this.result.functions.push(new IrFunction("$fini",this.checked.moduleRecords[m].id+":fini",this.typeId("void",root),this.source(root))); this.functionModules.push(m); this.functionNodes.push(root);
+      { const pendingPush = new IrFunction("$fini",this.checked.moduleRecords[m].id+":fini",this.typeId("void",root),this.source(root)); this.result.functions.push(pendingPush); } this.functionModules.push(m); this.functionNodes.push(root);
     }
     for (let f: number = 0; f < this.result.functions.length; f = f+1) {
       this.currentFunction = f; this.module = this.functionModules[f]; this.symbols = []; this.breakTargets = []; this.continueTargets = []; this.breakDepths = []; this.continueDepths = []; this.cleanupScopes = [new IrCleanupScope()];

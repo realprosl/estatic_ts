@@ -50,6 +50,9 @@ También se conectan `string.padStart` y `string.padEnd`, usados por el evaluado
 Las colecciones recibidas por `out` o `ref` se desreferencian antes de tomar
 su dirección para una operación mutante; así el checker conserva la misma
 colección y produce un IR válido al compilarse a sí mismo.
+Los cálculos de metadatos, tipos y estados de flujo se guardan en temporales
+antes de prestar los destinos de `push` o el receptor de `join`. No se relajan
+las reglas de préstamos del verificador.
 
 `npm run test:bootstrap:ir:annotations` verifica rutas, deduplicación, orden,
 parámetros, retornos, las seis funciones reales de `platform.ets` y rechazos

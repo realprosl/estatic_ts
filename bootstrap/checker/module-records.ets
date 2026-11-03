@@ -118,7 +118,7 @@ export class ModuleRecordBuilder {
     this.checked.moduleRecords = []; this.checked.symbolIds = []; this.scopeKeys = [];
     for (const module of this.graph.modules) this.checked.moduleRecords.push(new NativeModuleRecord(module.file, "module:" + contentHash(module.file), module.cached.record.hash));
     this.prepareScopes();
-    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid+1) this.checked.symbolIds.push(this.symbolKey(sid));
+    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid+1) { const identity: string = this.symbolKey(sid); this.checked.symbolIds.push(identity); }
     for (let m: number = 0; m < this.graph.modules.length; m = m+1) {
       let record = this.checked.moduleRecords[m]; let contracts: string[] = [];
       if (m < this.checked.files.length) for (const state of this.checked.files[m].constantStates) if (state != "") record.requiresBody = true;

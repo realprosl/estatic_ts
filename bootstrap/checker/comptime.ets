@@ -679,7 +679,7 @@ export class NativeComptime {
     this.checked.files[module].constantCodes[id] = this.failureCode;
     if (this.failure == "") { this.checked.files[module].constantStates[id] = "evaluated"; this.checked.files[module].constantValues[id] = serialized; }
     else if (!strict && this.failureCode == "COMPTIME_VALUE_UNAVAILABLE") this.checked.files[module].constantStates[id] = "deferred";
-    else { this.checked.files[module].constantStates[id] = "error"; this.checked.diagnostics.push(diagnosticAt("checker",this.failureCode + ": " + this.failure,this.graph.modules[this.failureModule].file,this.node(this.failureModule,this.failureNode))); }
+    else { this.checked.files[module].constantStates[id] = "error"; const diagnostic = diagnosticAt("checker",this.failureCode + ": " + this.failure,this.graph.modules[this.failureModule].file,this.node(this.failureModule,this.failureNode)); this.checked.diagnostics.push(diagnostic); }
   }
   run(): CheckResult {
     for (let m: number = 0; m < this.checked.files.length; m = m+1) for (let id: number = 0; id < this.checked.files[m].types.length; id = id+1) {

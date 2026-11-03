@@ -23,7 +23,7 @@ export class NativeExpansion {
     return false;
   }
   report(module: number, id: number, code: string, message: string): void {
-    this.graph.diagnostics.push(diagnosticAt("checker",code+": "+message,this.graph.modules[module].file,this.node(module,id))); this.graph.success = false;
+    const diagnostic = diagnosticAt("checker",code+": "+message,this.graph.modules[module].file,this.node(module,id)); this.graph.diagnostics.push(diagnostic); this.graph.success = false;
   }
   origin(sid: number): number { while (sid >= 0 && this.binding.symbols[sid].target >= 0) sid = this.binding.symbols[sid].target; return sid; }
   target(module: number, id: number): number {
