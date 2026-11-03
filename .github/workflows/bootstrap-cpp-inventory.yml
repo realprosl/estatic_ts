@@ -64,6 +64,59 @@ jobs:
           NODE
       - name: Publicar inventario en resumen de Actions
         run: cat build/bootstrap/cpp-inventory.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Preparar paquete C++ portable
+        shell: bash
+        run: |
+          mkdir -p portable/build
+          cp -a build/bootstrap portable/build/
+          cp -a runtime portable/runtime
+          cat > portable/build-all.sh <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          cd "$(dirname "$0")"
+          mkdir -p bin
+          for component in lexer parser frontend modules binder checker ir; do
+            echo "Compilando $component..."
+            g++ -std=c++20 -O0 -pthread -fno-exceptions \
+              '-DESTATIC_FRONTEND_ID="portable"' \
+              -I. -I"build/bootstrap/$component" \
+              "build/bootstrap/$component/unity.cpp" -o "bin/$component"
+          done
+          SH
+          chmod +x portable/build-all.sh
+          cat > portable/README.md <<'MD'
+          # Bootstrap C++ portable (Stage 0)
+          
+          Contiene los C++ generados desde bootstrap/ por src/ y el runtime/ del repositorio.
+          En Linux con g++ compatible con C++20, ejecuta `./build-all.sh` desde esta carpeta.
+          Cada componente es un ejecutable separado: no enlaces varios `unity.cpp` juntos.
+          Los `unit-N.cpp` se conservan para inspección y compilación por unidades,
+          pero `build-all.sh` usa exclusivamente `unity.cpp`.
+          Este paquete incluye el runtime completo para preservar los includes;
+          algunas plataformas pueden requerir dependencias del sistema adicionales.
+          No incluye ni necesita src/ ni los archivos .ets para compilar los C++ generados.
+          MD
+          (cd portable && find build runtime -type f \
+            \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' \) | sort > cpp-files.txt)
+      - name: Verificar compilación aislada con g++
+        shell: bash
+        run: |
+          cd portable
+          ./build-all.sh
+      - name: Publicar lista portable
+        shell: bash
+        run: |
+          echo '## Paquete C++ portable' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Compilación aislada con g++ completada.' >> "$GITHUB_STEP_SUMMARY"
+          echo '\`\`\`text' >> "$GITHUB_STEP_SUMMARY"
+          cat portable/cpp-files.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '\`\`\`' >> "$GITHUB_STEP_SUMMARY"
+      - name: Subir paquete C++ portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-portable-cpp
+          path: portable/
+          if-no-files-found: error
       - name: Guardar fuentes generadas
         uses: actions/upload-artifact@v4
         with:
