@@ -24,6 +24,7 @@ export async function install(argv:string[]):Promise<void> {
   if(Number(process.versions.node.split(".")[0])<22 || Number(process.versions.node.split(".")[0])===22&&Number(process.versions.node.split(".")[1])<6)throw new Error("Se requiere Node >=22.6");
   if(noStage0 && !(frontend||process.env.ESTATIC_BOOTSTRAP_FRONTEND))throw new Error("--no-stage0 requiere --frontend o ESTATIC_BOOTSTRAP_FRONTEND; no se ejecutará el compilador histórico");
   process.env.CXX=cxx;
+  if(noStage0)process.env.ESTATIC_NO_STAGE0="1";
   const library=join(prefix,"lib/estc"),current=join(library,"current"),destination=join(prefix,"bin/etsc");
   let oldPointer:string|undefined;
   if(existsSync(current)){
