@@ -12,7 +12,7 @@ export function rebuildFrontend(sourceFrontend: string, entry: string, output: s
   const source = resolve(entry);
   const target = resolve(output);
   if (input === target) throw new Error("La salida no puede sobrescribir el frontend de entrada");
-  const ir = nativeIr(input, source);
+  const ir = nativeIr(input, source, ["--trace"]);
   const result = generateCppFromIr(ir);
   const cpp = target + ".cpp";
   mkdirSync(dirname(target), { recursive: true });
