@@ -21,7 +21,8 @@ export async function buildIrFrontend(directory=join(root,"build/bootstrap/ir-cp
   hash.update(readFileSync(join(root,"package.json")));
   const identity=hash.digest("hex"),stamp=join(directory,"frontend.sha256"),binary=join(directory,"modules-demo");
   if(existsSync(binary)&&existsSync(stamp)&&readFileSync(stamp,"utf8")===identity)return binary;
-  const {buildLoader}=await import("../modules/build.ts");
+  // Historical compiler is loaded only on a cache miss during source bootstrap.
+  const {buildLoader}=await import("../stage0/build-loader.ts");
   const built=await buildLoader(directory,"bootstrap/ir/demo.ets",true);writeFileSync(stamp,identity);return built;
 }
 export function nativeIr(binary:string, entry:string,loaderArgs:string[]=[]):IrProject {
