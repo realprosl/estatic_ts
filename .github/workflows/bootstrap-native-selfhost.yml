@@ -88,3 +88,12 @@ jobs:
           name: etsc-bootstrap-cpp-sources
           path: dist/etsc-bootstrap-cpp/
           if-no-files-found: error
+
+  verify-selfhost:
+    needs: generate
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/bootstrap-cpp-zip-verify.yml
+    with:
+      run_id: ${{ github.run_id }}
