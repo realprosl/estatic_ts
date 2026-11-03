@@ -74,3 +74,14 @@ La lógica de construcción y caché de archivos `.a` del runtime se trasladó d
 - El test `bootstrap/install.test.ts` valida instalación y ejecución del compilador nativo fuera del checkout. Superarlo no demuestra que la construcción inicial sea independiente de Stage0.
 
 **Próximos hitos:** inventariar y mover el generador C++ nativo, auditar la cadena de construcción y después definir el snapshot de semilla reproducible. No fusionar ni iniciar `seed/` solo por tener la CI en verde.
+
+## Construcción sin invocar Stage0 (frontend nativo precompilado)
+
+El compilador nativo puede construirse e instalarse sin volver a ejecutar el compilador histórico si se dispone de un frontend nativo compatible, previamente construido y verificado:
+
+```bash
+ESTATIC_BOOTSTRAP_FRONTEND=/ruta/al/frontend node --experimental-strip-types bootstrap/cli.ts --help
+node --experimental-strip-types bootstrap/install.ts --prefix /ruta/instalacion --frontend /ruta/al/frontend
+```
+
+`buildIrFrontend()` consulta `ESTATIC_BOOTSTRAP_FRONTEND` antes de buscar una instalación o construir mediante Stage0. En ausencia de esta variable, conserva el comportamiento histórico. `--frontend` del instalador permite el mismo desacoplamiento explícito. **Esta vía consume un artefacto nativo preexistente; todavía no constituye una semilla reproducible ni demuestra self-hosting.**
