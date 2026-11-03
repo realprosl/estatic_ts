@@ -67,8 +67,8 @@ La lógica de construcción y caché de archivos `.a` del runtime se trasladó d
 
 ## Estado de dependencias y siguientes puertas (noviembre de 2026)
 
-- `bootstrap/modules/build.ts` es el adaptador explícito de construcción con Stage0: importa `src/modules/module-loader.ts` para generar el frontend inicial. No es una dependencia del ejecutable nativo instalado.
-- `bootstrap/build/native-compiler.ts` todavía compila `src/codegen/ir/native/generator.cpp`. Extraer ese generador C++ a una ruta canónica de `backend/` requiere revisar includes, consumidores y compatibilidad antes de moverlo.
+- `bootstrap/stage0/build-loader.ts` es el adaptador explícito de construcción con Stage0: importa `src/modules/module-loader.ts` para generar el frontend inicial. `bootstrap/modules/build.ts` se mantiene únicamente como fachada de compatibilidad y `bootstrap/ir/cpp.ts` carga el adaptador Stage0 dinámicamente cuando falta la compilación inicial en caché. No es una dependencia del ejecutable nativo instalado.
+- `bootstrap/build/native-compiler.ts` compila `backend/ir/native/generator.cpp` y el host incluye `backend/ir/native/model.hpp`; las rutas históricas de `src/codegen/ir/native/` permanecen como fachadas de compatibilidad.
 - Las herramientas de auditoría de lexer, parser, binder y checker pueden importar Stage0 para pruebas comparativas. No deben confundirse con módulos de producción.
 - `scripts/check-runtime-boundaries.sh` protege imports directos de Stage0 desde los módulos de producción enumerados de `bootstrap/` y desde `backend/ir/` y `shared/`. La CI inyecta imports prohibidos temporalmente para comprobar que el guard falla. Esta comprobación textual **no demuestra** la ausencia de dependencias transitivas.
 - El test `bootstrap/install.test.ts` valida instalación y ejecución del compilador nativo fuera del checkout. Superarlo no demuestra que la construcción inicial sea independiente de Stage0.
