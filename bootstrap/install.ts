@@ -78,7 +78,7 @@ export async function install(argv:string[]):Promise<void> {
     mkdirSync(join(stage,"native"));cpSync(native,join(stage,"native/frontend"));chmodSync(join(stage,"native/frontend"),0o755);
     for(const archive of archives){const relative=join("build/runtime-cache",basename(dirname(archive)),basename(archive)),dir=dirname(relative);mkdirSync(join(stage,dir),{recursive:true});cpSync(archive,join(stage,relative));cpSync(join(dirname(archive),"manifest.json"),join(stage,dir,"manifest.json"));}
     if(existsSync(join(root,"build/libs")))cpSync(join(root,"build/libs"),join(stage,"build/libs"),{recursive:true,verbatimSymlinks:true});
-    writeFileSync(join(stage,"installation.json"),JSON.stringify({format:"estc-install-1",version,compiler:cxx,native:true,frontend:"native/frontend",commandHash:digest(driver)},null,2)+"\n");
+    writeFileSync(join(stage,"installation.json"),JSON.stringify({format:"estc-install-1",version,compiler:cxx,native:true,frontend:"native/frontend",frontendSha256:digest(native),commandHash:digest(driver)},null,2)+"\n");
     release=join(library,"releases",version+"-"+randomUUID().slice(0,8));
     renameSync(stage,release);stage="";
     const pointer=join(library,".current-"+randomUUID());symlinkSync("releases/"+release.split("/").at(-1),pointer);renameSync(pointer,current);pointerChanged=true;
