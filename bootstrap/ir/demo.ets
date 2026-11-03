@@ -16,7 +16,7 @@ function runIr(): void {
   if (trace) printError("[native-ir] loading modules");
   let loader = new ModuleLoader(options); const graph = loader.load(entry);
   if (trace) printError("[native-ir] analyzing project");
-  const project = analyzeProject(graph);
+  const project = analyzeProject(graph, trace);
   if (trace) printError("[native-ir] lowering IR");
   let ir = lowerProject(project.graph,project.binding,project.checked);
   if (trace) printError("[native-ir] formatting IR");
