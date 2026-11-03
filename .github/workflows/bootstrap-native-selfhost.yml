@@ -78,7 +78,7 @@ jobs:
           La portabilidad a otros sistemas requiere adaptar las interfaces POSIX.
           MD
           (cd "$d" && find . -type f | sort > files.txt)
-          if find "$d" -type f \( -name '*.ets' -o -name '*.ts' -o -name '*.o' -o -name '*.a' -o -name '*.so' \) | grep .; then
+          if find "$d" -type f \( -name '*.ets' -o -name '*.ts' -a ! -name '*.d.ts' -o -name '*.o' -o -name '*.a' -o -name '*.so' \) | grep .; then
             echo 'El paquete contiene fuentes no portables o artefactos compilados' >&2
             exit 1
           fi
