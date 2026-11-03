@@ -24,7 +24,7 @@ violations="$(grep -nE '^[[:space:]]*(import|export)[[:space:]]|import[[:space:]
   bootstrap/ir/cpp.ts bootstrap/cli-progress.ts bootstrap/frontend/*.ts \
   backend/ir/*.ts \
   shared/ir/*.ts shared/runtime/*.ts shared/project/*.ts shared/core/*.ts shared/ast/*.ts \
-  | grep 'src/' || true)"
+  | grep -vE '\.test\.ts:' | grep 'src/' || true)"
 if [[ -n "$violations" ]]; then
   echo "$violations" >&2
   echo "ERROR: production native bootstrap/backend/shared imports Stage0 src/" >&2
