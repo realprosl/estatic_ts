@@ -37,6 +37,7 @@ export async function buildIrFrontend(
 }
 export function nativeIr(binary:string, entry:string,loaderArgs:string[]=[]):IrProject {
   const p=spawnSync(binary,[resolve(entry),...loaderArgs],{encoding:"utf8",maxBuffer:64*1024*1024,timeout:120000});
+  if(p.error && (p.error as NodeJS.ErrnoException).code==="ETIMEDOUT") throw new Error(`Native IR timeout after 120s for ${resolve(entry)}; stderr: ${p.stderr||"(no phase trace)"}; use --trace to locate the stalled phase`);
   if(p.error)throw p.error;
   if(p.status!==0){
     let details=p.stderr;
