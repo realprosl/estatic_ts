@@ -5,7 +5,9 @@
 namespace estc {
 class Generator {
 public:
- Project p;Result result;
+ Project p;Result result;std::set<int> cppGenerators;
+ void annotations();
+ S cppEscape(const Function&,const Instruction&);
  explicit Generator(const J& j):p(j){result.headers={"runtime/ets_runtime.hpp","runtime/ets_ir.hpp"};}
  [[noreturn]] S fail(const S& s,const Source& source={})const{throw Error(s,source);}
  const Type& shape(int id)const{if(id<0||id>=int(p.shapes.size()))throw Error("Tipo IR inexistente: "+n(id));return p.shapes[id];}
@@ -116,7 +118,8 @@ public:
 };
 S Generator::instruction(const Function& f,const Instruction& i,int block){
  auto a=[&](int k,bool consume=true){return operand(f,i,k,consume);};S T=i.typeId>=0?type(i.typeId):"void",v;const auto& op=i.op;
- if(op=="constant")v=literal(i.text,i.typeId);
+ if(op=="backendEscape")return cppEscape(f,i);
+ else if(op=="constant")v=literal(i.text,i.typeId);
  else if(op=="load"){const auto& p=f.places.at(i.place);v=p.kind=="index"&&this->p.types.at(f.places.at(p.base).typeId)=="string"?"ets::string_charAt("+place(f,p.base)+".get(),v"+n(p.index)+".get())":place(f,i.place)+".get()";}
  else if(op=="move")v=place(f,i.place)+".take()";
  else if(op=="borrow"||op=="address")v="std::addressof("+place(f,i.place)+".get())";
@@ -263,13 +266,63 @@ S Generator::runtimeCall(const Function& f,const Instruction& i){const auto& c=p
  }
  return fail("Capacidad runtime no implementada: "+c.capability,i.source);
 }
+// Native @cppgen deliberately supports only the literal identity generator used
+// by bootstrap. General comptime evaluation belongs to the frontend, not C++.
+void Generator::annotations(){
+ for(const auto& a:p.annotationRecords){
+  S name=str(get(a,"name"));Source source(get(a,"source"));const auto& args=get(a,"arguments");
+  if(in(name,{"cpp_name","cpp_type","link","cpp_header","cpp_include","cpp_link"}))throw Error("ABI externo no implementado: @"+name,source);
+  if(name!="include"&&name!="cppgen")continue;
+  if(!args.isArray())throw Error("@"+name+": argumentos inválidos",source);
+  if(name=="include"){
+   if(array(args).size()!=1||!array(args)[0].isString())throw Error("@include requiere una ruta literal",source);
+   S path=str(array(args)[0]);
+   static const std::regex safe("^[A-Za-z0-9_][A-Za-z0-9_./-]*$");
+   if(!std::regex_match(path,safe))throw Error("@include: ruta inválida",source);
+   V<S> parts;S part;for(char c:path){if(c=='/'){parts.push_back(part);part.clear();}else part+=c;}parts.push_back(part);
+   for(auto& x:parts)if(x.empty()||x=="."||x=="..")throw Error("@include: ruta inválida",source);
+   result.headers.insert(path);continue;
+  }
+  if(!array(args).empty())throw Error("@cppgen no admite argumentos de anotación",source);
+  const auto& target=get(a,"target");
+  if(!get(target,"file").isString()||!get(target,"start").isNumber())throw Error("@cppgen: destino inválido",source);
+  bool matched=false;
+  for(int k=0;k<int(p.functions.size());k++){
+   const auto& f=p.functions[k];if(f.source.file!=str(get(target,"file"))||f.source.start!=integer(get(target,"start"))||f.source.moduleId!=str(get(target,"moduleId"))||f.source.node!=integer(get(target,"node")))continue;
+   matched=true;
+   if(!cppGenerators.insert(k).second)throw Error("@cppgen duplicado",source);
+   if(f.asynchronous||!f.captureTypes.empty()||f.parameterTypes.size()!=1||p.types.at(f.parameterTypes[0])!="string"||p.types.at(f.returns)!="string"||f.blocks.size()!=1)throw Error("@cppgen nativo requiere (code:string):string e identidad literal",source);
+   const auto& b=f.blocks[0];
+   // No execution of the generator body, nor silent acceptance of transformations.
+   if(b.terminator!="return"||b.instructions.size()!=1)throw Error("@cppgen: cuerpo de identidad requerido",source);
+   const auto& i=b.instructions[0];
+   if(i.op!="load"||i.result!=b.value||i.result<0||i.result>=int(f.values.size())||f.values[i.result]!=f.returns||i.typeId!=f.returns||i.place<0||i.place>=int(f.places.size())||!f.places[i.place].parameter||f.places[i.place].typeId!=f.returns||std::count_if(f.places.begin(),f.places.end(),[](const Place& p){return p.parameter;})!=1)throw Error("@cppgen: cuerpo de identidad requerido",source);
+  }
+  if(!matched)throw Error("@cppgen: destino de función inexistente",source);
+ }
+}
+S Generator::cppEscape(const Function& f,const Instruction& i){
+ if(!cppGenerators.contains(i.callee))return fail("Capacidad @cppgen sin anotación de función",i.source);
+ if(f.asynchronous||i.result!=-1||i.typeId<0||p.types.at(i.typeId)!="void"||i.operands.size()!=1)return fail("@cppgen requiere una sentencia síncrona con un literal string",i.source);
+ const auto& code=definition(f,i.operands[0]);
+ if(code.op!="constant"||code.typeId<0||p.types.at(code.typeId)!="string"||code.text.find('\0')!=S::npos)return fail("@cppgen requiere un literal string; llamadas dinámicas no admitidas",i.source);
+ // Bind source parameter names to IR slots in a nested scope. The snippet runs
+ // at this exact instruction, so return exits the caller with its real C++ type.
+ S aliases,bridges;std::set<S> names;static const std::regex identifier("^[A-Za-z_][A-Za-z0-9_]*$");
+ for(const auto& p:f.places)if(p.parameter){if(!std::regex_match(p.name,identifier)||!names.insert(p.name).second)return fail("@cppgen: nombre de parámetro IR inválido o ausente",i.source);}
+ S prefix="ir_cpp_arg";bool collision=true;while(collision){collision=false;for(int k=0;k<int(f.places.size());k++)if(names.contains(prefix+n(k)))collision=true;if(collision)prefix+="_";}
+ for(int k=0;k<int(f.places.size());k++)if(f.places[k].parameter){bridges+="auto& "+prefix+n(k)+"="+place(f,k)+".get();\n";aliases+="auto& "+f.places[k].name+"="+prefix+n(k)+";\n";}
+ return "{\n"+bridges+"{\n"+aliases+code.text+"\n}\n}";
+}
 void Generator::validate(){
  if(p.types.size()!=p.shapes.size())throw Error("Tablas de tipos incompletas");auto valid=[&](int t){return t>=0&&t<int(p.types.size());};
  for(int id=0;id<int(p.shapes.size());id++){auto& s=shape(id);if(s.names.size()!=s.fields.size()||s.methods.size()!=s.methodTypes.size())throw Error("Tabla de campos/métodos incompatible");for(auto& list:{s.arguments,s.fields,s.variants,s.methodTypes})for(int t:list)if(!valid(t))throw Error("Referencia de tipo inexistente");for(int t:s.methodTypes)if(shape(t).kind!="function")throw Error("Tabla de métodos incompatible");if(s.kind=="scalar"&&!in(p.types[id],{"number","string","boolean","void","i8","u8","i16","u16","i32","u32","i64","u64","f32","f64"}))throw Error("Tipo escalar inválido");}
  std::set<S> dispatchKeys;for(auto& d:p.dispatches){S key=n(d.interfaceType)+":"+n(d.concreteType)+":"+d.name+":"+n(d.signature);if(!valid(d.interfaceType)||!valid(d.concreteType)||!valid(d.signature)||d.callee<0||d.callee>=int(p.functions.size())||!interface(d.interfaceType)||!has(shape(d.interfaceType).variants,d.concreteType)||shape(d.signature).kind!="function"||dispatchKeys.contains(key))throw Error("Contrato de dispatch de interfaz inválido");const auto& target=p.functions[d.callee];if(target.parameterTypes.size()!=shape(d.signature).arguments.size()||target.parameterTypes.empty()||shape(target.parameterTypes[0]).kind!="ref"||shape(target.parameterTypes[0]).arguments.at(0)!=d.concreteType)throw Error("Contrato de dispatch de interfaz inválido");dispatchKeys.insert(key);}
- for(auto& name:p.annotations)if(in(name,{"cpp_name","cpp_type","include","link","cpp_header","cpp_include","cpp_link"}))throw Error("ABI externo no implementado: @"+name);
- for(auto& f:p.functions){V<int> ids=f.parameterTypes;ids.insert(ids.end(),f.values.begin(),f.values.end());ids.push_back(f.returns);ids.push_back(f.bodyReturns);for(auto& place:f.places)ids.push_back(place.typeId);for(int id:ids){if(!valid(id))throw Error("Tipo de función/place/valor inexistente",f.source);if(shape(id).kind=="parameter")throw Error("Parámetro genérico sin especializar",f.source);}
-  for(auto& b:f.blocks){for(int target:b.targets)if(target<0||target>=int(f.blocks.size()))throw Error("Destino de bloque inexistente",b.source);for(auto& i:b.instructions){for(int v:i.operands)if(v<0||v>=int(f.values.size()))throw Error("Operando inexistente",i.source);if(in(i.op,{"call","taskCreate","closure"})&&(i.callee<0||i.callee>=int(p.functions.size())))throw Error("Callee inexistente",i.source);if(i.op=="binary"&&!in(i.text,{"+","-","*","/","%","&","|","^","<<",">>","==","!=","<",">","<=",">="}))throw Error("Operador binario inválido",i.source);if(i.op=="unary"&&!in(i.text,{"+","-","!","~"}))throw Error("Operador unario inválido",i.source);if(i.op=="intrinsic"&&!in(i.text,{"print","write","printError","writeError"}))throw Error("Intrínseco inválido",i.source);if(i.op=="backendEscape")throw Error("Capacidad C++ no soportada: backendEscape",i.source);}}
+ for(const auto& f:p.functions){V<int> ids=f.parameterTypes;ids.insert(ids.end(),f.values.begin(),f.values.end());ids.push_back(f.returns);ids.push_back(f.bodyReturns);for(auto& place:f.places)ids.push_back(place.typeId);for(int id:ids){if(!valid(id))throw Error("Tipo de función/place/valor inexistente",f.source);if(shape(id).kind=="parameter")throw Error("Parámetro genérico sin especializar",f.source);}
+ }
+ annotations();
+ for(auto& f:p.functions){
+  for(auto& b:f.blocks){for(int target:b.targets)if(target<0||target>=int(f.blocks.size()))throw Error("Destino de bloque inexistente",b.source);for(auto& i:b.instructions){for(int v:i.operands)if(v<0||v>=int(f.values.size()))throw Error("Operando inexistente",i.source);if(in(i.op,{"call","taskCreate","closure"})&&(i.callee<0||i.callee>=int(p.functions.size())))throw Error("Callee inexistente",i.source);if(i.op=="binary"&&!in(i.text,{"+","-","*","/","%","&","|","^","<<",">>","==","!=","<",">","<=",">="}))throw Error("Operador binario inválido",i.source);if(i.op=="unary"&&!in(i.text,{"+","-","!","~"}))throw Error("Operador unario inválido",i.source);if(i.op=="intrinsic"&&!in(i.text,{"print","write","printError","writeError"}))throw Error("Intrínseco inválido",i.source);if(i.op=="backendEscape")cppEscape(f,i);else if(in(i.op,{"call","taskCreate","closure"})&&cppGenerators.contains(i.callee))throw Error("@cppgen requiere una llamada directa como sentencia",i.source);}}
  }
 }
 Result Generator::generate(){validate();S defs=declarations();V<S> prototypes,bodies,globals,forwards,printers,printerPrototypes;

@@ -273,7 +273,9 @@ export class IrLowering {
   local(symbol: number, typeId: number, parameter: boolean, id: number): number {
     const place: number = this.symbols.length; this.symbols.push(symbol);
     const identity: string = symbol >= 0 ? this.checked.symbolIds[symbol] : "";
-    this.result.functions[this.currentFunction].places.push(new IrPlace(identity,typeId,-1,parameter,this.source(id))); return place;
+    this.result.functions[this.currentFunction].places.push(new IrPlace(identity,typeId,-1,parameter,this.source(id)));
+    if (symbol >= 0) this.result.functions[this.currentFunction].places[place].name = this.binding.symbols[symbol].name;
+    return place;
   }
   memberFor(text: string, name: string, signature: string = ""): number {
     const nominal: number = canonicalSymbol(memoryValue(text)); if (nominal < 0) return -1;
