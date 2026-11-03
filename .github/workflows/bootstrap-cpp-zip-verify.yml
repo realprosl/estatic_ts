@@ -22,6 +22,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
+      - name: Obtener fuentes bootstrap como entradas de prueba
+        uses: actions/checkout@v4
+        with:
+          path: reference
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Instalar dependencias C++ (sin Node)
         run: |
           sudo apt-get update
@@ -47,16 +52,22 @@ jobs:
           ./build-all.sh
           ./native/etsc --version
           test -x native/frontend
-      - name: Probar compilación nativa de una fuente de bootstrap
+      - name: Recompilar los siete componentes de bootstrap con el compilador del ZIP
+        shell: bash
         run: |
-          cd package
-          export ESTC_ROOT="$PWD"
-          mkdir -p selftest
-          cat > selftest/hello.ets <<'ETS'
-          console.log("Bootstrap nativo OK");
-          ETS
-          ./native/etsc build selftest/hello.ets -o selftest/hello.cpp --binary selftest/hello --no-progress
-          test -s selftest/hello.cpp
-          test -x selftest/hello
-          ./selftest/hello
-          echo 'ZIP reconstruido desde C++ y compilación ETS nativa: OK' >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          export ESTC_ROOT="$GITHUB_WORKSPACE/package"
+          cd reference
+          mkdir -p "$GITHUB_WORKSPACE/selfhost"
+          for component in lexer parser frontend modules binder checker ir; do
+            echo "::group::Autocompilación de bootstrap/$component"
+            "$ESTC_ROOT/native/etsc" build "bootstrap/$component/demo.ets" \
+              -o "$GITHUB_WORKSPACE/selfhost/$component.cpp" \
+              --binary "$GITHUB_WORKSPACE/selfhost/$component" \
+              --no-progress
+            test -s "$GITHUB_WORKSPACE/selfhost/$component.cpp"
+            test -x "$GITHUB_WORKSPACE/selfhost/$component"
+            echo "OK: bootstrap/$component/demo.ets" >> "$GITHUB_STEP_SUMMARY"
+            echo "::endgroup::"
+          done
+          echo 'Los siete componentes de bootstrap se han recompilado con el compilador reconstruido desde el ZIP.' >> "$GITHUB_STEP_SUMMARY"
