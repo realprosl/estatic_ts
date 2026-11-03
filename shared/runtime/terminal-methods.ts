@@ -1,5 +1,4 @@
-// Terminal signatures use the shared string-based type-name contract.
-type TypeName = string;
+import type { TypeName } from "../ast/type-name.ts";
 export const TERMINAL_METHODS:Record<string,{params:TypeName[];returnType:TypeName}>=Object.assign(Object.create(null),{
  write:{params:["string"],returnType:"boolean"},
  writeLine:{params:["string"],returnType:"boolean"},
