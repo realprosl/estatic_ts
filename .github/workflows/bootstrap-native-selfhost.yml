@@ -51,7 +51,8 @@ jobs:
           mkdir -p "$d/src/codegen/ir" "$d/bootstrap"
           cp -a src/codegen/ir/native "$d/src/codegen/ir/"
           cp -a bootstrap/native "$d/bootstrap/"
-          cp -a bootstrap/modules "$d/bootstrap/"
+          mkdir -p "$d/bootstrap/modules"
+          find bootstrap/modules -maxdepth 1 -type f \( -name "*.hpp" -o -name "*.h" \) -exec cp {} "$d/bootstrap/modules/" \;
           cp -a runtime "$d/"
           cp -a templates "$d/"
           cp -a types "$d/"
