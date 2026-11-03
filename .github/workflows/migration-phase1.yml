@@ -131,6 +131,14 @@ jobs:
       - name: IR and native backend tests
         run: |
           node --experimental-strip-types --test --test-concurrency=1 bootstrap/ir/ir.test.ts bootstrap/ir/cpp.test.ts bootstrap/ir/native.test.ts
+      - name: Attempt native-to-native frontend rebuild without Stage0 fallback
+        run: |
+          frontend=$(node --experimental-strip-types --input-type=module -e 'import { buildIrFrontend } from "./bootstrap/ir/cpp.ts"; console.log(await buildIrFrontend());')
+          ESTATIC_NO_STAGE0=1 ESTATIC_BOOTSTRAP_FRONTEND="$frontend" node --experimental-strip-types bootstrap/rebuild-frontend.ts "$frontend" bootstrap/ir/demo.ets build/bootstrap/rebuilt-frontend
+          test -x build/bootstrap/rebuilt-frontend
+          test -s build/bootstrap/rebuilt-frontend.provenance.json
+          ESTATIC_NO_STAGE0=1 build/bootstrap/rebuilt-frontend bootstrap/ir/demo.ets > build/bootstrap/rebuilt-ir.json
+          node --input-type=module -e 'import {readFileSync} from "node:fs"; const ir=JSON.parse(readFileSync("build/bootstrap/rebuilt-ir.json","utf8")); if(!ir || typeof ir!=="object")throw new Error("Invalid rebuilt frontend IR");'
       - name: CLI and runtime integration tests
         run: |
           node --experimental-strip-types --test --test-concurrency=1 bootstrap/cli.test.ts test/unit/runtime-backends.test.ts test/unit/cpp-types.test.ts test/unit/codegen.test.ts
