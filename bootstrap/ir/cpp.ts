@@ -27,6 +27,9 @@ export async function buildIrFrontend(
     const manifest=JSON.parse(readFileSync(join(root,"installation.json"),"utf8"));
     return verifiedFrontend(binary,manifest.frontendSha256);
   }
+  if (process.env.ESTATIC_NO_STAGE0 === "1") {
+    throw new Error("ESTATIC_NO_STAGE0=1: se requiere un frontend nativo precompilado o instalado; Stage0 está deshabilitado");
+  }
   // La compilación histórica queda aislada en bootstrap/stage0/.
   const { buildStage0Frontend } =
     await import("../stage0/build-frontend.ts");
