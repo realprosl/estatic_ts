@@ -1099,9 +1099,9 @@ export class Parser {
     let decoded: string = "";
     let index: number = 0;
     while (index < raw.length) {
-      const ch: string = raw[index];
+      const ch: string = raw.charAt(index);
       if (ch == "\\" && index + 1 < raw.length) {
-        const next: string = raw[index + 1];
+        const next: string = raw.charAt(index + 1);
         if (next == "n") { decoded = decoded + "\n"; index = index + 2; continue; }
         if (next == "r") { decoded = decoded + "\r"; index = index + 2; continue; }
         if (next == "t") { decoded = decoded + "\t"; index = index + 2; continue; }
