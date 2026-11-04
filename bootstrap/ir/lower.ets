@@ -348,6 +348,23 @@ export class IrLowering {
     if (["ptr","constPtr"].includes(shape.kind) && shape.arguments[0] == this.valueType(value)) return this.emit("own",typeId,[value],-1,-1,"",id);
     return this.emit("convert",typeId,[value],-1,-1,"",id);
   }
+  decodeTemplatePart(raw: string): string {
+    let decoded: string = "";
+    let index: number = 0;
+    while (index < raw.length) {
+      const ch: string = raw.charAt(index);
+      if (ch == "\\" && index + 1 < raw.length) {
+        const next: string = raw.charAt(index + 1);
+        if (next == "n") { decoded = decoded + "\n"; index = index + 2; continue; }
+        if (next == "r") { decoded = decoded + "\r"; index = index + 2; continue; }
+        if (next == "t") { decoded = decoded + "\t"; index = index + 2; continue; }
+        if (next == "\\" || next == "`" || next == "$") { decoded = decoded + next; index = index + 2; continue; }
+      }
+      decoded = decoded + ch;
+      index = index + 1;
+    }
+    return decoded;
+  }
   expression(id: number): number {
     if (id < 0) return -1;
     for (let at: number = this.overrideNodes.length-1; at >= 0; at = at-1) if (this.overrideNodes[at] == id) return this.emit("load",this.result.functions[this.currentFunction].places[this.overridePlaces[at]].typeId,[],this.overridePlaces[at],-1,"",id);
@@ -412,7 +429,7 @@ export class IrLowering {
     if (kind == NodeKind.IndexExpression) return this.emit("load",typeId,[],this.rootPlace(id),-1,"",id);
     if (kind == NodeKind.MemberExpression) return this.memberValue(id,typeId);
     if (kind == NodeKind.TemplateLiteralExpression) {
-      let values: number[] = []; for (const e of n.edges) if (e.role == EdgeRole.Parts) values.push(this.emit("constant",this.typeId("string",id),[],-1,-1,this.node(e.node).get(AttributeKind.Value),e.node)); else if (e.role == EdgeRole.Expressions) values.push(this.convert(this.expression(e.node),this.typeId("string",id),e.node));
+      let values: number[] = []; for (const e of n.edges) if (e.role == EdgeRole.Parts) values.push(this.emit("constant",this.typeId("string",id),[],-1,-1,this.decodeTemplatePart(this.node(e.node).get(AttributeKind.Value)),e.node)); else if (e.role == EdgeRole.Expressions) values.push(this.convert(this.expression(e.node),this.typeId("string",id),e.node));
       let result: number = values[0]; for (let at: number = 1; at < values.length; at = at+1) result = this.emit("binary",typeId,[result,values[at]],-1,-1,"+",id); return result;
     }
     if (kind == NodeKind.IdentifierExpression) return this.functionIdentifier(id,typeId);
