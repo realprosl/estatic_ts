@@ -982,7 +982,7 @@ export class IrLowering {
           let args: string[] = []; let valid: boolean = true;
           for (const arg of decorator.edges) if (arg.role == EdgeRole.Args) {
             const value = ast.nodes[arg.node];
-            if (value.kind != NodeKind.LiteralExpression) { valid = false; break; }
+            if (value.kind != NodeKind.LiteralExpression || value.get(AttributeKind.LiteralType) != "string") { valid = false; break; }
             args.push(value.get(AttributeKind.Value));
           }
           if (!valid || args.length != 1) {
@@ -1053,7 +1053,12 @@ export class IrLowering {
         }
         const body: number = bindingChild(this.node(id),EdgeRole.Body);
         if (body >= 0 && this.node(body).kind != NodeKind.BlockStatement) { const returned: number = this.convert(this.expression(body),this.result.functions[f].bodyReturns,id); this.cleanup(0,id); this.terminate("return",returned,[],id); }
-        else this.statement(body);
+        else if (body >= 0) this.statement(body);
+        else if (this.node(id).kind == NodeKind.FunctionDeclaration) {
+          let native: boolean = false;
+          for (const edge of this.node(id).edges) if (edge.role == EdgeRole.Decorators && this.node(edge.node).get(AttributeKind.Name) == "cpp_native") native = true;
+          if (!native) this.fail(id,"Declaración de función sin cuerpo y sin @cpp_native");
+        }
       } else this.statement(id);
       if (this.open()) {
         if (this.result.types[this.result.functions[f].bodyReturns] == "void") { this.cleanup(0,id); this.terminate("return",-1,[],id); }
