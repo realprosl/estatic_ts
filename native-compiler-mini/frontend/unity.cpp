@@ -13449,7 +13449,7 @@ struct NativeChecker {
                 return std::string("(number)=>number");
             }
             if ((name == std::string("includes"))) {
-                return std::string("(string,number)=>boolean");
+                return std::string("!builtin:string.includes");
             }
             if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("startsWith"), std::string("endsWith")}, name)) {
                 return std::string("(string)=>boolean");
