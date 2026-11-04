@@ -31,10 +31,10 @@ function compileAndRun(source:string) {
  return executed.stdout;
 }
 test('phase 2: imported ETS runtime function executes C++ without native registration',()=>{
- const source='import {format} from "./experiments/runtime-injection/console-v1"; print(format("hello"));';
+ const source=`import {format} from "${root}/experiments/runtime-injection/console-v1"; print(format("hello"));`;
  assert.equal(compileAndRun(source),'runtime:hello\n');
 });
 test('phase 3: expanded ETS module uses same prebuilt compiler',()=>{
- const source='import {formatExtra} from "./experiments/runtime-injection/console-v2"; print(formatExtra("hello"));';
+ const source=`import {formatExtra} from "${root}/experiments/runtime-injection/console-v2"; print(formatExtra("hello"));`;
  assert.equal(compileAndRun(source),'runtime:hello!\n');
 });
