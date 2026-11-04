@@ -18,7 +18,7 @@ export function formatIr(project: IrProject): string {
   let annotations: string[] = [];
   for (const a of project.annotations) {
     let args: string[] = []; for (const value of a.arguments) args.push(quoteSource(value));
-    annotations.push("{\\"name\\":"+quoteSource(a.name)+",\\"arguments\\":["+args.join(",")+"],\\"source\\":"+formatIrSource(a.source)+",\\"target\\":"+formatIrSource(a.target)+"}");
+    annotations.push("{\"name\":"+quoteSource(a.name)+",\"arguments\":["+args.join(",")+"],\"source\":"+formatIrSource(a.source)+",\"target\":"+formatIrSource(a.target)+"}");
   }
   let output: string[] = ['{"dispatches":['+dispatches.join(",")+"],\"annotations\":["+annotations.join(",")+"],"+formatContracts(project)+",\"format\":\"ets-ir-2\",\"success\":"+bindingBoolean(project.success)+",\"types\":["+types.join(",")+"],\"typeDefinitions\":["+definitions.join(",")+"],\"runtimeContracts\":["+contracts.join(",")+"],\"entry\":"+numberToString(project.entry)+",\"initializationOrder\":"+bindingNumbers(project.initializationOrder)+",\"finalizationOrder\":"+bindingNumbers(project.finalizationOrder)+",\"modules\":["];
   let comma: string = "";
