@@ -1,0 +1,107 @@
+name: Snapshot native compiler mini
+on:
+  push:
+    branches: [feature/minimal-cpp-compiler]
+    paths:
+      - '.github/workflows/native-compiler-mini-snapshot.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate C++ compiler from src and bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types --input-type=module <<'NODE'
+          import { mkdirSync, writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          import { compileFile } from './src/modules/module-loader.ts';
+          import { nativeTables } from './bootstrap/build/native-tables.ts';
+          import { getTs2cppVersionLabel } from './src/core/ts2cpp-version.ts';
+          const dir = 'native-compiler-mini';
+          const out = join(dir, 'frontend');
+          mkdirSync(out, { recursive: true });
+          const result = await compileFile('bootstrap/ir/demo.ets', { baseDirectory: process.cwd() });
+          writeFileSync(join(out, 'estatic_common.hpp'), result.externalHeaders.join('\n') + '\n' + result.header);
+          for (const [i, module] of result.modules.entries()) {
+            writeFileSync(join(out, `unit-${i}.cpp`), module.cpp);
+          }
+          const header = result.header.split('\n').filter(x => x.trim() !== '#pragma once').join('\n');
+          const bodies = result.modules.map(m => m.cpp.split('\n').filter(x => !x.includes('#include "estatic_common.hpp"')).join('\n'));
+          writeFileSync(join(out, 'unity.cpp'), [header, result.externalHeaders.join('\n'), ...bodies].join('\n'));
+          const nativeDir = join(dir, 'build/bootstrap/etsc');
+          mkdirSync(nativeDir, { recursive: true });
+          nativeTables(join(nativeDir, 'native-tables.hpp'));
+          writeFileSync(join(nativeDir, 'install_config.hpp'), `#define ESTC_PLATFORM "linux"\n#define ESTC_ARCH "portable"\n#define ESTC_VERSION ${JSON.stringify(getTs2cppVersionLabel().replace(/^estatic/,'etsc'))}\n`);
+          console.log(`Generated ${result.modules.length} frontend C++ units`);
+          NODE
+          d=native-compiler-mini
+          mkdir -p "$d/src/codegen/ir" "$d/bootstrap" "$d/bootstrap/modules"
+          cp -a src/codegen/ir/native "$d/src/codegen/ir/"
+          cp -a bootstrap/native "$d/bootstrap/"
+          find bootstrap/modules -maxdepth 1 -type f \( -name '*.hpp' -o -name '*.h' \) -exec cp {} "$d/bootstrap/modules/" \;
+          cp -a runtime "$d/"
+          if [ -d templates ]; then cp -a templates "$d/"; fi
+          if [ -d types ]; then cp -a types "$d/"; fi
+          cat > "$d/build-all.sh" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          cd "$(dirname "$0")"
+          mkdir -p native
+          g++ -std=c++20 -O1 -pthread -fno-exceptions -I. -Ifrontend \
+            '-DESTATIC_FRONTEND_ID="portable"' frontend/unity.cpp -o native/frontend
+          g++ -std=c++20 -O2 -I. -Ibuild/bootstrap/etsc \
+            bootstrap/native/driver.cpp src/codegen/ir/native/generator.cpp \
+            -lcrypto -o native/etsc
+          SH
+          chmod +x "$d/build-all.sh"
+          cat > "$d/README.md" <<'MD'
+          # Native compiler mini — full baseline
+          
+          Untrimmed C++ compiler generated from `bootstrap/ir/demo.ets` by the
+          original `src/modules/module-loader.ts`. This snapshot deliberately
+          preserves all runtime and native backend dependencies.
+          
+          On Linux with a C++20 compiler and OpenSSL development headers:
+          
+          ```sh
+          ./build-all.sh
+          export ESTC_ROOT="$(pwd)"
+          ./native/etsc --version
+          ./native/etsc build path/to/main.ets --no-progress
+          ```
+          
+          No Node.js or TypeScript sources are needed to build this snapshot.
+          The generated binaries in `native/` are not committed.
+          MD
+          find "$d" -type f \( -name '*.ets' -o -name '*.ts' -o -name '*.o' -o -name '*.a' -o -name '*.so' \) | grep . && exit 1 || true
+      - name: Compile generated package with g++
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev libcurl4-openssl-dev libuv1-dev
+          cd native-compiler-mini
+          ./build-all.sh
+          ./native/etsc --version
+          test -x native/frontend
+      - name: Commit generated C++ sources to feature branch
+        run: |
+          set -euo pipefail
+          rm -rf native-compiler-mini/native
+          git add -f native-compiler-mini
+          if git diff --cached --quiet; then
+            echo "Snapshot already up to date"
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m 'build: snapshot full portable bootstrap C++ compiler'
+          git push origin HEAD:feature/minimal-cpp-compiler
