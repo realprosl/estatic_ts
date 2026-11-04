@@ -67,16 +67,58 @@ jobs:
             --binary "$GITHUB_WORKSPACE/build/selfhost/stage2/hello" --no-progress
           test -x build/selfhost/stage2/hello
           build/selfhost/stage2/hello
-      - name: Segunda generación del frontend Bootstrap con el compilador integrado
+      - name: Diagnóstico segunda generación — análisis y emisión de IR
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          mkdir -p build/selfhost/stage2
+          echo "::group::Frontend Bootstrap de segunda generación"
+          date -u '+Inicio frontend: %FT%TZ'
+          /usr/bin/time -v -o build/selfhost/stage2/frontend-time.txt \
+            timeout --signal=TERM --kill-after=15s 9m \
+            build/selfhost/stage2/frontend "$GITHUB_WORKSPACE/bootstrap/ir/demo.ets" \
+            > build/selfhost/stage2/bootstrap-ir.json \
+            2> build/selfhost/stage2/frontend-stderr.log || {
+              rc=$?
+              echo "::error::Frontend de segunda generación falló o agotó 9 minutos (exit=$rc)"
+              tail -c 4000 build/selfhost/stage2/frontend-stderr.log || true
+              cat build/selfhost/stage2/frontend-time.txt || true
+              exit "$rc"
+            }
+          test -s build/selfhost/stage2/bootstrap-ir.json
+          python3 - <<'PY'
+          import json
+          with open('build/selfhost/stage2/bootstrap-ir.json') as f:
+              project=json.load(f)
+          print('IR success:',project.get('success'))
+          print('Diagnósticos:',len(project.get('diagnostics',[])))
+          if project.get('success') is not True: raise SystemExit('Frontend no produjo IR válido')
+          PY
+          cat build/selfhost/stage2/frontend-time.txt
+          echo "::endgroup::"
+      - name: Diagnóstico segunda generación — codegen C++ y enlace
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           export ESTC_ROOT="$GITHUB_WORKSPACE/native-compiler-mini"
-          build/selfhost/stage2/etsc build bootstrap/ir/demo.ets \
-            --frontend "$GITHUB_WORKSPACE/build/selfhost/stage2/frontend" \
+          echo "::group::Backend segunda generación"
+          date -u '+Inicio backend: %FT%TZ'
+          /usr/bin/time -v -o build/selfhost/stage2/backend-time.txt \
+            timeout --signal=TERM --kill-after=15s 12m \
+            build/selfhost/stage2/etsc build \
+            --from-ir "$GITHUB_WORKSPACE/build/selfhost/stage2/bootstrap-ir.json" \
             -o "$GITHUB_WORKSPACE/build/selfhost/stage2/bootstrap-ir.cpp" \
-            --binary "$GITHUB_WORKSPACE/build/selfhost/stage2/bootstrap-ir" --no-progress
+            --binary "$GITHUB_WORKSPACE/build/selfhost/stage2/bootstrap-ir" \
+            --no-progress --verbose || {
+              rc=$?
+              echo "::error::Backend de segunda generación falló o agotó 12 minutos (exit=$rc)"
+              cat build/selfhost/stage2/backend-time.txt || true
+              exit "$rc"
+            }
           test -x build/selfhost/stage2/bootstrap-ir
-          echo 'Segunda generación del frontend superada. El driver y backend siguen siendo C++ de referencia: self-hosting integral NO demostrado.' >> "$GITHUB_STEP_SUMMARY"
+          cat build/selfhost/stage2/backend-time.txt
+          echo 'Segunda generación del frontend completada. Driver/backend siguen siendo C++ de referencia.' >> "$GITHUB_STEP_SUMMARY"
+          echo "::endgroup::"
       - name: Guardar artefactos para diagnóstico
         if: always()
         uses: actions/upload-artifact@v4
