@@ -4,6 +4,10 @@ on:
     branches: [feature/minimal-cpp-compiler]
     paths:
       - '.github/workflows/native-compiler-mini-snapshot.yml'
+      - 'src/**'
+      - 'bootstrap/**'
+      - 'runtime/**'
+      - 'package.json'
   workflow_dispatch:
 permissions:
   contents: write
