@@ -1,0 +1,57 @@
+name: Verify committed native compiler against Bootstrap
+
+on:
+  push:
+    branches: [feature/minimal-cpp-compiler]
+    paths:
+      - '.github/workflows/native-compiler-mini-bootstrap-test.yml'
+      - 'native-compiler-mini/**'
+      - 'bootstrap/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install C++ dependencies (no Node)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
+      - name: Rebuild compiler exclusively from committed C++ snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd native-compiler-mini
+          bash ./build-all.sh
+          ./native/etsc --version
+          test -x native/frontend
+          test -x native/etsc
+      - name: Compile all seven Bootstrap components using snapshot compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ESTC_ROOT="$GITHUB_WORKSPACE/native-compiler-mini"
+          mkdir -p "$GITHUB_WORKSPACE/selfhost"
+          for component in lexer parser frontend modules binder checker ir; do
+            echo "::group::bootstrap/$component"
+            "$ESTC_ROOT/native/etsc" build "bootstrap/$component/demo.ets" \
+              -o "$GITHUB_WORKSPACE/selfhost/$component.cpp" \
+              --binary "$GITHUB_WORKSPACE/selfhost/$component" \
+              --no-progress
+            test -s "$GITHUB_WORKSPACE/selfhost/$component.cpp"
+            test -x "$GITHUB_WORKSPACE/selfhost/$component"
+            echo "OK: bootstrap/$component/demo.ets" >> "$GITHUB_STEP_SUMMARY"
+            echo "::endgroup::"
+          done
+      - name: Publish generated test outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-compiler-mini-bootstrap-test-outputs
+          path: selfhost/
+          if-no-files-found: ignore
