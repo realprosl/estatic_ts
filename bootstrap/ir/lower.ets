@@ -1,4 +1,4 @@
-import { IrDispatch, IrCleanupScope, IrRuntimeContract, IrType, IrSource, IrPlace, IrInstruction, IrBlock, IrFunction, IrModule, IrIssue, IrProject } from "./model";
+import { IrDispatch, IrCleanupScope, IrRuntimeContract, IrType, IrSource, IrPlace, IrInstruction, IrBlock, IrFunction, IrModule, IrIssue, IrProject, IrAnnotation } from "./model";
 import { ModuleGraph } from "../modules/loader";
 import { BindingResult, bindingChild } from "../binder/binder";
 import { CheckResult } from "../checker/model";
@@ -971,6 +971,26 @@ export class IrLowering {
         if (selected >= 0) { if (owner < 0 || owner >= this.graph.modules.length) valid = false; else if (selected >= this.graph.modules[owner].cached.result.ast.nodes.length) valid = false; }
         for (const e of ast.nodes[id].edges) if ((e.node) < 0 || e.node >= ast.nodes.length) valid = false;
         if (!valid) { { const pendingPush = new IrIssue("IR_INPUT","Identidad de entrada inválida",this.source(id)); this.result.diagnostics.push(pendingPush); } return this.result; }
+      }
+      // Preserve source annotations in ets-ir-2, including imported modules.
+      for (let id: number = 0; id < ast.nodes.length; id = id+1) {
+        const target = ast.nodes[id];
+        for (const edge of target.edges) if (edge.role == EdgeRole.Decorators) {
+          const decorator = ast.nodes[edge.node];
+          const name = decorator.get(AttributeKind.Name);
+          if (name != "cpp_native" && name != "include" && name != "cpp_include") continue;
+          let args: string[] = []; let valid: boolean = true;
+          for (const arg of decorator.edges) if (arg.role == EdgeRole.Args) {
+            const value = ast.nodes[arg.node];
+            if (value.kind != NodeKind.LiteralExpression) { valid = false; break; }
+            args.push(value.get(AttributeKind.Value));
+          }
+          if (!valid || args.length != 1) {
+            this.result.diagnostics.push(new IrIssue("IR_ANNOTATION","La anotación requiere un literal string",this.source(edge.node)));
+          } else {
+            this.result.annotations.push(new IrAnnotation(this.source(edge.node),this.source(id),name,args));
+          }
+        }
       }
       this.orderState.push(0);
       for (const edge of this.node(ast.root).edges) if (edge.role == EdgeRole.Statements) {
