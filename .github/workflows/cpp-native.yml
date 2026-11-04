@@ -22,10 +22,16 @@ jobs:
       - name: Install C++ dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++ libuv1-dev libcurl4-openssl-dev libdrogon-dev
+          sudo apt-get install -y g++ libuv1-dev libcurl4-openssl-dev libdrogon-dev libjsoncpp-dev pkg-config
+      - name: Verify Drogon and JsonCpp headers
+        run: |
+          test -f /usr/include/jsoncpp/json/json.h
+          pkg-config --exists jsoncpp
       - name: Install Node dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
       - name: Verify bootstrap parser and IR
         run: node --experimental-strip-types --test bootstrap/parser/parser.test.ts bootstrap/ir/ir.test.ts
       - name: Verify native annotations and C++ generation
+        env:
+          CPLUS_INCLUDE_PATH: /usr/include/jsoncpp
         run: node --experimental-strip-types --test --test-concurrency=1 bootstrap/ir/native-annotations.test.ts bootstrap/ir/cpp.test.ts
