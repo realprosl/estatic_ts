@@ -1095,23 +1095,6 @@ export class Parser {
     }
     return result;
   }
-  decodeTemplatePart(raw: string): string {
-    let decoded: string = "";
-    let index: number = 0;
-    while (index < raw.length) {
-      const ch: string = raw.charAt(index);
-      if (ch == "\\" && index + 1 < raw.length) {
-        const next: string = raw.charAt(index + 1);
-        if (next == "n") { decoded = decoded + "\n"; index = index + 2; continue; }
-        if (next == "r") { decoded = decoded + "\r"; index = index + 2; continue; }
-        if (next == "t") { decoded = decoded + "\t"; index = index + 2; continue; }
-        if (next == "\\" || next == "`" || next == "$") { decoded = decoded + next; index = index + 2; continue; }
-      }
-      decoded = decoded + ch;
-      index = index + 1;
-    }
-    return decoded;
-  }
   templateLiteral(start: ParserToken): number {
     const result: number = this.add(NodeKind.TemplateLiteralExpression, start, start);
     let scanning: boolean = true;
@@ -1119,7 +1102,7 @@ export class Parser {
       if (!this.check("template-text")) { this.report("Se esperaba texto de template"); break; }
       const part: ParserToken = this.take();
       const segment: number = this.add(NodeKind.TemplatePart, part, part);
-      this.attr(segment, AttributeKind.Value, this.decodeTemplatePart(part.lexeme)); this.edge(result, EdgeRole.Parts, segment);
+      this.attr(segment, AttributeKind.Value, part.lexeme); this.edge(result, EdgeRole.Parts, segment);
       if (!this.accept("interpolation-start")) { scanning = false; }
       else {
         this.skipNewlines();
