@@ -1,4 +1,4 @@
-import { IrDispatch, IrCleanupScope, IrRuntimeContract, IrType, IrSource, IrPlace, IrInstruction, IrBlock, IrFunction, IrModule, IrIssue, IrProject } from "./model";
+import { IrDispatch, IrCleanupScope, IrRuntimeContract, IrType, IrSource, IrPlace, IrInstruction, IrBlock, IrFunction, IrModule, IrIssue, IrProject, IrAnnotation } from "./model";
 import { ModuleGraph } from "../modules/loader";
 import { BindingResult, bindingChild } from "../binder/binder";
 import { CheckResult } from "../checker/model";
@@ -348,6 +348,23 @@ export class IrLowering {
     if (["ptr","constPtr"].includes(shape.kind) && shape.arguments[0] == this.valueType(value)) return this.emit("own",typeId,[value],-1,-1,"",id);
     return this.emit("convert",typeId,[value],-1,-1,"",id);
   }
+  decodeTemplatePart(raw: string): string {
+    let decoded: string = "";
+    let index: number = 0;
+    while (index < raw.length) {
+      const ch: string = raw.charAt(index);
+      if (ch == "\\" && index + 1 < raw.length) {
+        const next: string = raw.charAt(index + 1);
+        if (next == "n") { decoded = decoded + "\n"; index = index + 2; continue; }
+        if (next == "r") { decoded = decoded + "\r"; index = index + 2; continue; }
+        if (next == "t") { decoded = decoded + "\t"; index = index + 2; continue; }
+        if (next == "\\" || next == "`" || next == "$") { decoded = decoded + next; index = index + 2; continue; }
+      }
+      decoded = decoded + ch;
+      index = index + 1;
+    }
+    return decoded;
+  }
   expression(id: number): number {
     if (id < 0) return -1;
     for (let at: number = this.overrideNodes.length-1; at >= 0; at = at-1) if (this.overrideNodes[at] == id) return this.emit("load",this.result.functions[this.currentFunction].places[this.overridePlaces[at]].typeId,[],this.overridePlaces[at],-1,"",id);
@@ -412,7 +429,7 @@ export class IrLowering {
     if (kind == NodeKind.IndexExpression) return this.emit("load",typeId,[],this.rootPlace(id),-1,"",id);
     if (kind == NodeKind.MemberExpression) return this.memberValue(id,typeId);
     if (kind == NodeKind.TemplateLiteralExpression) {
-      let values: number[] = []; for (const e of n.edges) if (e.role == EdgeRole.Parts) values.push(this.emit("constant",this.typeId("string",id),[],-1,-1,this.node(e.node).get(AttributeKind.Value),e.node)); else if (e.role == EdgeRole.Expressions) values.push(this.convert(this.expression(e.node),this.typeId("string",id),e.node));
+      let values: number[] = []; for (const e of n.edges) if (e.role == EdgeRole.Parts) values.push(this.emit("constant",this.typeId("string",id),[],-1,-1,this.decodeTemplatePart(this.node(e.node).get(AttributeKind.Value)),e.node)); else if (e.role == EdgeRole.Expressions) values.push(this.convert(this.expression(e.node),this.typeId("string",id),e.node));
       let result: number = values[0]; for (let at: number = 1; at < values.length; at = at+1) result = this.emit("binary",typeId,[result,values[at]],-1,-1,"+",id); return result;
     }
     if (kind == NodeKind.IdentifierExpression) return this.functionIdentifier(id,typeId);
@@ -972,6 +989,34 @@ export class IrLowering {
         for (const e of ast.nodes[id].edges) if ((e.node) < 0 || e.node >= ast.nodes.length) valid = false;
         if (!valid) { { const pendingPush = new IrIssue("IR_INPUT","Identidad de entrada inválida",this.source(id)); this.result.diagnostics.push(pendingPush); } return this.result; }
       }
+      // Preserve source annotations in ets-ir-2, including imported modules.
+      // Read AST indices and values before mutating IR collections: the bootstrap
+      // borrow checker does not permit overlapping AST views and result writes.
+      for (let id: number = 0; id < ast.nodes.length; id = id+1) {
+        for (let at: number = 0; at < ast.nodes[id].edges.length; at = at+1) {
+          if (ast.nodes[id].edges[at].role != EdgeRole.Decorators) continue;
+          const decoratorId: number = ast.nodes[id].edges[at].node;
+          const name: string = ast.nodes[decoratorId].get(AttributeKind.Name);
+          if (name != "cpp_native" && name != "include" && name != "cpp_include") continue;
+          let args: string[] = []; let valid: boolean = true;
+          for (let argAt: number = 0; argAt < ast.nodes[decoratorId].edges.length; argAt = argAt+1) {
+            if (ast.nodes[decoratorId].edges[argAt].role != EdgeRole.Args) continue;
+            const valueId: number = ast.nodes[decoratorId].edges[argAt].node;
+            if (ast.nodes[valueId].kind != NodeKind.LiteralExpression || ast.nodes[valueId].get(AttributeKind.LiteralType) != "string") { valid = false; break; }
+            const literal: string = ast.nodes[valueId].get(AttributeKind.Value);
+            args.push(literal);
+          }
+          const decoratorSource: IrSource = this.source(decoratorId);
+          if (!valid || args.length != 1) {
+            const issue: IrIssue = new IrIssue("IR_ANNOTATION","La anotación requiere un literal string",decoratorSource);
+            this.result.diagnostics.push(issue);
+          } else {
+            const targetSource: IrSource = this.source(id);
+            const annotation: IrAnnotation = new IrAnnotation(decoratorSource,targetSource,name,args);
+            this.result.annotations.push(annotation);
+          }
+        }
+      }
       this.orderState.push(0);
       for (const edge of this.node(ast.root).edges) if (edge.role == EdgeRole.Statements) {
         if (this.node(edge.node).kind == NodeKind.ClassDeclaration) this.staticFields(edge.node,true);
@@ -1033,7 +1078,12 @@ export class IrLowering {
         }
         const body: number = bindingChild(this.node(id),EdgeRole.Body);
         if (body >= 0 && this.node(body).kind != NodeKind.BlockStatement) { const returned: number = this.convert(this.expression(body),this.result.functions[f].bodyReturns,id); this.cleanup(0,id); this.terminate("return",returned,[],id); }
-        else this.statement(body);
+        else if (body >= 0) this.statement(body);
+        else if (this.node(id).kind == NodeKind.FunctionDeclaration) {
+          let native: boolean = false;
+          for (const edge of this.node(id).edges) if (edge.role == EdgeRole.Decorators && this.node(edge.node).get(AttributeKind.Name) == "cpp_native") native = true;
+          if (!native) this.fail(id,"Declaración de función sin cuerpo y sin @cpp_native");
+        }
       } else this.statement(id);
       if (this.open()) {
         if (this.result.types[this.result.functions[f].bodyReturns] == "void") { this.cleanup(0,id); this.terminate("return",-1,[],id); }

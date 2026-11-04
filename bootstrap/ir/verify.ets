@@ -16,6 +16,12 @@ export class IrVerifier {
   project: IrProject; issues: IrIssue[]; definitions: number[]; positions: number[]; facts: IrFacts[];
   constructor(project: IrProject) { this.project = project; this.issues = []; this.definitions = []; this.positions = []; this.facts = []; }
   error(source: IrSource, message: string): void { this.issues.push(new IrIssue("IR_INVALID",message,source)); }
+  nativeBinding(f: constRef<IrFunction>): boolean {
+    for (const annotation of this.project.annotations) {
+      if (annotation.name == "cpp_native" && annotation.target.moduleId == f.source.moduleId && annotation.target.node == f.source.node) return true;
+    }
+    return false;
+  }
   typeId(id: number): boolean { return id >= 0 && id < this.project.types.length; }
   value(f: constRef<IrFunction>, id: number): boolean { return id >= 0 && id < f.values.length; }
   operandType(f: constRef<IrFunction>, id: number): string { return this.value(f,id) && this.typeId(f.values[id]) ? this.project.types[f.values[id]] : "!invalid"; }
@@ -246,8 +252,8 @@ export class IrVerifier {
       for (const target of contract.callees) if (target < 0 || target >= this.project.effectContracts.length) this.error(contract.source,"Arista de efectos inexistente");
       for (const lease of contract.borrows) if (lease.callback == "" || lease.root == "" || !["ref","constRef"].includes(lease.mode)) this.error(lease.source,"Obligación callback incompatible");
     }
-    for (const f of this.project.functions) { for (const contract of f.effectContracts) if (contract < 0 || contract >= this.project.effectContracts.length || this.project.effectContracts[contract].source.moduleId != f.source.moduleId || this.project.effectContracts[contract].source.node != f.source.node) this.error(f.source,"Contrato de función inexistente"); this.functionBody(f); }
-    if (this.issues.length == 0) for (const f of this.project.functions) { for (const issue of verifyBorrowRoutes(this.project,f)) this.issues.push(issue); for (const issue of verifyOwnershipRoutes(this.project,f)) this.issues.push(issue); }
+    for (const f of this.project.functions) { for (const contract of f.effectContracts) if (contract < 0 || contract >= this.project.effectContracts.length || this.project.effectContracts[contract].source.moduleId != f.source.moduleId || this.project.effectContracts[contract].source.node != f.source.node) this.error(f.source,"Contrato de función inexistente"); if (!this.nativeBinding(f)) this.functionBody(f); }
+    if (this.issues.length == 0) for (const f of this.project.functions) { if (this.nativeBinding(f)) continue; for (const issue of verifyBorrowRoutes(this.project,f)) this.issues.push(issue); for (const issue of verifyOwnershipRoutes(this.project,f)) this.issues.push(issue); }
     const source = new IrSource("","","",-1,0,0);
     let initializers: number[] = [];
     for (const module of this.project.modules) {

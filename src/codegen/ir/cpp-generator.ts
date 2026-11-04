@@ -306,7 +306,21 @@ export class IrCppGenerator {
     if(f.asynchronous){this.headers.add("runtime/ets_async.hpp");this.backends.libuv=true;}
     return `${ret} ir_f${index}(${[...f.captureTypes.map((t,k)=>`${this.type(t)}${f.captureModes[k]==="reference"?"*":""} c${k}`),...f.parameterTypes.map((t,k)=>`${this.type(t)} a${k}`)].join(",")})`;
   }
+  nativeBinding(f:IrFunction):string|undefined {
+    const matches=(this.project.annotations??[]).filter(a=>a.name==="cpp_native"&&a.target.moduleId===f.source.moduleId&&a.target.node===f.source.node);
+    if(matches.length>1)this.fail("Multiple @cpp_native bindings",f.source);
+    const a=matches[0];if(!a)return undefined;
+    const symbol=a.arguments[0];
+    if(a.arguments.length!==1||!symbol||!/^[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*$/.test(symbol))this.fail("Invalid @cpp_native symbol",a.source);
+    if(f.asynchronous||f.captureTypes.length)this.fail("@cpp_native does not support async or captures",f.source);
+    return symbol;
+  }
   functionBody(f:IrFunction,index:number):string {
+    const native=this.nativeBinding(f);
+    if(native) {
+      const call=native+"("+f.parameterTypes.map((_,k)=>"std::move(a"+k+")").join(",")+")";
+      return this.signature(f,index)+" {"+(this.project.types[f.returns]==="void"?call+";":"return "+call+";")+"}";
+    }
     const locals=f.places.flatMap((p,k)=>p.kind==="local"&&p.global<0?[`ets::ir::Slot<${this.type(p.typeId)}> p${k};`]:[]);
     const values=f.values.map((t,k)=>`ets::ir::Slot<${this.type(t)}> v${k};`);
     const awaited=f.blocks.flatMap((b,k)=>b.terminator==="suspend"&&this.project.types[this.shape(f.values[b.value]).arguments[0]]!=="void"?[`ets::ir::Slot<${this.type(this.shape(f.values[b.value]).arguments[0])}> await${k};`]:[]);
@@ -376,11 +390,16 @@ export class IrCppGenerator {
   }
   generate():IrCppResult {
     this.validateBoundary();
-    for(const annotation of this.project.annotations??[])if(["cpp_name","cpp_type","include","link","cpp_header","cpp_include","cpp_link"].includes(annotation.name))this.fail(`ABI externo no implementado: @${annotation.name}`,annotation.source);
+    for(const annotation of this.project.annotations??[])if(["cpp_name","cpp_type","link","cpp_header","cpp_link"].includes(annotation.name))this.fail(`ABI externo no implementado: @${annotation.name}`,annotation.source);
     if(this.project.format!=="ets-ir-2"||!this.project.success||this.project.diagnostics.length)this.fail("Se requiere ets-ir-2 verificado con success:true");
     if(this.project.types.length!==this.project.typeDefinitions.length)this.fail("Tablas de tipos incompletas");
     for(const f of this.project.functions)for(const t of [...f.values,...f.parameterTypes,...f.places.map(p=>p.typeId)])if(this.shape(t).kind==="parameter")this.fail("Parámetro genérico sin especializar en código ejecutable",f.source);
     for(const f of this.project.functions)for(const b of f.blocks)for(const i of b.instructions)if(!ops.has(i.op))this.fail(`Capacidad C++ no soportada: ${i.op}`,i.source);
+    for(const a of this.project.annotations??[])if(["include","cpp_include"].includes(a.name)) {
+      const h=a.arguments[0];
+      if(a.arguments.length!==1||!h||h.startsWith("/")||h.includes("..")||!/^[A-Za-z0-9_./-]+\.(?:h|hpp)$/.test(h))this.fail("Invalid @include header",a.source);
+      this.headers.add(h);
+    }
     const declarations=this.declarations(),prototypes=this.project.functions.map((f,k)=>this.signature(f,k)+";"),bodies=this.project.functions.map((f,k)=>this.functionBody(f,k));
     const globals=this.project.globals.map((p,k)=>`ets::ir::Slot<${this.type(p.typeId)}> ir_g${k};`);
     const run=(id:number)=>this.project.functions[id].asynchronous?`ets::syncWait(ir_f${id}());`:`ir_f${id}();`;
