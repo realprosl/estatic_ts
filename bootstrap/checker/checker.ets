@@ -1969,9 +1969,9 @@ export class NativeChecker {
         if (part.length == 0) { validSymbol = false; continue; }
         const allowedFirst: string = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_";
         const allowedRest: string = allowedFirst + "0123456789";
-        if (!allowedFirst.indexOf(part.charAt(0), 0) >= 0) validSymbol = false;
+        if (!allowedFirst.includes(part.charAt(0))) validSymbol = false;
         for (let k: number = 1; k < part.length; k = k + 1) {
-          if (!allowedRest.indexOf(part.charAt(k), 0) >= 0) validSymbol = false;
+          if (!allowedRest.includes(part.charAt(k))) validSymbol = false;
         }
       }
       if (owner.kind != NodeKind.FunctionDeclaration || this.asynchronous(module,target) || item.arguments.length != 1 || !validSymbol) { this.report(module,id,"@cpp_native requiere una función síncrona y un símbolo C++ literal válido"); valid = false; }
