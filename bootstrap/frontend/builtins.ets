@@ -174,7 +174,7 @@ export function nativeBuiltinSignatures(key: string): string[] {
   if (key == "string.charAt") return ["(number)=>string"];
   if (key == "string.charCodeAt") return ["(number)=>number"];
   if (key == "string.endsWith") return ["(string)=>boolean"];
-  if (key == "string.includes") return ["(string,number)=>boolean"];
+  if (key == "string.includes") return ["(string,number)=>boolean","(string)=>boolean"];
   if (key == "string.indexOf") return ["(string,number)=>number"];
   if (key == "string.lastIndexOf") return ["(string)=>number"];
   if (key == "string.localeCompare") return ["(string)=>number"];
