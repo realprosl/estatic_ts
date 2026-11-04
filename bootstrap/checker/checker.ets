@@ -1966,7 +1966,13 @@ export class NativeChecker {
       const parts: string[] = symbol.split("::");
       let validSymbol: boolean = parts.length > 0;
       for (const part of parts) {
-        if (part.length == 0 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(part)) validSymbol = false;
+        if (part.length == 0) { validSymbol = false; continue; }
+        for (let k: number = 0; k < part.length; k = k + 1) {
+          const ch: string = part[k];
+          const letter: boolean = (ch >= "A" && ch <= "Z") || (ch >= "a" && ch <= "z") || ch == "_";
+          const digit: boolean = ch >= "0" && ch <= "9";
+          if (!letter && (k == 0 || !digit)) validSymbol = false;
+        }
       }
       if (owner.kind != NodeKind.FunctionDeclaration || this.asynchronous(module,target) || item.arguments.length != 1 || !validSymbol) { this.report(module,id,"@cpp_native requiere una función síncrona y un símbolo C++ literal válido"); valid = false; }
     } else if (name == "cpp_name" || name == "cpp_type") {
