@@ -1967,11 +1967,11 @@ export class NativeChecker {
       let validSymbol: boolean = parts.length > 0;
       for (const part of parts) {
         if (part.length == 0) { validSymbol = false; continue; }
-        for (let k: number = 0; k < part.length; k = k + 1) {
-          const ch: string = part[k];
-          const letter: boolean = (ch >= "A" && ch <= "Z") || (ch >= "a" && ch <= "z") || ch == "_";
-          const digit: boolean = ch >= "0" && ch <= "9";
-          if (!letter && (k == 0 || !digit)) validSymbol = false;
+        const allowedFirst: string = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_";
+        const allowedRest: string = allowedFirst + "0123456789";
+        if (!allowedFirst.includes(part.charAt(0))) validSymbol = false;
+        for (let k: number = 1; k < part.length; k = k + 1) {
+          if (!allowedRest.includes(part.charAt(k))) validSymbol = false;
         }
       }
       if (owner.kind != NodeKind.FunctionDeclaration || this.asynchronous(module,target) || item.arguments.length != 1 || !validSymbol) { this.report(module,id,"@cpp_native requiere una función síncrona y un símbolo C++ literal válido"); valid = false; }
