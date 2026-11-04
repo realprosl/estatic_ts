@@ -22,7 +22,7 @@ jobs:
       - name: Install C++ dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++ libuv1-dev libcurl4-openssl-dev libdrogon-dev libjsoncpp-dev pkg-config
+          sudo apt-get install -y g++ libuv1-dev libcurl4-openssl-dev libdrogon-dev libjsoncpp-dev uuid-dev pkg-config
       - name: Verify Drogon and JsonCpp headers
         run: |
           test -f /usr/include/jsoncpp/json/json.h
