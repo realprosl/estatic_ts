@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/cpp-native-type-diagnostic.yml'
       - 'bootstrap/**'
+      - 'src/**'
   workflow_dispatch:
 
 jobs:
@@ -53,6 +54,7 @@ jobs:
             const part: string = "abc";
             const allowed: string = "abcdefghijklmnopqrstuvwxyz";
             const ok: boolean = allowed.includes(part.charAt(0));
+            const okFromOne: boolean = allowed.includes(part.charAt(0), 1);
           }
           EOF
           failures=0
