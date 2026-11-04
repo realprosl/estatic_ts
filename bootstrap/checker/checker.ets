@@ -730,7 +730,7 @@ export class NativeChecker {
     if (valueType == "string") {
       if (name == "charAt") return "(number)=>string";
       if (name == "charCodeAt") return "(number)=>number";
-      if (name == "includes") return "(string,number)=>boolean";
+      if (name == "includes") return "!builtin:string.includes";
       if (["startsWith","endsWith"].includes(name)) return "(string)=>boolean";
       if (name == "indexOf") return "(string,number)=>number";
       if (name == "lastIndexOf" || name == "localeCompare") return "(string)=>number";
