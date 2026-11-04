@@ -1,4 +1,5 @@
 name: Diagnose checker arity - SRC vs native Bootstrap
+# Re-run differential after restoring includes() in bootstrap/checker/checker.ets
 
 on:
   workflow_dispatch:
