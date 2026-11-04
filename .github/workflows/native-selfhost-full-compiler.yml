@@ -1,0 +1,59 @@
+name: Native self-hosting — compilador funcional completo
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/native-self-hosting]
+    paths:
+      - 'native-compiler-mini/**'
+      - '.github/workflows/native-selfhost-full-compiler.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compiler-completo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar dependencias C++ nativas
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
+      - name: Construir compilador completo desde el snapshot C++ sin Node
+        run: |
+          set -euo pipefail
+          cd native-compiler-mini
+          bash build-all.sh
+          test -x native/frontend
+          test -x native/etsc
+          ./native/etsc --version
+      - name: Compilar un programa real con el compilador nativo
+        run: |
+          set -euo pipefail
+          export ESTC_ROOT="$GITHUB_WORKSPACE/native-compiler-mini"
+          mkdir -p "$GITHUB_WORKSPACE/build/selfhost"
+          "$ESTC_ROOT/native/etsc" build "$GITHUB_WORKSPACE/examples/hello.ets" \
+            -o "$GITHUB_WORKSPACE/build/selfhost/hello.cpp" \
+            --binary "$GITHUB_WORKSPACE/build/selfhost/hello" --no-progress
+          test -s build/selfhost/hello.cpp
+          test -x build/selfhost/hello
+          build/selfhost/hello
+      - name: Comprobar compilación nativa del frontend completo de Bootstrap
+        run: |
+          set -euo pipefail
+          export ESTC_ROOT="$GITHUB_WORKSPACE/native-compiler-mini"
+          "$ESTC_ROOT/native/etsc" build "$GITHUB_WORKSPACE/bootstrap/ir/demo.ets" \
+            -o "$GITHUB_WORKSPACE/build/selfhost/bootstrap-ir.cpp" \
+            --binary "$GITHUB_WORKSPACE/build/selfhost/bootstrap-ir" --no-progress
+          test -s build/selfhost/bootstrap-ir.cpp
+          test -x build/selfhost/bootstrap-ir
+          echo 'Frontend Bootstrap recompilado; esto NO certifica todavía la reproducción del driver/backend etsc.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Guardar artefactos para diagnóstico
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-selfhost-first-baseline
+          path: build/selfhost/
+          if-no-files-found: warn
