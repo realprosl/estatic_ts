@@ -307,7 +307,7 @@ export class IrCppGenerator {
     return `${ret} ir_f${index}(${[...f.captureTypes.map((t,k)=>`${this.type(t)}${f.captureModes[k]==="reference"?"*":""} c${k}`),...f.parameterTypes.map((t,k)=>`${this.type(t)} a${k}`)].join(",")})`;
   }
   nativeBinding(f:IrFunction):string|undefined {
-    const matches=(this.project.annotations??[]).filter(a=>a.name==="cpp_native"&&a.target.file===f.source.file&&a.target.node===f.source.node);
+    const matches=(this.project.annotations??[]).filter(a=>a.name==="cpp_native"&&a.target.moduleId===f.source.moduleId&&a.target.node===f.source.node);
     if(matches.length>1)this.fail("Multiple @cpp_native bindings",f.source);
     const a=matches[0];if(!a)return undefined;
     const symbol=a.arguments[0];
