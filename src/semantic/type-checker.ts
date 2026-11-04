@@ -3258,7 +3258,7 @@ export class TypeChecker {
             result = "string";
             break;
           }
-          if (node.args.length !== method.arity) this.report(node, `string.${node.method} espera ${method.arity} argumento(s), recibió ${node.args.length}`);
+          if (node.method === "includes" ? (node.args.length < 1 || node.args.length > 2) : node.args.length !== method.arity) this.report(node, `string.${node.method} espera ${node.method === "includes" ? "1 o 2" : String(method.arity)} argumento(s), recibió ${node.args.length}`);
           method.paramTypes.forEach((expected, i) => {
             if (node.args[i]) this.require(this.expression(node.args[i], scope, expected), expected, node.args[i]!);
           });

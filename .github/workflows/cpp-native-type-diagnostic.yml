@@ -1,0 +1,80 @@
+name: Diagnose ETS string length and numeric operands
+on:
+  push:
+    branches: [test/cpp-native-e2e]
+    paths:
+      - '.github/workflows/cpp-native-type-diagnostic.yml'
+      - 'bootstrap/**'
+      - 'src/**'
+  workflow_dispatch:
+
+jobs:
+  isolate-checker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Node dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Isolate string length and numeric operations
+        shell: bash
+        run: |
+          mkdir -p build/type-diagnostic
+          cat > build/type-diagnostic/length.ets <<'EOF'
+          function main(): void {
+            const part: string = "abc";
+            const size: number = part.length;
+          }
+          EOF
+          cat > build/type-diagnostic/compare.ets <<'EOF'
+          function main(): void {
+            const part: string = "abc";
+            let k: number = 1;
+            const less: boolean = k < part.length;
+          }
+          EOF
+          cat > build/type-diagnostic/increment.ets <<'EOF'
+          function main(): void {
+            let k: number = 1;
+            k = k + 1;
+          }
+          EOF
+          cat > build/type-diagnostic/loop.ets <<'EOF'
+          function main(): void {
+            const part: string = "abc";
+            for (let k: number = 1; k < part.length; k = k + 1) {
+              const ch: string = part.charAt(k);
+            }
+          }
+          EOF
+          cat > build/type-diagnostic/includes.ets <<'EOF'
+          function main(): void {
+            const part: string = "abc";
+            const allowed: string = "abcdefghijklmnopqrstuvwxyz";
+            const ok: boolean = allowed.includes(part.charAt(0));
+            const okFromOne: boolean = allowed.includes(part.charAt(0), 1);
+          }
+          EOF
+          failures=0
+          for test in length compare increment loop includes; do
+            echo "::group::Diagnostic: $test"
+            if node --experimental-strip-types bootstrap/ir/cpp.ts "build/type-diagnostic/$test.ets" -o "build/type-diagnostic/$test.cpp" > "build/type-diagnostic/$test.log" 2>&1; then
+              echo "RESULT $test: PASS"
+            else
+              echo "RESULT $test: FAIL"
+              failures=$((failures + 1))
+            fi
+            cat "build/type-diagnostic/$test.log"
+            echo "::endgroup::"
+          done
+          echo "Diagnostic cases failing: $failures"
+          # This workflow is diagnostic: individual failures are reported, not masked.
+          if [ "$failures" -gt 0 ]; then exit 1; fi
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpp-native-type-diagnostic
+          path: build/type-diagnostic/

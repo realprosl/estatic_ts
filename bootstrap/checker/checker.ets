@@ -1952,7 +1952,7 @@ export class NativeChecker {
   }
   decorator(module: number, id: number): void {
     const n: AstNode = this.node(module,id); const name: string = n.get(AttributeKind.Name); const target: number = this.binding.files[module].parents[id]; const owner: AstNode = this.node(module,target);
-    if (!["cpp_name","cpp_type","cpp_drogon","cppgen","etsgen","comptime","deprecated","sealed","include","link"].includes(name)) { this.report(module,id,"Decorador desconocido o sin contrato nativo: @" + name); return; }
+    if (!["cpp_native","cpp_name","cpp_type","cpp_drogon","cppgen","etsgen","comptime","deprecated","sealed","include","link"].includes(name)) { this.report(module,id,"Decorador desconocido o sin contrato nativo: @" + name); return; }
     let item: NativeDecorator = new NativeDecorator(module,id,target,name); let valid: boolean = true;
     for (const edge of n.edges) if (edge.role == EdgeRole.Args) {
       const argument: AstNode = this.node(module,edge.node); this.expression(module,edge.node,"");
@@ -1961,6 +1961,20 @@ export class NativeChecker {
     }
     if (name == "etsgen" || name == "cppgen") {
       if (owner.kind != NodeKind.FunctionDeclaration || this.asynchronous(module,target) || item.arguments.length != 0 || functionReturn(this.signature(module,target)) != "string") { this.report(module,id,"@"+name+" requiere una función síncrona que devuelva string, sin argumentos de decorador"); valid = false; }
+    } else if (name == "cpp_native") {
+      const symbol: string = item.arguments.length == 1 ? item.arguments[0] : "";
+      const parts: string[] = symbol.split("::");
+      let validSymbol: boolean = parts.length > 0;
+      for (const part of parts) {
+        if (part.length == 0) { validSymbol = false; continue; }
+        const allowedFirst: string = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_";
+        const allowedRest: string = allowedFirst + "0123456789";
+        if (!allowedFirst.includes(part.charAt(0))) validSymbol = false;
+        for (let k: number = 1; k < part.length; k = k + 1) {
+          if (!allowedRest.includes(part.charAt(k))) validSymbol = false;
+        }
+      }
+      if (owner.kind != NodeKind.FunctionDeclaration || this.asynchronous(module,target) || item.arguments.length != 1 || !validSymbol) { this.report(module,id,"@cpp_native requiere una función síncrona y un símbolo C++ literal válido"); valid = false; }
     } else if (name == "cpp_name" || name == "cpp_type") {
       const allowed: boolean = name == "cpp_type" ? owner.kind == NodeKind.InterfaceDeclaration : [NodeKind.FunctionDeclaration,NodeKind.InterfaceMethod,NodeKind.ClassMethod].includes(owner.kind);
       if (!allowed || item.arguments.length != 1 || item.arguments[0] == "") { this.report(module,id,"@"+name+" requiere un nombre externo literal y una declaración compatible"); valid = false; }

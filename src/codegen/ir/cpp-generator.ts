@@ -308,8 +308,10 @@ export class IrCppGenerator {
   }
   nativeBinding(f:IrFunction):string|undefined {
     const matches=(this.project.annotations??[]).filter(a=>a.name==="cpp_native"&&a.target.moduleId===f.source.moduleId&&a.target.node===f.source.node);
-    if(matches.length>1)this.fail("Multiple @cpp_native bindings",f.source);
-    const a=matches[0];if(!a)return undefined;
+    // A module may be visited through multiple imports; identical annotation records are not conflicting bindings.
+    const unique=matches.filter((a,i)=>matches.findIndex(b=>b.source.moduleId===a.source.moduleId&&b.source.node===a.source.node&&b.arguments.length===a.arguments.length&&b.arguments.every((v,k)=>v===a.arguments[k]))===i);
+    if(unique.length>1)this.fail("Multiple @cpp_native bindings",f.source);
+    const a=unique[0];if(!a)return undefined;
     const symbol=a.arguments[0];
     if(a.arguments.length!==1||!symbol||!/^[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*$/.test(symbol))this.fail("Invalid @cpp_native symbol",a.source);
     if(f.asynchronous||f.captureTypes.length)this.fail("@cpp_native does not support async or captures",f.source);

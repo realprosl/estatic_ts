@@ -67,7 +67,7 @@ inline double string_lastIndexOf(const std::string& value, const std::string& ne
 // ----------------------------------------------------------------------------
 // includes(needle, start=0): true si needle aparece a partir de start.
 // ----------------------------------------------------------------------------
-inline bool string_includes(const std::string& value, const std::string& needle, double start) {
+inline bool string_includes(const std::string& value, const std::string& needle, double start = 0.0) {
     if (needle.empty()) return true;
     std::size_t from = 0;
     if (start > 0.0) from = static_cast<std::size_t>(start);
