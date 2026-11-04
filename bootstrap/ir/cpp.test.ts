@@ -112,10 +112,20 @@ test("IR C++ rejects unsuccessful projects and unsupported capabilities before e
 
 test("IR C++ explains unsupported Result<void> before invoking the C++ compiler",()=>{
  const project=ir('print(1);');
- const voidId=project.types.indexOf("void");
- const stringId=project.types.indexOf("string");
- assert.notEqual(voidId,-1);
- assert.notEqual(stringId,-1);
+ // The minimal print fixture need not contain void or string in its IR type table.
+ // Add explicit scalar types so this test reaches the Result<void> codegen guard.
+ const scalar=project.typeDefinitions.find(def=>def.kind==="scalar");
+ assert.ok(scalar);
+ const ensureScalar=(name:string):number=>{
+  const existing=project.types.indexOf(name);
+  if(existing!==-1)return existing;
+  const id=project.types.length;
+  project.types.push(name);
+  project.typeDefinitions.push({...scalar,arguments:[],fields:[],names:[],variants:[]});
+  return id;
+ };
+ const voidId=ensureScalar("void");
+ const stringId=ensureScalar("string");
  const id=project.types.length;
  project.types.push("Result<void>");
  project.typeDefinitions.push({kind:"Result",arguments:[voidId,stringId],fields:[],names:[],variants:[],numericKind:"",bits:0,signed:false,resource:false,length:0,tag:"",discriminator:"",discriminatorType:0,discriminatorValue:""});
