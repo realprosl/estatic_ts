@@ -67,6 +67,51 @@ jobs:
             --binary "$GITHUB_WORKSPACE/build/selfhost/stage2/hello" --no-progress
           test -x build/selfhost/stage2/hello
           build/selfhost/stage2/hello
+      - name: Construir frontend instrumentado para localizar fase lenta
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          export ESTC_ROOT="$GITHUB_WORKSPACE/native-compiler-mini"
+          mkdir -p build/selfhost/trace
+          python3 - <<'PY'
+          from pathlib import Path
+          source=Path('bootstrap/ir/demo.ets').read_text()
+          replacements=[
+            ('const graph = loader.load(entry); const project = analyzeProject(graph);',
+             'printError("TRACE BEGIN loader.load"); const graph = loader.load(entry); printError("TRACE END loader.load / BEGIN analyzeProject"); const project = analyzeProject(graph); printError("TRACE END analyzeProject");'),
+            ('let ir = lowerProject(project.graph,project.binding,project.checked);',
+             'printError("TRACE BEGIN lowerProject"); let ir = lowerProject(project.graph,project.binding,project.checked); printError("TRACE END lowerProject");'),
+            ('print(formatIr(ir)); if (!ir.success)',
+             'printError("TRACE BEGIN formatIr"); print(formatIr(ir)); printError("TRACE END formatIr"); if (!ir.success)')
+          ]
+          for old,new in replacements:
+              if source.count(old)!=1: raise SystemExit(f'Instrumentation anchor not unique: {old}')
+              source=source.replace(old,new)
+          # Keep relative imports working: instrument a temporary copy alongside demo.ets.
+          Path('bootstrap/ir/demo-trace.ets').write_text(source)
+          PY
+          trap 'rm -f bootstrap/ir/demo-trace.ets' EXIT
+          "$ESTC_ROOT/native/etsc" build "$GITHUB_WORKSPACE/bootstrap/ir/demo-trace.ets" \
+            -o "$GITHUB_WORKSPACE/build/selfhost/trace/frontend.cpp" \
+            --binary "$GITHUB_WORKSPACE/build/selfhost/trace/frontend" --no-progress
+          test -x build/selfhost/trace/frontend
+      - name: Perfilar fases del frontend recompilado
+        timeout-minutes: 7
+        run: |
+          set -euo pipefail
+          echo "Inicio: $(date -u +%FT%TZ)"
+          /usr/bin/time -v -o build/selfhost/trace/time.txt \
+            timeout --signal=TERM --kill-after=15s 5m \
+            build/selfhost/trace/frontend "$GITHUB_WORKSPACE/bootstrap/ir/demo.ets" \
+            > build/selfhost/trace/ir.json 2> build/selfhost/trace/stderr.log || {
+              rc=$?
+              echo "::error::Frontend instrumentado terminó con código $rc"
+              cat build/selfhost/trace/stderr.log || true
+              cat build/selfhost/trace/time.txt || true
+              exit "$rc"
+            }
+          grep 'TRACE ' build/selfhost/trace/stderr.log || true
+          cat build/selfhost/trace/time.txt
       - name: Diagnóstico segunda generación — análisis y emisión de IR
         timeout-minutes: 12
         run: |
