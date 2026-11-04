@@ -7,10 +7,10 @@ export class IrSource {
   }
 }
 export class IrPlace {
-  kind: string; base: number; index: number; field: number; readOnly: boolean;
+  name: string; kind: string; base: number; index: number; field: number; readOnly: boolean;
   symbolId: string; typeId: number; global: number; parameter: boolean; source: IrSource;
   constructor(symbolId: string, typeId: number, global: number, parameter: boolean, source: IrSource) {
-    this.kind = "local"; this.base = -1; this.index = -1; this.field = -1; this.readOnly = false;
+    this.name = ""; this.kind = "local"; this.base = -1; this.index = -1; this.field = -1; this.readOnly = false;
     this.symbolId = symbolId; this.typeId = typeId; this.global = global; this.parameter = parameter; this.source = source;
   }
 }

@@ -304,7 +304,8 @@ export class Binder {
       symbol = this.result.exports[entry].symbol; const target: number = this.origin(symbol);
       if ((space == "value" && (this.result.exports[entry].typeOnly || !this.result.symbols[target].values)) || (space == "type" && !this.result.symbols[target].types)) this.report(module, node, "El miembro '" + member + "' no está disponible como " + space);
     }
-    this.result.references.push(new BoundReference(module, node, this.result.files[module].nodeScopes[node], member, space, symbol, this.origin(symbol), false)); return symbol;
+    const scope: number = this.result.files[module].nodeScopes[node]; const referenceOrigin: number = this.origin(symbol);
+    this.result.references.push(new BoundReference(module, node, scope, member, space, symbol, referenceOrigin, false)); return symbol;
   }
   typeReferences(module: number, node: number, text: string, firstValue: boolean): void {
     let at: number = 0; let previous: string = ""; let first: boolean = true;

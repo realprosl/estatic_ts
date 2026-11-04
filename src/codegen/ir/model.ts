@@ -6,7 +6,7 @@ export interface IrType {
   numericKind: string; bits: number; signed: boolean; resource: boolean; length: number;
   tag: string; discriminator: string; discriminatorType: number; discriminatorValue: string;
 }
-export interface IrPlace { kind: string; typeId: number; base: number; index: number; field: number; global: number; parameter: boolean; source: IrSource }
+export interface IrPlace { name?: string; kind: string; typeId: number; base: number; index: number; field: number; global: number; parameter: boolean; source: IrSource }
 export interface IrInstruction {
   op: string; result: number; typeId: number; operands: number[]; place: number; callee: number;
   contract: number; lease: number; continuation: number; signature: number; text: string; names: string[]; effects: string[]; source: IrSource;
