@@ -5,13 +5,14 @@ on:
   pull_request:
     paths:
       - 'bootstrap/**'
-      - 'docs/native-include-cppgen.md'
+      - 'experiments/runtime-injection/**'
       - '.github/workflows/ets-runtime-injection-poc.yml'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  native-annotations:
+  annotations:
+    name: '1 - Native annotations'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -19,7 +20,29 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install dependencies without system package modifications
-        run: npm run install:skip-sysdeps
-      - name: Verify native include and cppgen contracts
-        run: npm run test:bootstrap:ir:annotations
+      - run: npm run install:skip-sysdeps
+      - run: npm run test:bootstrap:ir:annotations
+  imported-runtime:
+    name: '2 - Imported ETS runtime'
+    needs: annotations
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run install:skip-sysdeps
+      - run: node --experimental-strip-types --test --test-name-pattern='phase 2' experiments/runtime-injection/poc.test.ts
+  runtime-extension:
+    name: '3 - Runtime extension'
+    needs: imported-runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run install:skip-sysdeps
+      - run: node --experimental-strip-types --test experiments/runtime-injection/poc.test.ts
