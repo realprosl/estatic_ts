@@ -50,6 +50,33 @@ jobs:
           test -s build/selfhost/bootstrap-ir.cpp
           test -x build/selfhost/bootstrap-ir
           echo 'Frontend Bootstrap recompilado; esto NO certifica todavía la reproducción del driver/backend etsc.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Integrar frontend recompilado con driver y backend C++ nativos
+        run: |
+          set -euo pipefail
+          export ESTC_ROOT="$GITHUB_WORKSPACE/native-compiler-mini"
+          mkdir -p build/selfhost/stage2
+          # Se reutilizan el driver y el backend C++ de la referencia; el frontend
+          # procede de la recompilación nativa de Bootstrap, no del snapshot.
+          cp "$ESTC_ROOT/native/etsc" build/selfhost/stage2/etsc
+          cp build/selfhost/bootstrap-ir build/selfhost/stage2/frontend
+          test -x build/selfhost/stage2/etsc
+          test -x build/selfhost/stage2/frontend
+          build/selfhost/stage2/etsc build examples/hello.ets \
+            --frontend "$GITHUB_WORKSPACE/build/selfhost/stage2/frontend" \
+            -o "$GITHUB_WORKSPACE/build/selfhost/stage2/hello.cpp" \
+            --binary "$GITHUB_WORKSPACE/build/selfhost/stage2/hello" --no-progress
+          test -x build/selfhost/stage2/hello
+          build/selfhost/stage2/hello
+      - name: Segunda generación del frontend Bootstrap con el compilador integrado
+        run: |
+          set -euo pipefail
+          export ESTC_ROOT="$GITHUB_WORKSPACE/native-compiler-mini"
+          build/selfhost/stage2/etsc build bootstrap/ir/demo.ets \
+            --frontend "$GITHUB_WORKSPACE/build/selfhost/stage2/frontend" \
+            -o "$GITHUB_WORKSPACE/build/selfhost/stage2/bootstrap-ir.cpp" \
+            --binary "$GITHUB_WORKSPACE/build/selfhost/stage2/bootstrap-ir" --no-progress
+          test -x build/selfhost/stage2/bootstrap-ir
+          echo 'Segunda generación del frontend superada. El driver y backend siguen siendo C++ de referencia: self-hosting integral NO demostrado.' >> "$GITHUB_STEP_SUMMARY"
       - name: Guardar artefactos para diagnóstico
         if: always()
         uses: actions/upload-artifact@v4
