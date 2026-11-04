@@ -20,6 +20,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install libuv development headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libuv1-dev
       - run: npm run install:skip-sysdeps
       - run: npm run test:bootstrap:ir:annotations
   imported-runtime:
@@ -32,6 +36,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install libuv development headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libuv1-dev
       - run: npm run install:skip-sysdeps
       - run: node --experimental-strip-types --test --test-name-pattern='phase 2' experiments/runtime-injection/poc.test.ts
   runtime-extension:
@@ -44,5 +52,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install libuv development headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libuv1-dev
       - run: npm run install:skip-sysdeps
       - run: node --experimental-strip-types --test experiments/runtime-injection/poc.test.ts
