@@ -2,8 +2,9 @@ import { createHash, randomUUID } from "node:crypto";
 import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { initializeProject } from "../src/project/init-project.ts";
+import { initializeProject } from "../shared/project/init-project.ts";
 import { buildNativeCompiler } from "./build/native-compiler.ts";
+import { verifiedFrontend } from "./build/frontend-artifact.ts";
 import { root } from "./root.ts";
 import { buildIrFrontend } from "./ir/cpp.ts";
 import { precompileRuntime } from "./build/runtime-cache.ts";
@@ -11,16 +12,19 @@ import { precompileRuntime } from "./build/runtime-cache.ts";
 const folders=["runtime","types"];
 const digest=(file:string)=>createHash("sha256").update(readFileSync(file)).digest("hex");
 export async function install(argv:string[]):Promise<void> {
-  let prefix="/usr/local",cxx=process.env.CXX??"g++",frontend="";
+  let prefix="/usr/local",cxx=process.env.CXX??"g++",frontend="",noStage0=false;
   for(let at=0;at<argv.length;at++){
     if(argv[at]==="--help"||argv[at]==="-h"){
-      console.log("Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario]\nConstruye el frontend con src/, precompila libuv/httplib e instala etsc.\nRequisitos: Node >=22.6, C++20, ar y las dependencias del runtime.\nNode sólo se usa durante el bootstrap y la instalación; etsc es nativo.");return;
+      console.log("Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario] [--no-stage0]\nConstruye el frontend con Stage0 si no se proporciona --frontend o ESTATIC_BOOTSTRAP_FRONTEND (SHA-256 opcional: ESTATIC_BOOTSTRAP_FRONTEND_SHA256), precompila libuv/httplib e instala etsc.\nRequisitos: Node >=22.6, C++20, ar y las dependencias del runtime.\nNode sólo se usa durante el bootstrap y la instalación; etsc es nativo.");return;
     }
+    if(argv[at]==="--no-stage0"){noStage0=true;continue;}
     const flag=argv[at];if(!["--prefix","--cxx","--frontend"].includes(flag)||!argv[at+1]||argv[at+1].startsWith("-"))throw new Error(`Opción inválida o sin valor: ${flag}`);
     const value=argv[++at];if(flag==="--prefix")prefix=resolve(value);else if(flag==="--cxx")cxx=value;else frontend=resolve(value);
   }
   if(Number(process.versions.node.split(".")[0])<22 || Number(process.versions.node.split(".")[0])===22&&Number(process.versions.node.split(".")[1])<6)throw new Error("Se requiere Node >=22.6");
+  if(noStage0 && !(frontend||process.env.ESTATIC_BOOTSTRAP_FRONTEND))throw new Error("--no-stage0 requiere --frontend o ESTATIC_BOOTSTRAP_FRONTEND; no se ejecutará el compilador histórico");
   process.env.CXX=cxx;
+  if(noStage0)process.env.ESTATIC_NO_STAGE0="1";
   const library=join(prefix,"lib/estc"),current=join(library,"current"),destination=join(prefix,"bin/etsc");
   let oldPointer:string|undefined;
   if(existsSync(current)){
@@ -41,8 +45,8 @@ export async function install(argv:string[]):Promise<void> {
   const legacyEstc=join(prefix,"bin/estc");let ownedEstc=false;
   try{const old=JSON.parse(readFileSync(join(current,"installation.json"),"utf8"));ownedEstc=old.format==="estc-install-1"&&existsSync(legacyEstc)&&old.commandHash===digest(legacyEstc);}catch{}
   // Finish compilation in the clone before attempting publication to the prefix.
-  console.log("==> Construyendo el frontend nativo mediante src/");
-  const native=frontend||await buildIrFrontend();
+  console.log(frontend||process.env.ESTATIC_BOOTSTRAP_FRONTEND?"==> Usando frontend nativo precompilado":"==> Construyendo frontend inicial mediante Stage0");
+  const native=frontend?verifiedFrontend(frontend):await buildIrFrontend();
   if(!existsSync(native))throw new Error(`Frontend inexistente: ${native}`);
   console.log("==> Precompilando runtime (libuv, red y cpp-httplib)");
   const archives=precompileRuntime(cxx);
@@ -77,7 +81,7 @@ export async function install(argv:string[]):Promise<void> {
     mkdirSync(join(stage,"native"));cpSync(native,join(stage,"native/frontend"));chmodSync(join(stage,"native/frontend"),0o755);
     for(const archive of archives){const relative=join("build/runtime-cache",basename(dirname(archive)),basename(archive)),dir=dirname(relative);mkdirSync(join(stage,dir),{recursive:true});cpSync(archive,join(stage,relative));cpSync(join(dirname(archive),"manifest.json"),join(stage,dir,"manifest.json"));}
     if(existsSync(join(root,"build/libs")))cpSync(join(root,"build/libs"),join(stage,"build/libs"),{recursive:true,verbatimSymlinks:true});
-    writeFileSync(join(stage,"installation.json"),JSON.stringify({format:"estc-install-1",version,compiler:cxx,native:true,frontend:"native/frontend",commandHash:digest(driver)},null,2)+"\n");
+    writeFileSync(join(stage,"installation.json"),JSON.stringify({format:"estc-install-1",version,compiler:cxx,native:true,frontend:"native/frontend",frontendSha256:digest(native),commandHash:digest(driver)},null,2)+"\n");
     release=join(library,"releases",version+"-"+randomUUID().slice(0,8));
     renameSync(stage,release);stage="";
     const pointer=join(library,".current-"+randomUUID());symlinkSync("releases/"+release.split("/").at(-1),pointer);renameSync(pointer,current);pointerChanged=true;

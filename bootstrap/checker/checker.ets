@@ -1981,7 +1981,17 @@ export class NativeChecker {
     if (!this.binding.success) return this.result;
     for (const s of this.binding.symbols) { this.result.symbolTypes.push(""); this.symbolStates.push(0); }
     for (const m of this.graph.modules) this.result.files.push(new TypedFile(m.cached.result.ast.nodes.length));
-    for (let m: number = 0; m < this.graph.modules.length; m = m + 1) this.statement(m,this.graph.modules[m].cached.result.ast.root,"",0);
+    for (let m: number = 0; m < this.graph.modules.length; m = m + 1) {
+      if (this.trace) printError("frontend: type module "+numberToString(m)+" "+this.graph.modules[m].file);
+      const root: AstNode = this.node(m,this.graph.modules[m].cached.result.ast.root);
+      if (this.trace) {
+        for (const edge of root.edges) if (edge.role == EdgeRole.Statements) {
+          const item: AstNode = this.node(m,edge.node);
+          printError("frontend: type declaration "+numberToString(edge.node)+" "+nodeKindName(item.kind)+" "+item.get(AttributeKind.Name));
+          this.statement(m,edge.node,"",0);
+        }
+      } else this.statement(m,this.graph.modules[m].cached.result.ast.root,"",0);
+    }
     // Arrows may be reached only as values, not statements. Validate their bodies too.
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.result.files[m].types.length; id = id + 1) {
       if (this.binding.files[m].nodeScopes[id] >= 0 && this.node(m,id).kind == NodeKind.ArrowFunctionExpression) this.statement(m,id,"",0);

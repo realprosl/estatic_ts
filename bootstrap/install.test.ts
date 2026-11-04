@@ -14,7 +14,7 @@ const node=(args:string[],cwd=root,extra:Record<string,string>={})=>spawnSync(pr
 test("runtime cache invalidates headers and ABI flags and recovers corrupted archives",async()=>{
  const dir=temporary();try{
   mkdirSync(join(dir,"bootstrap/build"),{recursive:true});mkdirSync(join(dir,"runtime"));writeFileSync(join(dir,"package.json"),'{"type":"module"}');
-  cpSync(join(root,"bootstrap/root.ts"),join(dir,"bootstrap/root.ts"));cpSync(join(root,"bootstrap/build/runtime-cache.ts"),join(dir,"bootstrap/build/runtime-cache.ts"));
+  cpSync(join(root,"bootstrap/root.ts"),join(dir,"bootstrap/root.ts"));cpSync(join(root,"bootstrap/build/runtime-cache.ts"),join(dir,"bootstrap/build/runtime-cache.ts"));mkdirSync(join(dir,"runtime/build"),{recursive:true});cpSync(join(root,"runtime/build/runtime-cache.ts"),join(dir,"runtime/build/runtime-cache.ts"));
   writeFileSync(join(dir,"runtime/runtime_ets_libuv.cpp"),'#include "feature.hpp"\n#ifndef MODE\n#define MODE 0\n#endif\nint value(){return VALUE+MODE;}\n');writeFileSync(join(dir,"runtime/runtime_ets_net_libuv.cpp"),'int unused(){return 0;}');writeFileSync(join(dir,"runtime/feature.hpp"),'#define VALUE 3\n');
   const {runtimeArchive}=await import(pathToFileURL(join(dir,"bootstrap/build/runtime-cache.ts")).href);
   const archive=runtimeArchive("libuv"),first=statSync(archive).mtimeMs;assert.equal(runtimeArchive("libuv"),archive);assert.equal(statSync(archive).mtimeMs,first);

@@ -1,31 +1,43 @@
 #!/usr/bin/env -S node --experimental-strip-types --no-warnings
 // Build/I/O adapter. Source analysis/lowering stay in the native ETS process.
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { root } from "../root.ts";
-import { runtimeArchive } from "../build/runtime-cache.ts";
-import { generateCppFromIr, type IrCppResult } from "../../src/codegen/ir/cpp-generator.ts";
-import type { IrProject } from "../../src/codegen/ir/model.ts";
+import { verifiedFrontend } from "../build/frontend-artifact.ts";
+import { runtimeArchive } from "../../runtime/build/runtime-cache.ts";
+import { generateCppFromIr, type IrCppResult } from "../../backend/ir/cpp-generator.ts";
+import type { IrProject } from "../../shared/ir/model.ts";
 
-export async function buildIrFrontend(directory=join(root,"build/bootstrap/ir-cpp")):Promise<string> {
-  if(existsSync(join(root,"installation.json"))){
-    const binary=join(root,"native/frontend");
-    if(!existsSync(binary))throw new Error("Instalación incompleta: falta native/frontend; vuelve a ejecutar install.sh");
-    return binary;
+export async function buildIrFrontend(
+  directory = join(root, "build/bootstrap/ir-cpp"),
+): Promise<string> {
+  const prebuilt = process.env.ESTATIC_BOOTSTRAP_FRONTEND;
+  if (prebuilt) {
+    return verifiedFrontend(prebuilt);
   }
-  const hash=createHash("sha256").update(root).update(process.platform).update(process.arch).update(process.env.CXX??"g++");
-  for(const folder of ["src","bootstrap","runtime"])for(const path of readdirSync(join(root,folder),{recursive:true}).map(String).filter(p=>/\.(ts|ets|hpp|cpp)$/.test(p)&&!p.endsWith(".test.ts")).sort())hash.update(folder+"/"+path).update(readFileSync(join(root,folder,path)));
-  hash.update(readFileSync(join(root,"package.json")));
-  const identity=hash.digest("hex"),stamp=join(directory,"frontend.sha256"),binary=join(directory,"modules-demo");
-  if(existsSync(binary)&&existsSync(stamp)&&readFileSync(stamp,"utf8")===identity)return binary;
-  const {buildLoader}=await import("../modules/build.ts");
-  const built=await buildLoader(directory,"bootstrap/ir/demo.ets",true);writeFileSync(stamp,identity);return built;
+  if (existsSync(join(root, "installation.json"))) {
+    const binary = join(root, "native/frontend");
+    if (!existsSync(binary)) {
+      throw new Error(
+        "Instalación incompleta: falta native/frontend; vuelve a ejecutar install.sh",
+      );
+    }
+    const manifest=JSON.parse(readFileSync(join(root,"installation.json"),"utf8"));
+    return verifiedFrontend(binary,manifest.frontendSha256);
+  }
+  if (process.env.ESTATIC_NO_STAGE0 === "1") {
+    throw new Error("ESTATIC_NO_STAGE0=1: se requiere un frontend nativo precompilado o instalado; Stage0 está deshabilitado");
+  }
+  // La compilación histórica queda aislada en bootstrap/stage0/.
+  const { buildStage0Frontend } =
+    await import("../stage0/build-frontend.ts");
+  return buildStage0Frontend(directory);
 }
 export function nativeIr(binary:string, entry:string,loaderArgs:string[]=[]):IrProject {
   const p=spawnSync(binary,[resolve(entry),...loaderArgs],{encoding:"utf8",maxBuffer:64*1024*1024,timeout:120000});
+  if(p.error && (p.error as NodeJS.ErrnoException).code==="ETIMEDOUT") throw new Error(`Native IR timeout after 120s for ${resolve(entry)}; stderr: ${p.stderr||"(no phase trace)"}; use --trace to locate the stalled phase`);
   if(p.error)throw p.error;
   if(p.status!==0){
     let details=p.stderr;

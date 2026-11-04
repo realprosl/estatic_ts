@@ -1,0 +1,171 @@
+name: Migration phase 1 regression
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'bootstrap/**'
+      - 'runtime/**'
+      - 'shared/**'
+      - 'src/codegen/ir/**'
+      - 'src/codegen/runtime-callees.ts'
+      - 'src/semantic/terminal-methods.ts'
+      - 'src/modules/runtime-backends.ts'
+      - 'shared/project/**'
+      - 'shared/core/**'
+      - 'src/config/**'
+      - 'src/project/**'
+      - 'scripts/check-runtime-boundaries.sh'
+      - '.github/workflows/migration-phase1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Runtime and IR boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+      - name: Verify dependency direction
+        run: bash scripts/check-runtime-boundaries.sh
+      - name: Prove Stage0 import guard rejects forbidden dependencies
+        run: |
+          probe=backend/ir/__stage0_boundary_probe.ts
+          trap 'rm -f "$probe"' EXIT
+          printf 'import { compileFile } from "../../src/modules/module-loader.ts";\\n' > "$probe"
+          if bash scripts/check-runtime-boundaries.sh; then
+            echo "Boundary guard failed to detect a forbidden Stage0 import" >&2
+            exit 1
+          fi
+          rm "$probe"
+          bash scripts/check-runtime-boundaries.sh
+      - name: Prove shared contract guard rejects Stage0 imports
+        run: |
+          probe=shared/runtime/__stage0_boundary_probe.ts
+          trap 'rm -f "$probe"' EXIT
+          printf 'import { compileFile } from "../../src/modules/module-loader.ts";\\n' > "$probe"
+          if bash scripts/check-runtime-boundaries.sh; then
+            echo "Boundary guard failed to detect a shared-to-Stage0 import" >&2
+            exit 1
+          fi
+          rm "$probe"
+          bash scripts/check-runtime-boundaries.sh
+      - name: Verify old/new runtime and IR entrypoints
+        run: |
+          node --experimental-strip-types --input-type=module -e '
+            import * as oldRuntime from "./bootstrap/build/runtime-cache.ts";
+            import * as oldConfig from "./src/config/project-config.ts";
+            import * as config from "./shared/project/project-config.ts";
+            import * as oldProject from "./src/project/init-project.ts";
+            import * as project from "./shared/project/init-project.ts";
+            import * as oldVersion from "./src/core/ts2cpp-version.ts";
+            import * as version from "./shared/core/ts2cpp-version.ts";
+            import * as runtime from "./runtime/build/runtime-cache.ts";
+            import * as oldIr from "./src/codegen/ir/model.ts";
+            import * as oldBackend from "./src/codegen/ir/cpp-generator.ts";
+            import * as backend from "./backend/ir/cpp-generator.ts";
+            import * as ir from "./shared/ir/model.ts";
+            import * as oldCallees from "./src/codegen/runtime-callees.ts";
+            import * as callees from "./shared/runtime/runtime-callees.ts";
+            import * as oldTerminal from "./src/semantic/terminal-methods.ts";
+            import * as terminal from "./shared/runtime/terminal-methods.ts";
+            import * as stage0Backends from "./src/modules/runtime-backends.ts";
+            import * as sharedBackends from "./shared/runtime/runtime-backends.ts";
+            import { irCppNamedType } from "./backend/ir/named-types.ts";
+            import { cppType } from "./src/codegen/cpp-types.ts";
+            for (const name of ["runtimeArchive", "runtimeFlags", "precompileRuntime"]) {
+              if (oldRuntime[name] !== runtime[name]) throw new Error("Runtime facade mismatch: " + name);
+            }
+            if (oldConfig.loadConfig !== config.loadConfig || oldConfig.findConfig !== config.findConfig) throw new Error("Config facade mismatch");
+            if (oldProject.initializeProject !== project.initializeProject || oldProject.updateProjectTypes !== project.updateProjectTypes || oldProject.readCanonicalEstaticTypes !== project.readCanonicalEstaticTypes) throw new Error("Project facade mismatch");
+            if (oldVersion.getTs2cppVersionLabel !== version.getTs2cppVersionLabel || oldVersion.getTs2cppVersion !== version.getTs2cppVersion) throw new Error("Version facade mismatch");
+            if (oldBackend.IrCppGenerator !== backend.IrCppGenerator || oldBackend.generateCppFromIr !== backend.generateCppFromIr) throw new Error("Backend facade mismatch");
+            if (oldCallees.fileCalleeMap !== callees.fileCalleeMap || oldCallees.etsNetworkCalleeMap !== callees.etsNetworkCalleeMap) throw new Error("Runtime callees facade mismatch");
+            for (const name of ["number","string","boolean","void","i8","i16","i32","i64","u8","u16","u32","u64","f32","f64","Console","Request","Response","HttpClientResponse","JsonValue","Regex","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","FileReader","Server","Timer","FsWatcher","FsEvent"]) {
+              if (irCppNamedType(name) !== cppType(name)) throw new Error("IR named type mismatch: " + name);
+            }
+            if (stage0Backends.runtimeBackendsForCalls !== sharedBackends.runtimeBackendsForCalls) throw new Error("Backend selection facade mismatch");
+            if (oldTerminal.TERMINAL_METHODS !== terminal.TERMINAL_METHODS) throw new Error("Terminal facade mismatch");
+            if (oldIr.IrCodegenError !== ir.IrCodegenError) throw new Error("IR facade mismatch");
+            if (new ir.IrCodegenError("test").code !== "IR_CPP_UNSUPPORTED") throw new Error("IR diagnostic changed");
+          '
+      - name: Syntax checks
+        run: |
+          node --experimental-strip-types --check bootstrap/cli.ts
+          node --experimental-strip-types --check bootstrap/ir/cpp.ts
+          node --experimental-strip-types --check runtime/build/runtime-cache.ts
+          node --experimental-strip-types --check shared/ir/model.ts
+          node --experimental-strip-types --input-type=module -e 'await Promise.all([import("./shared/project/project-config.ts"),import("./shared/project/init-project.ts"),import("./shared/core/ts2cpp-version.ts")])'
+          node --experimental-strip-types --check shared/runtime/runtime-callees.ts
+          node --experimental-strip-types --check shared/runtime/terminal-methods.ts
+          node --experimental-strip-types --check shared/runtime/runtime-backends.ts
+          node --experimental-strip-types --check src/modules/runtime-backends.ts
+          node --experimental-strip-types --check backend/ir/cpp-generator.ts
+          node --experimental-strip-types --check backend/ir/runtime-calls.ts
+          node --experimental-strip-types --input-type=module -e 'import "./backend/ir/named-types.ts"'
+
+  regression:
+    name: Bootstrap and codegen regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+      - name: Install native compilation prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libuv1-dev libcurl4-openssl-dev libssl-dev libdrogon-dev libtrantor-dev libjsoncpp-dev uuid-dev zlib1g-dev
+          test -f /usr/include/uv.h
+          test -f /usr/include/drogon/drogon.h
+      - name: Compiler versions
+        run: |
+          node --version
+          g++ --version | head -n 1
+      - name: IR and native backend tests
+        run: |
+          node --experimental-strip-types --test --test-concurrency=1 bootstrap/ir/ir.test.ts bootstrap/ir/cpp.test.ts bootstrap/ir/native.test.ts
+      - name: CLI and runtime integration tests
+        run: |
+          node --experimental-strip-types --test --test-concurrency=1 bootstrap/cli.test.ts test/unit/runtime-backends.test.ts test/unit/cpp-types.test.ts test/unit/codegen.test.ts
+      - name: Installer and native table smoke checks
+        run: |
+          node --experimental-strip-types bootstrap/install.ts --help
+          node --experimental-strip-types --input-type=module -e '
+            import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+            import { tmpdir } from "node:os";
+            import { join } from "node:path";
+            import { nativeTables } from "./bootstrap/build/native-tables.ts";
+            const dir = mkdtempSync(join(tmpdir(), "estc-native-tables-"));
+            try {
+              const path = join(dir, "native-tables.hpp");
+              nativeTables(path);
+              const content = readFileSync(path, "utf8");
+              for (const name of ["nativeTypes", "fileCalls", "networkCalls", "terminalMethods", "backend_libuv"]) {
+                if (!content.includes(name)) throw new Error("Missing native table: " + name);
+              }
+            } finally { rmSync(dir, { recursive: true, force: true }); }
+          '
+      - name: Installed native compiler integration
+        run: |
+          node --experimental-strip-types --test --test-concurrency=1 bootstrap/install.test.ts
+      - name: Frontend compatibility tests
+        run: |
+          node --experimental-strip-types --test --test-concurrency=1 bootstrap/lexer/lexer.test.ts bootstrap/parser/parser.test.ts bootstrap/binder/binder.test.ts bootstrap/checker/checker.test.ts
+      # Experimental self-hosting gate: currently exceeds the native IR 120s budget.
+      # Keep the failure visible, but do not block established phase-1 regressions.
+      - name: Experimental native-to-native frontend rebuild (known timeout)
+        continue-on-error: true
+        run: |
+          frontend=$(node --experimental-strip-types --input-type=module -e 'import { buildIrFrontend } from "./bootstrap/ir/cpp.ts"; console.log(await buildIrFrontend());')
+          ESTATIC_NO_STAGE0=1 ESTATIC_BOOTSTRAP_FRONTEND="$frontend" node --experimental-strip-types bootstrap/rebuild-frontend.ts "$frontend" bootstrap/ir/demo.ets build/bootstrap/rebuilt-frontend
+          test -x build/bootstrap/rebuilt-frontend
+          test -s build/bootstrap/rebuilt-frontend.provenance.json
+          ESTATIC_NO_STAGE0=1 build/bootstrap/rebuilt-frontend bootstrap/ir/demo.ets > build/bootstrap/rebuilt-ir.json
+          node --input-type=module -e 'import {readFileSync} from "node:fs"; const ir=JSON.parse(readFileSync("build/bootstrap/rebuilt-ir.json","utf8")); if(!ir || typeof ir!=="object")throw new Error("Invalid rebuilt frontend IR");'

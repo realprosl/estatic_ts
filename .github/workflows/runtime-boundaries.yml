@@ -1,0 +1,47 @@
+name: Runtime boundaries and bootstrap cache
+on:
+  pull_request:
+    paths:
+      - 'runtime/**'
+      - 'shared/ir/**'
+      - 'src/codegen/ir/model.ts'
+      - 'bootstrap/cli.ts'
+      - 'bootstrap/ir/cpp.ts'
+      - 'bootstrap/build/**'
+      - 'scripts/check-runtime-boundaries.sh'
+      - '.github/workflows/runtime-boundaries.yml'
+  workflow_dispatch:
+jobs:
+  runtime-boundaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify runtime dependency boundaries
+        run: bash scripts/check-runtime-boundaries.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify compatibility exports without building optional system libraries
+        run: |
+          node --experimental-strip-types --input-type=module -e '
+            import * as facade from "./bootstrap/build/runtime-cache.ts";
+            import * as owned from "./runtime/build/runtime-cache.ts";
+            for (const key of ["runtimeArchive", "runtimeFlags", "precompileRuntime"]) {
+              if (facade[key] !== owned[key]) throw new Error("Facade mismatch: " + key);
+            }
+            const flags = owned.runtimeFlags("httplib", ["-O0", "-std=c++20"]);
+            if (!flags.includes("-O2") || !flags.includes("-DCPPHTTPLIB_NO_EXCEPTIONS")) {
+              throw new Error("Runtime flags contract changed");
+            }
+          '
+      - name: Verify shared IR contract and compatibility facade
+        run: |
+          node --experimental-strip-types --input-type=module -e '
+            import { IrCodegenError as shared } from "./shared/ir/model.ts";
+            import { IrCodegenError as legacy } from "./src/codegen/ir/model.ts";
+            if (shared !== legacy) throw new Error("IR contract facade changed identity");
+            const error = new legacy("unsupported");
+            if (error.code !== "IR_CPP_UNSUPPORTED") throw new Error("IR error contract changed");
+          '
+          node --experimental-strip-types --check bootstrap/cli.ts
+          node --experimental-strip-types --check bootstrap/ir/cpp.ts

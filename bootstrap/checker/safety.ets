@@ -1162,7 +1162,8 @@ export class SafetyAnalyzer {
   }
   run(): CheckResult {
     if (this.trace) printError("frontend: memory and captures");
-    this.memoryContracts(); this.captures(); this.result.borrows = this.leases;
+    this.memoryContracts(); if (this.trace) printError("frontend: memory contracts complete");
+    this.captures(); if (this.trace) printError("frontend: captures complete"); this.result.borrows = this.leases;
     if (this.trace) printError("frontend: effects");
     this.effects = new EffectAnalyzer(this.graph,this.binding,this.result); this.effects.trace = this.trace; this.effects.analyze(); this.result.files = this.effects.checked.files; this.result.effects = this.effects.summaries;
     if (this.trace) printError("frontend: provenance and visibility");
