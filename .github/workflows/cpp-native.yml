@@ -1,0 +1,31 @@
+name: cpp-native integration
+on:
+  push:
+    branches: [feature/cpp-native-annotation]
+  pull_request:
+    paths:
+      - 'bootstrap/**'
+      - 'src/codegen/ir/**'
+      - 'experiments/cpp-native/**'
+      - '.github/workflows/cpp-native.yml'
+  workflow_dispatch:
+
+jobs:
+  native-annotations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install C++ dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ libuv1-dev
+      - name: Install Node dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Verify bootstrap parser and IR
+        run: node --experimental-strip-types --test bootstrap/parser/parser.test.ts bootstrap/ir/ir.test.ts
+      - name: Verify native annotations and C++ generation
+        run: node --experimental-strip-types --test --test-concurrency=1 bootstrap/ir/native-annotations.test.ts bootstrap/ir/cpp.test.ts
