@@ -246,8 +246,8 @@ export class IrVerifier {
       for (const target of contract.callees) if (target < 0 || target >= this.project.effectContracts.length) this.error(contract.source,"Arista de efectos inexistente");
       for (const lease of contract.borrows) if (lease.callback == "" || lease.root == "" || !["ref","constRef"].includes(lease.mode)) this.error(lease.source,"Obligación callback incompatible");
     }
-    for (const f of this.project.functions) { for (const contract of f.effectContracts) if (contract < 0 || contract >= this.project.effectContracts.length || this.project.effectContracts[contract].source.moduleId != f.source.moduleId || this.project.effectContracts[contract].source.node != f.source.node) this.error(f.source,"Contrato de función inexistente"); this.functionBody(f); }
-    if (this.issues.length == 0) for (const f of this.project.functions) { for (const issue of verifyBorrowRoutes(this.project,f)) this.issues.push(issue); for (const issue of verifyOwnershipRoutes(this.project,f)) this.issues.push(issue); }
+    for (const f of this.project.functions) { for (const contract of f.effectContracts) if (contract < 0 || contract >= this.project.effectContracts.length || this.project.effectContracts[contract].source.moduleId != f.source.moduleId || this.project.effectContracts[contract].source.node != f.source.node) this.error(f.source,"Contrato de función inexistente"); if (!this.project.annotations.some(a => a.name == "cpp_native" && a.target.moduleId == f.source.moduleId && a.target.node == f.source.node)) this.functionBody(f); }
+    if (this.issues.length == 0) for (const f of this.project.functions) { if (this.project.annotations.some(a => a.name == "cpp_native" && a.target.moduleId == f.source.moduleId && a.target.node == f.source.node)) continue; for (const issue of verifyBorrowRoutes(this.project,f)) this.issues.push(issue); for (const issue of verifyOwnershipRoutes(this.project,f)) this.issues.push(issue); }
     const source = new IrSource("","","",-1,0,0);
     let initializers: number[] = [];
     for (const module of this.project.modules) {
