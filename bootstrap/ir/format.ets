@@ -15,7 +15,12 @@ export function formatIr(project: IrProject): string {
   for (const d of project.dispatches) dispatches.push("{\"interfaceType\":"+numberToString(d.interfaceType)+",\"concreteType\":"+numberToString(d.concreteType)+",\"name\":"+quoteSource(d.name)+",\"signature\":"+numberToString(d.signature)+",\"callee\":"+numberToString(d.callee)+"}");
   let contracts: string[] = [];
   for (const contract of project.runtimeContracts) { let effects: string[] = []; for (const effect of contract.effects) effects.push(quoteSource(effect)); contracts.push("{\"name\":"+quoteSource(contract.name)+",\"parameters\":"+bindingNumbers(contract.parameters)+",\"returns\":"+numberToString(contract.returns)+",\"effects\":["+effects.join(",")+"],\"capability\":"+quoteSource(contract.capability)+"}"); }
-  let output: string[] = ['{"dispatches":['+dispatches.join(",")+"],"+formatContracts(project)+",\"format\":\"ets-ir-2\",\"success\":"+bindingBoolean(project.success)+",\"types\":["+types.join(",")+"],\"typeDefinitions\":["+definitions.join(",")+"],\"runtimeContracts\":["+contracts.join(",")+"],\"entry\":"+numberToString(project.entry)+",\"initializationOrder\":"+bindingNumbers(project.initializationOrder)+",\"finalizationOrder\":"+bindingNumbers(project.finalizationOrder)+",\"modules\":["];
+  let annotations: string[] = [];
+  for (const a of project.annotations) {
+    let args: string[] = []; for (const value of a.arguments) args.push(quoteSource(value));
+    annotations.push("{\\"name\\":"+quoteSource(a.name)+",\\"arguments\\":["+args.join(",")+"],\\"source\\":"+formatIrSource(a.source)+",\\"target\\":"+formatIrSource(a.target)+"}");
+  }
+  let output: string[] = ['{"dispatches":['+dispatches.join(",")+"],\\\"annotations\\\":["+annotations.join(",")+"],"+formatContracts(project)+",\"format\":\"ets-ir-2\",\"success\":"+bindingBoolean(project.success)+",\"types\":["+types.join(",")+"],\"typeDefinitions\":["+definitions.join(",")+"],\"runtimeContracts\":["+contracts.join(",")+"],\"entry\":"+numberToString(project.entry)+",\"initializationOrder\":"+bindingNumbers(project.initializationOrder)+",\"finalizationOrder\":"+bindingNumbers(project.finalizationOrder)+",\"modules\":["];
   let comma: string = "";
   for (const module of project.modules) { output.push(comma+"{\"id\":"+quoteSource(module.id)+",\"sourceHash\":"+quoteSource(module.sourceHash)+",\"file\":"+quoteSource(module.file)+",\"initializer\":"+numberToString(module.initializer)+",\"finalizer\":"+numberToString(module.finalizer)+"}"); comma = ","; }
   output.push("],\"globals\":["); comma = "";
