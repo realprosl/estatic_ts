@@ -973,22 +973,30 @@ export class IrLowering {
         if (!valid) { { const pendingPush = new IrIssue("IR_INPUT","Identidad de entrada inválida",this.source(id)); this.result.diagnostics.push(pendingPush); } return this.result; }
       }
       // Preserve source annotations in ets-ir-2, including imported modules.
+      // Read AST indices and values before mutating IR collections: the bootstrap
+      // borrow checker does not permit overlapping AST views and result writes.
       for (let id: number = 0; id < ast.nodes.length; id = id+1) {
-        const target = ast.nodes[id];
-        for (const edge of target.edges) if (edge.role == EdgeRole.Decorators) {
-          const decorator = ast.nodes[edge.node];
-          const name = decorator.get(AttributeKind.Name);
+        for (let at: number = 0; at < ast.nodes[id].edges.length; at = at+1) {
+          if (ast.nodes[id].edges[at].role != EdgeRole.Decorators) continue;
+          const decoratorId: number = ast.nodes[id].edges[at].node;
+          const name: string = ast.nodes[decoratorId].get(AttributeKind.Name);
           if (name != "cpp_native" && name != "include" && name != "cpp_include") continue;
           let args: string[] = []; let valid: boolean = true;
-          for (const arg of decorator.edges) if (arg.role == EdgeRole.Args) {
-            const value = ast.nodes[arg.node];
-            if (value.kind != NodeKind.LiteralExpression || value.get(AttributeKind.LiteralType) != "string") { valid = false; break; }
-            args.push(value.get(AttributeKind.Value));
+          for (let argAt: number = 0; argAt < ast.nodes[decoratorId].edges.length; argAt = argAt+1) {
+            if (ast.nodes[decoratorId].edges[argAt].role != EdgeRole.Args) continue;
+            const valueId: number = ast.nodes[decoratorId].edges[argAt].node;
+            if (ast.nodes[valueId].kind != NodeKind.LiteralExpression || ast.nodes[valueId].get(AttributeKind.LiteralType) != "string") { valid = false; break; }
+            const literal: string = ast.nodes[valueId].get(AttributeKind.Value);
+            args.push(literal);
           }
+          const decoratorSource: IrSource = this.source(decoratorId);
           if (!valid || args.length != 1) {
-            this.result.diagnostics.push(new IrIssue("IR_ANNOTATION","La anotación requiere un literal string",this.source(edge.node)));
+            const issue: IrIssue = new IrIssue("IR_ANNOTATION","La anotación requiere un literal string",decoratorSource);
+            this.result.diagnostics.push(issue);
           } else {
-            this.result.annotations.push(new IrAnnotation(this.source(edge.node),this.source(id),name,args));
+            const targetSource: IrSource = this.source(id);
+            const annotation: IrAnnotation = new IrAnnotation(decoratorSource,targetSource,name,args);
+            this.result.annotations.push(annotation);
           }
         }
       }
