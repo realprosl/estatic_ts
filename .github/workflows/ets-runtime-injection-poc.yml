@@ -1,0 +1,25 @@
+name: ETS runtime injection proof of concept
+on:
+  push:
+    branches: [experiment/ets-runtime-injection]
+  pull_request:
+    paths:
+      - 'bootstrap/**'
+      - 'docs/native-include-cppgen.md'
+      - '.github/workflows/ets-runtime-injection-poc.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-annotations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies without system package modifications
+        run: npm run install:skip-sysdeps
+      - name: Verify native include and cppgen contracts
+        run: npm run test:bootstrap:ir:annotations
