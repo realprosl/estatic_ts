@@ -1,0 +1,50 @@
+name: Diagnose checker arity - SRC vs native Bootstrap
+# Re-run differential after restoring includes() in bootstrap/checker/checker.ets
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/minimal-cpp-compiler]
+    paths:
+      - '.github/workflows/checker-arity-differential.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  src:
+    name: SRC TypeScript compiler
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile checker demo using src/modules/module-loader.ts
+        run: |
+          node --experimental-strip-types --input-type=module <<'NODE'
+          import { compileFile } from './src/modules/module-loader.ts';
+          const result = await compileFile('bootstrap/checker/demo.ets', { baseDirectory: process.cwd() });
+          console.log('SRC compilation result:', JSON.stringify({ success: result.success, diagnostics: result.diagnostics }, null, 2));
+          if (result.success === false || (result.diagnostics?.length ?? 0) > 0) process.exitCode = 1;
+          NODE
+
+  bootstrap:
+    name: Committed C++ Bootstrap compiler
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install C++ dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
+      - name: Rebuild committed compiler and compile identical checker demo
+        run: |
+          set -euo pipefail
+          bash native-compiler-mini/build-all.sh
+          export ESTC_ROOT="$GITHUB_WORKSPACE/native-compiler-mini"
+          mkdir -p differential
+          "$ESTC_ROOT/native/etsc" build bootstrap/checker/demo.ets -o "$GITHUB_WORKSPACE/differential/checker.cpp" --binary "$GITHUB_WORKSPACE/differential/checker" --no-progress
+          test -s differential/checker.cpp
+          test -x differential/checker
