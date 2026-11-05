@@ -22,7 +22,7 @@ jobs:
         with:
           node-version: '22'
       - name: Install native dependencies
-        run: sudo apt-get update && sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
+        run: sudo apt-get update && sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev libdrogon-dev libjsoncpp-dev uuid-dev pkg-config
       - name: Build native compiler from corrected snapshot
         run: bash native-compiler-mini/build-all.sh
       - name: Assert metadata IR reads use references

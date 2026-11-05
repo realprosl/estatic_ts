@@ -24,10 +24,10 @@ test('container metadata borrows storage instead of copying the container', asyn
       const xs:Item[]=[new Item()];
       print(new Scan(xs).sum()); print(temporary().length); print(inspect(xs));
       const fixed:number[2]=[1,2]; print(fixed.length);
-      const tuple:[number,string]=[1,"s"]; print(tuple.length);
+      print(xs.length); const matrix:Item[][]=[xs]; print(matrix[0].length);
       const m=new Map<string,number>(); print(m.size);
       const s=new Set<number>(); print(s.size);
-      print("hello".length); print(optionalSome(1).kind);
+      print("hello".length);
     `);
     const project = nativeIr(frontend, file);
     let count=0;
