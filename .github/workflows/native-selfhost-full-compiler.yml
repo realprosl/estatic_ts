@@ -122,6 +122,20 @@ jobs:
               cache=cache.replace(old,new)
           Path('bootstrap/modules/syntax-cache-trace-backup.ets').write_text(Path('bootstrap/modules/syntax-cache.ets').read_text())
           Path('bootstrap/modules/syntax-cache.ets').write_text(cache)
+          parser=Path('bootstrap/parser/parser.ets').read_text()
+          parser_replacements=[
+            ('  parseProgram(): ParseResult {',
+             '  parseProgram(): ParseResult { printError("TRACE parseProgram ENTER tokens=" + numberToString(this.tokens.length));'),
+            ('        const child: number = this.statement(true);',
+             '        if (this.current % 500 < 2) printError("TRACE statement BEGIN at=" + numberToString(this.current) + " nodes=" + numberToString(this.nodes.length)); const child: number = this.statement(true); if (this.current % 500 < 2) printError("TRACE statement END at=" + numberToString(this.current) + " nodes=" + numberToString(this.nodes.length));'),
+            ('    return new ParseResult(program, this.nodes, this.diagnostics);',
+             '    printError("TRACE parseProgram DONE at=" + numberToString(this.current)); return new ParseResult(program, this.nodes, this.diagnostics);')
+          ]
+          for old,new in parser_replacements:
+              if parser.count(old)!=1: raise SystemExit(f'Parser instrumentation anchor not unique: {old}')
+              parser=parser.replace(old,new)
+          Path('bootstrap/parser/parser-trace-backup.ets').write_text(Path('bootstrap/parser/parser.ets').read_text())
+          Path('bootstrap/parser/parser.ets').write_text(parser)
           Path('bootstrap/modules/loader-trace-backup.ets').write_text(Path('bootstrap/modules/loader.ets').read_text())
           Path('bootstrap/modules/loader.ets').write_text(loader)
           for old,new in replacements:
@@ -130,7 +144,7 @@ jobs:
           # Keep relative imports working: instrument a temporary copy alongside demo.ets.
           Path('bootstrap/ir/demo-trace.ets').write_text(source)
           PY
-          trap 'mv bootstrap/modules/loader-trace-backup.ets bootstrap/modules/loader.ets; mv bootstrap/modules/syntax-cache-trace-backup.ets bootstrap/modules/syntax-cache.ets; mv bootstrap/frontend/frontend-trace-backup.ets bootstrap/frontend/frontend.ets; rm -f bootstrap/ir/demo-trace.ets' EXIT
+          trap 'mv bootstrap/modules/loader-trace-backup.ets bootstrap/modules/loader.ets; mv bootstrap/modules/syntax-cache-trace-backup.ets bootstrap/modules/syntax-cache.ets; mv bootstrap/frontend/frontend-trace-backup.ets bootstrap/frontend/frontend.ets; mv bootstrap/parser/parser-trace-backup.ets bootstrap/parser/parser.ets; rm -f bootstrap/ir/demo-trace.ets' EXIT
           "$ESTC_ROOT/native/etsc" build "$GITHUB_WORKSPACE/bootstrap/ir/demo-trace.ets" \
             -o "$GITHUB_WORKSPACE/build/selfhost/trace/frontend.cpp" \
             --binary "$GITHUB_WORKSPACE/build/selfhost/trace/frontend" --no-progress
