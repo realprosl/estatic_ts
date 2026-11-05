@@ -380,18 +380,18 @@ export class Binder {
         if (attribute.name == AttributeKind.DeclaredType || attribute.name == AttributeKind.Type || attribute.name == AttributeKind.ReturnType || attribute.name == AttributeKind.Constraint || attribute.name == AttributeKind.TargetType || attribute.name == AttributeKind.TypeArgument || attribute.name == AttributeKind.Payload || (node.kind == NodeKind.TypeParameter && attribute.name == AttributeKind.Default)) this.typeReferences(module, id, attribute.value, false);
       }
     }
-    // Resolve static namespace chains after lexical names, in dependency order
+    // Cache the latest resolved value reference per node. Scanning all references\n    // for every member expression makes this pass quadratic on large modules.\n    let valueSymbols: number[] = [];\n    for (let id: number = 0; id < arena.length; id = id + 1) valueSymbols.push(-1);\n    for (const reference of this.result.references) if (reference.module == module && reference.space == "value" && !reference.deferred && reference.node >= 0 && reference.node < valueSymbols.length) valueSymbols[reference.node] = reference.symbol;\n    // Resolve static namespace chains after lexical names, in dependency order
     // of expression nodes (parser allocates member parents after their object).
     for (let id: number = 0; id < arena.length; id = id + 1) {
       const node: AstNode = arena[id]; const scope: number = this.result.files[module].nodeScopes[id];
       if (scope < 0 || (node.kind != NodeKind.MemberExpression && node.kind != NodeKind.MemberCallExpression)) continue;
       const object: number = bindingChild(node, EdgeRole.Object); let receiver: number = -1;
-      for (const reference of this.result.references) { if (reference.module == module && reference.node == object && reference.space == "value" && !reference.deferred) receiver = reference.symbol; }
+      receiver = object >= 0 && object < valueSymbols.length ? valueSymbols[object] : -1;
       const origin: number = this.origin(receiver);
       const member: string = node.kind == NodeKind.MemberExpression ? node.get(AttributeKind.Member) : node.get(AttributeKind.Method);
       if (origin >= 0 && this.result.symbols[origin].namespaceModule >= 0) {
         if (node.get(AttributeKind.Optional) == "true") this.report(module, id, "Un namespace no admite acceso opcional");
-        const symbol: number = this.namespaceMember(module, id, receiver, member, "value"); this.namespaceValue(module, id, symbol);
+        const symbol: number = this.namespaceMember(module, id, receiver, member, "value"); this.namespaceValue(module, id, symbol);\n        valueSymbols[id] = symbol;
       }
       else this.result.references.push(new BoundReference(module, id, scope, member, "member", -1, -1, true));
     }
