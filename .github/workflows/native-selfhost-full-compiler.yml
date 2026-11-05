@@ -84,17 +84,41 @@ jobs:
             ('print(formatIr(ir)); if (!ir.success)',
              'printError("TRACE BEGIN formatIr"); print(formatIr(ir)); printError("TRACE END formatIr"); if (!ir.success)')
           ]
+          loader=Path('bootstrap/modules/loader.ets').read_text()
+          loader_replacements=[
+            ('const cached: CachedSource = cache.getOrParseModule(file, source, after);',
+             'printError("TRACE parse BEGIN " + file + " bytes=" + numberToString(source.length)); const cached: CachedSource = cache.getOrParseModule(file, source, after); printError("TRACE parse END " + file);'),
+            ('let discovered: LoadedFile[] = [readModule(canonical, graph, cache)];',
+             'printError("TRACE first module BEGIN " + canonical); let discovered: LoadedFile[] = [readModule(canonical, graph, cache)]; printError("TRACE first module END " + canonical);'),
+            ('if (existing < 0) { discovered.push(readModule(dependency, graph, cache));',
+             'if (existing < 0) { printError("TRACE dependency BEGIN " + dependency); discovered.push(readModule(dependency, graph, cache)); printError("TRACE dependency END " + dependency);')
+          ]
+          for old,new in loader_replacements:
+              if loader.count(old)!=1: raise SystemExit(f'Loader instrumentation anchor not unique: {old}')
+              loader=loader.replace(old,new)
+          Path('bootstrap/modules/loader-trace-backup.ets').write_text(Path('bootstrap/modules/loader.ets').read_text())
+          Path('bootstrap/modules/loader.ets').write_text(loader)
           for old,new in replacements:
               if source.count(old)!=1: raise SystemExit(f'Instrumentation anchor not unique: {old}')
               source=source.replace(old,new)
           # Keep relative imports working: instrument a temporary copy alongside demo.ets.
           Path('bootstrap/ir/demo-trace.ets').write_text(source)
           PY
-          trap 'rm -f bootstrap/ir/demo-trace.ets' EXIT
+          trap 'mv bootstrap/modules/loader-trace-backup.ets bootstrap/modules/loader.ets; rm -f bootstrap/ir/demo-trace.ets' EXIT
           "$ESTC_ROOT/native/etsc" build "$GITHUB_WORKSPACE/bootstrap/ir/demo-trace.ets" \
             -o "$GITHUB_WORKSPACE/build/selfhost/trace/frontend.cpp" \
             --binary "$GITHUB_WORKSPACE/build/selfhost/trace/frontend" --no-progress
           test -x build/selfhost/trace/frontend
+      - name: Diagnóstico driver verbose con frontend recompilado
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          export ESTC_ROOT="$GITHUB_WORKSPACE/native-compiler-mini"
+          timeout 60s build/selfhost/stage2/etsc build examples/hello.ets \
+            --frontend "$GITHUB_WORKSPACE/build/selfhost/stage2/frontend" \
+            -o "$GITHUB_WORKSPACE/build/selfhost/stage2/hello-verbose.cpp" \
+            --binary "$GITHUB_WORKSPACE/build/selfhost/stage2/hello-verbose" \
+            --verbose --no-progress
       - name: Perfilar fases del frontend recompilado
         timeout-minutes: 7
         run: |
