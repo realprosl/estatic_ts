@@ -391,7 +391,7 @@ export class Binder {
       const node: AstNode = arena[id]; const scope: number = this.result.files[module].nodeScopes[id];
       if (scope < 0 || (node.kind != NodeKind.MemberExpression && node.kind != NodeKind.MemberCallExpression)) continue;
       const object: number = bindingChild(node, EdgeRole.Object); let receiver: number = -1;
-      receiver = object >= 0 && object < valueSymbols.length ? valueSymbols[object] : -1;
+      if (object >= 0 && object < valueSymbols.length) receiver = valueSymbols[object];
       const origin: number = this.origin(receiver);
       const member: string = node.kind == NodeKind.MemberExpression ? node.get(AttributeKind.Member) : node.get(AttributeKind.Method);
       if (origin >= 0 && this.result.symbols[origin].namespaceModule >= 0) {
