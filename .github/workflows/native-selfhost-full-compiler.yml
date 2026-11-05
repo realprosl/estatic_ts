@@ -124,6 +124,14 @@ jobs:
           Path('bootstrap/modules/syntax-cache.ets').write_text(cache)
           parser=Path('bootstrap/parser/parser.ets').read_text()
           parser_replacements=[
+            ('  constructor(tokens: ParserToken[]) {',
+             '  constructor(tokens: ParserToken[]) { printError("TRACE constructor ENTER tokens=" + numberToString(tokens.length));'),
+            ('    for (let i: number = 0; i + 1 < this.tokens.length; i = i + 1) {',
+             '    printError("TRACE constructor EOF scan BEGIN"); for (let i: number = 0; i + 1 < this.tokens.length; i = i + 1) { if (i % 1000 == 0) printError("TRACE constructor EOF scan at=" + numberToString(i));'),
+            ('    for (let i: number = 0; i < this.tokens.length; i = i + 1) {',
+             '    printError("TRACE constructor coordinate scan BEGIN"); for (let i: number = 0; i < this.tokens.length; i = i + 1) { if (i % 1000 == 0) printError("TRACE constructor coordinate scan at=" + numberToString(i));'),
+            ('  coordinate(value: number, minimum: number): boolean {',
+             '  coordinate(value: number, minimum: number): boolean {'),
             ('  parseProgram(): ParseResult {',
              '  parseProgram(): ParseResult { printError("TRACE parseProgram ENTER tokens=" + numberToString(this.tokens.length));'),
             ('        const child: number = this.statement(true);',
