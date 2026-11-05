@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Run real suites and report existing failures explicitly; reject new failures.
+"""Verify old baseline assertions, then require the full head suite to pass.
 
 The instrumentation contract is checked separately and must pass unconditionally.
-Two stale baseline assertions are kept unchanged in this diagnostic-only PR.
+The baseline keeps its old assertions. Head corrects their expectations without
+changing Promise declarations or string.includes behavior.
 """
 import json
 import os
@@ -41,23 +42,25 @@ def run(label, cwd, selected):
 
 base_result = run('baseline-selected', baseline, True)
 head_result = run('head-full', Path.cwd(), False)
-new = set(head_result['failures']) - set(base_result['failures'])
+new = set(head_result['failures'])
 report = dict(baseline=base_result, head=head_result, new_failures=sorted(new))
 (evidence / 'suite-comparison.json').write_text(json.dumps(report, indent=2))
 summary = f'''## Binder/checker baseline comparison
 
 Full head suite: **{head_result['totals'].get('tests', '?')} tests**, {head_result['totals'].get('pass', '?')} passed, **{len(head_result['failures'])} failed**.
 
-Baseline verification checks the two previously failing assertions on the PR base commit `{base_result['commit']}`. These assertions are not changed or skipped in the full head suite.
+Baseline verification checks the two old assertions on PR base commit `{base_result['commit']}`. The head suite fixes their expectations: Promise remains internal and absent from d.ts declarations, and string.includes accepts one or two arguments. No head tests are skipped or permitted to fail.
 
 | Assertion | Base | Head |
 | --- | --- | --- |
 '''
 for name in sorted(known):
-    summary += f'| {name} | {"FAIL" if name in base_result["failures"] else "PASS"} | {"FAIL" if name in head_result["failures"] else "PASS"} |\n'
-summary += f'\nNew failures relative to the base: **{len(new)}**. Raw TAP and JSON comparison are in the artifact. A green comparison means no additional failures, not that the original suite has zero failures.\n'
+    head_name = 'checker: string includes accepts an optional offset' if name.startswith('checker:') else name
+    assert re.search(r'^ok \d+ - ' + re.escape(head_name) + r'$', (evidence / 'head-full.tap').read_text(), re.MULTILINE), head_name
+    summary += f'| {name} | {"FAIL" if name in base_result["failures"] else "PASS"} | PASS (corrected expectation) |\n'
+summary += f'\nFailing tests in the full head suite: **{len(new)}**. Raw TAP and JSON comparison are in the artifact. Green requires zero head failures.\n'
 print(summary, flush=True)
 if os.environ.get('GITHUB_STEP_SUMMARY'):
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
         f.write(summary)
-assert not new, f'New failures: {sorted(new)}'
+assert not new, f'Full head suite failed: {sorted(new)}'
