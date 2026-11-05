@@ -5,7 +5,8 @@
 namespace estc {
 class Generator {
 public:
- Project p;Result result;std::set<int> cppGenerators;
+ Project p;Result result;std::set<int> cppGenerators;std::map<int,int> metadataPlaces;
+ void metadataLoads(const Function&);
  void annotations();
  S cppEscape(const Function&,const Instruction&);
  explicit Generator(const J& j):p(j){result.headers={"runtime/ets_runtime.hpp","runtime/ets_ir.hpp"};}
@@ -116,8 +117,23 @@ public:
  const Instruction& definition(const Function& f,int value)const{for(auto& b:f.blocks)for(auto& i:b.instructions)if(i.result==value)return i;throw Error("Temporal sin definición",f.source);}
  void validate();Result generate();
 };
+// A copied container is unnecessary only for an adjacent, single-use metadata
+// inspection. Keeping this local preserves snapshots across calls and writes.
+void Generator::metadataLoads(const Function& f){
+ metadataPlaces.clear();V<int> uses(f.values.size(),0);
+ for(const auto& p:f.places)if(p.kind=="index"&&p.index>=0)uses.at(p.index)++;
+ for(const auto& b:f.blocks){if(b.value>=0)uses.at(b.value)++;for(const auto& i:b.instructions)for(int v:i.operands)uses.at(v)++;}
+ for(const auto& b:f.blocks)for(int k=1;k<int(b.instructions.size());k++){
+  const auto& load=b.instructions[k-1];const auto& read=b.instructions[k];
+  if(load.op!="load"||load.result<0||uses.at(load.result)!=1||read.op!="property"||read.operands.size()!=1||read.operands[0]!=load.result||!in(read.text,{"length","size","kind","ok"}))continue;
+  if(in(shape(load.typeId).kind,{"ref","constRef","ptr","constPtr"}))continue;
+  const auto& q=f.places.at(load.place);if(q.kind=="index"&&p.types.at(f.places.at(q.base).typeId)=="string")continue;
+  metadataPlaces[load.result]=load.place;
+ }
+}
 S Generator::instruction(const Function& f,const Instruction& i,int block){
  auto a=[&](int k,bool consume=true){return operand(f,i,k,consume);};S T=i.typeId>=0?type(i.typeId):"void",v;const auto& op=i.op;
+ if(op=="load"&&metadataPlaces.contains(i.result))return "// metadata load fused with its sole adjacent inspection";
  if(op=="backendEscape")return cppEscape(f,i);
  else if(op=="constant")v=literal(i.text,i.typeId);
  else if(op=="load"){const auto& p=f.places.at(i.place);v=p.kind=="index"&&this->p.types.at(f.places.at(p.base).typeId)=="string"?"ets::string_charAt("+place(f,p.base)+".get(),v"+n(p.index)+".get())":place(f,i.place)+".get()";}
@@ -150,7 +166,7 @@ S Generator::instruction(const Function& f,const Instruction& i,int block){
  else if(op=="result")v=T+"::"+(i.text=="Err"?"failure":"success")+"("+a(0)+")";
  else if(op=="isPresent")v=deref(a(0),f.values.at(i.operands.at(0)))+".isPresent()";
  else if(op=="unwrap")v="("+deref(a(0),f.values.at(i.operands.at(0)))+").value()";
- else if(op=="property"){int id=inner(f.values.at(i.operands.at(0)));S input=deref(a(0,false),f.values.at(i.operands.at(0)));const auto& s=shape(id);if(in(i.text,{"length","size"}))v=in(s.kind,{"tuple","pack"})?"double("+n(s.arguments.size())+")":"double(("+input+").size())";else if(i.text=="ok")v="("+input+").isOk()";else if(i.text=="kind")v=s.kind=="Optional"?"std::string(("+input+").isPresent()?\"Some\":\"None\")":"std::string(("+input+").isOk()?\"Ok\":\"Err\")";}
+ else if(op=="property"){int id=inner(f.values.at(i.operands.at(0)));S input=metadataPlaces.contains(i.operands.at(0))?place(f,metadataPlaces.at(i.operands.at(0)))+".get()":deref(a(0,false),f.values.at(i.operands.at(0)));const auto& s=shape(id);if(in(i.text,{"length","size"}))v=in(s.kind,{"tuple","pack"})?"double("+n(s.arguments.size())+")":"double(("+input+").size())";else if(i.text=="ok")v="("+input+").isOk()";else if(i.text=="kind")v=s.kind=="Optional"?"std::string(("+input+").isPresent()?\"Some\":\"None\")":"std::string(("+input+").isOk()?\"Ok\":\"Err\")";}
  else if(op=="extractIndex")v=in(shape(f.values.at(i.operands.at(0))).kind,{"tuple","pack"})?"std::get<"+n(constantIndex(f,i.operands.at(1)))+">("+a(0)+")":"("+a(0)+").at(static_cast<std::size_t>("+a(1)+"))";
  else if(op=="typeTag"){int id=inner(i.signature);S name=p.types.at(id);v=literal(numeric(id)?"number":in(name,{"string","boolean"})?name:name=="void"?"undefined":"object",i.typeId);}
  else if(op=="typeTest"){int id=inner(f.values.at(i.operands.at(0)));v=sum(id)?"("+deref(a(0,false),f.values.at(i.operands.at(0)))+".data.index()=="+n(index(choices(id),i.signature))+")":id==i.signature?"true":"false";}
@@ -181,7 +197,7 @@ S Generator::instruction(const Function& f,const Instruction& i,int block){
  return i.result>=0?"v"+n(i.result)+".set("+v+");":v+";";
 }
 S Generator::signature(const Function& f,int id){S ret=f.asynchronous&&shape(f.returns).kind!="Promise"?"ets::Task<"+type(f.bodyReturns)+">":type(f.returns);if(f.asynchronous){result.headers.insert("runtime/ets_async.hpp");result.libuv=true;}V<S> args;for(int k=0;k<int(f.captureTypes.size());k++)args.push_back(type(f.captureTypes[k])+(f.captureModes.at(k)=="reference"?"*":"")+" c"+n(k));for(int k=0;k<int(f.parameterTypes.size());k++)args.push_back(type(f.parameterTypes[k])+" a"+n(k));return ret+" ir_f"+n(id)+"("+join(args)+")";}
-S Generator::body(const Function& f,int id){V<S> out;int parameter=0;
+S Generator::body(const Function& f,int id){metadataLoads(f);V<S> out;int parameter=0;
  for(int k=0;k<int(f.places.size());k++){auto& p=f.places[k];if(p.kind=="local"&&p.global<0)out.push_back("ets::ir::Slot<"+type(p.typeId)+"> p"+n(k)+";");}
  for(int k=0;k<int(f.values.size());k++)out.push_back("ets::ir::Slot<"+type(f.values[k])+"> v"+n(k)+";");
  for(int k=0;k<int(f.blocks.size());k++){auto& b=f.blocks[k];if(b.terminator=="suspend"){int t=shape(f.values.at(b.value)).arguments.at(0);if(p.types.at(t)!="void")out.push_back("ets::ir::Slot<"+type(t)+"> await"+n(k)+";");}}
