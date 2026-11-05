@@ -1,3 +1,4 @@
+import { traceAnalysis } from "../frontend/analysis-trace";
 import { AttributeKind, EdgeRole, NodeKind } from "../parser/ast-schema";
 import { ModuleGraph, LoadedFile, GeneratedSource } from "../modules/loader";
 import { CachedSource, FileRecord } from "../modules/syntax-cache";
@@ -15,8 +16,8 @@ export class FrontendProject {
 }
 // Expansion owns a value copy of the graph. Cached source arenas are immutable.
 export class NativeExpansion {
-  graph: ModuleGraph; binding: BindingResult; count: number;
-  constructor(graph: ModuleGraph) { this.graph = graph; this.binding = new BindingResult(); this.count = 0; }
+  graph: ModuleGraph; binding: BindingResult; count: number; trace: boolean;
+  constructor(graph: ModuleGraph) { this.graph = graph; this.binding = new BindingResult(); this.count = 0; this.trace = false; }
   node(module: number, id: number): AstNode { return this.graph.modules[module].cached.result.ast.nodes[id]; }
   decorated(module: number, id: number, name: string): boolean {
     for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Decorators && this.node(module,edge.node).get(AttributeKind.Name) == name) return true;
@@ -91,7 +92,7 @@ export class NativeExpansion {
       }
       n.edges = edges; fragment.modules[0].cached.result.ast.nodes[id] = n;
     }
-    const local: BindingResult = bindProject(fragment);
+    const local: BindingResult = bindProject(fragment,this.trace);
     for (const diagnostic of local.diagnostics) if (diagnostic.message.includes("duplicad",0)) { this.report(module,call,"ETSGEN_GENERATED_HYGIENE",diagnostic.message); return false; }
     let emitted: string[] = [];
     for (let sid: number = 0; sid < local.symbols.length; sid = sid+1) {
@@ -170,26 +171,47 @@ export class NativeExpansion {
     this.graph.modules[module].cached.result.ast.nodes[id].analysisEnd = cursor; return cursor+1;
   }
   run(): ModuleGraph {
+    let round: number = 0;
     while (this.graph.success) {
-      this.binding = bindProject(this.graph); let foundModule: number = -1; let foundCall: number = -1; let foundSymbol: number = -1;
+      if (this.trace) traceAnalysis(true,"expansion.round."+numberToString(round),"POINT");
+      round = round+1;
+      traceAnalysis(this.trace,"expansion.bind","BEGIN");
+      this.binding = bindProject(this.graph,this.trace);
+      traceAnalysis(this.trace,"expansion.bind","END");
+      traceAnalysis(this.trace,"expansion.search","BEGIN");
+      let foundModule: number = -1; let foundCall: number = -1; let foundSymbol: number = -1;
       for (let m: number = 0; m < this.graph.modules.length && foundCall < 0; m = m+1) for (let id: number = 0; id < this.graph.modules[m].cached.result.ast.nodes.length && foundCall < 0; id = id+1) {
         if (this.binding.files[m].nodeScopes[id] < 0 || ![NodeKind.CallExpression,NodeKind.MemberCallExpression].includes(this.node(m,id).kind)) continue;
         let parent: number = this.binding.files[m].parents[id]; let inGenerator: boolean = false;
         while (parent >= 0) { if (this.decorated(m,parent,"etsgen")) inGenerator = true; parent = this.binding.files[m].parents[parent]; }
         const sid: number = this.target(m,id); if (inGenerator || !this.generator(sid)) continue;
         const statement: number = this.binding.files[m].parents[id]; const container: number = statement >= 0 ? this.binding.files[m].parents[statement] : -1;
-        if (statement < 0 || this.node(m,statement).kind != NodeKind.ExpressionStatement || container < 0 || ![NodeKind.Program,NodeKind.BlockStatement,NodeKind.CaseClause,NodeKind.DefaultClause].includes(this.node(m,container).kind)) { this.report(m,id,"ETSGEN_INVALID_CONTEXT","La expansión requiere una sentencia en una lista de statements"); return this.graph; }
+        if (statement < 0 || this.node(m,statement).kind != NodeKind.ExpressionStatement || container < 0 || ![NodeKind.Program,NodeKind.BlockStatement,NodeKind.CaseClause,NodeKind.DefaultClause].includes(this.node(m,container).kind)) { traceAnalysis(this.trace,"expansion.search","END"); this.report(m,id,"ETSGEN_INVALID_CONTEXT","La expansión requiere una sentencia en una lista de statements"); return this.graph; }
         foundModule = m; foundCall = id; foundSymbol = sid;
       }
+      traceAnalysis(this.trace,"expansion.search","END");
       if (foundCall < 0) break;
-      if (!this.expand(foundModule,foundCall,foundSymbol)) break;
+      traceAnalysis(this.trace,"expansion.expand","BEGIN");
+      if (!this.expand(foundModule,foundCall,foundSymbol)) { traceAnalysis(this.trace,"expansion.expand","END"); break; }
+      traceAnalysis(this.trace,"expansion.expand","END");
     }
+    traceAnalysis(this.trace,"expansion.order","BEGIN");
     if (this.graph.generatedSources.length > 0) for (let m: number = 0; m < this.graph.modules.length; m = m+1) this.order(m,this.graph.modules[m].cached.result.ast.root,0,0);
+    traceAnalysis(this.trace,"expansion.order","END");
     return this.graph;
   }
 }
 export function analyzeProject(graph: ModuleGraph, trace: boolean = false): FrontendProject {
   if (trace) printError("frontend: expansion and binding");
-  let expansion = new NativeExpansion(graph); const expanded: ModuleGraph = expansion.run(); const binding: BindingResult = bindProject(expanded);
+  traceAnalysis(trace,"expansion.construct","BEGIN");
+  let expansion = new NativeExpansion(graph); expansion.trace = trace;
+  traceAnalysis(trace,"expansion.construct","END");
+  traceAnalysis(trace,"expansion.run","BEGIN");
+  const expanded: ModuleGraph = expansion.run();
+  traceAnalysis(trace,"expansion.run","END");
+  traceAnalysis(trace,"binding.final","BEGIN");
+  const binding: BindingResult = bindProject(expanded,trace);
+  traceAnalysis(trace,"binding.final","END");
+  traceAnalysis(trace,"project.assemble","POINT");
   return new FrontendProject(expanded,binding,checkProject(expanded,binding,trace));
 }

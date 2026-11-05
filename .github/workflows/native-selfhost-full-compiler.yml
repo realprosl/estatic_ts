@@ -78,102 +78,11 @@ jobs:
           export ESTC_ROOT="$GITHUB_WORKSPACE/native-compiler-mini"
           mkdir -p build/selfhost/constructor-bench
           python3 scripts/bench-parser-constructor.py
-      - name: Construir frontend instrumentado para localizar fase lenta
-        timeout-minutes: 8
+      - name: Preparar frontend con instrumentación optativa de analyzeProject
         run: |
           set -euo pipefail
-          export ESTC_ROOT="$GITHUB_WORKSPACE/native-compiler-mini"
           mkdir -p build/selfhost/trace
-          python3 - <<'PY'
-          from pathlib import Path
-          source=Path('bootstrap/ir/demo.ets').read_text()
-          replacements=[
-            ('const graph = loader.load(entry); const project = analyzeProject(graph);',
-             'printError("TRACE BEGIN loader.load"); const graph = loader.load(entry); printError("TRACE END loader.load / BEGIN analyzeProject"); const project = analyzeProject(graph); printError("TRACE END analyzeProject");'),
-            ('let ir = lowerProject(project.graph,project.binding,project.checked);',
-             'printError("TRACE BEGIN lowerProject"); let ir = lowerProject(project.graph,project.binding,project.checked); printError("TRACE END lowerProject");'),
-            ('print(formatIr(ir)); if (!ir.success)',
-             'printError("TRACE BEGIN formatIr"); print(formatIr(ir)); printError("TRACE END formatIr"); if (!ir.success)')
-          ]
-          loader=Path('bootstrap/modules/loader.ets').read_text()
-          loader_replacements=[
-            ('const cached: CachedSource = cache.getOrParseModule(file, source, after);',
-             'printError("TRACE parse BEGIN " + file + " bytes=" + numberToString(source.length)); const cached: CachedSource = cache.getOrParseModule(file, source, after); printError("TRACE parse END " + file);'),
-            ('let discovered: LoadedFile[] = [readModule(canonical, graph, cache)];',
-             'printError("TRACE first module BEGIN " + canonical); let discovered: LoadedFile[] = [readModule(canonical, graph, cache)]; printError("TRACE first module END " + canonical);'),
-            ('if (existing < 0) { discovered.push(readModule(dependency, graph, cache));',
-             'if (existing < 0) { printError("TRACE dependency BEGIN " + dependency); discovered.push(readModule(dependency, graph, cache)); printError("TRACE dependency END " + dependency);')
-          ]
-          for old,new in loader_replacements:
-              if loader.count(old)!=1: raise SystemExit(f'Loader instrumentation anchor not unique: {old}')
-              loader=loader.replace(old,new)
-          frontend=Path('bootstrap/frontend/frontend.ets').read_text()
-          frontend_replacements=[
-            ('const lexical: LexerResult = tokenizeExpanded(source);',
-             'printError("TRACE lexer BEGIN " + file); const lexical: LexerResult = tokenizeExpanded(source); printError("TRACE lexer END " + file + " tokens=" + numberToString(lexical.tokens.length));'),
-            ('ast = parseTokens(tokens);',
-             'printError("TRACE parser BEGIN " + file + " tokens=" + numberToString(tokens.length)); ast = parseTokens(tokens); printError("TRACE parser END " + file + " nodes=" + numberToString(ast.nodes.length));')
-          ]
-          for old,new in frontend_replacements:
-              if frontend.count(old)!=1: raise SystemExit(f'Frontend instrumentation anchor not unique: {old}')
-              frontend=frontend.replace(old,new)
-          Path('bootstrap/frontend/frontend-trace-backup.ets').write_text(Path('bootstrap/frontend/frontend.ets').read_text())
-          Path('bootstrap/frontend/frontend.ets').write_text(frontend)
-          cache=Path('bootstrap/modules/syntax-cache.ets').read_text()
-          cache_replacements=[
-            ('const hash: string = contentHash(source);',
-             'printError("TRACE cache hash BEGIN " + file); const hash: string = contentHash(source); printError("TRACE cache hash END " + file);'),
-            ('const result: SourceResult = parseSource(source, file);',
-             'printError("TRACE cache miss parseSource BEGIN " + file); const result: SourceResult = parseSource(source, file); printError("TRACE cache miss parseSource END " + file);'),
-            ('result.success ? encodeSyntax(result) : ""',
-             'result.success ? encodeSyntax(result) : ""')
-          ]
-          for old,new in cache_replacements:
-              if cache.count(old)!=1: raise SystemExit(f'Cache instrumentation anchor not unique: {old}')
-              cache=cache.replace(old,new)
-          Path('bootstrap/modules/syntax-cache-trace-backup.ets').write_text(Path('bootstrap/modules/syntax-cache.ets').read_text())
-          Path('bootstrap/modules/syntax-cache.ets').write_text(cache)
-          parser=Path('bootstrap/parser/parser.ets').read_text()
-          parser_replacements=[
-            ('  constructor(tokens: ParserToken[]) {',
-             '  constructor(tokens: ParserToken[]) { printError("TRACE constructor ENTER tokens=" + numberToString(tokens.length));'),
-            ('    for (let i: number = 0; i + 1 < this.tokens.length; i = i + 1) {',
-             '    printError("TRACE constructor EOF scan BEGIN"); for (let i: number = 0; i + 1 < this.tokens.length; i = i + 1) { if (i % 1000 == 0) printError("TRACE constructor EOF scan at=" + numberToString(i));'),
-            ('    for (let i: number = 0; i < this.tokens.length; i = i + 1) {',
-             '    printError("TRACE constructor coordinate scan BEGIN"); for (let i: number = 0; i < this.tokens.length; i = i + 1) { if (i % 1000 == 0) printError("TRACE constructor coordinate scan at=" + numberToString(i));'),
-            ('  parseProgram(): ParseResult {',
-             '  parseProgram(): ParseResult { printError("TRACE parseProgram ENTER tokens=" + numberToString(this.tokens.length));'),
-            ('    this.skipNewlines();\n    if (this.headerAhead()) {',
-             '    printError("TRACE program initial newlines BEGIN at=" + numberToString(this.current)); this.skipNewlines(); printError("TRACE program initial newlines END at=" + numberToString(this.current));\n    printError("TRACE program headerAhead BEGIN at=" + numberToString(this.current)); if (this.headerAhead()) { printError("TRACE program headerAhead TRUE");'),
-            ('      while (this.headerAhead()) {',
-             '      while (this.headerAhead()) { printError("TRACE program decorator BEGIN at=" + numberToString(this.current));'),
-            ('        this.skipNewlines();\n      }\n      this.edge(program, EdgeRole.Statements, header);',
-             '        this.skipNewlines(); printError("TRACE program decorator END at=" + numberToString(this.current));\n      }\n      this.edge(program, EdgeRole.Statements, header);'),
-            ('    while (!this.check("eof")) {\n      this.skipNewlines();',
-             '    printError("TRACE program statements BEGIN at=" + numberToString(this.current)); while (!this.check("eof")) {\n      printError("TRACE program loop BEGIN at=" + numberToString(this.current)); this.skipNewlines();'),
-            ('        const child: number = this.statement(true);',
-             '        printError("TRACE statement BEGIN at=" + numberToString(this.current) + " kind=" + this.peek(0).kind + " lexeme=" + this.peek(0).lexeme); const child: number = this.statement(true); printError("TRACE statement END at=" + numberToString(this.current) + " nodes=" + numberToString(this.nodes.length));'),
-            ('    return new ParseResult(program, this.nodes, this.diagnostics);',
-             '    printError("TRACE parseProgram DONE at=" + numberToString(this.current)); return new ParseResult(program, this.nodes, this.diagnostics);')
-          ]
-          for old,new in parser_replacements:
-              if parser.count(old)!=1 and not (old.startswith('    while (!this.check("eof")) {') and parser.count(old)>1): raise SystemExit(f'Parser instrumentation anchor not unique: {old}')
-              parser=parser.replace(old,new,1) if old.startswith('    while (!this.check("eof")) {') else parser.replace(old,new)
-          Path('bootstrap/parser/parser-trace-backup.ets').write_text(Path('bootstrap/parser/parser.ets').read_text())
-          Path('bootstrap/parser/parser.ets').write_text(parser)
-          Path('bootstrap/modules/loader-trace-backup.ets').write_text(Path('bootstrap/modules/loader.ets').read_text())
-          Path('bootstrap/modules/loader.ets').write_text(loader)
-          for old,new in replacements:
-              if source.count(old)!=1: raise SystemExit(f'Instrumentation anchor not unique: {old}')
-              source=source.replace(old,new)
-          # Keep relative imports working: instrument a temporary copy alongside demo.ets.
-          Path('bootstrap/ir/demo-trace.ets').write_text(source)
-          PY
-          trap 'mv bootstrap/modules/loader-trace-backup.ets bootstrap/modules/loader.ets; mv bootstrap/modules/syntax-cache-trace-backup.ets bootstrap/modules/syntax-cache.ets; mv bootstrap/frontend/frontend-trace-backup.ets bootstrap/frontend/frontend.ets; mv bootstrap/parser/parser-trace-backup.ets bootstrap/parser/parser.ets; rm -f bootstrap/ir/demo-trace.ets' EXIT
-          "$ESTC_ROOT/native/etsc" build "$GITHUB_WORKSPACE/bootstrap/ir/demo-trace.ets" \
-            -o "$GITHUB_WORKSPACE/build/selfhost/trace/frontend.cpp" \
-            --binary "$GITHUB_WORKSPACE/build/selfhost/trace/frontend" --no-progress
-          test -x build/selfhost/trace/frontend
+          cp build/selfhost/bootstrap-ir build/selfhost/trace/frontend
       - name: Diagnóstico driver verbose con frontend recompilado
         timeout-minutes: 2
         run: |
@@ -191,7 +100,7 @@ jobs:
           echo "Inicio: $(date -u +%FT%TZ)"
           /usr/bin/time -v -o build/selfhost/trace/time.txt \
             timeout --signal=TERM --kill-after=15s 5m \
-            build/selfhost/trace/frontend "$GITHUB_WORKSPACE/bootstrap/ir/demo.ets" \
+            build/selfhost/trace/frontend "$GITHUB_WORKSPACE/bootstrap/ir/demo.ets" --trace \
             > build/selfhost/trace/ir.json 2> build/selfhost/trace/stderr.log || {
               rc=$?
               echo "::error::Frontend instrumentado terminó con código $rc"

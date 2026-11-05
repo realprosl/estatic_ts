@@ -122,7 +122,12 @@ test('checker: increment expression is actually checked',()=>error('for(let i=0;
 test('checker: receiver writes are checked inside constructor',()=>check('class C{x:number; constructor(x:number){this.x=x;}} let c=new C(1); c.x=2;'));
 test('checker: mutating method requires mutable receiver',()=>error('class C{x:number=0; set():void{this.x=1;}} const c=new C(); c.set();',/inmutable/));
 test('checker: array pop returns void as in stage zero',()=>error('let a=[1]; const n=a.pop();',/void/));
-test('checker: string includes keeps the required offset parameter',()=>{check('print("abc".includes("b",0));');error('print("abc".includes("b"));',/Aridad/);});
+test('checker: string includes accepts an optional offset',()=>{
+ check('print("abc".includes("b"));');check('print("abc".includes("b",0));');
+ error('print("abc".includes());',/Ninguna firma del builtin compatible/);error('print("abc".includes("b",0,1));',/Ninguna firma del builtin compatible/);
+ error('print("abc".includes("b","wrong"));',/Ninguna firma del builtin compatible/);
+ error('print("abc".includes(1));',/Ninguna firma del builtin compatible/);
+});
 test('checker: join only supports string elements',()=>error('const a=[1]; print(a.join(","));',/miembro/));
 test('checker: no string index writes',()=>error('let s="abc"; s[0]="x";',/string por índice/));
 test('checker: class name is not a runtime value',()=>error('class C{} const c=C;',/requiere new/));
