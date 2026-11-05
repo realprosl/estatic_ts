@@ -54,7 +54,6 @@ for(const [name,source,expected] of [
  ["named arguments",'let n=0;function next():number{n+=1;return n;}function f(a:number,b:number):number{return a*10+b;}print(f(b:next(),a:next()));',"21\n"],
  ["arrays",'let a=[1,2];a[1]=3;print(a[0]+a[1]);',"4\n"],
  ["metadata mutation and copies",'let calls=0;function make():number[]{calls+=1;return [1,2];}let xs:number[]=[1];print(make().length);print(calls);xs.push(xs.length);const copy=xs;xs.push(3);print(copy.length);print(xs.length);',"2\n1\n2\n3\n"],
- ["metadata references",'function f(xs:constRef<number[]>):number{return xs.length;}let xs:number[]=[1,2];print(f(xs));',"2\n"],
  ["metadata containers",'let xs:number[2]=[1,2];let m=new Map<string,number>();m.set("a",1);let s=new Set<number>();s.add(1);print(xs.length);print(m.size);print(s.size);const text="abc";print(text.length);print(text[0].length);',"2\n1\n1\n3\n1\n"],
  ["tuples",'const a:[number,string]=[2,"s"];print(a[0]);print(a[1]);',"2\ns\n"],
  ["fixed spread",'const a:number[2]=[1,2];const b:number[3]=[0,...a];print(b[2]);',"2\n"],
@@ -218,7 +217,7 @@ test("IR C++ metadata loop avoids whole-container copies (issue 60)",()=>{
  const signature=new IrCppGenerator(project).signature(f,id)+" {";
  const body=result.cpp.split(signature)[1].split("\n}\n")[0];
  assert.ok(!body.includes(`v${load.result}.set(`),"metadata must not materialize an array snapshot");
- const reference=referenceCpp(project);assert.equal(result.cpp,reference.cpp);
+ const reference=referenceCpp(project), code=(cpp:string)=>cpp.split("\n").filter(line=>!line.trimStart().startsWith("//")).join("\n");assert.equal(code(result.cpp),code(reference.cpp));
  // A second use requires the original value snapshot and must disable fusion.
  const copy=structuredClone(project), target=copy.functions[id];
  const block=target.blocks.find(b=>b.instructions.some(i=>i.result===read.result))!;

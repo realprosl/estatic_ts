@@ -33,6 +33,8 @@ def measure(binary, size, mode, output):
     (output / f"{mode}-{size}.log").write_text("".join(lines))
     if process.returncode or f"{mode} END" not in marks:
         raise RuntimeError(f"{mode}/{size}: exit {process.returncode}; see {output}")
+    if not any(f"BENCH {mode} END tokens={size + 1} " in line for line in lines):
+        raise RuntimeError("Source has fewer tokens than the requested sample")
     if mode == "constructor" and "diagnostics=0" not in "".join(lines):
         raise RuntimeError("Valid tokens produced diagnostics")
     result = dict(mode=mode, tokens=size + 1,
@@ -52,6 +54,8 @@ def main():
     parser.add_argument("--output", type=Path, default=ROOT / "build/selfhost/constructor-bench")
     parser.add_argument("--sizes", nargs="+", type=int, default=[1000, 2000, 4000, 8000, 16000, 20208])
     args = parser.parse_args()
+    if any(size <= 0 for size in args.sizes):
+        parser.error("Sample sizes must be positive")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     # Separate instrumented module: production constructor and its validation stay unchanged.

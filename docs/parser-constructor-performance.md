@@ -50,12 +50,12 @@ Local Linux/g++ 13.3 results (2026-11-05), with zero parser diagnostics:
 
 | Tokens including EOF | Constructor s | EOF scan s | Coordinate scan s | Process CPU s | Peak RSS KiB |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1,001 | 0.0177 | 0.0011 | 0.0152 | 2.942 | 20,588 |
-| 2,001 | 0.0343 | 0.0024 | 0.0285 | 2.717 | 20,576 |
-| 4,001 | 0.0697 | 0.0050 | 0.0587 | 3.050 | 21,020 |
-| 8,001 | 0.1423 | 0.0088 | 0.1096 | 3.024 | 21,608 |
-| 16,001 | 0.3164 | 0.0209 | 0.2333 | 3.002 | 29,920 |
-| 20,209 | 0.4007 | 0.0272 | 0.3416 | 4.226 | 32,880 |
+| 1,001 | 0.0133 | 0.0000 | 0.0128 | 2.781 | 20,576 |
+| 2,001 | 0.0300 | 0.0020 | 0.0259 | 2.730 | 20,632 |
+| 4,001 | 0.0710 | 0.0049 | 0.0602 | 2.765 | 21,056 |
+| 8,001 | 0.1367 | 0.0081 | 0.1185 | 3.217 | 21,736 |
+| 16,001 | 0.2777 | 0.0148 | 0.2372 | 3.292 | 30,388 |
+| 20,209 | 0.4758 | 0.0237 | 0.3816 | 3.272 | 33,344 |
 
 Process CPU includes lexing and sample construction; constructor/phase timings
 use stderr markers and a monotonic clock. Instrumentation and scheduling add
@@ -63,16 +63,20 @@ noise, so the microsecond-level access timings are diagnostic rather than an
 absolute throughput guarantee. The final sample includes exactly 20,209 tokens.
 Before the fix, the uninstrumented constructor took 1.118 s / 2.762 s / 10.635 s
 for 1,001 / 2,001 / 4,001 tokens on the same machine. The corrected samples grow
-approximately linearly and complete the full target in about 0.4 seconds.
+approximately linearly and complete the full target in about 0.48 seconds.
 
 ## Validation scope
 
 The regression suite checks metadata loops, one-time evaluation of temporary
-receivers, independent array copies, reference receivers, and mutation such as
+receivers, independent array copies, and mutation such as
 `xs.push(xs.length)`. A structural check requires the two backends to generate
-identical C++, and requires multi-use snapshots to remain materialized.
+identical executable C++ (excluding comments), and requires multi-use snapshots to remain materialized.
 The workflow runs on pull requests targeting `feature/native-self-hosting` and
 retains the full generation checks.
+
+The three metadata regressions pass against each backend (3/3 reference, 3/3 native).
+The complete native runtime suite is limited locally by missing `uv.h`; CI installs
+libuv before running the integration checks.
 
 Constructor performance is independently verified. Full second-generation
 frontend analysis, IR emission and linking must be checked separately; these
