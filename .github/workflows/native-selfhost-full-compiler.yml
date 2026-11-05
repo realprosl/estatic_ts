@@ -2,6 +2,12 @@ name: Native self-hosting — compilador funcional completo
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [feature/native-self-hosting]
+    paths:
+      - 'native-compiler-mini/**'
+      - 'bootstrap/ir/lower.ets'
+      - '.github/workflows/native-selfhost-full-compiler.yml'
   push:
     branches: [feature/native-self-hosting]
     paths:

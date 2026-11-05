@@ -1,0 +1,72 @@
+name: Parser constructor regression (#60)
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [feature/native-self-hosting]
+    paths:
+      - 'bootstrap/**'
+      - 'src/**'
+      - 'runtime/**'
+      - 'native-compiler-mini/**'
+      - 'test/performance/**'
+      - '.github/workflows/parser-constructor-regression.yml'
+permissions:
+  contents: read
+jobs:
+  constructor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install native dependencies
+        run: sudo apt-get update && sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
+      - name: Build native compiler from corrected snapshot
+        run: bash native-compiler-mini/build-all.sh
+      - name: Assert metadata IR reads use references
+        env:
+          ESTATIC_IR_BINARY: ${{ github.workspace }}/native-compiler-mini/native/frontend
+        run: node --experimental-strip-types --test bootstrap/ir/metadata.test.ts
+      - name: Instrument the two constructor loops
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('bootstrap/parser/parser.ets')
+          s=p.read_text()
+          anchors=[
+            ('    for (let i: number = 0; i + 1 < this.tokens.length;', '    printError("PHASE eof BEGIN");\n    for (let i: number = 0; i + 1 < this.tokens.length;'),
+            ('    for (let i: number = 0; i < this.tokens.length;', '    printError("PHASE eof END"); printError("PHASE validation BEGIN");\n    for (let i: number = 0; i < this.tokens.length;'),
+            ('  coordinate(value: number, minimum: number): boolean {', '  coordinate(value: number, minimum: number): boolean {')]
+          for a,b in anchors:
+              assert s.count(a)==1, a
+              s=s.replace(a,b)
+          a='\n  }\n  coordinate(value: number, minimum: number): boolean {'
+          assert s.count(a)==1
+          s=s.replace(a,'\n    printError("PHASE validation END");'+a)
+          p.write_text(s)
+          PY
+      - name: Compile benchmark and preserve generated C++ and IR
+        env:
+          ESTC_ROOT: ${{ github.workspace }}/native-compiler-mini
+        run: |
+          mkdir -p build/selfhost/constructor-regression
+          native-compiler-mini/native/frontend test/performance/parser-constructor.ets > build/selfhost/constructor-regression/bench.ir.json
+          native-compiler-mini/native/etsc build --from-ir build/selfhost/constructor-regression/bench.ir.json \
+            -o build/selfhost/constructor-regression/bench.cpp \
+            --binary build/selfhost/constructor-regression/bench --no-progress
+      - name: Measure 1k through 20k tokens and guard scaling
+        run: python3 test/performance/parser-constructor.py build/selfhost/constructor-regression/bench
+      - name: Restore uninstrumented parser
+        if: always()
+        run: git restore bootstrap/parser/parser.ets
+      - name: Validate parser diagnostics and reference backend semantics
+        run: node --experimental-strip-types --test --test-concurrency=1 bootstrap/parser/parser.test.ts bootstrap/ir/cpp.test.ts
+      - name: Validate native backend semantics
+        run: node --experimental-strip-types --test bootstrap/ir/native.test.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: parser-constructor-evidence
+          path: build/selfhost/constructor-regression/

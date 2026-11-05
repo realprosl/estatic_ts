@@ -20566,10 +20566,10 @@ struct IrLowering {
             const double input = bindingChild(n, EdgeRole::Object);
             const double actual = (*this).typeId((*this).checked.files[static_cast<std::size_t>((*this).module)].types[static_cast<std::size_t>(input)], input);
             double value = (-1.0);
-            if ((*this).result.typeDefinitions[static_cast<std::size_t>(actual)].resource) {
-                (value = (*this).emit(std::string("borrow"), (*this).typeId(ets::concat(std::string("constRef<"), (*this).result.types[static_cast<std::size_t>(actual)], std::string(">")), id), std::vector<double>(), (*this).rootPlace(input), (-1.0), std::string("constRef"), id));
-            } else {
+            if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("ref"), std::string("constRef")}, (*this).result.typeDefinitions[static_cast<std::size_t>(actual)].kind)) {
                 (value = (*this).expression(input));
+            } else {
+                (value = (*this).emit(std::string("borrow"), (*this).typeId(ets::concat(std::string("constRef<"), (*this).result.types[static_cast<std::size_t>(actual)], std::string(">")), id), std::vector<double>(), (*this).materialize(input), (-1.0), std::string("constRef"), id));
             }
             return (*this).emit(std::string("property"), typeId, std::vector<double>{value}, (-1.0), (-1.0), name, id);
         }
