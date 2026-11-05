@@ -56,6 +56,8 @@ for(const [name,source,expected] of [
  ["metadata of string index",'const text="ab";print(text[0].length);',"1\n"],
  ["metadata value snapshots",'let hits=0;function make():number[]{hits+=1;return [1,2];}class C{xs:number[]=[1];}let c=new C();print(c.xs.length);c.xs.push(2);print(c.xs.length);print(make().length);print(hits);const original=c.xs;c.xs.push(3);print(original.length);print(c.xs.length);',"1\n2\n2\n1\n2\n3\n"],
  ["arrays",'let a=[1,2];a[1]=3;print(a[0]+a[1]);',"4\n"],
+ ["metadata mutation and copies",'let calls=0;function make():number[]{calls+=1;return [1,2];}let xs:number[]=[1];print(make().length);print(calls);xs.push(xs.length);const copy=xs;xs.push(3);print(copy.length);print(xs.length);',"2\n1\n2\n3\n"],
+ ["metadata containers",'let xs:number[2]=[1,2];let m=new Map<string,number>();m.set("a",1);let s=new Set<number>();s.add(1);print(xs.length);print(m.size);print(s.size);const text="abc";print(text.length);print(text[0].length);',"2\n1\n1\n3\n1\n"],
  ["tuples",'const a:[number,string]=[2,"s"];print(a[0]);print(a[1]);',"2\ns\n"],
  ["fixed spread",'const a:number[2]=[1,2];const b:number[3]=[0,...a];print(b[2]);',"2\n"],
  ["class",'class C{x:number;constructor(n:number){this.x=n;}inc():void{this.x+=1;}}let c=new C(2);c.inc();print(c.x);',"3\n"],
@@ -207,3 +209,24 @@ test("bootstrap CLI reuses project config and passes aliases/roots to native loa
 
 
 test("IR C++ recursive interface copies pass ASan/UBSan",()=>assert.equal(execute('interface I{render():string;}class Leaf{render():string{return "L";}}class Group{children:I[];render():string{let s="";for(const c of this.children)s+=c.render();return s;}}const x:I=new Group([new Leaf(),new Group([new Leaf()])]);const y:I=x;print(x.render());print(y.render());',{},["-fsanitize=address,undefined","-fno-omit-frame-pointer"]),"LL\nLL\n"));
+
+
+test("IR C++ metadata loop avoids whole-container copies (issue 60)",()=>{
+ const project=ir('class C{xs:number[]=[1,2];count():number{let sum=0;for(let i=0;i<this.xs.length;i+=1)sum+=this.xs[i];return sum;}}print(new C().count());');
+ const f=project.functions.find(f=>f.name==="count");assert.ok(f);
+ const ops=f.blocks.flatMap(b=>b.instructions), read=ops.find(i=>i.op==="property"&&i.text==="length");assert.ok(read);
+ const load=ops.find(i=>i.result===read.operands[0]);assert.ok(load);assert.equal(load.op,"load");
+ const result=generateCppFromIr(project), id=project.functions.indexOf(f);
+ const signature=new IrCppGenerator(project).signature(f,id)+" {";
+ const body=result.cpp.split(signature)[1].split("\n}\n")[0];
+ assert.ok(!body.includes(`v${load.result}.set(`),"metadata must not materialize an array snapshot");
+ const reference=referenceCpp(project), code=(cpp:string)=>cpp.split("\n").filter(line=>!line.trimStart().startsWith("//")).join("\n");assert.equal(code(result.cpp),code(reference.cpp));
+ // A second use requires the original value snapshot and must disable fusion.
+ const copy=structuredClone(project), target=copy.functions[id];
+ const block=target.blocks.find(b=>b.instructions.some(i=>i.result===read.result))!;
+ const at=block.instructions.findIndex(i=>i.result===read.result);
+ block.instructions.splice(at+1,0,{...structuredClone(read),result:target.values.length});target.values.push(read.typeId);
+ const preserved=generateCppFromIr(copy);
+ const preservedBody=preserved.cpp.split(signature)[1].split("\n}\n")[0];
+ assert.ok(preservedBody.includes(`v${load.result}.set(`),"multi-use snapshots must remain copies");
+});

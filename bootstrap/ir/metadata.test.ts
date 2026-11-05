@@ -32,7 +32,7 @@ test('metadata-only loads avoid copies, while other loads retain snapshots', asy
       let ns:number[]=[1]; ns.push(ns.length); print(ns.length);
     `);
     const project = nativeIr(frontend, file);
-    const count = (cpp:string) => [...cpp.matchAll(/\/\/ metadata-only load v\d+/g)].length;
+    const count = (cpp:string) => [...cpp.matchAll(/\/\/ metadata load fused with its sole adjacent inspection/g)].length;
     const generate = (p:IrProject):string[] => {
       const results=[generateCppFromIr(p).cpp];
       if(process.env.ESTATIC_NATIVE_CODEGEN){

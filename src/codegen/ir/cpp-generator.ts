@@ -13,29 +13,6 @@ export class IrCppGenerator {
   readonly headers = new Set(["runtime/ets_runtime.hpp","runtime/ets_ir.hpp"]);
   readonly backends: RuntimeBackends = {libuv:false,curl:false,tls:false,ioUring:false};
   readonly project: IrProject;
-  private metadataPlaces = new Map<number,number>();
-  // Fuse only an adjacent, single-use load/metadata pair. Keeping this local to
-  // codegen avoids a container copy without extending any IR borrow lifetime.
-  private planMetadataReads(f:IrFunction):void {
-    this.metadataPlaces.clear();
-    const uses=f.values.map(()=>0);
-    for(const p of f.places)if(p.index>=0)uses[p.index]++;
-    for(const b of f.blocks){
-      if(b.value>=0)uses[b.value]++;
-      for(const i of b.instructions)for(const v of i.operands)uses[v]++;
-    }
-    for(const b of f.blocks)for(let at=0;at+1<b.instructions.length;at++){
-      const load=b.instructions[at], read=b.instructions[at+1];
-      if(load.op!=="load"||load.result<0||uses[load.result]!==1||read.op!=="property"||
-         !["length","size"].includes(read.text)||read.operands.length!==1||read.operands[0]!==load.result)continue;
-      const source=f.places[load.place];
-      // A string index uses string_charAt, not an addressable C++ place.
-      if(source.kind==="index"&&this.project.types[f.places[source.base].typeId]==="string")continue;
-      const kind=this.shape(load.typeId).kind;
-      if(this.project.types[load.typeId]==="string"||["array","fixedArray","tuple","pack","Map","Set"].includes(kind))
-        this.metadataPlaces.set(load.result,load.place);
-    }
-  }
   constructor(project: IrProject) { this.project=project; }
   fail(message: string, source?: IrSource): never { throw new IrCodegenError(message, source); }
   shape(id: number): IrType { return this.project.typeDefinitions[id] ?? this.fail(`Tipo IR inexistente: ${id}`); }
@@ -191,13 +168,31 @@ export class IrCppGenerator {
     const id=f.values[i.operands[k]], s=this.shape(id), args=s.arguments.slice(0,-1);
     return `[&](${args.map((_,n)=>`auto&& x${n}`).join(",")})->${this.type(s.arguments.at(-1)!)}{${this.project.types[s.arguments.at(-1)!]==="void"?"":"return "}${this.operand(f,i,k,false)}(${args.map((t,n)=>["ref","constRef"].includes(this.shape(t).kind)?`std::addressof(ets::ir::read(x${n}))`:`x${n}`).join(",")});}`;
   }
+  // Fuse only adjacent, single-use load -> metadata reads. No mutation or
+  // call can intervene, so a container snapshot has no observable use.
+  metadataPlaces = new Map<number,number>();
+  metadataLoads(f:IrFunction):Map<number,number> {
+    const uses=f.values.map(()=>0), places=new Map<number,number>();
+    for(const p of f.places)if(p.kind==="index"&&p.index>=0)uses[p.index]++;
+    for(const b of f.blocks){if(b.value>=0)uses[b.value]++;for(const i of b.instructions)for(const v of i.operands)uses[v]++;}
+    for(const b of f.blocks)for(let k=1;k<b.instructions.length;k++){
+      const load=b.instructions[k-1], read=b.instructions[k];
+      if(load.op!=="load"||load.result<0||uses[load.result]!==1||read.op!=="property"||read.operands.length!==1||read.operands[0]!==load.result||!["length","size","kind","ok"].includes(read.text))continue;
+      if(["ref","constRef","ptr","constPtr"].includes(this.shape(load.typeId).kind))continue;
+      const p=f.places[load.place];
+      // String indexing produces a character value, not an addressable string.
+      if(p.kind==="index"&&this.project.types[f.places[p.base].typeId]==="string")continue;
+      places.set(load.result,load.place);
+    }
+    return places;
+  }
   instruction(f:IrFunction,i:IrInstruction,block:number):string {
     const a=(k:number,consume=true)=>this.operand(f,i,k,consume), s=this.shape.bind(this), T=i.typeId>=0?this.type(i.typeId):"void";
     let value:string|undefined;
+    if(i.op==="load"&&this.metadataPlaces.has(i.result))return "// metadata load fused with its sole adjacent inspection";
     switch(i.op) {
       case "constant": value=this.literal(i.text,i.typeId);break;
       case "load": {
-        if(this.metadataPlaces.has(i.result))return `// metadata-only load v${i.result}`;
         const p=f.places[i.place];
         if(p?.kind==="index"&&this.project.types[f.places[p.base].typeId]==="string")value=`ets::string_charAt(${this.place(f,p.base)}.get(),v${p.index}.get())`;
         else value=`${this.place(f,i.place)}.get()`;break;
@@ -342,12 +337,12 @@ export class IrCppGenerator {
     return symbol;
   }
   functionBody(f:IrFunction,index:number):string {
-    this.planMetadataReads(f);
     const native=this.nativeBinding(f);
     if(native) {
       const call=native+"("+f.parameterTypes.map((_,k)=>"std::move(a"+k+")").join(",")+")";
       return this.signature(f,index)+" {"+(this.project.types[f.returns]==="void"?call+";":"return "+call+";")+"}";
     }
+    this.metadataPlaces=this.metadataLoads(f);
     const locals=f.places.flatMap((p,k)=>p.kind==="local"&&p.global<0?[`ets::ir::Slot<${this.type(p.typeId)}> p${k};`]:[]);
     const values=f.values.map((t,k)=>`ets::ir::Slot<${this.type(t)}> v${k};`);
     const awaited=f.blocks.flatMap((b,k)=>b.terminator==="suspend"&&this.project.types[this.shape(f.values[b.value]).arguments[0]]!=="void"?[`ets::ir::Slot<${this.type(this.shape(f.values[b.value]).arguments[0])}> await${k};`]:[]);
