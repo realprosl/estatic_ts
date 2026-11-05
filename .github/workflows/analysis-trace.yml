@@ -2,12 +2,27 @@ name: analyzeProject instrumentation (#63)
 on:
   workflow_dispatch:
   pull_request:
-    branches: [feature/native-self-hosting]
     paths:
       - 'bootstrap/**'
       - 'src/**'
+      - 'runtime/**'
       - 'native-compiler-mini/**'
-      - '.github/workflows/analysis-trace.yml'
+      - 'scripts/**'
+      - 'package.json'
+      - '.github/workflows/**'
+  push:
+    branches: [main, feature/native-self-hosting]
+    paths:
+      - 'bootstrap/**'
+      - 'src/**'
+      - 'runtime/**'
+      - 'native-compiler-mini/**'
+      - 'scripts/**'
+      - 'package.json'
+      - '.github/workflows/**'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -34,13 +49,8 @@ jobs:
         env:
           ESTATIC_ANALYSIS_FRONTEND: ${{ github.workspace }}/build/analysis-trace/frontend
         run: node --experimental-strip-types --test bootstrap/ir/analysis-trace.test.ts
-      - name: Check out PR base for existing-failure verification
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.base.sha || '16f15717f144e1748c6a557200717a15bb8831ea' }}
-          path: baseline
-      - name: Verify baseline evidence and require full binder/checker suites to pass
-        run: python3 scripts/check-analysis-trace-baseline.py baseline build/analysis-trace/evidence
+      - name: Verify checker, expansion and binder semantics
+        run: node --experimental-strip-types --test --test-concurrency=1 bootstrap/binder/binder.test.ts bootstrap/checker/checker.test.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

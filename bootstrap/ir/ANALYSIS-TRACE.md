@@ -51,6 +51,7 @@ No per-node logging is added. Error paths can skip safety or comptime phases;
 absence of their markers must not be interpreted as successful completion.
 
 Issue #63 adds and verifies this contract. Issue #64 performs the full timing,
-CPU/RSS investigation. The existing self-host diagnostic invokes `--trace`
-directly instead of rewriting source files to inject logging. Timeouts remain
-unchanged; a diagnostic timeout still fails that workflow.
+CPU/RSS investigation. The retained `analysis-trace.yml` workflow rebuilds the
+native compiler and Bootstrap frontend, verifies the trace contract, and runs
+the binder/checker suites. Full frontend profiling can be invoked explicitly
+with the command above; a successful build does not certify second generation.
