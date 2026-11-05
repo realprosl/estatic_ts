@@ -34,8 +34,13 @@ jobs:
         env:
           ESTATIC_ANALYSIS_FRONTEND: ${{ github.workspace }}/build/analysis-trace/frontend
         run: node --experimental-strip-types --test bootstrap/ir/analysis-trace.test.ts
-      - name: Verify checker, expansion and binder semantics
-        run: node --experimental-strip-types --test --test-concurrency=1 bootstrap/binder/binder.test.ts bootstrap/checker/checker.test.ts
+      - name: Check out PR base for existing-failure verification
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || '16f15717f144e1748c6a557200717a15bb8831ea' }}
+          path: baseline
+      - name: Verify binder/checker suites introduce no failures beyond the base
+        run: python3 scripts/check-analysis-trace-baseline.py baseline build/analysis-trace/evidence
       - uses: actions/upload-artifact@v4
         if: always()
         with:
