@@ -25,9 +25,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev libdrogon-dev libjsoncpp-dev uuid-dev pkg-config
       - name: Build native compiler from corrected snapshot
         run: bash native-compiler-mini/build-all.sh
-      - name: Assert metadata IR reads use references
+      - name: Assert metadata copies are eliminated in both backends
         env:
           ESTATIC_IR_BINARY: ${{ github.workspace }}/native-compiler-mini/native/frontend
+          ESTATIC_NATIVE_CODEGEN: ${{ github.workspace }}/native-compiler-mini/native/etsc
         run: node --experimental-strip-types --test bootstrap/ir/metadata.test.ts
       - name: Instrument the two constructor loops
         run: |

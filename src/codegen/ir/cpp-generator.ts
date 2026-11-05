@@ -13,6 +13,26 @@ export class IrCppGenerator {
   readonly headers = new Set(["runtime/ets_runtime.hpp","runtime/ets_ir.hpp"]);
   readonly backends: RuntimeBackends = {libuv:false,curl:false,tls:false,ioUring:false};
   readonly project: IrProject;
+  private metadataPlaces = new Map<number,number>();
+  // Fuse only an adjacent, single-use load/metadata pair. Keeping this local to
+  // codegen avoids a container copy without extending any IR borrow lifetime.
+  private planMetadataReads(f:IrFunction):void {
+    this.metadataPlaces.clear();
+    const uses=f.values.map(()=>0);
+    for(const p of f.places)if(p.index>=0)uses[p.index]++;
+    for(const b of f.blocks){
+      if(b.value>=0)uses[b.value]++;
+      for(const i of b.instructions)for(const v of i.operands)uses[v]++;
+    }
+    for(const b of f.blocks)for(let at=0;at+1<b.instructions.length;at++){
+      const load=b.instructions[at], read=b.instructions[at+1];
+      if(load.op!=="load"||load.result<0||uses[load.result]!==1||read.op!=="property"||
+         !["length","size"].includes(read.text)||read.operands.length!==1||read.operands[0]!==load.result)continue;
+      const kind=this.shape(load.typeId).kind;
+      if(this.project.types[load.typeId]==="string"||["array","fixedArray","tuple","pack","Map","Set"].includes(kind))
+        this.metadataPlaces.set(load.result,load.place);
+    }
+  }
   constructor(project: IrProject) { this.project=project; }
   fail(message: string, source?: IrSource): never { throw new IrCodegenError(message, source); }
   shape(id: number): IrType { return this.project.typeDefinitions[id] ?? this.fail(`Tipo IR inexistente: ${id}`); }
@@ -174,6 +194,7 @@ export class IrCppGenerator {
     switch(i.op) {
       case "constant": value=this.literal(i.text,i.typeId);break;
       case "load": {
+        if(this.metadataPlaces.has(i.result))return `// metadata-only load v${i.result}`;
         const p=f.places[i.place];
         if(p?.kind==="index"&&this.project.types[f.places[p.base].typeId]==="string")value=`ets::string_charAt(${this.place(f,p.base)}.get(),v${p.index}.get())`;
         else value=`${this.place(f,i.place)}.get()`;break;
@@ -233,7 +254,7 @@ export class IrCppGenerator {
       case "isPresent": value=`${this.deref(a(0),f.values[i.operands[0]])}.isPresent()`;break;
       case "unwrap": value=`(${this.deref(a(0),f.values[i.operands[0]])}).value()`;break;
       case "property": {
-        const input=this.deref(a(0,false),f.values[i.operands[0]]), inputId=this.inner(f.values[i.operands[0]]), shape=s(inputId);
+        const input=this.metadataPlaces.has(i.operands[0])?`${this.place(f,this.metadataPlaces.get(i.operands[0])!)}.get()`:this.deref(a(0,false),f.values[i.operands[0]]), inputId=this.inner(f.values[i.operands[0]]), shape=s(inputId);
         if(["length","size"].includes(i.text))value=["tuple","pack"].includes(shape.kind)?`double(${shape.arguments.length})`:`double((${input}).size())`;
         else if(i.text==="ok")value=`(${input}).isOk()`;
         else if(i.text==="kind")value=shape.kind==="Optional"?`std::string((${input}).isPresent()?"Some":"None")`:`std::string((${input}).isOk()?"Ok":"Err")`;
@@ -318,6 +339,7 @@ export class IrCppGenerator {
     return symbol;
   }
   functionBody(f:IrFunction,index:number):string {
+    this.planMetadataReads(f);
     const native=this.nativeBinding(f);
     if(native) {
       const call=native+"("+f.parameterTypes.map((_,k)=>"std::move(a"+k+")").join(",")+")";
