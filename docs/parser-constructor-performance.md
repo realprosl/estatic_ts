@@ -42,7 +42,8 @@ sources after compilation. It measures isolated `.length`, indexed access,
 the EOF loop, the coordinate loop and the complete constructor. Each process
 has a 40 second deadline; doubling checks allow a small timing noise floor.
 Logs, generated C++ and machine-readable results are under
-`build/selfhost/constructor-bench/` and are uploaded by the self-hosting workflow.
+`build/selfhost/constructor-bench/`. Pass `--compiler path/to/etsc` to select
+the native compiler explicitly.
 The code generation regression additionally rejects whole-array copies in a metadata loop,
 without depending on machine speed.
 
@@ -71,8 +72,10 @@ The regression suite checks metadata loops, one-time evaluation of temporary
 receivers, independent array copies, and mutation such as
 `xs.push(xs.length)`. A structural check requires the two backends to generate
 identical executable C++ (excluding comments), and requires multi-use snapshots to remain materialized.
-The workflow runs on pull requests targeting `feature/native-self-hosting` and
-retains the full generation checks.
+The tests remain available through `npm test`, and the benchmark can be invoked
+with the command above. The single retained `analysis-trace.yml` workflow
+rebuilds the native compiler and Bootstrap frontend and checks tracing,
+binding and checking.
 
 The three metadata regressions pass against each backend (3/3 reference, 3/3 native).
 The complete native runtime suite is limited locally by missing `uv.h`; CI installs

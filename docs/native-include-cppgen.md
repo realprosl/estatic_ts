@@ -56,7 +56,7 @@ las reglas de préstamos del verificador.
 
 `npm run test:bootstrap:ir:annotations` verifica rutas, deduplicación, orden,
 parámetros, retornos, las seis funciones reales de `platform.ets` y rechazos
-controlados. `bootstrap-native-selfhost.yml` reconstruye frontend y backend
-exclusivamente desde el paquete C++ (frontend con `-O1` para que el análisis
-del compilador sea viable), compila los siete demos con esos binarios
-y ejecuta además las pruebas de contratos usando el frontend reconstruido.
+controlados. El workflow `analysis-trace.yml` reconstruye el compilador desde
+el snapshot C++, recompila el frontend de Bootstrap y comprueba sus trazas,
+binder y checker. Las pruebas de contratos de anotaciones siguen disponibles
+mediante el comando anterior.
