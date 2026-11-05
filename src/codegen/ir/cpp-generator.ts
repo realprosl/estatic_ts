@@ -28,6 +28,9 @@ export class IrCppGenerator {
       const load=b.instructions[at], read=b.instructions[at+1];
       if(load.op!=="load"||load.result<0||uses[load.result]!==1||read.op!=="property"||
          !["length","size"].includes(read.text)||read.operands.length!==1||read.operands[0]!==load.result)continue;
+      const source=f.places[load.place];
+      // A string index uses string_charAt, not an addressable C++ place.
+      if(source.kind==="index"&&this.project.types[f.places[source.base].typeId]==="string")continue;
       const kind=this.shape(load.typeId).kind;
       if(this.project.types[load.typeId]==="string"||["array","fixedArray","tuple","pack","Map","Set"].includes(kind))
         this.metadataPlaces.set(load.result,load.place);

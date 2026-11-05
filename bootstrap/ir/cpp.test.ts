@@ -53,6 +53,7 @@ for(const [name,source,expected] of [
  ["short circuit",'let n=0;function f():boolean{n+=1;return true;}const x=false&&f();const y=true||f();print(n);',"0\n"],
  ["named arguments",'let n=0;function next():number{n+=1;return n;}function f(a:number,b:number):number{return a*10+b;}print(f(b:next(),a:next()));',"21\n"],
  ["metadata during receiver mutation",'let xs:number[]=[1];xs.push(xs.length);print(xs.length);print(xs[1]);',"2\n1\n"],
+ ["metadata of string index",'const text="ab";print(text[0].length);',"1\n"],
  ["metadata value snapshots",'let hits=0;function make():number[]{hits+=1;return [1,2];}class C{xs:number[]=[1];}let c=new C();print(c.xs.length);c.xs.push(2);print(c.xs.length);print(make().length);print(hits);const original=c.xs;c.xs.push(3);print(original.length);print(c.xs.length);',"1\n2\n2\n1\n2\n3\n"],
  ["arrays",'let a=[1,2];a[1]=3;print(a[0]+a[1]);',"4\n"],
  ["tuples",'const a:[number,string]=[2,"s"];print(a[0]);print(a[1]);',"2\ns\n"],

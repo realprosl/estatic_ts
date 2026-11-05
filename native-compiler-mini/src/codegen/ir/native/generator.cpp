@@ -15,6 +15,8 @@ public:
   for(const auto& b:f.blocks)for(int at=0;at+1<int(b.instructions.size());at++){
    const auto& load=b.instructions[at];const auto& read=b.instructions[at+1];
    if(load.op!="load"||load.result<0||uses.at(load.result)!=1||read.op!="property"||!in(read.text,{"length","size"})||read.operands.size()!=1||read.operands[0]!=load.result)continue;
+   const auto& source=f.places.at(load.place);
+   if(source.kind=="index"&&p.types.at(f.places.at(source.base).typeId)=="string")continue;
    if(p.types.at(load.typeId)=="string"||in(shape(load.typeId).kind,{"array","fixedArray","tuple","pack","Map","Set"}))metadataPlaces[load.result]=load.place;
   }
  }
