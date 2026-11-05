@@ -86,7 +86,13 @@ jobs:
               tokens.push(new ParserToken(token.kind, token.lexeme, token.offset, token.line, token.column,
                 token.endOffset, token.endLine, token.endColumn));
             }
-            const limit: number = Number(argument(2));
+            const rawLimit: string = argument(2);
+            let limit: number = 0;
+            for (let digit: number = 0; digit < rawLimit.length; digit = digit + 1) {
+              const code: number = rawLimit.charCodeAt(digit);
+              if (code < 48 || code > 57) exitProcess(2);
+              limit = limit * 10 + code - 48;
+            }
             let sample: ParserToken[] = [];
             let count: number = 0;
             for (const token of tokens) {
