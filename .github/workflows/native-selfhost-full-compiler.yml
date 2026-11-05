@@ -67,6 +67,55 @@ jobs:
             --binary "$GITHUB_WORKSPACE/build/selfhost/stage2/hello" --no-progress
           test -x build/selfhost/stage2/hello
           build/selfhost/stage2/hello
+      - name: Medir constructor Parser aislado por tamaño de tokens
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          export ESTC_ROOT="$GITHUB_WORKSPACE/native-compiler-mini"
+          mkdir -p build/selfhost/constructor-bench
+          cat > bootstrap/ir/constructor-bench.ets <<'ETS'
+          import { tokenizeExpanded } from "../lexer/lexer";
+          import { Parser, ParserToken } from "../parser/parser";
+          import { readSnapshot } from "../modules/platform";
+          function run(): void {
+            const snapshot: string[] = readSnapshot(argument(1));
+            if (snapshot[1] != "") { printError(snapshot[1]); exitProcess(2); }
+            const lexical = tokenizeExpanded(snapshot[0]);
+            let tokens: ParserToken[] = [];
+            for (const token of lexical.tokens) {
+              tokens.push(new ParserToken(token.kind, token.lexeme, token.offset, token.line, token.column,
+                token.endOffset, token.endLine, token.endColumn));
+            }
+            const limit: number = Number(argument(2));
+            let sample: ParserToken[] = [];
+            let count: number = 0;
+            for (const token of tokens) {
+              if (count >= limit || token.kind == "eof") break;
+              sample.push(token);
+              count = count + 1;
+            }
+            const last: ParserToken = sample[sample.length - 1];
+            sample.push(new ParserToken("eof", "", last.endOffset, last.endLine, last.endColumn,
+              last.endOffset, last.endLine, last.endColumn));
+            printError("BENCH constructor BEGIN tokens=" + numberToString(sample.length));
+            const parser: Parser = new Parser(sample);
+            printError("BENCH constructor END tokens=" + numberToString(parser.tokens.length)
+              + " diagnostics=" + numberToString(parser.diagnostics.length));
+          }
+          run();
+          ETS
+          trap 'rm -f bootstrap/ir/constructor-bench.ets' EXIT
+          "$ESTC_ROOT/native/etsc" build "$GITHUB_WORKSPACE/bootstrap/ir/constructor-bench.ets" \
+            -o "$GITHUB_WORKSPACE/build/selfhost/constructor-bench/bench.cpp" \
+            --binary "$GITHUB_WORKSPACE/build/selfhost/constructor-bench/bench" --no-progress
+          for n in 1000 2000 4000 8000 16000 20208; do
+            echo "::group::Constructor con $n tokens"
+            /usr/bin/time -f 'BENCH elapsed=%e user=%U max_rss_kb=%M' \
+              timeout --signal=TERM --kill-after=5s 40s \
+              build/selfhost/constructor-bench/bench "$GITHUB_WORKSPACE/bootstrap/parser/parser.ets" "$n" \
+              2>&1 | tee "build/selfhost/constructor-bench/tokens-$n.log"
+            echo "::endgroup::"
+          done
       - name: Construir frontend instrumentado para localizar fase lenta
         timeout-minutes: 8
         run: |
