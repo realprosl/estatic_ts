@@ -1,3 +1,4 @@
+import { traceAnalysis } from "../frontend/analysis-trace";
 import { AttributeKind, EdgeRole, NodeKind, nodeKindName } from "../parser/ast-schema";
 import { nativeBuiltinNames, nativeBuiltinTypes } from "../frontend/builtins";
 import { ModuleGraph } from "../modules/loader";
@@ -59,7 +60,8 @@ export class ScopeWork {
 }
 export class Binder {
   graph: ModuleGraph; result: BindingResult;
-  constructor(graph: ModuleGraph) { this.graph = graph; this.result = new BindingResult(); }
+  trace: boolean;
+  constructor(graph: ModuleGraph) { this.graph = graph; this.result = new BindingResult(); this.trace = false; }
   report(module: number, node: number, message: string): void {
     const token: ParserToken = this.graph.modules[module].cached.result.ast.nodes[node].start;
     this.result.diagnostics.push(diagnosticAt("binder", message, this.graph.modules[module].file,this.graph.modules[module].cached.result.ast.nodes[node]));
@@ -395,26 +397,51 @@ export class Binder {
     }
   }
   bind(): BindingResult {
+    traceAnalysis(this.trace,"binding.run","BEGIN");
+    traceAnalysis(this.trace,"binding.initialize","BEGIN");
     this.result = new BindingResult();
     for (const diagnostic of this.graph.diagnostics) this.result.diagnostics.push(diagnostic);
-    if (!this.graph.success) return this.result;
+    if (!this.graph.success) { traceAnalysis(this.trace,"binding.initialize","END"); traceAnalysis(this.trace,"binding.run","END"); return this.result; }
     this.scope(-1, -1, -1, "builtins");
     for (const name of bindingBuiltinValues()) this.declare(name, "builtin", 0, -1, -1, true, false);
     for (const name of bindingBuiltinTypes()) this.declare(name, "builtin-type", 0, -1, -1, false, true);
+    traceAnalysis(this.trace,"binding.initialize","END");
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) {
+      if (this.trace) traceAnalysis(true,"binding.collect."+numberToString(m),"BEGIN");
       const scope: number = this.scope(0, m, this.graph.modules[m].cached.result.ast.root, "module");
       this.result.files.push(new BoundFile(scope, this.graph.modules[m].cached.result.ast.nodes.length));
       this.collect(m);
+      if (this.trace) traceAnalysis(true,"binding.collect."+numberToString(m),"END");
     }
-    for (let m: number = 0; m < this.graph.modules.length; m = m + 1) { this.imports(m); this.moduleExports(m); }
+    for (let m: number = 0; m < this.graph.modules.length; m = m + 1) {
+      if (this.trace) traceAnalysis(true,"binding.imports."+numberToString(m),"BEGIN");
+      this.imports(m);
+      if (this.trace) traceAnalysis(true,"binding.imports."+numberToString(m),"END");
+      if (this.trace) traceAnalysis(true,"binding.exports."+numberToString(m),"BEGIN");
+      this.moduleExports(m);
+      if (this.trace) traceAnalysis(true,"binding.exports."+numberToString(m),"END");
+    }
+    traceAnalysis(this.trace,"binding.duplicates","BEGIN");
     this.duplicates();
-    for (let m: number = 0; m < this.graph.modules.length; m = m + 1) this.uses(m);
+    traceAnalysis(this.trace,"binding.duplicates","END");
+    for (let m: number = 0; m < this.graph.modules.length; m = m + 1) {
+      if (this.trace) traceAnalysis(true,"binding.uses."+numberToString(m),"BEGIN");
+      this.uses(m);
+      if (this.trace) traceAnalysis(true,"binding.uses."+numberToString(m),"END");
+    }
+    traceAnalysis(this.trace,"binding.targets","BEGIN");
     for (const ref of this.result.references) if (ref.space == "value" && !ref.deferred && this.result.files[ref.module].valueTargets[ref.node] < 0) this.result.files[ref.module].valueTargets[ref.node] = ref.target;
-    this.result.success = this.result.diagnostics.length == 0; return this.result;
+    this.result.success = this.result.diagnostics.length == 0;
+    traceAnalysis(this.trace,"binding.targets","END");
+    traceAnalysis(this.trace,"binding.run","END");
+    return this.result;
   }
 }
-export function bindProject(graph: ModuleGraph): BindingResult {
-  let binder: Binder = new Binder(graph); return binder.bind();
+export function bindProject(graph: ModuleGraph, trace: boolean = false): BindingResult {
+  traceAnalysis(trace,"binding.construct","BEGIN");
+  let binder: Binder = new Binder(graph); binder.trace = trace;
+  traceAnalysis(trace,"binding.construct","END");
+  return binder.bind();
 }
 
 export function bindingBuiltinValues(): string[] { let names: string[] = ["i8", "u8", "i16", "u16", "i32", "u32", "i64", "u64", "f32", "f64", "optionalIsPresent", "optionalValueOr", "optionalOrElse", "resultOk", "resultErr", "resultIsOk", "resultValueOr", "Date", "FileReader", "JSON", "Map", "Math", "Optional", "Promise", "Result", "Server", "Set", "__noExtend", "__noThrow", "acceptTcp", "acceptTcpUntil", "acceptTls", "all", "appendFile", "appendFileAsync", "appendFileUntil", "argument", "argumentCount", "asyncIoUringRead", "asyncIoUringWrite", "cancel", "cancelTimer", "cancellationToken", "charAt", "clearError", "closeTcp", "closeTls", "compileCpp", "compilerRoot", "comptime", "console", "constRef", "copyFile", "copyFileAsync", "copyFileUntil", "createCancellation", "createTlsServer", "ensureParentDirectory", "err", "estaticAstRecords", "estaticTypedAstJson", "estaticTypedAstRecords", "exitProcess", "fail", "fileAppend", "fileCopy", "fileExists", "fileExistsAsync", "fileMove", "fileRead", "fileRemove", "fileWrite", "fs", "hasError", "http", "indexOf", "ioUringAvailable", "ioUringRead", "ioUringWrite", "isCancelled", "jsonArrayGet", "jsonArrayLength", "jsonAsBool", "jsonAsNumber", "jsonAsString", "jsonEscape", "jsonIsArray", "jsonIsBool", "jsonIsNull", "jsonIsNumber", "jsonIsObject", "jsonIsString", "jsonObjectGet", "length", "lineAt", "lineCount", "listenTcp", "match", "move", "moveFile", "moveFileAsync", "moveFileUntil", "normalizePath", "numberToString", "ok", "openFileReader", "optionalNone", "optionalSome", "otherwise", "path", "pathDirectory", "print", "printError", "process", "promiseAll", "promiseRace", "race", "readFile", "readFileAsync", "readFileUntil", "readTcp", "readTcpUntil", "readTls", "ref", "removeFile", "removeFileAsync", "removeFileUntil", "resolveDns", "resolveImportPath", "resolveProjectPath", "retry", "setInterval", "setTimeout", "sleep", "spawn", "startsWith", "stopLoop", "substring", "syntaxTreeJson", "syntaxTreeRecords", "tcpAccept", "tcpClose", "tcpConnect", "tcpListen", "tcpRead", "tcpWrite", "timeout", "trim", "unwatchFs", "validateSyntax", "watchFs", "when", "whenType", "write", "writeError", "writeFile", "writeFileAsync", "writeFileUntil", "writeTcp", "writeTcpUntil", "writeTls"]; for (const name of nativeBuiltinNames()) if (!names.includes(name)) names.push(name); return names; }

@@ -1,3 +1,4 @@
+import { traceAnalysis } from "../frontend/analysis-trace";
 import { AttributeKind, EdgeRole, NodeKind, attributeKindName, edgeRoleName, isCallableNodeKind, nodeKindName } from "../parser/ast-schema";
 import { ModuleGraph } from "../modules/loader";
 import { contentHash, syntaxIdentity } from "../modules/platform";
@@ -114,7 +115,9 @@ export class ModuleRecordBuilder {
     for (const edge of n.edges) { if ([EdgeRole.TypeParameters,EdgeRole.DefaultValue].includes(edge.role)) return true; if (edge.role != EdgeRole.Body && this.needsBody(module,edge.node,depth+1)) return true; }
     return false;
   }
+  trace: boolean = false;
   run(): CheckResult {
+    traceAnalysis(this.trace,"checker.records.build","BEGIN");
     this.checked.moduleRecords = []; this.checked.symbolIds = []; this.scopeKeys = [];
     for (const module of this.graph.modules) this.checked.moduleRecords.push(new NativeModuleRecord(module.file, "module:" + contentHash(module.file), module.cached.record.hash));
     this.prepareScopes();
@@ -144,7 +147,13 @@ export class ModuleRecordBuilder {
       }
       this.checked.moduleRecords[m] = record;
     }
+    traceAnalysis(this.trace,"checker.records.build","END");
     return this.checked;
   }
 }
-export function attachModuleRecords(graph: ModuleGraph, binding: BindingResult, checked: CheckResult): CheckResult { let builder = new ModuleRecordBuilder(graph,binding,checked); return builder.run(); }
+export function attachModuleRecords(graph: ModuleGraph, binding: BindingResult, checked: CheckResult, trace: boolean = false): CheckResult {
+  traceAnalysis(trace,"checker.records.construct","BEGIN");
+  let builder = new ModuleRecordBuilder(graph,binding,checked); builder.trace = trace;
+  traceAnalysis(trace,"checker.records.construct","END");
+  return builder.run();
+}

@@ -1,3 +1,4 @@
+import { traceAnalysis } from "../frontend/analysis-trace";
 import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind } from "../parser/ast-schema";
 import { EffectAnalyzer } from "./effects";
 import { resourceType, resourceSubstitution } from "./ownership";
@@ -1162,13 +1163,17 @@ export class SafetyAnalyzer {
   }
   run(): CheckResult {
     if (this.trace) printError("frontend: memory and captures");
-    this.memoryContracts(); this.captures(); this.result.borrows = this.leases;
+    traceAnalysis(this.trace,"safety.memory","BEGIN"); this.memoryContracts(); traceAnalysis(this.trace,"safety.memory","END");
+    traceAnalysis(this.trace,"safety.captures","BEGIN"); this.captures(); this.result.borrows = this.leases; traceAnalysis(this.trace,"safety.captures","END");
     if (this.trace) printError("frontend: effects");
-    this.effects = new EffectAnalyzer(this.graph,this.binding,this.result); this.effects.trace = this.trace; this.effects.analyze(); this.result.files = this.effects.checked.files; this.result.effects = this.effects.summaries;
+    traceAnalysis(this.trace,"safety.effects","BEGIN"); this.effects = new EffectAnalyzer(this.graph,this.binding,this.result); this.effects.trace = this.trace; this.effects.analyze(); this.result.files = this.effects.checked.files; this.result.effects = this.effects.summaries; traceAnalysis(this.trace,"safety.effects","END");
     if (this.trace) printError("frontend: provenance and visibility");
-    this.provenance(); this.visibility(); if (this.trace) printError("frontend: flow"); this.flow(); this.result.borrows = this.leases; return this.result;
+    traceAnalysis(this.trace,"safety.provenance","BEGIN"); this.provenance(); traceAnalysis(this.trace,"safety.provenance","END");
+    traceAnalysis(this.trace,"safety.visibility","BEGIN"); this.visibility(); traceAnalysis(this.trace,"safety.visibility","END");
+    if (this.trace) printError("frontend: flow");
+    traceAnalysis(this.trace,"safety.flow","BEGIN"); this.flow(); this.result.borrows = this.leases; traceAnalysis(this.trace,"safety.flow","END"); return this.result;
   }
 }
 export function validateSafety(graph: ModuleGraph, binding: BindingResult, out result: CheckResult, trace: boolean = false): void {
-  let analyzer: SafetyAnalyzer = new SafetyAnalyzer(graph,binding,result); analyzer.trace = trace; result = analyzer.run();
+  traceAnalysis(trace,"safety.construct","BEGIN"); let analyzer: SafetyAnalyzer = new SafetyAnalyzer(graph,binding,result); analyzer.trace = trace; traceAnalysis(trace,"safety.construct","END"); result = analyzer.run();
 }
