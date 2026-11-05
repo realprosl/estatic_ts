@@ -124,8 +124,9 @@ test('checker: mutating method requires mutable receiver',()=>error('class C{x:n
 test('checker: array pop returns void as in stage zero',()=>error('let a=[1]; const n=a.pop();',/void/));
 test('checker: string includes accepts an optional offset',()=>{
  check('print("abc".includes("b"));');check('print("abc".includes("b",0));');
- error('print("abc".includes());',/Aridad/);error('print("abc".includes("b",0,1));',/Aridad/);
- error('print("abc".includes("b","wrong"));',/incompatible|argumento|overload|firma|tipo/i);
+ error('print("abc".includes());',/Ninguna firma del builtin compatible/);error('print("abc".includes("b",0,1));',/Ninguna firma del builtin compatible/);
+ error('print("abc".includes("b","wrong"));',/Ninguna firma del builtin compatible/);
+ error('print("abc".includes(1));',/Ninguna firma del builtin compatible/);
 });
 test('checker: join only supports string elements',()=>error('const a=[1]; print(a.join(","));',/miembro/));
 test('checker: no string index writes',()=>error('let s="abc"; s[0]="x";',/string por índice/));
