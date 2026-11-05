@@ -51,6 +51,29 @@ jobs:
         run: node --experimental-strip-types --test bootstrap/ir/analysis-trace.test.ts
       - name: Verify checker, expansion and binder semantics
         run: node --experimental-strip-types --test --test-concurrency=1 bootstrap/binder/binder.test.ts bootstrap/checker/checker.test.ts
+      - name: Profile native analyzeProject (#64)
+        env:
+          ESTATIC_ANALYSIS_FRONTEND: ${{ github.workspace }}/build/analysis-trace/frontend
+        run: |
+          set -uo pipefail
+          mkdir -p build/analysis-trace/profile
+          printf 'commit=%s\ncompiler=%s\nentry=%s\n' "$GITHUB_SHA" "$ESTATIC_ANALYSIS_FRONTEND" "bootstrap/ir/demo.ets" > build/analysis-trace/profile/context.txt
+          set +e
+          /usr/bin/time -v -o build/analysis-trace/profile/resources.txt timeout --signal=TERM --kill-after=10s 300s "$ESTATIC_ANALYSIS_FRONTEND" bootstrap/ir/demo.ets --trace > build/analysis-trace/profile/ir.stdout 2> build/analysis-trace/profile/trace.stderr
+          code=$?
+          set -e
+          printf '%s\n' "$code" > build/analysis-trace/profile/exit-code.txt
+          node -e '
+            const fs=require("fs"), b="build/analysis-trace/profile/";
+            const lines=fs.readFileSync(b+"trace.stderr","utf8").split(/\r?\n/);
+            const events=lines.filter(x=>x.includes("TRACE ") || x.includes("trace "));
+            fs.writeFileSync(b+"trace-events.txt",events.join("\n")+"\n");
+            const code=Number(fs.readFileSync(b+"exit-code.txt","utf8").trim());
+            fs.writeFileSync(b+"summary.json",JSON.stringify({exitCode:code,timedOut:code===124||code===137,traceEvents:events.length,lastTraceEvents:events.slice(-20)},null,2)+"\n");
+          '
+          cat build/analysis-trace/profile/summary.json
+          cat build/analysis-trace/profile/resources.txt
+          if [ "$code" -ne 0 ]; then echo "Profiling failed (exit $code); artifacts preserved"; exit "$code"; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
