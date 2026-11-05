@@ -96,6 +96,32 @@ jobs:
           for old,new in loader_replacements:
               if loader.count(old)!=1: raise SystemExit(f'Loader instrumentation anchor not unique: {old}')
               loader=loader.replace(old,new)
+          frontend=Path('bootstrap/frontend/frontend.ets').read_text()
+          frontend_replacements=[
+            ('const lexical: LexerResult = tokenizeExpanded(source);',
+             'printError("TRACE lexer BEGIN " + file); const lexical: LexerResult = tokenizeExpanded(source); printError("TRACE lexer END " + file + " tokens=" + numberToString(lexical.tokens.length));'),
+            ('ast = parseTokens(tokens);',
+             'printError("TRACE parser BEGIN " + file + " tokens=" + numberToString(tokens.length)); ast = parseTokens(tokens); printError("TRACE parser END " + file + " nodes=" + numberToString(ast.nodes.length));')
+          ]
+          for old,new in frontend_replacements:
+              if frontend.count(old)!=1: raise SystemExit(f'Frontend instrumentation anchor not unique: {old}')
+              frontend=frontend.replace(old,new)
+          Path('bootstrap/frontend/frontend-trace-backup.ets').write_text(Path('bootstrap/frontend/frontend.ets').read_text())
+          Path('bootstrap/frontend/frontend.ets').write_text(frontend)
+          cache=Path('bootstrap/modules/syntax-cache.ets').read_text()
+          cache_replacements=[
+            ('const hash: string = contentHash(source);',
+             'printError("TRACE cache hash BEGIN " + file); const hash: string = contentHash(source); printError("TRACE cache hash END " + file);'),
+            ('const result: SourceResult = parseSource(source, file);',
+             'printError("TRACE cache miss parseSource BEGIN " + file); const result: SourceResult = parseSource(source, file); printError("TRACE cache miss parseSource END " + file);'),
+            ('result.success ? encodeSyntax(result) : ""',
+             'result.success ? encodeSyntax(result) : ""')
+          ]
+          for old,new in cache_replacements:
+              if cache.count(old)!=1: raise SystemExit(f'Cache instrumentation anchor not unique: {old}')
+              cache=cache.replace(old,new)
+          Path('bootstrap/modules/syntax-cache-trace-backup.ets').write_text(Path('bootstrap/modules/syntax-cache.ets').read_text())
+          Path('bootstrap/modules/syntax-cache.ets').write_text(cache)
           Path('bootstrap/modules/loader-trace-backup.ets').write_text(Path('bootstrap/modules/loader.ets').read_text())
           Path('bootstrap/modules/loader.ets').write_text(loader)
           for old,new in replacements:
@@ -104,7 +130,7 @@ jobs:
           # Keep relative imports working: instrument a temporary copy alongside demo.ets.
           Path('bootstrap/ir/demo-trace.ets').write_text(source)
           PY
-          trap 'mv bootstrap/modules/loader-trace-backup.ets bootstrap/modules/loader.ets; rm -f bootstrap/ir/demo-trace.ets' EXIT
+          trap 'mv bootstrap/modules/loader-trace-backup.ets bootstrap/modules/loader.ets; mv bootstrap/modules/syntax-cache-trace-backup.ets bootstrap/modules/syntax-cache.ets; mv bootstrap/frontend/frontend-trace-backup.ets bootstrap/frontend/frontend.ets; rm -f bootstrap/ir/demo-trace.ets' EXIT
           "$ESTC_ROOT/native/etsc" build "$GITHUB_WORKSPACE/bootstrap/ir/demo-trace.ets" \
             -o "$GITHUB_WORKSPACE/build/selfhost/trace/frontend.cpp" \
             --binary "$GITHUB_WORKSPACE/build/selfhost/trace/frontend" --no-progress
