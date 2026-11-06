@@ -182,11 +182,31 @@ S Generator::instruction(const Function& f,const Instruction& i,int block){
 }
 S Generator::signature(const Function& f,int id){S ret=f.asynchronous&&shape(f.returns).kind!="Promise"?"ets::Task<"+type(f.bodyReturns)+">":type(f.returns);if(f.asynchronous){result.headers.insert("runtime/ets_async.hpp");result.libuv=true;}V<S> args;for(int k=0;k<int(f.captureTypes.size());k++)args.push_back(type(f.captureTypes[k])+(f.captureModes.at(k)=="reference"?"*":"")+" c"+n(k));for(int k=0;k<int(f.parameterTypes.size());k++)args.push_back(type(f.parameterTypes[k])+" a"+n(k));return ret+" ir_f"+n(id)+"("+join(args)+")";}
 S Generator::body(const Function& f,int id){V<S> out;int parameter=0;
+ // A single-use load immediately followed by a size query needs no value
+ // snapshot. Copying the container here makes parser lookahead quadratic.
+ V<int> uses(f.values.size());
+ for(const auto& b:f.blocks){for(const auto& i:b.instructions)for(int v:i.operands)uses.at(v)++;if(b.value>=0)uses.at(b.value)++;}
+ for(const auto& p:f.places)if(p.index>=0)uses.at(p.index)++;
+ for(int v:f.frameValues)uses.at(v)++;
  for(int k=0;k<int(f.places.size());k++){auto& p=f.places[k];if(p.kind=="local"&&p.global<0)out.push_back("ets::ir::Slot<"+type(p.typeId)+"> p"+n(k)+";");}
  for(int k=0;k<int(f.values.size());k++)out.push_back("ets::ir::Slot<"+type(f.values[k])+"> v"+n(k)+";");
  for(int k=0;k<int(f.blocks.size());k++){auto& b=f.blocks[k];if(b.terminator=="suspend"){int t=shape(f.values.at(b.value)).arguments.at(0);if(p.types.at(t)!="void")out.push_back("ets::ir::Slot<"+type(t)+"> await"+n(k)+";");}}
  for(int k=0;k<int(f.places.size());k++)if(f.places[k].parameter)out.push_back("p"+n(k)+".set(std::move(a"+n(parameter++)+"));");out.push_back("goto b0;");
- for(int k=0;k<int(f.blocks.size());k++){const auto& b=f.blocks[k];out.push_back("b"+n(k)+":");for(auto& i:b.instructions)out.push_back(instruction(f,i,k));S ret=f.asynchronous?"co_return":"return";
+ for(int k=0;k<int(f.blocks.size());k++){const auto& b=f.blocks[k];out.push_back("b"+n(k)+":");
+  for(int at=0;at<int(b.instructions.size());at++){
+   const auto& i=b.instructions[at];
+   if(i.op=="load"&&i.result>=0&&uses.at(i.result)==1&&at+1<int(b.instructions.size())){
+    const auto& next=b.instructions[at+1];const auto& s=shape(i.typeId);
+    const auto& loaded=f.places.at(i.place);
+    bool stringIndex=loaded.kind=="index"&&p.types.at(f.places.at(loaded.base).typeId)=="string";
+    if(!stringIndex&&next.op=="property"&&in(next.text,{"length","size"})&&next.operands==V<int>{i.result}&&next.result>=0&&
+       (in(s.kind,{"array","fixedArray","Map","Set"})||p.types.at(i.typeId)=="string")){
+     out.push_back("v"+n(next.result)+".set(double(("+place(f,i.place)+".get()).size()));");at++;continue;
+    }
+   }
+   out.push_back(instruction(f,i,k));
+  }
+  S ret=f.asynchronous?"co_return":"return";
   if(b.terminator=="jump")out.push_back("goto b"+n(b.targets.at(0))+";");
   else if(b.terminator=="branch")out.push_back("if(v"+n(b.value)+".get())goto b"+n(b.targets.at(0))+";else goto b"+n(b.targets.at(1))+";");
   else if(b.terminator=="return")out.push_back(ret+(b.value<0?S{}:" v"+n(b.value)+"."+(shape(f.values.at(b.value)).resource?"take":"get")+"()")+";");

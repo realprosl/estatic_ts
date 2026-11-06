@@ -8,6 +8,13 @@ on:
     paths:
       - .github/workflows/native-cpp-self-bootstrap.yml
       - scripts/verify-native-cpp-self-bootstrap.sh
+      - native-cpp/**
+      - src/codegen/ir/**
+      - bootstrap/ir/cpp.test.ts
+
+concurrency:
+  group: native-cpp-self-bootstrap-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -22,12 +29,17 @@ jobs:
       - name: Install C++ dependencies (no Node.js setup)
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++ python3 libssl-dev
+          sudo apt-get install -y g++ gdb python3 libssl-dev
       - name: Rebuild native-cpp and regenerate compiler twice
+        env:
+          SELF_BOOTSTRAP_DEBUG: '1'
+          SELF_BOOTSTRAP_STEP_TIMEOUT: '600'
+          SELF_BOOTSTRAP_DEBUG_SAMPLE_SECONDS: '30'
         shell: bash
         run: |
           set -euo pipefail
-          bash scripts/verify-native-cpp-self-bootstrap.sh
+          mkdir -p build/native-cpp-self-bootstrap
+          bash scripts/verify-native-cpp-self-bootstrap.sh 2>&1 | tee build/native-cpp-self-bootstrap/verification.log
       - name: Report verified stages
         if: success()
         shell: bash
