@@ -1,0 +1,33 @@
+{
+  "sourceCommit": "c75a1af04ba66700354aa5fd707e6bdcb65df33e",
+  "frontend": "second native generation",
+  "nativeCodegen": "native-compiler-mini/native/etsc",
+  "files": [
+    "bootstrap/binder/binder.test.ts",
+    "bootstrap/checker/checker.test.ts",
+    "bootstrap/checker/parameter-token.test.ts",
+    "bootstrap/checker/safety-scaling.test.ts",
+    "bootstrap/ir/analysis-trace.test.ts",
+    "bootstrap/ir/collection-query.test.ts",
+    "bootstrap/ir/metadata.test.ts"
+  ],
+  "initial": {
+    "tests": 1465,
+    "passed": 1464,
+    "failed": 1,
+    "cancelled": 0,
+    "skipped": 0,
+    "seconds": 204.886189859,
+    "failure": "metadata test could not create /tmp/ets-metadata-XXXXXX: /tmp is absent in this environment"
+  },
+  "rerun": {
+    "file": "bootstrap/ir/metadata.test.ts",
+    "TMPDIR": "/workspace/scratch/083e25db7b25/estatic_ts/build/full-validation/tmp",
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "allSelectedTestsPassedAfterEnvironmentCorrection": true
+}

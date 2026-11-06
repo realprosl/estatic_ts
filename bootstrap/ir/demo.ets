@@ -21,7 +21,7 @@ function runIr(): void {
   const project = analyzeProject(graph,trace);
   traceAnalysis(trace,"project","END");
   traceAnalysis(trace,"lower","BEGIN");
-  let ir = lowerProject(project.graph,project.binding,project.checked);
+  let ir = lowerProject(project.graph,project.binding,project.checked,trace);
   traceAnalysis(trace,"lower","END");
   let diagnostics = project.graph.diagnostics;
   for (const d of project.binding.diagnostics) diagnostics.push(d);

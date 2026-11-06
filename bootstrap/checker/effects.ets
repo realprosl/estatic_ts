@@ -61,6 +61,9 @@ export class EffectAnalyzer {
   }
   executionOwner(module: number, id: number): number {
     const body: number = this.owner(this.binding.files[module].nodeScopes[id]);
+    // Parameter evaluation has a separate creation owner only for async bodies.
+    // Ordinary nodes can use the cached owner without copying ancestor ASTs.
+    if (body < 0 || !this.asynchronous(body)) return body;
     let at: number = id;
     while (at >= 0) {
       const n: AstNode = this.node(module,at);

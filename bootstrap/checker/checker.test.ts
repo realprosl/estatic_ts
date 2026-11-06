@@ -11,8 +11,8 @@ import {TypeChecker} from "../../src/semantic/type-checker.ts";
 import {DiagnosticError} from "../../src/core/diagnostic.ts";
 import {buildLoader,root} from "../modules/build.ts";
 const directory=mkdtempSync(join(root,"build-checker-test-")); let binary:string;
-before(async()=>{binary=await buildLoader(join(directory,"binary"),"bootstrap/checker/demo.ets",true);});
-after(()=>rmSync(directory,{recursive:true,force:true}));
+before(async()=>{binary=process.env.ESTATIC_CHECKER_BINARY??await buildLoader(join(directory,"binary"),"bootstrap/checker/demo.ets",true);});
+after(()=>rmSync(directory,{recursive:true,force:true,maxRetries:3,retryDelay:100}));
 function fixture(source:string,files:Record<string,string>={}){const dir=mkdtempSync(join(directory,"project-"));for(const[name,text]of Object.entries({"main.ets":source,...files})){mkdirSync(dirname(join(dir,name)),{recursive:true});writeFileSync(join(dir,name),text);}return{entry:join(dir,"main.ets"),cache:join(dir,"cache")};}
 function run(f:ReturnType<typeof fixture>,status=0){const p=spawnSync(binary,[f.entry,"--cache",f.cache],{encoding:"utf8",timeout:60000,maxBuffer:64*1024*1024});assert.ifError(p.error);assert.equal(p.status,status,p.stderr+p.stdout.slice(-3000));const g=JSON.parse(p.stdout);g.diagnostics.forEach(assertDiagnostic);g.binding.diagnostics.forEach(assertDiagnostic);assert.equal(g.success,status===0);return g;}
 function check(source:string,files:Record<string,string>={}){return run(fixture(source,files));}
@@ -1990,4 +1990,11 @@ test('diagnostic contract separates comptime codes',()=>{
  const g=error('const n=comptime(():number=>1/0);',/COMPTIME_/);
  const d=g.diagnostics.find((d:any)=>d.code.startsWith('COMPTIME_'));assert.ok(d);assertDiagnostic(d);
  assert.ok(!d.message.startsWith(d.code));
+});
+
+test('native safety restores callable locals across recursive out calls and nested blocks',()=>{
+  check('class B{x:number=1;}function step(out b:B,n:number):void{let local=n;if(n>0){let before=local;step(b,n-1);local=before;}b.x+=local;}let b=new B();step(b,3);print(b.x);');
+});
+test('native safety retains caller moves through nested out forwarding',()=>{
+  error('class B{}function consume(out p:ptr<B>):void{const q=move(p);}function wrapper(out p:ptr<B>):void{{let local=1;consume(p);}print(p);}let p:ptr<B> =new B();wrapper(p);',/E4102/);
 });

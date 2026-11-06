@@ -38,6 +38,9 @@ of phase names, timestamp lines as they arrive, and preserve repetitions.
 | `checker.comptime` | Compile-time evaluation |
 | `checker.records.construct`, `checker.records.build` | Module record construction |
 | `lower`, `format` | Later IR lowering and output |
+| `lower.functions` | Register and lower function bodies (after initial table validation/registration) |
+| `lower.function.N` (POINT) | Start lowering function index N |
+| `lower.contracts`, `lower.borrows`, `lower.verify` | Preserve contracts, finish borrows and verify the IR |
 
 Inner END markers precede existing return expressions. Their duration excludes
 subsequent value transfers; outer call markers include those transfers. POINT
@@ -47,7 +50,7 @@ available, but consumers should use the stable `TRACE analyze.` markers.
 
 The tracing helper accepts only a boolean and short phase/event strings. It
 never receives graphs, ASTs or checked results, and has no mutable global state.
-No per-node logging is added. Error paths can skip safety or comptime phases;
+No per-node logging is added; lowering emits one POINT per function. Error paths can skip safety or comptime phases;
 absence of their markers must not be interpreted as successful completion.
 
 Issue #63 adds and verifies this contract. Issue #64 performs the full timing,

@@ -1,0 +1,934 @@
+TRACE analyze.loader BEGIN
+TRACE analyze.loader END
+TRACE analyze.project BEGIN
+frontend: expansion and binding
+TRACE analyze.expansion.construct BEGIN
+TRACE analyze.expansion.construct END
+TRACE analyze.expansion.run BEGIN
+TRACE analyze.expansion.round.0 POINT
+TRACE analyze.expansion.bind BEGIN
+TRACE analyze.binding.construct BEGIN
+TRACE analyze.binding.construct END
+TRACE analyze.binding.run BEGIN
+TRACE analyze.binding.initialize BEGIN
+TRACE analyze.binding.initialize END
+TRACE analyze.binding.collect.0 BEGIN
+TRACE analyze.binding.collect.0 END
+TRACE analyze.binding.collect.1 BEGIN
+TRACE analyze.binding.collect.1 END
+TRACE analyze.binding.collect.2 BEGIN
+TRACE analyze.binding.collect.2 END
+TRACE analyze.binding.collect.3 BEGIN
+TRACE analyze.binding.collect.3 END
+TRACE analyze.binding.collect.4 BEGIN
+TRACE analyze.binding.collect.4 END
+TRACE analyze.binding.collect.5 BEGIN
+TRACE analyze.binding.collect.5 END
+TRACE analyze.binding.collect.6 BEGIN
+TRACE analyze.binding.collect.6 END
+TRACE analyze.binding.collect.7 BEGIN
+TRACE analyze.binding.collect.7 END
+TRACE analyze.binding.collect.8 BEGIN
+TRACE analyze.binding.collect.8 END
+TRACE analyze.binding.collect.9 BEGIN
+TRACE analyze.binding.collect.9 END
+TRACE analyze.binding.collect.10 BEGIN
+TRACE analyze.binding.collect.10 END
+TRACE analyze.binding.collect.11 BEGIN
+TRACE analyze.binding.collect.11 END
+TRACE analyze.binding.collect.12 BEGIN
+TRACE analyze.binding.collect.12 END
+TRACE analyze.binding.collect.13 BEGIN
+TRACE analyze.binding.collect.13 END
+TRACE analyze.binding.collect.14 BEGIN
+TRACE analyze.binding.collect.14 END
+TRACE analyze.binding.collect.15 BEGIN
+TRACE analyze.binding.collect.15 END
+TRACE analyze.binding.collect.16 BEGIN
+TRACE analyze.binding.collect.16 END
+TRACE analyze.binding.collect.17 BEGIN
+TRACE analyze.binding.collect.17 END
+TRACE analyze.binding.collect.18 BEGIN
+TRACE analyze.binding.collect.18 END
+TRACE analyze.binding.collect.19 BEGIN
+TRACE analyze.binding.collect.19 END
+TRACE analyze.binding.collect.20 BEGIN
+TRACE analyze.binding.collect.20 END
+TRACE analyze.binding.collect.21 BEGIN
+TRACE analyze.binding.collect.21 END
+TRACE analyze.binding.collect.22 BEGIN
+TRACE analyze.binding.collect.22 END
+TRACE analyze.binding.collect.23 BEGIN
+TRACE analyze.binding.collect.23 END
+TRACE analyze.binding.collect.24 BEGIN
+TRACE analyze.binding.collect.24 END
+TRACE analyze.binding.collect.25 BEGIN
+TRACE analyze.binding.collect.25 END
+TRACE analyze.binding.collect.26 BEGIN
+TRACE analyze.binding.collect.26 END
+TRACE analyze.binding.collect.27 BEGIN
+TRACE analyze.binding.collect.27 END
+TRACE analyze.binding.collect.28 BEGIN
+TRACE analyze.binding.collect.28 END
+TRACE analyze.binding.collect.29 BEGIN
+TRACE analyze.binding.collect.29 END
+TRACE analyze.binding.collect.30 BEGIN
+TRACE analyze.binding.collect.30 END
+TRACE analyze.binding.collect.31 BEGIN
+TRACE analyze.binding.collect.31 END
+TRACE analyze.binding.collect.32 BEGIN
+TRACE analyze.binding.collect.32 END
+TRACE analyze.binding.collect.33 BEGIN
+TRACE analyze.binding.collect.33 END
+TRACE analyze.binding.collect.34 BEGIN
+TRACE analyze.binding.collect.34 END
+TRACE analyze.binding.collect.35 BEGIN
+TRACE analyze.binding.collect.35 END
+TRACE analyze.binding.collect.36 BEGIN
+TRACE analyze.binding.collect.36 END
+TRACE analyze.binding.imports.0 BEGIN
+TRACE analyze.binding.imports.0 END
+TRACE analyze.binding.exports.0 BEGIN
+TRACE analyze.binding.exports.0 END
+TRACE analyze.binding.imports.1 BEGIN
+TRACE analyze.binding.imports.1 END
+TRACE analyze.binding.exports.1 BEGIN
+TRACE analyze.binding.exports.1 END
+TRACE analyze.binding.imports.2 BEGIN
+TRACE analyze.binding.imports.2 END
+TRACE analyze.binding.exports.2 BEGIN
+TRACE analyze.binding.exports.2 END
+TRACE analyze.binding.imports.3 BEGIN
+TRACE analyze.binding.imports.3 END
+TRACE analyze.binding.exports.3 BEGIN
+TRACE analyze.binding.exports.3 END
+TRACE analyze.binding.imports.4 BEGIN
+TRACE analyze.binding.imports.4 END
+TRACE analyze.binding.exports.4 BEGIN
+TRACE analyze.binding.exports.4 END
+TRACE analyze.binding.imports.5 BEGIN
+TRACE analyze.binding.imports.5 END
+TRACE analyze.binding.exports.5 BEGIN
+TRACE analyze.binding.exports.5 END
+TRACE analyze.binding.imports.6 BEGIN
+TRACE analyze.binding.imports.6 END
+TRACE analyze.binding.exports.6 BEGIN
+TRACE analyze.binding.exports.6 END
+TRACE analyze.binding.imports.7 BEGIN
+TRACE analyze.binding.imports.7 END
+TRACE analyze.binding.exports.7 BEGIN
+TRACE analyze.binding.exports.7 END
+TRACE analyze.binding.imports.8 BEGIN
+TRACE analyze.binding.imports.8 END
+TRACE analyze.binding.exports.8 BEGIN
+TRACE analyze.binding.exports.8 END
+TRACE analyze.binding.imports.9 BEGIN
+TRACE analyze.binding.imports.9 END
+TRACE analyze.binding.exports.9 BEGIN
+TRACE analyze.binding.exports.9 END
+TRACE analyze.binding.imports.10 BEGIN
+TRACE analyze.binding.imports.10 END
+TRACE analyze.binding.exports.10 BEGIN
+TRACE analyze.binding.exports.10 END
+TRACE analyze.binding.imports.11 BEGIN
+TRACE analyze.binding.imports.11 END
+TRACE analyze.binding.exports.11 BEGIN
+TRACE analyze.binding.exports.11 END
+TRACE analyze.binding.imports.12 BEGIN
+TRACE analyze.binding.imports.12 END
+TRACE analyze.binding.exports.12 BEGIN
+TRACE analyze.binding.exports.12 END
+TRACE analyze.binding.imports.13 BEGIN
+TRACE analyze.binding.imports.13 END
+TRACE analyze.binding.exports.13 BEGIN
+TRACE analyze.binding.exports.13 END
+TRACE analyze.binding.imports.14 BEGIN
+TRACE analyze.binding.imports.14 END
+TRACE analyze.binding.exports.14 BEGIN
+TRACE analyze.binding.exports.14 END
+TRACE analyze.binding.imports.15 BEGIN
+TRACE analyze.binding.imports.15 END
+TRACE analyze.binding.exports.15 BEGIN
+TRACE analyze.binding.exports.15 END
+TRACE analyze.binding.imports.16 BEGIN
+TRACE analyze.binding.imports.16 END
+TRACE analyze.binding.exports.16 BEGIN
+TRACE analyze.binding.exports.16 END
+TRACE analyze.binding.imports.17 BEGIN
+TRACE analyze.binding.imports.17 END
+TRACE analyze.binding.exports.17 BEGIN
+TRACE analyze.binding.exports.17 END
+TRACE analyze.binding.imports.18 BEGIN
+TRACE analyze.binding.imports.18 END
+TRACE analyze.binding.exports.18 BEGIN
+TRACE analyze.binding.exports.18 END
+TRACE analyze.binding.imports.19 BEGIN
+TRACE analyze.binding.imports.19 END
+TRACE analyze.binding.exports.19 BEGIN
+TRACE analyze.binding.exports.19 END
+TRACE analyze.binding.imports.20 BEGIN
+TRACE analyze.binding.imports.20 END
+TRACE analyze.binding.exports.20 BEGIN
+TRACE analyze.binding.exports.20 END
+TRACE analyze.binding.imports.21 BEGIN
+TRACE analyze.binding.imports.21 END
+TRACE analyze.binding.exports.21 BEGIN
+TRACE analyze.binding.exports.21 END
+TRACE analyze.binding.imports.22 BEGIN
+TRACE analyze.binding.imports.22 END
+TRACE analyze.binding.exports.22 BEGIN
+TRACE analyze.binding.exports.22 END
+TRACE analyze.binding.imports.23 BEGIN
+TRACE analyze.binding.imports.23 END
+TRACE analyze.binding.exports.23 BEGIN
+TRACE analyze.binding.exports.23 END
+TRACE analyze.binding.imports.24 BEGIN
+TRACE analyze.binding.imports.24 END
+TRACE analyze.binding.exports.24 BEGIN
+TRACE analyze.binding.exports.24 END
+TRACE analyze.binding.imports.25 BEGIN
+TRACE analyze.binding.imports.25 END
+TRACE analyze.binding.exports.25 BEGIN
+TRACE analyze.binding.exports.25 END
+TRACE analyze.binding.imports.26 BEGIN
+TRACE analyze.binding.imports.26 END
+TRACE analyze.binding.exports.26 BEGIN
+TRACE analyze.binding.exports.26 END
+TRACE analyze.binding.imports.27 BEGIN
+TRACE analyze.binding.imports.27 END
+TRACE analyze.binding.exports.27 BEGIN
+TRACE analyze.binding.exports.27 END
+TRACE analyze.binding.imports.28 BEGIN
+TRACE analyze.binding.imports.28 END
+TRACE analyze.binding.exports.28 BEGIN
+TRACE analyze.binding.exports.28 END
+TRACE analyze.binding.imports.29 BEGIN
+TRACE analyze.binding.imports.29 END
+TRACE analyze.binding.exports.29 BEGIN
+TRACE analyze.binding.exports.29 END
+TRACE analyze.binding.imports.30 BEGIN
+TRACE analyze.binding.imports.30 END
+TRACE analyze.binding.exports.30 BEGIN
+TRACE analyze.binding.exports.30 END
+TRACE analyze.binding.imports.31 BEGIN
+TRACE analyze.binding.imports.31 END
+TRACE analyze.binding.exports.31 BEGIN
+TRACE analyze.binding.exports.31 END
+TRACE analyze.binding.imports.32 BEGIN
+TRACE analyze.binding.imports.32 END
+TRACE analyze.binding.exports.32 BEGIN
+TRACE analyze.binding.exports.32 END
+TRACE analyze.binding.imports.33 BEGIN
+TRACE analyze.binding.imports.33 END
+TRACE analyze.binding.exports.33 BEGIN
+TRACE analyze.binding.exports.33 END
+TRACE analyze.binding.imports.34 BEGIN
+TRACE analyze.binding.imports.34 END
+TRACE analyze.binding.exports.34 BEGIN
+TRACE analyze.binding.exports.34 END
+TRACE analyze.binding.imports.35 BEGIN
+TRACE analyze.binding.imports.35 END
+TRACE analyze.binding.exports.35 BEGIN
+TRACE analyze.binding.exports.35 END
+TRACE analyze.binding.imports.36 BEGIN
+TRACE analyze.binding.imports.36 END
+TRACE analyze.binding.exports.36 BEGIN
+TRACE analyze.binding.exports.36 END
+TRACE analyze.binding.duplicates BEGIN
+TRACE analyze.binding.duplicates END
+TRACE analyze.binding.uses.0 BEGIN
+TRACE analyze.binding.uses.0 END
+TRACE analyze.binding.uses.1 BEGIN
+TRACE analyze.binding.uses.1 END
+TRACE analyze.binding.uses.2 BEGIN
+TRACE analyze.binding.uses.2 END
+TRACE analyze.binding.uses.3 BEGIN
+TRACE analyze.binding.uses.3 END
+TRACE analyze.binding.uses.4 BEGIN
+TRACE analyze.binding.uses.4 END
+TRACE analyze.binding.uses.5 BEGIN
+TRACE analyze.binding.uses.5 END
+TRACE analyze.binding.uses.6 BEGIN
+TRACE analyze.binding.uses.6 END
+TRACE analyze.binding.uses.7 BEGIN
+TRACE analyze.binding.uses.7 END
+TRACE analyze.binding.uses.8 BEGIN
+TRACE analyze.binding.uses.8 END
+TRACE analyze.binding.uses.9 BEGIN
+TRACE analyze.binding.uses.9 END
+TRACE analyze.binding.uses.10 BEGIN
+TRACE analyze.binding.uses.10 END
+TRACE analyze.binding.uses.11 BEGIN
+TRACE analyze.binding.uses.11 END
+TRACE analyze.binding.uses.12 BEGIN
+TRACE analyze.binding.uses.12 END
+TRACE analyze.binding.uses.13 BEGIN
+TRACE analyze.binding.uses.13 END
+TRACE analyze.binding.uses.14 BEGIN
+TRACE analyze.binding.uses.14 END
+TRACE analyze.binding.uses.15 BEGIN
+TRACE analyze.binding.uses.15 END
+TRACE analyze.binding.uses.16 BEGIN
+TRACE analyze.binding.uses.16 END
+TRACE analyze.binding.uses.17 BEGIN
+TRACE analyze.binding.uses.17 END
+TRACE analyze.binding.uses.18 BEGIN
+TRACE analyze.binding.uses.18 END
+TRACE analyze.binding.uses.19 BEGIN
+TRACE analyze.binding.uses.19 END
+TRACE analyze.binding.uses.20 BEGIN
+TRACE analyze.binding.uses.20 END
+TRACE analyze.binding.uses.21 BEGIN
+TRACE analyze.binding.uses.21 END
+TRACE analyze.binding.uses.22 BEGIN
+TRACE analyze.binding.uses.22 END
+TRACE analyze.binding.uses.23 BEGIN
+TRACE analyze.binding.uses.23 END
+TRACE analyze.binding.uses.24 BEGIN
+TRACE analyze.binding.uses.24 END
+TRACE analyze.binding.uses.25 BEGIN
+TRACE analyze.binding.uses.25 END
+TRACE analyze.binding.uses.26 BEGIN
+TRACE analyze.binding.uses.26 END
+TRACE analyze.binding.uses.27 BEGIN
+TRACE analyze.binding.uses.27 END
+TRACE analyze.binding.uses.28 BEGIN
+TRACE analyze.binding.uses.28 END
+TRACE analyze.binding.uses.29 BEGIN
+TRACE analyze.binding.uses.29 END
+TRACE analyze.binding.uses.30 BEGIN
+TRACE analyze.binding.uses.30 END
+TRACE analyze.binding.uses.31 BEGIN
+TRACE analyze.binding.uses.31 END
+TRACE analyze.binding.uses.32 BEGIN
+TRACE analyze.binding.uses.32 END
+TRACE analyze.binding.uses.33 BEGIN
+TRACE analyze.binding.uses.33 END
+TRACE analyze.binding.uses.34 BEGIN
+TRACE analyze.binding.uses.34 END
+TRACE analyze.binding.uses.35 BEGIN
+TRACE analyze.binding.uses.35 END
+TRACE analyze.binding.uses.36 BEGIN
+TRACE analyze.binding.uses.36 END
+TRACE analyze.binding.targets BEGIN
+TRACE analyze.binding.targets END
+TRACE analyze.binding.run END
+TRACE analyze.expansion.bind END
+TRACE analyze.expansion.search BEGIN
+TRACE analyze.expansion.search END
+TRACE analyze.expansion.order BEGIN
+TRACE analyze.expansion.order END
+TRACE analyze.expansion.run END
+TRACE analyze.binding.final BEGIN
+TRACE analyze.binding.construct BEGIN
+TRACE analyze.binding.construct END
+TRACE analyze.binding.run BEGIN
+TRACE analyze.binding.initialize BEGIN
+TRACE analyze.binding.initialize END
+TRACE analyze.binding.collect.0 BEGIN
+TRACE analyze.binding.collect.0 END
+TRACE analyze.binding.collect.1 BEGIN
+TRACE analyze.binding.collect.1 END
+TRACE analyze.binding.collect.2 BEGIN
+TRACE analyze.binding.collect.2 END
+TRACE analyze.binding.collect.3 BEGIN
+TRACE analyze.binding.collect.3 END
+TRACE analyze.binding.collect.4 BEGIN
+TRACE analyze.binding.collect.4 END
+TRACE analyze.binding.collect.5 BEGIN
+TRACE analyze.binding.collect.5 END
+TRACE analyze.binding.collect.6 BEGIN
+TRACE analyze.binding.collect.6 END
+TRACE analyze.binding.collect.7 BEGIN
+TRACE analyze.binding.collect.7 END
+TRACE analyze.binding.collect.8 BEGIN
+TRACE analyze.binding.collect.8 END
+TRACE analyze.binding.collect.9 BEGIN
+TRACE analyze.binding.collect.9 END
+TRACE analyze.binding.collect.10 BEGIN
+TRACE analyze.binding.collect.10 END
+TRACE analyze.binding.collect.11 BEGIN
+TRACE analyze.binding.collect.11 END
+TRACE analyze.binding.collect.12 BEGIN
+TRACE analyze.binding.collect.12 END
+TRACE analyze.binding.collect.13 BEGIN
+TRACE analyze.binding.collect.13 END
+TRACE analyze.binding.collect.14 BEGIN
+TRACE analyze.binding.collect.14 END
+TRACE analyze.binding.collect.15 BEGIN
+TRACE analyze.binding.collect.15 END
+TRACE analyze.binding.collect.16 BEGIN
+TRACE analyze.binding.collect.16 END
+TRACE analyze.binding.collect.17 BEGIN
+TRACE analyze.binding.collect.17 END
+TRACE analyze.binding.collect.18 BEGIN
+TRACE analyze.binding.collect.18 END
+TRACE analyze.binding.collect.19 BEGIN
+TRACE analyze.binding.collect.19 END
+TRACE analyze.binding.collect.20 BEGIN
+TRACE analyze.binding.collect.20 END
+TRACE analyze.binding.collect.21 BEGIN
+TRACE analyze.binding.collect.21 END
+TRACE analyze.binding.collect.22 BEGIN
+TRACE analyze.binding.collect.22 END
+TRACE analyze.binding.collect.23 BEGIN
+TRACE analyze.binding.collect.23 END
+TRACE analyze.binding.collect.24 BEGIN
+TRACE analyze.binding.collect.24 END
+TRACE analyze.binding.collect.25 BEGIN
+TRACE analyze.binding.collect.25 END
+TRACE analyze.binding.collect.26 BEGIN
+TRACE analyze.binding.collect.26 END
+TRACE analyze.binding.collect.27 BEGIN
+TRACE analyze.binding.collect.27 END
+TRACE analyze.binding.collect.28 BEGIN
+TRACE analyze.binding.collect.28 END
+TRACE analyze.binding.collect.29 BEGIN
+TRACE analyze.binding.collect.29 END
+TRACE analyze.binding.collect.30 BEGIN
+TRACE analyze.binding.collect.30 END
+TRACE analyze.binding.collect.31 BEGIN
+TRACE analyze.binding.collect.31 END
+TRACE analyze.binding.collect.32 BEGIN
+TRACE analyze.binding.collect.32 END
+TRACE analyze.binding.collect.33 BEGIN
+TRACE analyze.binding.collect.33 END
+TRACE analyze.binding.collect.34 BEGIN
+TRACE analyze.binding.collect.34 END
+TRACE analyze.binding.collect.35 BEGIN
+TRACE analyze.binding.collect.35 END
+TRACE analyze.binding.collect.36 BEGIN
+TRACE analyze.binding.collect.36 END
+TRACE analyze.binding.imports.0 BEGIN
+TRACE analyze.binding.imports.0 END
+TRACE analyze.binding.exports.0 BEGIN
+TRACE analyze.binding.exports.0 END
+TRACE analyze.binding.imports.1 BEGIN
+TRACE analyze.binding.imports.1 END
+TRACE analyze.binding.exports.1 BEGIN
+TRACE analyze.binding.exports.1 END
+TRACE analyze.binding.imports.2 BEGIN
+TRACE analyze.binding.imports.2 END
+TRACE analyze.binding.exports.2 BEGIN
+TRACE analyze.binding.exports.2 END
+TRACE analyze.binding.imports.3 BEGIN
+TRACE analyze.binding.imports.3 END
+TRACE analyze.binding.exports.3 BEGIN
+TRACE analyze.binding.exports.3 END
+TRACE analyze.binding.imports.4 BEGIN
+TRACE analyze.binding.imports.4 END
+TRACE analyze.binding.exports.4 BEGIN
+TRACE analyze.binding.exports.4 END
+TRACE analyze.binding.imports.5 BEGIN
+TRACE analyze.binding.imports.5 END
+TRACE analyze.binding.exports.5 BEGIN
+TRACE analyze.binding.exports.5 END
+TRACE analyze.binding.imports.6 BEGIN
+TRACE analyze.binding.imports.6 END
+TRACE analyze.binding.exports.6 BEGIN
+TRACE analyze.binding.exports.6 END
+TRACE analyze.binding.imports.7 BEGIN
+TRACE analyze.binding.imports.7 END
+TRACE analyze.binding.exports.7 BEGIN
+TRACE analyze.binding.exports.7 END
+TRACE analyze.binding.imports.8 BEGIN
+TRACE analyze.binding.imports.8 END
+TRACE analyze.binding.exports.8 BEGIN
+TRACE analyze.binding.exports.8 END
+TRACE analyze.binding.imports.9 BEGIN
+TRACE analyze.binding.imports.9 END
+TRACE analyze.binding.exports.9 BEGIN
+TRACE analyze.binding.exports.9 END
+TRACE analyze.binding.imports.10 BEGIN
+TRACE analyze.binding.imports.10 END
+TRACE analyze.binding.exports.10 BEGIN
+TRACE analyze.binding.exports.10 END
+TRACE analyze.binding.imports.11 BEGIN
+TRACE analyze.binding.imports.11 END
+TRACE analyze.binding.exports.11 BEGIN
+TRACE analyze.binding.exports.11 END
+TRACE analyze.binding.imports.12 BEGIN
+TRACE analyze.binding.imports.12 END
+TRACE analyze.binding.exports.12 BEGIN
+TRACE analyze.binding.exports.12 END
+TRACE analyze.binding.imports.13 BEGIN
+TRACE analyze.binding.imports.13 END
+TRACE analyze.binding.exports.13 BEGIN
+TRACE analyze.binding.exports.13 END
+TRACE analyze.binding.imports.14 BEGIN
+TRACE analyze.binding.imports.14 END
+TRACE analyze.binding.exports.14 BEGIN
+TRACE analyze.binding.exports.14 END
+TRACE analyze.binding.imports.15 BEGIN
+TRACE analyze.binding.imports.15 END
+TRACE analyze.binding.exports.15 BEGIN
+TRACE analyze.binding.exports.15 END
+TRACE analyze.binding.imports.16 BEGIN
+TRACE analyze.binding.imports.16 END
+TRACE analyze.binding.exports.16 BEGIN
+TRACE analyze.binding.exports.16 END
+TRACE analyze.binding.imports.17 BEGIN
+TRACE analyze.binding.imports.17 END
+TRACE analyze.binding.exports.17 BEGIN
+TRACE analyze.binding.exports.17 END
+TRACE analyze.binding.imports.18 BEGIN
+TRACE analyze.binding.imports.18 END
+TRACE analyze.binding.exports.18 BEGIN
+TRACE analyze.binding.exports.18 END
+TRACE analyze.binding.imports.19 BEGIN
+TRACE analyze.binding.imports.19 END
+TRACE analyze.binding.exports.19 BEGIN
+TRACE analyze.binding.exports.19 END
+TRACE analyze.binding.imports.20 BEGIN
+TRACE analyze.binding.imports.20 END
+TRACE analyze.binding.exports.20 BEGIN
+TRACE analyze.binding.exports.20 END
+TRACE analyze.binding.imports.21 BEGIN
+TRACE analyze.binding.imports.21 END
+TRACE analyze.binding.exports.21 BEGIN
+TRACE analyze.binding.exports.21 END
+TRACE analyze.binding.imports.22 BEGIN
+TRACE analyze.binding.imports.22 END
+TRACE analyze.binding.exports.22 BEGIN
+TRACE analyze.binding.exports.22 END
+TRACE analyze.binding.imports.23 BEGIN
+TRACE analyze.binding.imports.23 END
+TRACE analyze.binding.exports.23 BEGIN
+TRACE analyze.binding.exports.23 END
+TRACE analyze.binding.imports.24 BEGIN
+TRACE analyze.binding.imports.24 END
+TRACE analyze.binding.exports.24 BEGIN
+TRACE analyze.binding.exports.24 END
+TRACE analyze.binding.imports.25 BEGIN
+TRACE analyze.binding.imports.25 END
+TRACE analyze.binding.exports.25 BEGIN
+TRACE analyze.binding.exports.25 END
+TRACE analyze.binding.imports.26 BEGIN
+TRACE analyze.binding.imports.26 END
+TRACE analyze.binding.exports.26 BEGIN
+TRACE analyze.binding.exports.26 END
+TRACE analyze.binding.imports.27 BEGIN
+TRACE analyze.binding.imports.27 END
+TRACE analyze.binding.exports.27 BEGIN
+TRACE analyze.binding.exports.27 END
+TRACE analyze.binding.imports.28 BEGIN
+TRACE analyze.binding.imports.28 END
+TRACE analyze.binding.exports.28 BEGIN
+TRACE analyze.binding.exports.28 END
+TRACE analyze.binding.imports.29 BEGIN
+TRACE analyze.binding.imports.29 END
+TRACE analyze.binding.exports.29 BEGIN
+TRACE analyze.binding.exports.29 END
+TRACE analyze.binding.imports.30 BEGIN
+TRACE analyze.binding.imports.30 END
+TRACE analyze.binding.exports.30 BEGIN
+TRACE analyze.binding.exports.30 END
+TRACE analyze.binding.imports.31 BEGIN
+TRACE analyze.binding.imports.31 END
+TRACE analyze.binding.exports.31 BEGIN
+TRACE analyze.binding.exports.31 END
+TRACE analyze.binding.imports.32 BEGIN
+TRACE analyze.binding.imports.32 END
+TRACE analyze.binding.exports.32 BEGIN
+TRACE analyze.binding.exports.32 END
+TRACE analyze.binding.imports.33 BEGIN
+TRACE analyze.binding.imports.33 END
+TRACE analyze.binding.exports.33 BEGIN
+TRACE analyze.binding.exports.33 END
+TRACE analyze.binding.imports.34 BEGIN
+TRACE analyze.binding.imports.34 END
+TRACE analyze.binding.exports.34 BEGIN
+TRACE analyze.binding.exports.34 END
+TRACE analyze.binding.imports.35 BEGIN
+TRACE analyze.binding.imports.35 END
+TRACE analyze.binding.exports.35 BEGIN
+TRACE analyze.binding.exports.35 END
+TRACE analyze.binding.imports.36 BEGIN
+TRACE analyze.binding.imports.36 END
+TRACE analyze.binding.exports.36 BEGIN
+TRACE analyze.binding.exports.36 END
+TRACE analyze.binding.duplicates BEGIN
+TRACE analyze.binding.duplicates END
+TRACE analyze.binding.uses.0 BEGIN
+TRACE analyze.binding.uses.0 END
+TRACE analyze.binding.uses.1 BEGIN
+TRACE analyze.binding.uses.1 END
+TRACE analyze.binding.uses.2 BEGIN
+TRACE analyze.binding.uses.2 END
+TRACE analyze.binding.uses.3 BEGIN
+TRACE analyze.binding.uses.3 END
+TRACE analyze.binding.uses.4 BEGIN
+TRACE analyze.binding.uses.4 END
+TRACE analyze.binding.uses.5 BEGIN
+TRACE analyze.binding.uses.5 END
+TRACE analyze.binding.uses.6 BEGIN
+TRACE analyze.binding.uses.6 END
+TRACE analyze.binding.uses.7 BEGIN
+TRACE analyze.binding.uses.7 END
+TRACE analyze.binding.uses.8 BEGIN
+TRACE analyze.binding.uses.8 END
+TRACE analyze.binding.uses.9 BEGIN
+TRACE analyze.binding.uses.9 END
+TRACE analyze.binding.uses.10 BEGIN
+TRACE analyze.binding.uses.10 END
+TRACE analyze.binding.uses.11 BEGIN
+TRACE analyze.binding.uses.11 END
+TRACE analyze.binding.uses.12 BEGIN
+TRACE analyze.binding.uses.12 END
+TRACE analyze.binding.uses.13 BEGIN
+TRACE analyze.binding.uses.13 END
+TRACE analyze.binding.uses.14 BEGIN
+TRACE analyze.binding.uses.14 END
+TRACE analyze.binding.uses.15 BEGIN
+TRACE analyze.binding.uses.15 END
+TRACE analyze.binding.uses.16 BEGIN
+TRACE analyze.binding.uses.16 END
+TRACE analyze.binding.uses.17 BEGIN
+TRACE analyze.binding.uses.17 END
+TRACE analyze.binding.uses.18 BEGIN
+TRACE analyze.binding.uses.18 END
+TRACE analyze.binding.uses.19 BEGIN
+TRACE analyze.binding.uses.19 END
+TRACE analyze.binding.uses.20 BEGIN
+TRACE analyze.binding.uses.20 END
+TRACE analyze.binding.uses.21 BEGIN
+TRACE analyze.binding.uses.21 END
+TRACE analyze.binding.uses.22 BEGIN
+TRACE analyze.binding.uses.22 END
+TRACE analyze.binding.uses.23 BEGIN
+TRACE analyze.binding.uses.23 END
+TRACE analyze.binding.uses.24 BEGIN
+TRACE analyze.binding.uses.24 END
+TRACE analyze.binding.uses.25 BEGIN
+TRACE analyze.binding.uses.25 END
+TRACE analyze.binding.uses.26 BEGIN
+TRACE analyze.binding.uses.26 END
+TRACE analyze.binding.uses.27 BEGIN
+TRACE analyze.binding.uses.27 END
+TRACE analyze.binding.uses.28 BEGIN
+TRACE analyze.binding.uses.28 END
+TRACE analyze.binding.uses.29 BEGIN
+TRACE analyze.binding.uses.29 END
+TRACE analyze.binding.uses.30 BEGIN
+TRACE analyze.binding.uses.30 END
+TRACE analyze.binding.uses.31 BEGIN
+TRACE analyze.binding.uses.31 END
+TRACE analyze.binding.uses.32 BEGIN
+TRACE analyze.binding.uses.32 END
+TRACE analyze.binding.uses.33 BEGIN
+TRACE analyze.binding.uses.33 END
+TRACE analyze.binding.uses.34 BEGIN
+TRACE analyze.binding.uses.34 END
+TRACE analyze.binding.uses.35 BEGIN
+TRACE analyze.binding.uses.35 END
+TRACE analyze.binding.uses.36 BEGIN
+TRACE analyze.binding.uses.36 END
+TRACE analyze.binding.targets BEGIN
+TRACE analyze.binding.targets END
+TRACE analyze.binding.run END
+TRACE analyze.binding.final END
+TRACE analyze.project.assemble POINT
+TRACE analyze.checker.construct BEGIN
+TRACE analyze.checker.construct END
+TRACE analyze.checker.run BEGIN
+frontend: types
+TRACE analyze.checker.types BEGIN
+TRACE analyze.checker.types.initialize BEGIN
+TRACE analyze.checker.types.initialize END
+TRACE analyze.checker.types.module.0 BEGIN
+TRACE analyze.checker.types.module.0 END
+TRACE analyze.checker.types.module.1 BEGIN
+TRACE analyze.checker.types.module.1 END
+TRACE analyze.checker.types.module.2 BEGIN
+TRACE analyze.checker.types.module.2 END
+TRACE analyze.checker.types.module.3 BEGIN
+TRACE analyze.checker.types.module.3 END
+TRACE analyze.checker.types.module.4 BEGIN
+TRACE analyze.checker.types.module.4 END
+TRACE analyze.checker.types.module.5 BEGIN
+TRACE analyze.checker.types.module.5 END
+TRACE analyze.checker.types.module.6 BEGIN
+TRACE analyze.checker.types.module.6 END
+TRACE analyze.checker.types.module.7 BEGIN
+TRACE analyze.checker.types.module.7 END
+TRACE analyze.checker.types.module.8 BEGIN
+TRACE analyze.checker.types.module.8 END
+TRACE analyze.checker.types.module.9 BEGIN
+TRACE analyze.checker.types.module.9 END
+TRACE analyze.checker.types.module.10 BEGIN
+TRACE analyze.checker.types.module.10 END
+TRACE analyze.checker.types.module.11 BEGIN
+TRACE analyze.checker.types.module.11 END
+TRACE analyze.checker.types.module.12 BEGIN
+TRACE analyze.checker.types.module.12 END
+TRACE analyze.checker.types.module.13 BEGIN
+TRACE analyze.checker.types.module.13 END
+TRACE analyze.checker.types.module.14 BEGIN
+TRACE analyze.checker.types.module.14 END
+TRACE analyze.checker.types.module.15 BEGIN
+TRACE analyze.checker.types.module.15 END
+TRACE analyze.checker.types.module.16 BEGIN
+TRACE analyze.checker.types.module.16 END
+TRACE analyze.checker.types.module.17 BEGIN
+TRACE analyze.checker.types.module.17 END
+TRACE analyze.checker.types.module.18 BEGIN
+TRACE analyze.checker.types.module.18 END
+TRACE analyze.checker.types.module.19 BEGIN
+TRACE analyze.checker.types.module.19 END
+TRACE analyze.checker.types.module.20 BEGIN
+TRACE analyze.checker.types.module.20 END
+TRACE analyze.checker.types.module.21 BEGIN
+TRACE analyze.checker.types.module.21 END
+TRACE analyze.checker.types.module.22 BEGIN
+TRACE analyze.checker.types.module.22 END
+TRACE analyze.checker.types.module.23 BEGIN
+TRACE analyze.checker.types.module.23 END
+TRACE analyze.checker.types.module.24 BEGIN
+TRACE analyze.checker.types.module.24 END
+TRACE analyze.checker.types.module.25 BEGIN
+TRACE analyze.checker.types.module.25 END
+TRACE analyze.checker.types.module.26 BEGIN
+TRACE analyze.checker.types.module.26 END
+TRACE analyze.checker.types.module.27 BEGIN
+TRACE analyze.checker.types.module.27 END
+TRACE analyze.checker.types.module.28 BEGIN
+TRACE analyze.checker.types.module.28 END
+TRACE analyze.checker.types.module.29 BEGIN
+TRACE analyze.checker.types.module.29 END
+TRACE analyze.checker.types.module.30 BEGIN
+TRACE analyze.checker.types.module.30 END
+TRACE analyze.checker.types.module.31 BEGIN
+TRACE analyze.checker.types.module.31 END
+TRACE analyze.checker.types.module.32 BEGIN
+TRACE analyze.checker.types.module.32 END
+TRACE analyze.checker.types.module.33 BEGIN
+TRACE analyze.checker.types.module.33 END
+TRACE analyze.checker.types.module.34 BEGIN
+TRACE analyze.checker.types.module.34 END
+TRACE analyze.checker.types.module.35 BEGIN
+TRACE analyze.checker.types.module.35 END
+TRACE analyze.checker.types.module.36 BEGIN
+TRACE analyze.checker.types.module.36 END
+TRACE analyze.checker.types.arrows BEGIN
+TRACE analyze.checker.types.arrows END
+TRACE analyze.checker.types.signatures BEGIN
+TRACE analyze.checker.types.signatures END
+TRACE analyze.checker.types END
+TRACE analyze.checker.safety BEGIN
+TRACE analyze.safety.construct BEGIN
+TRACE analyze.safety.construct END
+frontend: memory and captures
+TRACE analyze.safety.memory BEGIN
+TRACE analyze.safety.memory.aliases BEGIN
+TRACE analyze.safety.memory.aliases END
+TRACE analyze.safety.memory END
+TRACE analyze.safety.captures BEGIN
+TRACE analyze.safety.captures END
+frontend: effects
+TRACE analyze.safety.effects BEGIN
+frontend: effects graph
+frontend: effect functions
+frontend: effect points 130916
+frontend: effect module 0
+frontend: effect module 1
+frontend: effect module 2
+frontend: effect module 3
+frontend: effect module 4
+frontend: effect module 5
+frontend: effect module 6
+frontend: effect module 7
+frontend: effect module 8
+frontend: effect module 9
+frontend: effect module 10
+frontend: effect module 11
+frontend: effect module 12
+frontend: effect module 13
+frontend: effect module 14
+frontend: effect module 15
+frontend: effect module 16
+frontend: effect module 17
+frontend: effect module 18
+frontend: effect module 19
+frontend: effect module 20
+frontend: effect module 21
+frontend: effect module 22
+frontend: effect module 23
+frontend: effect module 24
+frontend: effect module 25
+frontend: effect module 26
+frontend: effect module 27
+frontend: effect module 28
+frontend: effect module 29
+frontend: effect module 30
+frontend: effect module 31
+frontend: effect module 32
+frontend: effect module 33
+frontend: effect module 34
+frontend: effect module 35
+frontend: effect module 36
+frontend: effect graph pass 1, 70084 edges
+frontend: effect graph pass 2, 92173 edges
+frontend: effect graph pass 3, 92182 edges
+frontend: effect graph pass 4, 92182 edges
+frontend: effect graph pass 5, 92182 edges
+frontend: effect graph pass 6, 92182 edges
+frontend: effect graph pass 7, 92182 edges
+frontend: effect graph pass 8, 92182 edges
+frontend: effect graph pass 9, 92182 edges
+frontend: effect graph pass 10, 92182 edges
+frontend: effect graph pass 11, 92182 edges
+frontend: effect graph pass 12, 92182 edges
+frontend: effect graph pass 13, 92182 edges
+frontend: effect graph pass 14, 92182 edges
+frontend: effect graph pass 15, 92182 edges
+frontend: effect graph pass 16, 92182 edges
+frontend: effect graph pass 17, 92182 edges
+frontend: effect graph pass 18, 92182 edges
+frontend: effect graph pass 19, 92182 edges
+frontend: effect graph pass 20, 92182 edges
+frontend: effect graph pass 21, 92182 edges
+frontend: effect graph pass 22, 92182 edges
+frontend: effect graph pass 23, 92182 edges
+frontend: effect graph pass 24, 92182 edges
+frontend: effects summaries
+TRACE analyze.safety.effects END
+frontend: provenance and visibility
+TRACE analyze.safety.provenance BEGIN
+TRACE analyze.safety.provenance END
+TRACE analyze.safety.visibility BEGIN
+TRACE analyze.safety.visibility END
+frontend: flow
+TRACE analyze.safety.flow BEGIN
+frontend: global flow 0
+frontend: global flow 1
+frontend: global flow 2
+frontend: global flow 3
+frontend: global flow 4
+frontend: global flow 5
+frontend: global flow 6
+frontend: global flow 7
+frontend: global flow 8
+frontend: global flow 9
+frontend: global flow 10
+frontend: global flow 11
+frontend: global flow 12
+frontend: global flow 13
+frontend: global flow 14
+frontend: global flow 15
+frontend: global flow 16
+frontend: global flow 17
+frontend: global flow 18
+frontend: global flow 19
+frontend: global flow 20
+frontend: global flow 21
+frontend: global flow 22
+frontend: global flow 23
+frontend: global flow 24
+frontend: global flow 25
+frontend: global flow 26
+frontend: global flow 27
+frontend: global flow 28
+frontend: global flow 29
+frontend: global flow 30
+frontend: global flow 31
+frontend: global flow 32
+frontend: global flow 33
+frontend: global flow 34
+frontend: global flow 35
+frontend: global flow 36
+frontend: definitions flow 0
+frontend: definitions flow 1
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: definitions flow 2
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/lexer/lexer.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/lexer/lexer.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/lexer/lexer.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/lexer/lexer.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/lexer/lexer.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/lexer/lexer.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/lexer/lexer.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/lexer/lexer.ets:constructor effects invokes=0 moves=0
+frontend: definitions flow 3
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/frontend/frontend.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/frontend/frontend.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/frontend/frontend.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/frontend/frontend.ets:constructor effects invokes=0 moves=0
+frontend: definitions flow 4
+frontend: definitions flow 5
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/frontend/frontend.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/modules/syntax-cache.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/modules/syntax-cache.ets:decodeToken parameter ref<#1423>
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/modules/syntax-cache.ets:decodeToken parameter ref<#1423>
+frontend: precise /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/parser/parser.ets:constructor effects invokes=0 moves=0
+frontend: definitions flow 6
+frontend: definitions flow 7
+frontend: definitions flow 8
+frontend: definitions flow 9
+frontend: definitions flow 10
+frontend: definitions flow 11
+frontend: definitions flow 12
+frontend: definitions flow 13
+frontend: definitions flow 14
+frontend: definitions flow 15
+frontend: definitions flow 16
+frontend: definitions flow 17
+frontend: definitions flow 18
+frontend: flow calls 10000 /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/checker/safety.ets:setPath depth 7
+frontend: flow calls 20000 /workspace/scratch/083e25db7b25/estatic_ts/bootstrap/checker/safety.ets:setPath depth 6
+frontend: definitions flow 19
+frontend: definitions flow 20
+frontend: definitions flow 21
+frontend: definitions flow 22
+frontend: definitions flow 23
+frontend: definitions flow 24
+frontend: definitions flow 25
+frontend: definitions flow 26
+frontend: definitions flow 27
+frontend: definitions flow 28
+frontend: definitions flow 29
+frontend: definitions flow 30
+frontend: definitions flow 31
+frontend: definitions flow 32
+frontend: definitions flow 33
+frontend: definitions flow 34
+frontend: definitions flow 35
+frontend: definitions flow 36
+frontend: flow complete, 22965 precise calls
+TRACE analyze.safety.flow END
+TRACE analyze.checker.safety END
+frontend: comptime
+TRACE analyze.checker.comptime BEGIN
+TRACE analyze.checker.comptime END
+TRACE analyze.checker.run END
+frontend: module records
+TRACE analyze.checker.records.construct BEGIN
+TRACE analyze.checker.records.construct END
+TRACE analyze.checker.records.build BEGIN
+TRACE analyze.checker.records.build END
+TRACE analyze.project END
+TRACE analyze.lower BEGIN
+TRACE analyze.lower END
+TRACE analyze.format BEGIN
+TRACE analyze.format END

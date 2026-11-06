@@ -96,9 +96,10 @@ export function emitRuntimeCall(g:IrCppGenerator,f:IrFunction,i:IrInstruction):s
     if(["map","andThen"].includes(method))return `(${receiver}).${method}(${g.callback(f,i,1)})`;
   }
   if(["Map","Set"].includes(base)) {
-    if(["set","add","has","clear","size","delete"].includes(method))return `(${receiver}).${method==="delete"?"removeKey":method}(${i.operands.slice(1).map((_,k)=>a(k+1)).join(",")})`;
-    if(method==="get")return `${T}::of((${receiver}).get(${a(1)}))`;
-    if(method==="forEach")return `(${receiver}).forEach(${g.callback(f,i,1)})`;
+    const collection=g.collectionReceiver(f,i);
+    if(["set","add","has","clear","size","delete"].includes(method))return `(${collection}).${method==="delete"?"removeKey":method}(${i.operands.slice(1).map((_,k)=>a(k+1)).join(",")})`;
+    if(method==="get")return `${T}::of((${collection}).get(${a(1)}))`;
+    if(method==="forEach")return `(${collection}).forEach(${g.callback(f,i,1)})`;
   }
   if(base==="array") {
     g.headers.add("runtime/ets_collections.hpp");const E=g.elementType(shape.arguments[0]);

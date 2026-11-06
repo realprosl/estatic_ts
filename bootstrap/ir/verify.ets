@@ -9,12 +9,18 @@ import { irPlacePath, irInitialPlace } from "./verify-memory";
 import { irAssignable, irElement, verifyShapeInstruction } from "./verify-shapes";
 
 export class IrFacts {
-  reachable: boolean; dominators: boolean[]; initialized: boolean[];
-  constructor(blocks: number, places: number) { this.reachable = false; this.dominators = []; this.initialized = []; for (let i: number = 0; i < blocks; i = i+1) this.dominators.push(true); for (let i: number = 0; i < places; i = i+1) this.initialized.push(true); }
+  reachable: boolean; predecessors: number[]; dominators: boolean[]; initialized: boolean[];
+  constructor(blocks: number, places: number) { this.reachable = false; this.predecessors = []; this.dominators = []; this.initialized = []; for (let i: number = 0; i < blocks; i = i+1) this.dominators.push(true); for (let i: number = 0; i < places; i = i+1) this.initialized.push(true); }
+}
+// Logical paths may have several place IDs, including checked views.
+export class IrInitializationNode {
+  parent: number; children: number[]; places: number[];
+  constructor(parent: number) { this.parent = parent; this.children = []; this.places = []; }
 }
 export class IrVerifier {
-  project: IrProject; issues: IrIssue[]; definitions: number[]; positions: number[]; facts: IrFacts[];
-  constructor(project: IrProject) { this.project = project; this.issues = []; this.definitions = []; this.positions = []; this.facts = []; }
+  project: IrProject; issues: IrIssue[]; definitions: number[]; positions: number[]; facts: IrFacts[]; placePaths: string[];
+  initializationNodes: IrInitializationNode[]; placeNodes: number[]; physicalChildren: IrInitializationNode[];
+  constructor(project: IrProject) { this.project = project; this.issues = []; this.definitions = []; this.positions = []; this.facts = []; this.placePaths = []; this.initializationNodes = []; this.placeNodes = []; this.physicalChildren = []; }
   error(source: IrSource, message: string): void { this.issues.push(new IrIssue("IR_INVALID",message,source)); }
   nativeBinding(f: constRef<IrFunction>): boolean {
     for (const annotation of this.project.annotations) {
@@ -86,9 +92,9 @@ export class IrVerifier {
       if (i.operands.length != 0 || !hasResult || this.project.typeDefinitions[i.typeId].kind != "Optional") this.error(i.source,"None incompatible");
     } else if (i.op == "closure") {
       if ((i.callee) < 0 || i.callee >= this.project.functions.length) this.error(i.source,"Closure sin destino");
-      else { const target = this.project.functions[i.callee];
-        if (target.signature != this.project.types[i.typeId] || i.operands.length != target.captureTypes.length || !hasResult) this.error(i.source,"Entorno de closure incompatible");
-        for (let at: number = 0; at < i.operands.length && at < target.captureTypes.length; at = at+1) if (this.value(f,i.operands[at])) { const actual: number = f.values[i.operands[at]]; const shape = this.project.typeDefinitions[actual]; if (target.captureModes[at] == "reference" ? shape.kind != "ref" || shape.arguments[0] != target.captureTypes[at] : actual != target.captureTypes[at]) this.error(i.source,"Tipo de captura incompatible"); }
+      else {
+        if (this.project.functions[i.callee].signature != this.project.types[i.typeId] || i.operands.length != this.project.functions[i.callee].captureTypes.length || !hasResult) this.error(i.source,"Entorno de closure incompatible");
+        for (let at: number = 0; at < i.operands.length && at < this.project.functions[i.callee].captureTypes.length; at = at+1) if (this.value(f,i.operands[at])) { const actual: number = f.values[i.operands[at]]; const shape = this.project.typeDefinitions[actual]; if (this.project.functions[i.callee].captureModes[at] == "reference" ? shape.kind != "ref" || shape.arguments[0] != this.project.functions[i.callee].captureTypes[at] : actual != this.project.functions[i.callee].captureTypes[at]) this.error(i.source,"Tipo de captura incompatible"); }
       }
     } else if (i.op == "interfaceCall") {
       if (!this.typeId(i.signature) || this.project.typeDefinitions[i.signature].kind != "function" || i.operands.length == 0 || !this.value(f,i.operands[0])) this.error(i.source,"Dispatch de interfaz sin firma/receptor");
@@ -107,13 +113,12 @@ export class IrVerifier {
       }
     } else if (i.op == "call" || i.op == "taskCreate") {
       if ((i.callee) < 0 || i.callee >= this.project.functions.length) { this.error(i.source,"Destino de llamada inexistente"); return; }
-      const target = this.project.functions[i.callee];
-      if ((i.op == "taskCreate") != target.asynchronous) this.error(i.source,"Creación de tarea/invocación incompatible");
-      if (i.typeId != target.returns || i.operands.length != target.parameterTypes.length || hasResult != (resultType != "void")) this.error(i.source,"Firma de llamada incompatible");
-      for (let p: number = 0; p < i.operands.length && p < target.parameterTypes.length; p = p+1) if (!this.value(f,i.operands[p]) || f.values[i.operands[p]] != target.parameterTypes[p]) this.error(i.source,"Argumento de llamada incompatible");
+      if ((i.op == "taskCreate") != this.project.functions[i.callee].asynchronous) this.error(i.source,"Creación de tarea/invocación incompatible");
+      if (i.typeId != this.project.functions[i.callee].returns || i.operands.length != this.project.functions[i.callee].parameterTypes.length || hasResult != (resultType != "void")) this.error(i.source,"Firma de llamada incompatible");
+      for (let p: number = 0; p < i.operands.length && p < this.project.functions[i.callee].parameterTypes.length; p = p+1) if (!this.value(f,i.operands[p]) || f.values[i.operands[p]] != this.project.functions[i.callee].parameterTypes[p]) this.error(i.source,"Argumento de llamada incompatible");
     } else if (i.op == "backendEscape") {
       if ((i.callee) < 0 || i.callee >= this.project.functions.length || hasResult || resultType != "void") this.error(i.source,"Escape de backend sin generador");
-      else { const target = this.project.functions[i.callee]; if (this.project.types[target.returns] != "string" || target.parameterTypes.length != i.operands.length) this.error(i.source,"Firma de generador incompatible"); for (let at: number = 0; at < i.operands.length && at < target.parameterTypes.length; at = at+1) if (!this.value(f,i.operands[at]) || f.values[i.operands[at]] != target.parameterTypes[at]) this.error(i.source,"Argumento de generador incompatible"); }
+      else { if (this.project.types[this.project.functions[i.callee].returns] != "string" || this.project.functions[i.callee].parameterTypes.length != i.operands.length) this.error(i.source,"Firma de generador incompatible"); for (let at: number = 0; at < i.operands.length && at < this.project.functions[i.callee].parameterTypes.length; at = at+1) if (!this.value(f,i.operands[at]) || f.values[i.operands[at]] != this.project.functions[i.callee].parameterTypes[at]) this.error(i.source,"Argumento de generador incompatible"); }
     } else if (i.op == "runtimeCall") {
       if ((i.contract) < 0 || i.contract >= this.project.runtimeContracts.length) this.error(i.source,"Contrato runtime inexistente");
       else { const contract = this.project.runtimeContracts[i.contract]; if (contract.returns != i.typeId || contract.parameters.length != i.operands.length || hasResult != (resultType != "void") || contract.capability == "" || contract.effects.length == 0) this.error(i.source,"Contrato runtime incompatible");
@@ -126,23 +131,57 @@ export class IrVerifier {
     if (!["load","store","address","move","borrow","dropRemaining","iterator"].includes(i.op) && i.place != -1) this.error(i.source,"Place inesperado");
     if (i.op != "call" && i.op != "taskCreate" && i.op != "backendEscape" && i.op != "closure" && i.callee != -1) this.error(i.source,"Callee inesperado");
   }
+  indexInitialization(f: constRef<IrFunction>): void {
+    this.initializationNodes = []; this.placeNodes = []; this.physicalChildren = [];
+    let paths = new Map<string,number>();
+    for (let p: number = 0; p < f.places.length; p = p+1) this.physicalChildren.push(new IrInitializationNode(-1));
+    for (let p: number = 0; p < f.places.length; p = p+1) {
+      let key: string = ""; let parent: number = -1;
+      for (const part of this.placePaths[p].split(".")) {
+        if (key == "") key = part; else key = key+"."+part;
+        let node: number = paths.get(key).valueOr(-1);
+        if (node < 0) {
+          node = this.initializationNodes.length;
+          this.initializationNodes.push(new IrInitializationNode(parent)); paths.set(key,node);
+          if (parent >= 0) this.initializationNodes[parent].children.push(node);
+        }
+        parent = node;
+      }
+      this.placeNodes.push(parent); this.initializationNodes[parent].places.push(p);
+      const base: number = f.places[p].base;
+      if (base >= 0 && base < f.places.length) this.physicalChildren[base].children.push(p);
+    }
+  }
   updateInitialization(f: constRef<IrFunction>, i: constRef<IrInstruction>, initialized: boolean[]): boolean[] {
     if ((i.place) < 0 || i.place >= f.places.length) return initialized;
-    const projectionKey: string = irPlacePath(f,i.place,0);
-    if (i.op == "store") {
-      for (let p: number = 0; p < f.places.length; p = p+1) { const key: string = irPlacePath(f,p,0); if (key == projectionKey || key.startsWith(projectionKey+".")) initialized[p] = true; }
-      let parent: number = f.places[i.place].base;
-      while (parent >= 0) { let all: boolean = true; for (let p: number = 0; p < f.places.length; p = p+1) if (f.places[p].base == parent && !initialized[p]) all = false; if (all) initialized[parent] = true; parent = f.places[parent].base; }
+    const invalidates: boolean = i.op == "dropRemaining" || (i.op == "move" && this.project.typeDefinitions[f.places[i.place].typeId].resource);
+    if (i.op != "store" && !invalidates) return initialized;
+    // Logical aliases share a node. Traverse only the affected subtree.
+    const root: number = this.placeNodes[i.place]; let pending: number[] = [root];
+    while (pending.length > 0) {
+      const node: number = pending[pending.length-1]; pending.pop();
+      for (const place of this.initializationNodes[node].places) initialized[place] = !invalidates;
+      for (const child of this.initializationNodes[node].children) pending.push(child);
     }
-    if (i.op == "dropRemaining" || (i.op == "move" && this.project.typeDefinitions[f.places[i.place].typeId].resource)) for (let p: number = 0; p < f.places.length; p = p+1) { const key: string = irPlacePath(f,p,0); if (key == projectionKey || key.startsWith(projectionKey+".") || projectionKey.startsWith(key+".")) initialized[p] = false; }
+    if (i.op == "store") {
+      let parent: number = f.places[i.place].base;
+      while (parent >= 0) { let all: boolean = true; for (const child of this.physicalChildren[parent].children) if (!initialized[child]) all = false; if (all) initialized[parent] = true; parent = f.places[parent].base; }
+    }
+    if (invalidates) {
+      let parent: number = this.initializationNodes[root].parent;
+      while (parent >= 0) { for (const place of this.initializationNodes[parent].places) initialized[place] = false; parent = this.initializationNodes[parent].parent; }
+    }
     return initialized;
   }
   functionBody(f: constRef<IrFunction>): void {
-    this.definitions = []; this.positions = []; this.facts = [];
+    this.definitions = []; this.positions = []; this.facts = []; this.placePaths = [];
     if (!this.typeId(f.returns) || f.blocks.length == 0) { this.error(f.source,"Función sin entrada/tipo de retorno"); return; }
     for (const typeId of f.values) { if (!this.typeId(typeId) || this.project.types[typeId] == "void") this.error(f.source,"Tipo de valor inválido"); this.definitions.push(-1); this.positions.push(-1); }
     let parameter: number = 0;
+    // Places and value definitions stay immutable during verification. Resolve
+    // each path once instead of rescanning the IR at every store/fixed-point pass.
     for (let place: number = 0; place < f.places.length; place = place+1) {
+      this.placePaths.push(irPlacePath(f,place,0));
       const p = f.places[place];
       if (p.kind == "capture") { if ((p.field) < 0 || p.field >= f.captureTypes.length || f.captureTypes[p.field] != p.typeId) this.error(p.source,"Place de entorno incompatible"); }
       else if (p.kind != "local") {
@@ -160,6 +199,7 @@ export class IrVerifier {
       if (p.parameter) { if (parameter >= f.parameterTypes.length || f.parameterTypes[parameter] != p.typeId) this.error(p.source,"Place de parámetro incompatible"); parameter = parameter+1; }
     }
     if (parameter != f.parameterTypes.length) this.error(f.source,"Faltan places de parámetros");
+    this.indexInitialization(f);
     for (let b: number = 0; b < f.blocks.length; b = b+1) {
       this.facts.push(new IrFacts(f.blocks.length,f.places.length)); const block = f.blocks[b];
       for (let at: number = 0; at < block.instructions.length; at = at+1) {
@@ -172,6 +212,8 @@ export class IrVerifier {
       if (!["jump","branch","return","unreachable","suspend","cancel","trap"].includes(block.terminator) || block.targets.length != count) this.error(block.source,"Terminador inválido");
       for (const target of block.targets) if (target < 0 || target >= f.blocks.length) this.error(block.source,"Destino de bloque inexistente");
     }
+    // CFG targets are immutable; preserve predecessor order and deduplicate edges.
+    for (let b: number = 0; b < f.blocks.length; b = b+1) for (const target of f.blocks[b].targets) if (target >= 0 && target < f.blocks.length && !this.facts[target].predecessors.includes(b)) this.facts[target].predecessors.push(b);
     this.facts[0].reachable = true; let changed: boolean = true;
     while (changed) { changed = false; for (let b: number = 0; b < f.blocks.length; b = b+1) if (this.facts[b].reachable) for (const target of f.blocks[b].targets) if (target >= 0 && target < f.blocks.length && !this.facts[target].reachable) { this.facts[target].reachable = true; changed = true; } }
     // Greatest fixed point: must-dominance and must-initialization at block exit.
@@ -182,7 +224,7 @@ export class IrVerifier {
         let dom: boolean[] = []; let init: boolean[] = [];
         for (let d: number = 0; d < f.blocks.length; d = d+1) dom.push(b == 0 ? d == 0 : true);
         for (let p: number = 0; p < f.places.length; p = p+1) init.push(b == 0 ? irInitialPlace(f,p) : true);
-        if (b != 0) for (let predecessor: number = 0; predecessor < f.blocks.length; predecessor = predecessor+1) if (this.facts[predecessor].reachable && f.blocks[predecessor].targets.includes(b)) {
+        if (b != 0) for (const predecessor of this.facts[b].predecessors) if (this.facts[predecessor].reachable) {
           for (let d: number = 0; d < dom.length; d = d+1) dom[d] = dom[d] && this.facts[predecessor].dominators[d];
           for (let p: number = 0; p < init.length; p = p+1) init[p] = init[p] && this.facts[predecessor].initialized[p];
         }
@@ -195,7 +237,7 @@ export class IrVerifier {
     for (let b: number = 0; b < f.blocks.length; b = b+1) {
       const block = f.blocks[b]; let initialized: boolean[] = [];
       for (let p: number = 0; p < f.places.length; p = p+1) initialized.push(b == 0 ? irInitialPlace(f,p) : true);
-      if (b != 0) for (let predecessor: number = 0; predecessor < f.blocks.length; predecessor = predecessor+1) if (this.facts[predecessor].reachable && f.blocks[predecessor].targets.includes(b)) for (let p: number = 0; p < initialized.length; p = p+1) initialized[p] = initialized[p] && this.facts[predecessor].initialized[p];
+      if (b != 0) for (const predecessor of this.facts[b].predecessors) if (this.facts[predecessor].reachable) for (let p: number = 0; p < initialized.length; p = p+1) initialized[p] = initialized[p] && this.facts[predecessor].initialized[p];
       for (let at: number = 0; at < block.instructions.length; at = at+1) {
         const i = block.instructions[at]; this.instruction(f,i); for (const value of i.operands) this.use(f,value,b,at,i.source);
         if (i.place >= 0 && (i.place) < initialized.length) {
@@ -239,11 +281,11 @@ export class IrVerifier {
       const source = new IrSource("","","",-1,0,0);
       if (!this.typeId(d.interfaceType) || !this.typeId(d.concreteType) || !this.typeId(d.signature) || (d.callee) < 0 || d.callee >= this.project.functions.length) this.error(source,"Identidad de dispatch inválida");
       else {
-        const target = this.project.functions[d.callee]; const signature = this.project.typeDefinitions[d.signature];
-        if (!["interface","intersection"].includes(this.project.typeDefinitions[d.interfaceType].kind) || !this.project.typeDefinitions[d.interfaceType].variants.includes(d.concreteType) || signature.kind != "function" || target.parameterTypes.length != signature.arguments.length || (target.receiverType) < 0) this.error(source,"Contrato de dispatch inválido");
+        const signature = this.project.typeDefinitions[d.signature];
+        if (!["interface","intersection"].includes(this.project.typeDefinitions[d.interfaceType].kind) || !this.project.typeDefinitions[d.interfaceType].variants.includes(d.concreteType) || signature.kind != "function" || this.project.functions[d.callee].parameterTypes.length != signature.arguments.length || (this.project.functions[d.callee].receiverType) < 0) this.error(source,"Contrato de dispatch inválido");
         else {
-          if (this.project.typeDefinitions[target.receiverType].kind != "ref" || this.project.typeDefinitions[target.receiverType].arguments[0] != d.concreteType || !irAssignable(this.project,target.returns,signature.arguments[signature.arguments.length-1],0)) this.error(source,"Destino de dispatch incompatible");
-          for (let at: number = 1; at < target.parameterTypes.length; at = at+1) if (!irAssignable(this.project,signature.arguments[at-1],target.parameterTypes[at],0)) this.error(source,"Parámetro de dispatch incompatible");
+          if (this.project.typeDefinitions[this.project.functions[d.callee].receiverType].kind != "ref" || this.project.typeDefinitions[this.project.functions[d.callee].receiverType].arguments[0] != d.concreteType || !irAssignable(this.project,this.project.functions[d.callee].returns,signature.arguments[signature.arguments.length-1],0)) this.error(source,"Destino de dispatch incompatible");
+          for (let at: number = 1; at < this.project.functions[d.callee].parameterTypes.length; at = at+1) if (!irAssignable(this.project,signature.arguments[at-1],this.project.functions[d.callee].parameterTypes[at],0)) this.error(source,"Parámetro de dispatch incompatible");
         }
       }
     }

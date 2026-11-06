@@ -1,0 +1,45 @@
+{
+  "sourceCommit": "c75a1af04ba66700354aa5fd707e6bdcb65df33e",
+  "date": "2026-11-06",
+  "compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+  "node": "v24.22.1",
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.39",
+  "seedRoute": "TypeScript stage-0 module-loader -> C++ unity -> g++",
+  "seedFlags": {
+    "seed-O0": [
+      "-std=c++20",
+      "-O0",
+      "-pthread",
+      "-fno-exceptions"
+    ],
+    "seed-O1": [
+      "-std=c++20",
+      "-O1",
+      "-pthread",
+      "-fno-exceptions"
+    ]
+  },
+  "generation2Route": "native seed-O1 -> verified frontend IR -> reference C++ backend -> g++ -O1",
+  "analysisTimeoutSeconds": 300,
+  "buildTimeoutSeconds": 600,
+  "binaries": {
+    "seed-O0": {
+      "sha256": "a7335a5cdc97501b168dc9dc5ebf746635fe96029abcc3d11292c38c8eaec876",
+      "bytes": 3877368
+    },
+    "seed-O1": {
+      "sha256": "acce908875c877b9b2d776a41bb423a7aa0e982827e227dae7f2262440aaebcb",
+      "bytes": 2114200
+    },
+    "frontend-gen2": {
+      "sha256": "49066fcabcba33c2806e1fb3dc5ad30934698c665829ed20af88db7827a237ca",
+      "bytes": 6065944
+    },
+    "backend": {
+      "sha256": "f226e3801dd38966ff8d63e00f52ccbe9ca7b23259e6dae8733c37ed25164dac",
+      "bytes": 696400
+    }
+  },
+  "selfIrRepeatVerified": false,
+  "controlVerified": true
+}

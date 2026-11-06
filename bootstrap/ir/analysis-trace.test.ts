@@ -58,7 +58,8 @@ for(const [name,source,files,status] of [
       'binding.initialize','binding.collect.0','binding.imports.0','binding.exports.0',
       'binding.duplicates','binding.uses.0','binding.targets','checker.safety',
       'safety.construct','safety.memory','safety.captures','safety.effects',
-      'safety.provenance','safety.visibility','safety.flow','checker.comptime'])
+      'safety.provenance','safety.visibility','safety.flow','checker.comptime',
+      'lower.functions','lower.contracts','lower.borrows','lower.verify'])
       assert(completed.includes(phase),`missing ${phase}`);
   }
   if(name==='imports')assert(completed.includes('binding.collect.1'),'module indices identify progress');

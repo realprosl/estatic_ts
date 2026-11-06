@@ -1,0 +1,20 @@
+{
+  "sourceCommit": "c75a1af04ba66700354aa5fd707e6bdcb65df33e",
+  "sourceDirty": false,
+  "frontendSourceCommit": "c75a1af04ba66700354aa5fd707e6bdcb65df33e",
+  "frontend": "/workspace/scratch/083e25db7b25/estatic_ts/build/full-validation/seed/frontend-O1",
+  "frontendSha256": "acce908875c877b9b2d776a41bb423a7aa0e982827e227dae7f2262440aaebcb",
+  "entry": "bootstrap/ir/demo.ets",
+  "timeoutSeconds": 300,
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.39",
+  "timing": "monotonic stderr arrival times; includes pipe and scheduling latency",
+  "command": [
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=10s",
+    "300s",
+    "/workspace/scratch/083e25db7b25/estatic_ts/build/full-validation/seed/frontend-O1",
+    "bootstrap/ir/demo.ets",
+    "--trace"
+  ]
+}

@@ -35,11 +35,19 @@ export class NativeChecker {
     if (this.compatibilityDepth > 128) return false;
     this.compatibilityDepth = this.compatibilityDepth + 1; const result: boolean = this.compatibleInner(actual,expected); this.compatibilityDepth = this.compatibilityDepth - 1; return result;
   }
+  parameterSymbol(text: string): number {
+    // Parameter tokens encode a symbol ID. Ordinary types cannot match one;
+    // decode the token instead of formatting every symbol ID on each lookup.
+    if (text.charAt(0) != "@") return -1;
+    const sid: number = canonicalSymbol("#" + text.slice(1,text.length));
+    if (sid < 0 || sid >= this.binding.symbols.length || text != "@" + numberToString(sid)) return -1;
+    return sid;
+  }
   parameterBound(text: string): string {
-    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (text == "@" + numberToString(sid)) {
-      const s = this.binding.symbols[sid]; const n: AstNode = this.node(s.module,s.node);
-      if (n.get(AttributeKind.Constraint) != "") return this.annotation(s.module,s.node,n.get(AttributeKind.Constraint));
-    } return "";
+    const sid: number = this.parameterSymbol(text); if (sid < 0) return "";
+    const s = this.binding.symbols[sid]; const n: AstNode = this.node(s.module,s.node);
+    if (n.get(AttributeKind.Constraint) != "") return this.annotation(s.module,s.node,n.get(AttributeKind.Constraint));
+    return "";
   }
   compatibleInner(actual: string, expected: string): boolean {
     if (actual == "!never") return true;
@@ -489,10 +497,8 @@ export class NativeChecker {
     return resourceType(this.graph,this.binding,this.result,text,[]);
   }
   packToken(text: string): boolean {
-    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (text == "@" + numberToString(sid)) {
-      const symbol = this.binding.symbols[sid]; return symbol.kind == "TypeParameter" && this.node(symbol.module,symbol.node).get(AttributeKind.Variadic) == "true";
-    }
-    return false;
+    const sid: number = this.parameterSymbol(text); if (sid < 0) return false;
+    const symbol = this.binding.symbols[sid]; return symbol.kind == "TypeParameter" && this.node(symbol.module,symbol.node).get(AttributeKind.Variadic) == "true";
   }
   packActuals(module: number, args: number[], actual: string[], positions: number[], rest: number): string[] {
     let values: string[] = [];
@@ -665,6 +671,19 @@ export class NativeChecker {
     if (parts.length > 1) { for (const part of parts) { const found: number = this.memberSymbol(part,name); if (found >= 0) return found; } return -1; }
     const owner: number = this.nominalSymbol(receiver); if (owner < 0) return -1;
     const s: BindingSymbol = this.binding.symbols[owner];
+    // collect() records the declaration's own scope after creating it. Its
+    // symbols retain declaration order, so the first match is the same as in
+    // the global scan without visiting declarations from unrelated scopes.
+    if (s.module >= 0 && s.node >= 0) {
+      const scope: number = this.binding.files[s.module].nodeScopes[s.node];
+      if (scope >= 0 && this.binding.scopes[scope].module == s.module && this.binding.scopes[scope].node == s.node) {
+        for (const sid of this.binding.scopes[scope].symbols) {
+          const item: BindingSymbol = this.binding.symbols[sid];
+          if (item.name == name && item.module == s.module) return sid;
+        }
+        return -1;
+      }
+    }
     for (let i: number = 0; i < this.binding.symbols.length; i = i + 1) {
       const item: BindingSymbol = this.binding.symbols[i];
       if (item.name == name && item.module == s.module && item.scope >= 0 && this.binding.scopes[item.scope].node == s.node) return i;
@@ -1995,14 +2014,23 @@ export class NativeChecker {
     traceAnalysis(this.trace,"checker.types","BEGIN");
     for (const diagnostic of this.binding.diagnostics) this.result.diagnostics.push(diagnostic);
     if (!this.binding.success) { traceAnalysis(this.trace,"checker.types","END"); return this.result; }
+    traceAnalysis(this.trace,"checker.types.initialize","BEGIN");
     for (const s of this.binding.symbols) { this.result.symbolTypes.push(""); this.symbolStates.push(0); }
     for (const m of this.graph.modules) this.result.files.push(new TypedFile(m.cached.result.ast.nodes.length));
-    for (let m: number = 0; m < this.graph.modules.length; m = m + 1) this.statement(m,this.graph.modules[m].cached.result.ast.root,"",0);
+    traceAnalysis(this.trace,"checker.types.initialize","END");
+    for (let m: number = 0; m < this.graph.modules.length; m = m + 1) {
+      if (this.trace) traceAnalysis(true,"checker.types.module."+numberToString(m),"BEGIN");
+      this.statement(m,this.graph.modules[m].cached.result.ast.root,"",0);
+      if (this.trace) traceAnalysis(true,"checker.types.module."+numberToString(m),"END");
+    }
+    traceAnalysis(this.trace,"checker.types.arrows","BEGIN");
     // Arrows may be reached only as values, not statements. Validate their bodies too.
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.result.files[m].types.length; id = id + 1) {
       if (this.binding.files[m].nodeScopes[id] >= 0 && this.node(m,id).kind == NodeKind.ArrowFunctionExpression) this.statement(m,id,"",0);
       if (this.binding.files[m].nodeScopes[id] >= 0 && this.node(m,id).kind == NodeKind.Decorator) this.decorator(m,id);
     }
+    traceAnalysis(this.trace,"checker.types.arrows","END");
+    traceAnalysis(this.trace,"checker.types.signatures","BEGIN");
     // Safety checks also need the types of unused fields/parameters/receivers.
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
       const symbol: BindingSymbol = this.binding.symbols[sid];
@@ -2013,6 +2041,7 @@ export class NativeChecker {
       const sid: number = this.origin(item.symbol); const symbol: BindingSymbol = this.binding.symbols[sid];
       if (symbol.module >= 0 && (symbol.namespaceModule) < 0) this.symbolType(sid,symbol.module,symbol.node);
     }
+    traceAnalysis(this.trace,"checker.types.signatures","END");
     traceAnalysis(this.trace,"checker.types","END");
     if (this.result.diagnostics.length == 0) { traceAnalysis(this.trace,"checker.safety","BEGIN"); let checked: CheckResult = this.result; validateSafety(this.graph,this.binding,checked,this.trace); this.result = checked; traceAnalysis(this.trace,"checker.safety","END"); }
     if (this.result.diagnostics.length == 0) { if (this.trace) printError("frontend: comptime"); traceAnalysis(this.trace,"checker.comptime","BEGIN"); this.result = evaluateNativeComptime(this.graph,this.binding,this.result); traceAnalysis(this.trace,"checker.comptime","END"); }

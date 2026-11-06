@@ -322,3 +322,22 @@ test("native IR preserves concrete identities for structural interface dispatch"
 for(const mode of ["dispatch-callee","dispatch-missing","dispatch-signature","method-table"])test(`native IR verifier rejects ${mode}`,()=>{
  const ir=run(dispatchFixture,{},mode,1);assert(ir.diagnostics.some((d:any)=>d.code==="IR_INVALID"));
 });
+
+test('native IR keeps interned types distinct across generic substitutions and repeated calls',()=>{
+  const ir=run('class Box<T>{value:T;constructor(value:T){this.value=value;}}function id<T>(x:T):T{return x;}const a=new Box<number>(id(1));const b=new Box<string>(id("x"));print(a.value);print(b.value);print(id(2));');
+  assert.equal(new Set(ir.types).size,ir.types.length);
+  assert(ir.typeDefinitions.every((shape:any)=>shape.kind!=="pending"));
+  assert.deepEqual(execute(ir),['1','x','2']);
+});
+
+test('native IR retains caller argument tables across cross-module defaults and named calls',()=>{
+  const ir=run('import {f} from "./lib";print(f(second:4));print(f(10,2));',{
+    'lib.ets':'function helper(n:number):number{return n+1;}export function f(first:number=helper(2),second:number=3):number{return first+second;}'
+  });
+  assert.deepEqual(execute(ir),['7','12']);
+});
+
+test('native IR keeps local identities across shadowing and successive functions',()=>{
+  const ir=run('function first():number{let x=1;{let x=2;print(x);}return x;}function second():number{let x=3;return x;}print(first());print(second());');
+  assert.deepEqual(execute(ir),['2','1','3']);
+});
