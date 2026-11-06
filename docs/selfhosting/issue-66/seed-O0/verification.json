@@ -1,0 +1,40 @@
+{
+  "success": false,
+  "seedSourceCommit": "c75a1af04ba66700354aa5fd707e6bdcb65df33e",
+  "targetSourceCommit": "c75a1af04ba66700354aa5fd707e6bdcb65df33e",
+  "checkoutCommit": "c75a1af04ba66700354aa5fd707e6bdcb65df33e",
+  "checkoutDirty": false,
+  "frontendSha256": "a7335a5cdc97501b168dc9dc5ebf746635fe96029abcc3d11292c38c8eaec876",
+  "backendSha256": "f226e3801dd38966ff8d63e00f52ccbe9ca7b23259e6dae8733c37ed25164dac",
+  "compilerFlags": [
+    "-std=c++20",
+    "-O1",
+    "-pthread",
+    "-fno-exceptions"
+  ],
+  "analysisTimeoutSeconds": 300,
+  "buildTimeoutSeconds": 600,
+  "backend": "C++ reference backend; only the frontend is regenerated",
+  "steps": [
+    {
+      "label": "second-generation-ir",
+      "command": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "/workspace/scratch/083e25db7b25/estatic_ts/scripts/profile-analyze-project.py",
+        "--frontend",
+        "/workspace/scratch/083e25db7b25/estatic_ts/build/full-validation/seed/modules-demo",
+        "--frontend-source-commit",
+        "c75a1af04ba66700354aa5fd707e6bdcb65df33e",
+        "--entry",
+        "bootstrap/ir/demo.ets",
+        "--timeout",
+        "300",
+        "--output",
+        "/workspace/scratch/083e25db7b25/estatic_ts/build/full-validation/cycle/second-generation-ir"
+      ],
+      "exitCode": 124,
+      "seconds": 300.114518269
+    }
+  ],
+  "error": "Command '['/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3', PosixPath('/workspace/scratch/083e25db7b25/estatic_ts/scripts/profile-analyze-project.py'), '--frontend', PosixPath('/workspace/scratch/083e25db7b25/estatic_ts/build/full-validation/seed/modules-demo'), '--frontend-source-commit', 'c75a1af04ba66700354aa5fd707e6bdcb65df33e', '--entry', 'bootstrap/ir/demo.ets', '--timeout', '300', '--output', PosixPath('/workspace/scratch/083e25db7b25/estatic_ts/build/full-validation/cycle/second-generation-ir')]' returned non-zero exit status 124."
+}

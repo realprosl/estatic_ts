@@ -1,0 +1,27 @@
+{
+  "success": true,
+  "steps": [
+    {
+      "label": "seed-ir",
+      "exitCode": 0,
+      "seconds": 0.011507373999847914
+    },
+    {
+      "label": "gen2-ir",
+      "exitCode": 0,
+      "seconds": 0.015818981999927928
+    },
+    {
+      "label": "build-control",
+      "exitCode": 0,
+      "seconds": 1.5508474060000026
+    },
+    {
+      "label": "run-control",
+      "exitCode": 0,
+      "seconds": 0.004221674000064013
+    }
+  ],
+  "identicalIr": true,
+  "irSha256": "51ca8cf09f020d9ef93eaa394fe06633084af9160fff57ca450835860ab782a2"
+}
