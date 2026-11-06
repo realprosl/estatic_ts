@@ -1,0 +1,357 @@
+{
+  "exitCode": 0,
+  "timedOut": false,
+  "elapsedSeconds": 6.707846139999674,
+  "traceEvents": 118,
+  "completedPhases": [
+    {
+      "phase": "analyze.loader",
+      "startSeconds": 0.009550280999974348,
+      "endSeconds": 1.5256444520000514,
+      "durationSeconds": 1.516094171000077
+    },
+    {
+      "phase": "analyze.expansion.construct",
+      "startSeconds": 1.5335909860000356,
+      "endSeconds": 1.5569066289999682,
+      "durationSeconds": 0.023315642999932606
+    },
+    {
+      "phase": "analyze.binding.construct",
+      "startSeconds": 1.5646316980000847,
+      "endSeconds": 1.587861442999838,
+      "durationSeconds": 0.023229744999753166
+    },
+    {
+      "phase": "analyze.binding.initialize",
+      "startSeconds": 1.5879280760000256,
+      "endSeconds": 1.5920598659999996,
+      "durationSeconds": 0.004131789999973989
+    },
+    {
+      "phase": "analyze.binding.collect.0",
+      "startSeconds": 1.5920859879997806,
+      "endSeconds": 1.592339678999906,
+      "durationSeconds": 0.0002536910001254
+    },
+    {
+      "phase": "analyze.binding.collect.1",
+      "startSeconds": 1.5923497270000553,
+      "endSeconds": 1.592491064999649,
+      "durationSeconds": 0.00014133799959381577
+    },
+    {
+      "phase": "analyze.binding.collect.2",
+      "startSeconds": 1.5924981739999566,
+      "endSeconds": 1.6646594449998702,
+      "durationSeconds": 0.07216127099991354
+    },
+    {
+      "phase": "analyze.binding.imports.0",
+      "startSeconds": 1.6647113199996966,
+      "endSeconds": 1.6647195909999937,
+      "durationSeconds": 8.271000297099818e-06
+    },
+    {
+      "phase": "analyze.binding.exports.0",
+      "startSeconds": 1.6647687969998515,
+      "endSeconds": 1.6647936699996535,
+      "durationSeconds": 2.4872999802028062e-05
+    },
+    {
+      "phase": "analyze.binding.imports.1",
+      "startSeconds": 1.6648001589996966,
+      "endSeconds": 1.6648058000000674,
+      "durationSeconds": 5.6410003708151635e-06
+    },
+    {
+      "phase": "analyze.binding.exports.1",
+      "startSeconds": 1.6648128950000682,
+      "endSeconds": 1.664863600999979,
+      "durationSeconds": 5.0705999910860555e-05
+    },
+    {
+      "phase": "analyze.binding.imports.2",
+      "startSeconds": 1.66487112599998,
+      "endSeconds": 1.6744753729999502,
+      "durationSeconds": 0.0096042469999702
+    },
+    {
+      "phase": "analyze.binding.exports.2",
+      "startSeconds": 1.6745152619996588,
+      "endSeconds": 1.6831843019999724,
+      "durationSeconds": 0.008669040000313544
+    },
+    {
+      "phase": "analyze.binding.duplicates",
+      "startSeconds": 1.6832193810000717,
+      "endSeconds": 1.6835729629997331,
+      "durationSeconds": 0.0003535819996614009
+    },
+    {
+      "phase": "analyze.binding.uses.0",
+      "startSeconds": 1.683581650999713,
+      "endSeconds": 1.683673326999724,
+      "durationSeconds": 9.167600001092069e-05
+    },
+    {
+      "phase": "analyze.binding.uses.1",
+      "startSeconds": 1.683679428999767,
+      "endSeconds": 1.6837542190000931,
+      "durationSeconds": 7.479000032617478e-05
+    },
+    {
+      "phase": "analyze.binding.uses.2",
+      "startSeconds": 1.6837638749998405,
+      "endSeconds": 2.5346610369997506,
+      "durationSeconds": 0.8508971619999102
+    },
+    {
+      "phase": "analyze.binding.targets",
+      "startSeconds": 2.5347494979996554,
+      "endSeconds": 2.5367110699999103,
+      "durationSeconds": 0.0019615720002548187
+    },
+    {
+      "phase": "analyze.binding.run",
+      "startSeconds": 1.5879099879998648,
+      "endSeconds": 2.536723895999785,
+      "durationSeconds": 0.94881390799992
+    },
+    {
+      "phase": "analyze.expansion.bind",
+      "startSeconds": 1.5569694199998594,
+      "endSeconds": 2.547334516999854,
+      "durationSeconds": 0.9903650969999944
+    },
+    {
+      "phase": "analyze.expansion.search",
+      "startSeconds": 2.5473613290000685,
+      "endSeconds": 2.6115538700000798,
+      "durationSeconds": 0.06419254100001126
+    },
+    {
+      "phase": "analyze.expansion.order",
+      "startSeconds": 2.6117300169999,
+      "endSeconds": 2.6117649200000415,
+      "durationSeconds": 3.4903000141639495e-05
+    },
+    {
+      "phase": "analyze.expansion.run",
+      "startSeconds": 1.5569519890000265,
+      "endSeconds": 2.6278072899999643,
+      "durationSeconds": 1.0708553009999378
+    },
+    {
+      "phase": "analyze.binding.construct",
+      "startSeconds": 2.633196465999845,
+      "endSeconds": 2.652950185000009,
+      "durationSeconds": 0.019753719000163983
+    },
+    {
+      "phase": "analyze.binding.initialize",
+      "startSeconds": 2.652994875999866,
+      "endSeconds": 2.657204648000061,
+      "durationSeconds": 0.004209772000194789
+    },
+    {
+      "phase": "analyze.binding.collect.0",
+      "startSeconds": 2.6572151979999035,
+      "endSeconds": 2.6574177249999593,
+      "durationSeconds": 0.0002025270000558521
+    },
+    {
+      "phase": "analyze.binding.collect.1",
+      "startSeconds": 2.6574247779999496,
+      "endSeconds": 2.6575829439998415,
+      "durationSeconds": 0.00015816599989193492
+    },
+    {
+      "phase": "analyze.binding.collect.2",
+      "startSeconds": 2.657591354000033,
+      "endSeconds": 2.7336020479997387,
+      "durationSeconds": 0.07601069399970584
+    },
+    {
+      "phase": "analyze.binding.imports.0",
+      "startSeconds": 2.7336482050000086,
+      "endSeconds": 2.7336588269999993,
+      "durationSeconds": 1.0621999990689801e-05
+    },
+    {
+      "phase": "analyze.binding.exports.0",
+      "startSeconds": 2.733672585000022,
+      "endSeconds": 2.7336925629997495,
+      "durationSeconds": 1.9977999727416318e-05
+    },
+    {
+      "phase": "analyze.binding.imports.1",
+      "startSeconds": 2.7336993509998138,
+      "endSeconds": 2.733705869000005,
+      "durationSeconds": 6.518000191135798e-06
+    },
+    {
+      "phase": "analyze.binding.exports.1",
+      "startSeconds": 2.7337110379999103,
+      "endSeconds": 2.7337162989997523,
+      "durationSeconds": 5.2609998419939075e-06
+    },
+    {
+      "phase": "analyze.binding.imports.2",
+      "startSeconds": 2.7337214280000808,
+      "endSeconds": 2.7337263159997747,
+      "durationSeconds": 4.887999693892198e-06
+    },
+    {
+      "phase": "analyze.binding.exports.2",
+      "startSeconds": 2.7337320569999974,
+      "endSeconds": 2.7406394569998156,
+      "durationSeconds": 0.0069073999998181534
+    },
+    {
+      "phase": "analyze.binding.duplicates",
+      "startSeconds": 2.7406749130000208,
+      "endSeconds": 2.741063180999845,
+      "durationSeconds": 0.0003882679998241656
+    },
+    {
+      "phase": "analyze.binding.uses.0",
+      "startSeconds": 2.741076506999889,
+      "endSeconds": 2.741877046999889,
+      "durationSeconds": 0.0008005400000001828
+    },
+    {
+      "phase": "analyze.binding.uses.1",
+      "startSeconds": 2.741893149999669,
+      "endSeconds": 2.741901938999945,
+      "durationSeconds": 8.789000276010484e-06
+    },
+    {
+      "phase": "analyze.binding.uses.2",
+      "startSeconds": 2.7419073239998397,
+      "endSeconds": 3.4370493910000732,
+      "durationSeconds": 0.6951420670002335
+    },
+    {
+      "phase": "analyze.binding.targets",
+      "startSeconds": 3.437101182999868,
+      "endSeconds": 3.439391787999739,
+      "durationSeconds": 0.002290604999870993
+    },
+    {
+      "phase": "analyze.binding.run",
+      "startSeconds": 2.6529855769999813,
+      "endSeconds": 3.4394061279999733,
+      "durationSeconds": 0.786420550999992
+    },
+    {
+      "phase": "analyze.binding.final",
+      "startSeconds": 2.6278465669997786,
+      "endSeconds": 3.4528722619998007,
+      "durationSeconds": 0.8250256950000221
+    },
+    {
+      "phase": "analyze.checker.construct",
+      "startSeconds": 3.4636510199998156,
+      "endSeconds": 3.4883600039997873,
+      "durationSeconds": 0.02470898399997168
+    },
+    {
+      "phase": "analyze.checker.types",
+      "startSeconds": 3.4884148419996563,
+      "endSeconds": 3.704004731999703,
+      "durationSeconds": 0.21558989000004658
+    },
+    {
+      "phase": "analyze.safety.construct",
+      "startSeconds": 3.718456149999838,
+      "endSeconds": 3.8366566929998953,
+      "durationSeconds": 0.11820054300005722
+    },
+    {
+      "phase": "analyze.safety.memory",
+      "startSeconds": 3.8367121349997433,
+      "endSeconds": 3.8587559029997465,
+      "durationSeconds": 0.022043768000003183
+    },
+    {
+      "phase": "analyze.safety.captures",
+      "startSeconds": 3.8588086469999325,
+      "endSeconds": 3.8654130340000847,
+      "durationSeconds": 0.006604387000152201
+    },
+    {
+      "phase": "analyze.safety.effects",
+      "startSeconds": 3.8654619769999954,
+      "endSeconds": 4.339266137999857,
+      "durationSeconds": 0.4738041609998618
+    },
+    {
+      "phase": "analyze.safety.provenance",
+      "startSeconds": 4.339319594999779,
+      "endSeconds": 4.501682242999777,
+      "durationSeconds": 0.16236264799999844
+    },
+    {
+      "phase": "analyze.safety.visibility",
+      "startSeconds": 4.501733552999667,
+      "endSeconds": 4.5040660219997335,
+      "durationSeconds": 0.0023324690000663395
+    },
+    {
+      "phase": "analyze.safety.flow",
+      "startSeconds": 4.504089762999683,
+      "endSeconds": 4.776850600999751,
+      "durationSeconds": 0.27276083800006745
+    },
+    {
+      "phase": "analyze.checker.safety",
+      "startSeconds": 3.7040720689997215,
+      "endSeconds": 4.819557847999931,
+      "durationSeconds": 1.1154857790002097
+    },
+    {
+      "phase": "analyze.checker.comptime",
+      "startSeconds": 4.819613489999938,
+      "endSeconds": 4.892850783000085,
+      "durationSeconds": 0.07323729300014747
+    },
+    {
+      "phase": "analyze.checker.run",
+      "startSeconds": 3.4884043349998137,
+      "endSeconds": 4.912021564000042,
+      "durationSeconds": 1.4236172290002287
+    },
+    {
+      "phase": "analyze.checker.records.construct",
+      "startSeconds": 4.922246607000034,
+      "endSeconds": 4.950924303999727,
+      "durationSeconds": 0.02867769699969358
+    },
+    {
+      "phase": "analyze.checker.records.build",
+      "startSeconds": 4.95097359600004,
+      "endSeconds": 4.961387750000085,
+      "durationSeconds": 0.010414154000045528
+    },
+    {
+      "phase": "analyze.project",
+      "startSeconds": 1.52570796100008,
+      "endSeconds": 5.066399191000073,
+      "durationSeconds": 3.540691229999993
+    },
+    {
+      "phase": "analyze.lower",
+      "startSeconds": 5.0664508390000265,
+      "endSeconds": 6.284727337999811,
+      "durationSeconds": 1.218276498999785
+    },
+    {
+      "phase": "analyze.format",
+      "startSeconds": 6.284821475999706,
+      "endSeconds": 6.687862731999758,
+      "durationSeconds": 0.40304125600005136
+    }
+  ],
+  "openPhases": []
+}

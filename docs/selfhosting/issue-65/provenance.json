@@ -1,0 +1,19 @@
+{
+  "compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+  "flags": [
+    "-std=c++20",
+    "-O0",
+    "-pthread",
+    "-fno-exceptions"
+  ],
+  "irIdentical": true,
+  "irSuccess": true,
+  "irSha256": "b3a91123d4fa7b0701fa0340e8bef54c94491a4ce2b0dbd7e04a578e2ede5ad8",
+  "irBytes": 288678,
+  "binaries": {
+    "binder-base": "f8fd125d1751ca1684c3594e9aaca57d9729f1b48c9a0b9cd3a189f86a4da5ca",
+    "binder-head": "7e31d678f9b3e2a91d7c7bfd1ad59a49c86fa56589c179f4a38c5ab54ca674e3",
+    "frontend-base-local": "b9741ddf9def4b5b167883957ffff678e77604288bcf43f4874c28690bcb6105",
+    "frontend": "96184a71de65cb88c8fb6ea8f78217fc5bfa030c4ca4220c76ba78b53e5a7105"
+  }
+}

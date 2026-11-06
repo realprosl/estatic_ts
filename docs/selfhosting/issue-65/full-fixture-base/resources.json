@@ -1,0 +1,7 @@
+{
+  "userSeconds": 6.643437,
+  "systemSeconds": 0.062243,
+  "maxRssKiB": 105828,
+  "cpuPercent": 99.96770736903522,
+  "scope": "timeout process and reaped frontend child; Linux wait4"
+}

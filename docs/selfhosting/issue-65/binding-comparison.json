@@ -1,0 +1,56 @@
+{
+  "binaries": {
+    "baseline": {
+      "path": "/workspace/scratch/7a1d257a6397/estatic_ts/build/issue-65/binder-base",
+      "sha256": "f8fd125d1751ca1684c3594e9aaca57d9729f1b48c9a0b9cd3a189f86a4da5ca"
+    },
+    "candidate": {
+      "path": "/workspace/scratch/7a1d257a6397/estatic_ts/build/issue-65/binder-head",
+      "sha256": "7e31d678f9b3e2a91d7c7bfd1ad59a49c86fa56589c179f4a38c5ab54ca674e3"
+    }
+  },
+  "cases": [
+    {
+      "name": "chains",
+      "exitCode": 0,
+      "identical": true,
+      "references": 10,
+      "diagnostics": 0
+    },
+    {
+      "name": "generic",
+      "exitCode": 0,
+      "identical": true,
+      "references": 8,
+      "diagnostics": 0
+    },
+    {
+      "name": "missing",
+      "exitCode": 1,
+      "identical": true,
+      "references": 4,
+      "diagnostics": 1
+    },
+    {
+      "name": "type-only",
+      "exitCode": 1,
+      "identical": true,
+      "references": 3,
+      "diagnostics": 1
+    },
+    {
+      "name": "queries",
+      "exitCode": 0,
+      "identical": true,
+      "references": 9,
+      "diagnostics": 0
+    },
+    {
+      "name": "many-members",
+      "exitCode": 0,
+      "identical": true,
+      "references": 1024,
+      "diagnostics": 0
+    }
+  ]
+}
