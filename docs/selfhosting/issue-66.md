@@ -1,3 +1,5 @@
+> **Actualización:** las fuentes y el estado posterior están en [issue-66-progress-20261106.md](issue-66-progress-20261106.md). La última verificación quedó sin resultado recuperado por desconexión del entorno; la PR continúa en borrador. El informe siguiente conserva la prueba histórica anterior.
+
 # #66: prueba completa de segunda generación
 
 Validación local del commit `c75a1af04ba66700354aa5fd707e6bdcb65df33e`,
