@@ -12,9 +12,15 @@ export class IrFacts {
   reachable: boolean; predecessors: number[]; dominators: boolean[]; initialized: boolean[];
   constructor(blocks: number, places: number) { this.reachable = false; this.predecessors = []; this.dominators = []; this.initialized = []; for (let i: number = 0; i < blocks; i = i+1) this.dominators.push(true); for (let i: number = 0; i < places; i = i+1) this.initialized.push(true); }
 }
+// Logical paths may have several place IDs, including checked views.
+export class IrInitializationNode {
+  parent: number; children: number[]; places: number[];
+  constructor(parent: number) { this.parent = parent; this.children = []; this.places = []; }
+}
 export class IrVerifier {
   project: IrProject; issues: IrIssue[]; definitions: number[]; positions: number[]; facts: IrFacts[]; placePaths: string[];
-  constructor(project: IrProject) { this.project = project; this.issues = []; this.definitions = []; this.positions = []; this.facts = []; this.placePaths = []; }
+  initializationNodes: IrInitializationNode[]; placeNodes: number[]; physicalChildren: IrInitializationNode[];
+  constructor(project: IrProject) { this.project = project; this.issues = []; this.definitions = []; this.positions = []; this.facts = []; this.placePaths = []; this.initializationNodes = []; this.placeNodes = []; this.physicalChildren = []; }
   error(source: IrSource, message: string): void { this.issues.push(new IrIssue("IR_INVALID",message,source)); }
   nativeBinding(f: constRef<IrFunction>): boolean {
     for (const annotation of this.project.annotations) {
@@ -125,15 +131,46 @@ export class IrVerifier {
     if (!["load","store","address","move","borrow","dropRemaining","iterator"].includes(i.op) && i.place != -1) this.error(i.source,"Place inesperado");
     if (i.op != "call" && i.op != "taskCreate" && i.op != "backendEscape" && i.op != "closure" && i.callee != -1) this.error(i.source,"Callee inesperado");
   }
+  indexInitialization(f: constRef<IrFunction>): void {
+    this.initializationNodes = []; this.placeNodes = []; this.physicalChildren = [];
+    let paths = new Map<string,number>();
+    for (let p: number = 0; p < f.places.length; p = p+1) this.physicalChildren.push(new IrInitializationNode(-1));
+    for (let p: number = 0; p < f.places.length; p = p+1) {
+      let key: string = ""; let parent: number = -1;
+      for (const part of this.placePaths[p].split(".")) {
+        if (key == "") key = part; else key = key+"."+part;
+        let node: number = paths.get(key).valueOr(-1);
+        if (node < 0) {
+          node = this.initializationNodes.length;
+          this.initializationNodes.push(new IrInitializationNode(parent)); paths.set(key,node);
+          if (parent >= 0) this.initializationNodes[parent].children.push(node);
+        }
+        parent = node;
+      }
+      this.placeNodes.push(parent); this.initializationNodes[parent].places.push(p);
+      const base: number = f.places[p].base;
+      if (base >= 0 && base < f.places.length) this.physicalChildren[base].children.push(p);
+    }
+  }
   updateInitialization(f: constRef<IrFunction>, i: constRef<IrInstruction>, initialized: boolean[]): boolean[] {
     if ((i.place) < 0 || i.place >= f.places.length) return initialized;
-    const projectionKey: string = this.placePaths[i.place];
-    if (i.op == "store") {
-      for (let p: number = 0; p < f.places.length; p = p+1) { const key: string = this.placePaths[p]; if (key == projectionKey || key.startsWith(projectionKey+".")) initialized[p] = true; }
-      let parent: number = f.places[i.place].base;
-      while (parent >= 0) { let all: boolean = true; for (let p: number = 0; p < f.places.length; p = p+1) if (f.places[p].base == parent && !initialized[p]) all = false; if (all) initialized[parent] = true; parent = f.places[parent].base; }
+    const invalidates: boolean = i.op == "dropRemaining" || (i.op == "move" && this.project.typeDefinitions[f.places[i.place].typeId].resource);
+    if (i.op != "store" && !invalidates) return initialized;
+    // Logical aliases share a node. Traverse only the affected subtree.
+    const root: number = this.placeNodes[i.place]; let pending: number[] = [root];
+    while (pending.length > 0) {
+      const node: number = pending[pending.length-1]; pending.pop();
+      for (const place of this.initializationNodes[node].places) initialized[place] = !invalidates;
+      for (const child of this.initializationNodes[node].children) pending.push(child);
     }
-    if (i.op == "dropRemaining" || (i.op == "move" && this.project.typeDefinitions[f.places[i.place].typeId].resource)) for (let p: number = 0; p < f.places.length; p = p+1) { const key: string = this.placePaths[p]; if (key == projectionKey || key.startsWith(projectionKey+".") || projectionKey.startsWith(key+".")) initialized[p] = false; }
+    if (i.op == "store") {
+      let parent: number = f.places[i.place].base;
+      while (parent >= 0) { let all: boolean = true; for (const child of this.physicalChildren[parent].children) if (!initialized[child]) all = false; if (all) initialized[parent] = true; parent = f.places[parent].base; }
+    }
+    if (invalidates) {
+      let parent: number = this.initializationNodes[root].parent;
+      while (parent >= 0) { for (const place of this.initializationNodes[parent].places) initialized[place] = false; parent = this.initializationNodes[parent].parent; }
+    }
     return initialized;
   }
   functionBody(f: constRef<IrFunction>): void {
@@ -162,6 +199,7 @@ export class IrVerifier {
       if (p.parameter) { if (parameter >= f.parameterTypes.length || f.parameterTypes[parameter] != p.typeId) this.error(p.source,"Place de parámetro incompatible"); parameter = parameter+1; }
     }
     if (parameter != f.parameterTypes.length) this.error(f.source,"Faltan places de parámetros");
+    this.indexInitialization(f);
     for (let b: number = 0; b < f.blocks.length; b = b+1) {
       this.facts.push(new IrFacts(f.blocks.length,f.places.length)); const block = f.blocks[b];
       for (let at: number = 0; at < block.instructions.length; at = at+1) {
