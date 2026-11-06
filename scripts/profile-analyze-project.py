@@ -103,7 +103,8 @@ def main():
     resources = dict(userSeconds=usage.ru_utime, systemSeconds=usage.ru_stime,
                      maxRssKiB=usage.ru_maxrss,
                      cpuPercent=100 * (usage.ru_utime + usage.ru_stime) / duration,
-                     scope="timeout process and reaped frontend child; Linux wait4")
+                     scope="timeout process and reaped frontend child; Linux wait4",
+                     frontendUsageComplete=code >= 0)
     (output / "resources.json").write_text(json.dumps(resources, indent=2) + "\n")
     summary = dict(exitCode=code, timedOut=code == 124, killed=code in (137, -9),
                    timeoutMayHaveKilled=code in (137, -9) and duration >= args.timeout,

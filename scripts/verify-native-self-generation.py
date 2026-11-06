@@ -23,7 +23,11 @@ def main():
     parser.add_argument('--compiler', required=True, type=Path)
     parser.add_argument('--native-root', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--analysis-timeout', default=300, type=int)
+    parser.add_argument('--build-timeout', default=600, type=int)
     args = parser.parse_args()
+    if args.analysis_timeout <= 0 or args.build_timeout <= 0:
+        parser.error('timeouts must be positive')
     root = Path(__file__).resolve().parents[1]
     frontend = args.frontend.resolve(strict=True)
     compiler = args.compiler.resolve(strict=True)
@@ -36,13 +40,15 @@ def main():
                   checkoutDirty=bool(subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=no'], cwd=root)),
                   frontendSha256=digest(frontend), backendSha256=digest(compiler),
                   compilerFlags=['-std=c++20', '-O1', '-pthread', '-fno-exceptions'],
-                  analysisTimeoutSeconds=300, buildTimeoutSeconds=600,
+                  analysisTimeoutSeconds=args.analysis_timeout, buildTimeoutSeconds=args.build_timeout,
                   backend='C++ reference backend; only the frontend is regenerated', steps=[])
 
     def save():
         (output / 'verification.json').write_text(json.dumps(report, indent=2) + '\n')
 
-    def run(label, command, timeout=600):
+    def run(label, command, timeout=None):
+        if timeout is None:
+            timeout = args.build_timeout
         step = dict(label=label, command=[str(arg) for arg in command])
         report['steps'].append(step)
         save()
@@ -61,7 +67,8 @@ def main():
     def profile(label, binary, entry, source_commit):
         run(label, [sys.executable, root / 'scripts/profile-analyze-project.py',
                     '--frontend', binary, '--frontend-source-commit', source_commit,
-                    '--entry', entry, '--output', output / label], timeout=320)
+                    '--entry', entry, '--timeout', str(args.analysis_timeout),
+                    '--output', output / label], timeout=args.analysis_timeout + 20)
         ir = output / label / 'ir.stdout'
         with ir.open() as stream:
             project = json.load(stream)

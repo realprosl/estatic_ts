@@ -8,6 +8,7 @@ public:
  Project p;Result result;std::set<int> cppGenerators;std::map<int,int> metadataPlaces,collectionQueryPlaces;
  void metadataLoads(const Function&);
  void collectionQueryLoads(const Function&);
+ std::set<int> temporaryStores;void singleUseStores(const Function&);
  void annotations();
  S cppEscape(const Function&,const Instruction&);
  explicit Generator(const J& j):p(j){result.headers={"runtime/ets_runtime.hpp","runtime/ets_ir.hpp"};}
@@ -132,6 +133,17 @@ void Generator::metadataLoads(const Function& f){
   metadataPlaces[load.result]=load.place;
  }
 }
+void Generator::singleUseStores(const Function& f){
+ temporaryStores.clear();V<int> uses(f.values.size(),0);
+ for(const auto& q:f.places)if(q.kind=="index"&&q.index>=0)uses.at(q.index)++;
+ for(const auto& b:f.blocks){if(b.value>=0)uses.at(b.value)++;for(const auto& i:b.instructions)for(int v:i.operands)uses.at(v)++;}
+ for(const auto& b:f.blocks){std::set<int> produced;for(const auto& i:b.instructions){
+  if(i.op=="store"&&i.operands.size()==1){int v=i.operands[0];const auto& s=shape(f.values.at(v));
+   if(uses.at(v)==1&&produced.contains(v)&&std::find(f.frameValues.begin(),f.frameValues.end(),v)==f.frameValues.end()&&!s.resource&&in(s.kind,{"record","array","fixedArray","tuple","Map","Set"}))temporaryStores.insert(v);
+  }
+  if(i.result>=0)produced.insert(i.result);
+ }}
+}
 void Generator::collectionQueryLoads(const Function& f){
  collectionQueryPlaces.clear();V<int> uses(f.values.size(),0);
  for(const auto& q:f.places)if(q.kind=="index"&&q.index>=0)uses.at(q.index)++;
@@ -159,7 +171,7 @@ S Generator::instruction(const Function& f,const Instruction& i,int block){
  else if(op=="load"){const auto& p=f.places.at(i.place);v=p.kind=="index"&&this->p.types.at(f.places.at(p.base).typeId)=="string"?"ets::string_charAt("+place(f,p.base)+".get(),v"+n(p.index)+".get())":place(f,i.place)+".get()";}
  else if(op=="move")v=place(f,i.place)+".take()";
  else if(op=="borrow"||op=="address")v="std::addressof("+place(f,i.place)+".get())";
- else if(op=="store")return place(f,i.place)+".set("+a(0)+");";
+ else if(op=="store")return place(f,i.place)+".set("+(temporaryStores.contains(i.operands.at(0))?"v"+n(i.operands[0])+".take()":a(0))+");";
  else if(op=="dropRemaining")return place(f,i.place)+".drop();";
  else if(op=="dropValue")return "v"+n(i.operands.at(0))+".drop();";
  else if(op=="endBorrow")return "// end statically verified lease "+n(i.lease);
@@ -217,7 +229,7 @@ S Generator::instruction(const Function& f,const Instruction& i,int block){
  return i.result>=0?"v"+n(i.result)+".set("+v+");":v+";";
 }
 S Generator::signature(const Function& f,int id){S ret=f.asynchronous&&shape(f.returns).kind!="Promise"?"ets::Task<"+type(f.bodyReturns)+">":type(f.returns);if(f.asynchronous){result.headers.insert("runtime/ets_async.hpp");result.libuv=true;}V<S> args;for(int k=0;k<int(f.captureTypes.size());k++)args.push_back(type(f.captureTypes[k])+(f.captureModes.at(k)=="reference"?"*":"")+" c"+n(k));for(int k=0;k<int(f.parameterTypes.size());k++)args.push_back(type(f.parameterTypes[k])+" a"+n(k));return ret+" ir_f"+n(id)+"("+join(args)+")";}
-S Generator::body(const Function& f,int id){metadataLoads(f);collectionQueryLoads(f);V<S> out;int parameter=0;
+S Generator::body(const Function& f,int id){metadataLoads(f);collectionQueryLoads(f);singleUseStores(f);V<S> out;int parameter=0;
  for(int k=0;k<int(f.places.size());k++){auto& p=f.places[k];if(p.kind=="local"&&p.global<0)out.push_back("ets::ir::Slot<"+type(p.typeId)+"> p"+n(k)+";");}
  for(int k=0;k<int(f.values.size());k++)out.push_back("ets::ir::Slot<"+type(f.values[k])+"> v"+n(k)+";");
  for(int k=0;k<int(f.blocks.size());k++){auto& b=f.blocks[k];if(b.terminator=="suspend"){int t=shape(f.values.at(b.value)).arguments.at(0);if(p.types.at(t)!="void")out.push_back("ets::ir::Slot<"+type(t)+"> await"+n(k)+";");}}

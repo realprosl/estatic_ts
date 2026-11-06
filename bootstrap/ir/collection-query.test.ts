@@ -83,3 +83,41 @@ test('collection snapshots survive extra consumers, writes and intervening calls
     }
   }
 });
+
+test('temporary aggregate stores preserve independent snapshots and repeated loops',()=>{
+  const p=project(`
+    class State{xs:number[];constructor(xs:number[]){this.xs=xs;}}
+    const input=[1,2];let a=new State(input);let b=a;
+    a.xs.push(3);print(b.xs.length);print(a.xs.length);print(input.length);
+    let total=0;for(let i=0;i<3;i+=1){const copy=b;total+=copy.xs.length;}print(total);
+  `);
+  for(const cpp of generate(p))assert.deepEqual(execute(cpp),['2','3','2','6']);
+});
+
+test('temporary stores retain shared values and values defined in another block',()=>{
+  const original=project('function f():void{const xs=[4,5];print(xs[0]);}f();');
+  for(const mode of ['single','shared','cross-block'] as const){
+    const p=structuredClone(original);let value=-1;
+    for(const f of p.functions){
+      for(const b of [...f.blocks]){
+        const at=b.instructions.findIndex(i=>i.op==='store'&&i.operands.length===1&&
+          p.typeDefinitions[f.values[i.operands[0]]]?.kind==='array'&&
+          b.instructions.some(previous=>previous.result===i.operands[0]));
+        if(at<0)continue;
+        const store=b.instructions[at];value=store.operands[0];
+        if(mode==='shared')b.instructions.splice(at+1,0,structuredClone(store));
+        if(mode==='cross-block'){
+          const next={...structuredClone(b),instructions:b.instructions.splice(at)};
+          b.terminator='jump';b.targets=[f.blocks.length];b.value=-1;f.blocks.push(next);
+        }
+        break;
+      }
+      if(value>=0)break;
+    }
+    assert(value>=0);
+    for(const cpp of generate(p)){
+      assert(cpp.includes(`.set(v${value}.${mode==='single'?'take':'get'}());`),mode);
+      assert.deepEqual(execute(cpp),['4']);
+    }
+  }
+});

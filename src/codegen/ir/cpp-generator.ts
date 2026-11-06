@@ -172,6 +172,25 @@ export class IrCppGenerator {
   // call can intervene, so a container snapshot has no observable use.
   metadataPlaces = new Map<number,number>();
   collectionQueryPlaces = new Map<number,number>();
+  temporaryStores = new Set<number>();
+  singleUseStores(f:IrFunction):Set<number> {
+    const uses=f.values.map(()=>0), stores=new Set<number>();
+    for(const p of f.places)if(p.kind==="index"&&p.index>=0)uses[p.index]++;
+    for(const b of f.blocks){if(b.value>=0)uses[b.value]++;for(const i of b.instructions)for(const v of i.operands)uses[v]++;}
+    for(const b of f.blocks){
+      const produced=new Set<number>();
+      for(const i of b.instructions){
+        if(i.op==="store"&&i.operands.length===1){
+          const v=i.operands[0], shape=this.shape(f.values[v]);
+          if(uses[v]===1&&produced.has(v)&&!f.frameValues.includes(v)&&!shape.resource&&
+            ["record","array","fixedArray","tuple","Map","Set"].includes(shape.kind))stores.add(v);
+        }
+        if(i.result>=0)produced.add(i.result);
+      }
+    }
+    return stores;
+  }
+
   collectionQueryLoads(f:IrFunction):Map<number,number> {
     const uses=f.values.map(()=>0), places=new Map<number,number>();
     for(const p of f.places)if(p.kind==="index"&&p.index>=0)uses[p.index]++;
@@ -231,7 +250,7 @@ export class IrCppGenerator {
       }
       case "move": value=`${this.place(f,i.place)}.take()`;break;
       case "borrow": case "address": value=`std::addressof(${this.place(f,i.place)}.get())`;break;
-      case "store": return `${this.place(f,i.place)}.set(${a(0)});`;
+      case "store": return `${this.place(f,i.place)}.set(${this.temporaryStores.has(i.operands[0])?`v${i.operands[0]}.take()`:a(0)});`;
       case "dropRemaining": return `${this.place(f,i.place)}.drop();`;
       case "dropValue": return `v${i.operands[0]}.drop();`;
       case "endBorrow": return `// end lease ${i.lease}; statically verified, no runtime ownership`;
@@ -376,6 +395,7 @@ export class IrCppGenerator {
     }
     this.metadataPlaces=this.metadataLoads(f);
     this.collectionQueryPlaces=this.collectionQueryLoads(f);
+    this.temporaryStores=this.singleUseStores(f);
     const locals=f.places.flatMap((p,k)=>p.kind==="local"&&p.global<0?[`ets::ir::Slot<${this.type(p.typeId)}> p${k};`]:[]);
     const values=f.values.map((t,k)=>`ets::ir::Slot<${this.type(t)}> v${k};`);
     const awaited=f.blocks.flatMap((b,k)=>b.terminator==="suspend"&&this.project.types[this.shape(f.values[b.value]).arguments[0]]!=="void"?[`ets::ir::Slot<${this.type(this.shape(f.values[b.value]).arguments[0])}> await${k};`]:[]);
