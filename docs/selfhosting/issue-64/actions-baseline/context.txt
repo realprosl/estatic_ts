@@ -1,0 +1,3 @@
+commit=fe555ada9f05aaa82d3acd60fdb12aa102f50909
+compiler=/home/runner/work/estatic_ts/estatic_ts/build/analysis-trace/frontend
+entry=bootstrap/ir/demo.ets
