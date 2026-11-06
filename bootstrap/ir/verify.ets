@@ -9,8 +9,8 @@ import { irPlacePath, irInitialPlace } from "./verify-memory";
 import { irAssignable, irElement, verifyShapeInstruction } from "./verify-shapes";
 
 export class IrFacts {
-  reachable: boolean; dominators: boolean[]; initialized: boolean[];
-  constructor(blocks: number, places: number) { this.reachable = false; this.dominators = []; this.initialized = []; for (let i: number = 0; i < blocks; i = i+1) this.dominators.push(true); for (let i: number = 0; i < places; i = i+1) this.initialized.push(true); }
+  reachable: boolean; predecessors: number[]; dominators: boolean[]; initialized: boolean[];
+  constructor(blocks: number, places: number) { this.reachable = false; this.predecessors = []; this.dominators = []; this.initialized = []; for (let i: number = 0; i < blocks; i = i+1) this.dominators.push(true); for (let i: number = 0; i < places; i = i+1) this.initialized.push(true); }
 }
 export class IrVerifier {
   project: IrProject; issues: IrIssue[]; definitions: number[]; positions: number[]; facts: IrFacts[]; placePaths: string[];
@@ -174,6 +174,8 @@ export class IrVerifier {
       if (!["jump","branch","return","unreachable","suspend","cancel","trap"].includes(block.terminator) || block.targets.length != count) this.error(block.source,"Terminador inválido");
       for (const target of block.targets) if (target < 0 || target >= f.blocks.length) this.error(block.source,"Destino de bloque inexistente");
     }
+    // CFG targets are immutable; preserve predecessor order and deduplicate edges.
+    for (let b: number = 0; b < f.blocks.length; b = b+1) for (const target of f.blocks[b].targets) if (target >= 0 && target < f.blocks.length && !this.facts[target].predecessors.includes(b)) this.facts[target].predecessors.push(b);
     this.facts[0].reachable = true; let changed: boolean = true;
     while (changed) { changed = false; for (let b: number = 0; b < f.blocks.length; b = b+1) if (this.facts[b].reachable) for (const target of f.blocks[b].targets) if (target >= 0 && target < f.blocks.length && !this.facts[target].reachable) { this.facts[target].reachable = true; changed = true; } }
     // Greatest fixed point: must-dominance and must-initialization at block exit.
@@ -184,7 +186,7 @@ export class IrVerifier {
         let dom: boolean[] = []; let init: boolean[] = [];
         for (let d: number = 0; d < f.blocks.length; d = d+1) dom.push(b == 0 ? d == 0 : true);
         for (let p: number = 0; p < f.places.length; p = p+1) init.push(b == 0 ? irInitialPlace(f,p) : true);
-        if (b != 0) for (let predecessor: number = 0; predecessor < f.blocks.length; predecessor = predecessor+1) if (this.facts[predecessor].reachable && f.blocks[predecessor].targets.includes(b)) {
+        if (b != 0) for (const predecessor of this.facts[b].predecessors) if (this.facts[predecessor].reachable) {
           for (let d: number = 0; d < dom.length; d = d+1) dom[d] = dom[d] && this.facts[predecessor].dominators[d];
           for (let p: number = 0; p < init.length; p = p+1) init[p] = init[p] && this.facts[predecessor].initialized[p];
         }
@@ -197,7 +199,7 @@ export class IrVerifier {
     for (let b: number = 0; b < f.blocks.length; b = b+1) {
       const block = f.blocks[b]; let initialized: boolean[] = [];
       for (let p: number = 0; p < f.places.length; p = p+1) initialized.push(b == 0 ? irInitialPlace(f,p) : true);
-      if (b != 0) for (let predecessor: number = 0; predecessor < f.blocks.length; predecessor = predecessor+1) if (this.facts[predecessor].reachable && f.blocks[predecessor].targets.includes(b)) for (let p: number = 0; p < initialized.length; p = p+1) initialized[p] = initialized[p] && this.facts[predecessor].initialized[p];
+      if (b != 0) for (const predecessor of this.facts[b].predecessors) if (this.facts[predecessor].reachable) for (let p: number = 0; p < initialized.length; p = p+1) initialized[p] = initialized[p] && this.facts[predecessor].initialized[p];
       for (let at: number = 0; at < block.instructions.length; at = at+1) {
         const i = block.instructions[at]; this.instruction(f,i); for (const value of i.operands) this.use(f,value,b,at,i.source);
         if (i.place >= 0 && (i.place) < initialized.length) {

@@ -23,7 +23,7 @@ function memoryValue(text: string): string { let value: string = text; while (me
 function irSameNumbers(left: number[], right: number[]): boolean { if (left.length != right.length) return false; for (let i: number = 0; i < left.length; i = i+1) if (left[i] != right[i]) return false; return true; }
 
 export class IrLowering {
-  interfaceFrom: number[]; interfaceTo: number[]; typeIds: Map<string,number>;
+  interfaceFrom: number[]; interfaceTo: number[]; typeIds: Map<string,number>; symbolPlaces: Map<number,number>;
   dispatchInterfaces: number[]; dispatchNames: string[]; dispatchSignatures: number[];
   contextFrom: string[]; contextTo: string[];
   graph: ModuleGraph; binding: BindingResult; checked: CheckResult; result: IrProject;
@@ -34,7 +34,7 @@ export class IrLowering {
   argumentSymbols: number[]; argumentValues: number[];
   functionModules: number[]; functionNodes: number[]; globalSymbols: number[]; orderState: number[];
   constructor(graph: ModuleGraph, binding: BindingResult, checked: CheckResult) {
-    this.typeIds = new Map<string,number>();
+    this.typeIds = new Map<string,number>(); this.symbolPlaces = new Map<number,number>();
     this.interfaceFrom = []; this.interfaceTo = []; this.dispatchInterfaces = []; this.dispatchNames = []; this.dispatchSignatures = [];
     this.contextFrom = []; this.contextTo = [];
     this.graph = graph; this.binding = binding; this.checked = checked; this.result = new IrProject();
@@ -264,16 +264,16 @@ export class IrLowering {
   }
   place(symbol: number, id: number): number {
     if (symbol >= 0 && this.binding.symbols[symbol].kind == "receiver" && this.receiverOverride >= 0) return this.receiverOverride;
-    const local: number = irIndex(this.symbols,symbol); if (local >= 0) return local;
+    const local: number = this.symbolPlaces.get(symbol).valueOr(-1); if (local >= 0) return local;
     const global: number = irIndex(this.globalSymbols,symbol);
     if (global >= 0) {
-      const p = this.result.globals[global]; this.symbols.push(symbol);
+      const p = this.result.globals[global]; this.symbolPlaces.set(symbol,this.symbols.length); this.symbols.push(symbol);
       { const pendingPush = new IrPlace(p.symbolId,p.typeId,global,false,this.source(id)); this.result.functions[this.currentFunction].places.push(pendingPush); } return this.symbols.length-1;
     }
     this.fail(id,"Símbolo sin place local/global (captura o valor de función)"); return -1;
   }
   local(symbol: number, typeId: number, parameter: boolean, id: number): number {
-    const place: number = this.symbols.length; this.symbols.push(symbol);
+    const place: number = this.symbols.length; if (!this.symbolPlaces.has(symbol)) this.symbolPlaces.set(symbol,place); this.symbols.push(symbol);
     const identity: string = symbol >= 0 ? this.checked.symbolIds[symbol] : "";
     { const pendingPush = new IrPlace(identity,typeId,-1,parameter,this.source(id)); this.result.functions[this.currentFunction].places.push(pendingPush); }
     if (symbol >= 0) this.result.functions[this.currentFunction].places[place].name = this.binding.symbols[symbol].name;
@@ -1052,7 +1052,7 @@ export class IrLowering {
     traceAnalysis(trace,"lower.functions","BEGIN");
     for (let f: number = 0; f < this.result.functions.length; f = f+1) {
       traceAnalysis(trace,"lower.function."+numberToString(f),"POINT");
-      this.currentFunction = f; this.module = this.functionModules[f]; this.symbols = []; this.breakTargets = []; this.continueTargets = []; this.breakDepths = []; this.continueDepths = []; this.cleanupScopes = [new IrCleanupScope()];
+      this.currentFunction = f; this.module = this.functionModules[f]; this.symbols = []; this.symbolPlaces = new Map<number,number>(); this.breakTargets = []; this.continueTargets = []; this.breakDepths = []; this.continueDepths = []; this.cleanupScopes = [new IrCleanupScope()];
       const id: number = this.functionNodes[f]; this.block = this.newBlock(id);
       if (this.result.functions[f].name == "$fini") {
         for (let g: number = this.globalSymbols.length-1; g >= 0; g = g-1) if (this.result.globals[g].source.moduleId == this.checked.moduleRecords[this.module].id && this.result.typeDefinitions[this.result.globals[g].typeId].resource) this.emit("dropRemaining",-1,[],this.place(this.globalSymbols[g],id),-1,"",id);

@@ -336,3 +336,8 @@ test('native IR retains caller argument tables across cross-module defaults and 
   });
   assert.deepEqual(execute(ir),['7','12']);
 });
+
+test('native IR keeps local identities across shadowing and successive functions',()=>{
+  const ir=run('function first():number{let x=1;{let x=2;print(x);}return x;}function second():number{let x=3;return x;}print(first());print(second());');
+  assert.deepEqual(execute(ir),['2','1','3']);
+});
