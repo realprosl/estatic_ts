@@ -1,0 +1,44 @@
+name: Native C++ self-bootstrap stage 2/3
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/native-cpp-self-bootstrap-stage2
+    paths:
+      - .github/workflows/native-cpp-self-bootstrap.yml
+      - scripts/verify-native-cpp-self-bootstrap.sh
+
+permissions:
+  contents: read
+
+jobs:
+  self-bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout native-cpp and Bootstrap sources
+        uses: actions/checkout@v4
+      - name: Install C++ dependencies (no Node.js setup)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ python3 libssl-dev
+      - name: Rebuild native-cpp and regenerate compiler twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify-native-cpp-self-bootstrap.sh
+      - name: Report verified stages
+        if: success()
+        shell: bash
+        run: |
+          cat build/native-cpp-self-bootstrap/SUMMARY.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload IR comparisons and generated C++ (including failures)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-cpp-self-bootstrap-evidence
+          path: |
+            build/native-cpp-self-bootstrap/
+          if-no-files-found: warn
+          retention-days: 30
