@@ -1,4 +1,5 @@
 name: Native C++ self-bootstrap stage 2/3
+run-name: Native C++ stages 2/3 with GDB diagnostics
 
 on:
   workflow_dispatch:
