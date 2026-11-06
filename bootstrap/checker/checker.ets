@@ -46,7 +46,8 @@ export class NativeChecker {
   parameterBound(text: string): string {
     const sid: number = this.parameterSymbol(text); if (sid < 0) return "";
     const s = this.binding.symbols[sid]; const n: AstNode = this.node(s.module,s.node);
-    return n.get(AttributeKind.Constraint) == "" ? "" : this.annotation(s.module,s.node,n.get(AttributeKind.Constraint));
+    if (n.get(AttributeKind.Constraint) != "") return this.annotation(s.module,s.node,n.get(AttributeKind.Constraint));
+    return "";
   }
   compatibleInner(actual: string, expected: string): boolean {
     if (actual == "!never") return true;
