@@ -327,8 +327,25 @@ export class IrCppGenerator {
     const values=f.values.map((t,k)=>`ets::ir::Slot<${this.type(t)}> v${k};`);
     const awaited=f.blocks.flatMap((b,k)=>b.terminator==="suspend"&&this.project.types[this.shape(f.values[b.value]).arguments[0]]!=="void"?[`ets::ir::Slot<${this.type(this.shape(f.values[b.value]).arguments[0])}> await${k};`]:[]);
     let parameter=0;const initialize=f.places.flatMap((p,k)=>p.parameter?[`p${k}.set(std::move(a${parameter++}));`]:[]);
+    // Keep snapshots for ordinary loads; an adjacent, single-use size query
+    // can inspect its place directly without copying the whole container.
+    const uses=f.values.map(()=>0);
+    for(const b of f.blocks){for(const i of b.instructions)for(const v of i.operands)uses[v]++;if(b.value>=0)uses[b.value]++;}
+    for(const p of f.places)if(p.index>=0)uses[p.index]++;
+    for(const v of f.frameValues)uses[v]++;
     const blocks=f.blocks.map((b,k)=>{
-      const lines=b.instructions.map(i=>this.instruction(f,i,k));const ret=f.asynchronous?"co_return":"return";
+      const lines:string[]=[];
+      for(let at=0;at<b.instructions.length;at++){
+        const i=b.instructions[at],next=b.instructions[at+1];
+        const place=i.op==="load"?f.places[i.place]:undefined;
+        const stringIndex=place?.kind==="index"&&this.project.types[f.places[place.base].typeId]==="string";
+        if(!stringIndex&&i.op==="load"&&i.result>=0&&uses[i.result]===1&&next?.op==="property"&&["length","size"].includes(next.text)&&next.operands.length===1&&next.operands[0]===i.result&&next.result>=0&&
+          (["array","fixedArray","Map","Set"].includes(this.shape(i.typeId).kind)||this.project.types[i.typeId]==="string")){
+          lines.push(`v${next.result}.set(double((${this.place(f,i.place)}.get()).size()));`);at++;continue;
+        }
+        lines.push(this.instruction(f,i,k));
+      }
+      const ret=f.asynchronous?"co_return":"return";
       switch(b.terminator) {
         case "jump":lines.push(`goto b${b.targets[0]};`);break;
         case "branch":lines.push(`if(v${b.value}.get())goto b${b.targets[0]};else goto b${b.targets[1]};`);break;

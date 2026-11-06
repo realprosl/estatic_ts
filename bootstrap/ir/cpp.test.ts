@@ -104,6 +104,27 @@ test("IR C++ preserves escaped and template literal newlines",()=>{
 });
 
 test("IR C++ initializes imported modules once",()=>assert.equal(execute('import {get} from "./dep";print(get());',{"dep.ets":'export let n=3;export function get():number{return n;}print("dep");'}),"dep\n3\n"));
+test("IR C++ size queries do not allocate container snapshots",()=>{
+ const project=ir('class Sizes{xs:number[];text:string;arrayLength():number{return this.xs.length;}stringLength():number{return this.text.length;}}const sizes=new Sizes([1,2,3],"abcdefghijklmnopqrstuvwxyz0123456789");print(sizes.arrayLength());print(sizes.stringLength());');
+ let cpp=generateCppFromIr(project).cpp;
+ for(const name of ["arrayLength","stringLength"]){
+  const id=project.functions.findIndex(f=>f.name===name);assert(id>=0);
+  const body=new RegExp(`(\\bir_f${id}\\([^\\n]*\\) \\{)`);
+  assert(body.test(cpp));cpp=cpp.replace(body,"$1\nAllocationGuard no_snapshot;");
+ }
+ cpp=`#include <cstdlib>\n#include <new>\nstatic bool forbidAllocation=false;
+void* operator new(std::size_t n){if(forbidAllocation)std::abort();if(auto p=std::malloc(n?n:1))return p;std::abort();}
+void operator delete(void* p) noexcept{std::free(p);}
+void operator delete(void* p,std::size_t) noexcept{std::free(p);}
+struct AllocationGuard{AllocationGuard(){forbidAllocation=true;}~AllocationGuard(){forbidAllocation=false;}};\n`+cpp;
+ const dir=mkdtempSync(join(directory,"size-query-")),file=join(dir,"app.cpp"),binary=join(dir,"app");writeFileSync(file,cpp);
+ const build=spawnSync("g++",["-std=c++20","-O0","-pthread","-fno-exceptions",`-I${root}`,file,"-o",binary],{encoding:"utf8",timeout:180000});
+ assert.ifError(build.error);assert.equal(build.status,0,build.stderr);
+ const run=spawnSync(binary,[],{encoding:"utf8",timeout:15000});assert.ifError(run.error);assert.equal(run.status,0,run.stderr);assert.equal(run.stdout,"3\n36\n");
+});
+
+test("IR C++ size queries preserve independent value snapshots",()=>assert.equal(execute('let xs=[1,2];const snapshot=xs;xs.push(3);print(snapshot.length);print(xs.length);let text="abc";const saved=text;text+="d";print(saved.length);print(text.length);print(text[0].length);'),"2\n3\n3\n4\n1\n"));
+
 test("IR C++ rejects unsuccessful projects and unsupported capabilities before emission",()=>{
  const p=ir('print(1);');p.success=false;assert.throws(()=>generateCppFromIr(p),/success:true/);p.success=true;p.functions[0].blocks[0].instructions[0].op="backendEscape";assert.throws(()=>generateCppFromIr(p),/Capacidad/);
  assert.throws(()=>generateCppFromIr(ir('class C{x:number=1;}print(new C());')),/contrato de impresión/);
