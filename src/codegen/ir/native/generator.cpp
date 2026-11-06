@@ -5,8 +5,9 @@
 namespace estc {
 class Generator {
 public:
- Project p;Result result;std::set<int> cppGenerators;std::map<int,int> metadataPlaces;
+ Project p;Result result;std::set<int> cppGenerators;std::map<int,int> metadataPlaces,collectionQueryPlaces;
  void metadataLoads(const Function&);
+ void collectionQueryLoads(const Function&);
  void annotations();
  S cppEscape(const Function&,const Instruction&);
  explicit Generator(const J& j):p(j){result.headers={"runtime/ets_runtime.hpp","runtime/ets_ir.hpp"};}
@@ -131,9 +132,28 @@ void Generator::metadataLoads(const Function& f){
   metadataPlaces[load.result]=load.place;
  }
 }
+void Generator::collectionQueryLoads(const Function& f){
+ collectionQueryPlaces.clear();V<int> uses(f.values.size(),0);
+ for(const auto& q:f.places)if(q.kind=="index"&&q.index>=0)uses.at(q.index)++;
+ for(const auto& b:f.blocks){if(b.value>=0)uses.at(b.value)++;for(const auto& i:b.instructions)for(int v:i.operands)uses.at(v)++;}
+ auto primitive=[&](int id){return shape(id).kind=="enum"||(shape(id).kind=="scalar"&&(numeric(id)||in(p.types.at(id),{"string","boolean"})));};
+ for(const auto& b:f.blocks)for(int k=0;k<int(b.instructions.size());k++){
+  const auto& load=b.instructions[k];
+  if(load.op!="load"||load.result<0||uses.at(load.result)!=1||load.typeId<0)continue;
+  const auto& s=shape(load.typeId);
+  if(!in(s.kind,{"Map","Set"})||s.resource||!std::all_of(s.arguments.begin(),s.arguments.end(),primitive))continue;
+  for(int at=k+1;at<int(b.instructions.size());at++){
+   const auto& read=b.instructions[at];S name=read.op=="runtimeCall"&&read.contract>=0&&read.contract<int(p.contracts.size())?p.contracts[read.contract].name:S{};
+   if(read.operands.size()==2&&read.operands[0]==load.result&&(s.kind=="Map"?in(name,{"Map.has","Map.get"}):name=="Set.has")){collectionQueryPlaces[load.result]=load.place;break;}
+   if(read.typeId>=0&&primitive(read.typeId)&&(read.op=="constant"||(read.op=="load"&&f.places.at(read.place).kind=="local")))continue;
+   break;
+  }
+ }
+}
 S Generator::instruction(const Function& f,const Instruction& i,int block){
  auto a=[&](int k,bool consume=true){return operand(f,i,k,consume);};S T=i.typeId>=0?type(i.typeId):"void",v;const auto& op=i.op;
  if(op=="load"&&metadataPlaces.contains(i.result))return "// metadata load fused with its sole adjacent inspection";
+ if(op=="load"&&collectionQueryPlaces.contains(i.result))return "// collection query load fused with read-only lookup";
  if(op=="backendEscape")return cppEscape(f,i);
  else if(op=="constant")v=literal(i.text,i.typeId);
  else if(op=="load"){const auto& p=f.places.at(i.place);v=p.kind=="index"&&this->p.types.at(f.places.at(p.base).typeId)=="string"?"ets::string_charAt("+place(f,p.base)+".get(),v"+n(p.index)+".get())":place(f,i.place)+".get()";}
@@ -197,7 +217,7 @@ S Generator::instruction(const Function& f,const Instruction& i,int block){
  return i.result>=0?"v"+n(i.result)+".set("+v+");":v+";";
 }
 S Generator::signature(const Function& f,int id){S ret=f.asynchronous&&shape(f.returns).kind!="Promise"?"ets::Task<"+type(f.bodyReturns)+">":type(f.returns);if(f.asynchronous){result.headers.insert("runtime/ets_async.hpp");result.libuv=true;}V<S> args;for(int k=0;k<int(f.captureTypes.size());k++)args.push_back(type(f.captureTypes[k])+(f.captureModes.at(k)=="reference"?"*":"")+" c"+n(k));for(int k=0;k<int(f.parameterTypes.size());k++)args.push_back(type(f.parameterTypes[k])+" a"+n(k));return ret+" ir_f"+n(id)+"("+join(args)+")";}
-S Generator::body(const Function& f,int id){metadataLoads(f);V<S> out;int parameter=0;
+S Generator::body(const Function& f,int id){metadataLoads(f);collectionQueryLoads(f);V<S> out;int parameter=0;
  for(int k=0;k<int(f.places.size());k++){auto& p=f.places[k];if(p.kind=="local"&&p.global<0)out.push_back("ets::ir::Slot<"+type(p.typeId)+"> p"+n(k)+";");}
  for(int k=0;k<int(f.values.size());k++)out.push_back("ets::ir::Slot<"+type(f.values[k])+"> v"+n(k)+";");
  for(int k=0;k<int(f.blocks.size());k++){auto& b=f.blocks[k];if(b.terminator=="suspend"){int t=shape(f.values.at(b.value)).arguments.at(0);if(p.types.at(t)!="void")out.push_back("ets::ir::Slot<"+type(t)+"> await"+n(k)+";");}}
@@ -262,7 +282,7 @@ S Generator::runtimeCall(const Function& f,const Instruction& i){const auto& c=p
  }
  if(base=="string"&&stringMethods.contains(method))return "ets::string_"+method+"("+args()+")";
  if(i.operands.empty())return fail("Capacidad runtime no implementada: "+c.capability,i.source);
- int actual=f.values.at(i.operands.at(0));const auto& s=shape(inner(actual));S receiver=deref(a(0,false),actual);
+ int actual=f.values.at(i.operands.at(0));const auto& s=shape(inner(actual));S receiver=collectionQueryPlaces.contains(i.operands.at(0))?place(f,collectionQueryPlaces.at(i.operands.at(0)))+".get()":deref(a(0,false),actual);
  if(in(base,{"Optional","Result"})){if(in(method,{"isPresent","isEmpty","isOk","value","error","valueOr","orElse"}))return "("+deref(a(0,shape(actual).resource),actual)+")."+method+"("+args(1)+")";if(in(method,{"map","andThen"}))return "("+receiver+")."+method+"("+callback(f,i,1)+")";}
  if(in(base,{"Map","Set"})){if(in(method,{"set","add","has","clear","size","delete"}))return "("+receiver+")."+(method=="delete"?"removeKey":method)+"("+args(1)+")";if(method=="get")return T+"::of(("+receiver+").get("+a(1)+"))";if(method=="forEach")return "("+receiver+").forEach("+callback(f,i,1)+")";}
  if(base=="array"){

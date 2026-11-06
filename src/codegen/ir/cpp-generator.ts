@@ -171,6 +171,37 @@ export class IrCppGenerator {
   // Fuse only adjacent, single-use load -> metadata reads. No mutation or
   // call can intervene, so a container snapshot has no observable use.
   metadataPlaces = new Map<number,number>();
+  collectionQueryPlaces = new Map<number,number>();
+  collectionQueryLoads(f:IrFunction):Map<number,number> {
+    const uses=f.values.map(()=>0), places=new Map<number,number>();
+    for(const p of f.places)if(p.kind==="index"&&p.index>=0)uses[p.index]++;
+    for(const b of f.blocks){if(b.value>=0)uses[b.value]++;for(const i of b.instructions)for(const v of i.operands)uses[v]++;}
+    const primitive=(id:number)=>this.shape(id).kind==="enum"||
+      (this.shape(id).kind==="scalar"&&(this.numeric(id)||["string","boolean"].includes(this.project.types[id])));
+    for(const b of f.blocks)for(let k=0;k<b.instructions.length;k++){
+      const load=b.instructions[k], shape=load.typeId>=0?this.shape(load.typeId):undefined;
+      if(load.op!=="load"||load.result<0||uses[load.result]!==1||!shape||
+        !["Map","Set"].includes(shape.kind)||shape.resource||!shape.arguments.every(primitive))continue;
+      for(let at=k+1;at<b.instructions.length;at++){
+        const read=b.instructions[at];
+        const name=read.op==="runtimeCall"?this.project.runtimeContracts[read.contract]?.name:"";
+        if(read.operands.length===2&&read.operands[0]===load.result&&
+          (shape.kind==="Map"?["Map.has","Map.get"].includes(name??""):name==="Set.has")){
+          places.set(load.result,load.place);break;
+        }
+        // Only primitive constants and local slot reads may separate capture
+        // from lookup. Calls, writes, moves, borrows and indexed reads stop it.
+        if(read.typeId>=0&&primitive(read.typeId)&&
+          (read.op==="constant"||(read.op==="load"&&f.places[read.place]?.kind==="local")))continue;
+        break;
+      }
+    }
+    return places;
+  }
+  collectionReceiver(f:IrFunction,i:IrInstruction):string {
+    const value=i.operands[0], place=this.collectionQueryPlaces.get(value);
+    return place===undefined?this.deref(this.operand(f,i,0,false),f.values[value]):`${this.place(f,place)}.get()`;
+  }
   metadataLoads(f:IrFunction):Map<number,number> {
     const uses=f.values.map(()=>0), places=new Map<number,number>();
     for(const p of f.places)if(p.kind==="index"&&p.index>=0)uses[p.index]++;
@@ -190,6 +221,7 @@ export class IrCppGenerator {
     const a=(k:number,consume=true)=>this.operand(f,i,k,consume), s=this.shape.bind(this), T=i.typeId>=0?this.type(i.typeId):"void";
     let value:string|undefined;
     if(i.op==="load"&&this.metadataPlaces.has(i.result))return "// metadata load fused with its sole adjacent inspection";
+    if(i.op==="load"&&this.collectionQueryPlaces.has(i.result))return "// collection query load fused with read-only lookup";
     switch(i.op) {
       case "constant": value=this.literal(i.text,i.typeId);break;
       case "load": {
@@ -343,6 +375,7 @@ export class IrCppGenerator {
       return this.signature(f,index)+" {"+(this.project.types[f.returns]==="void"?call+";":"return "+call+";")+"}";
     }
     this.metadataPlaces=this.metadataLoads(f);
+    this.collectionQueryPlaces=this.collectionQueryLoads(f);
     const locals=f.places.flatMap((p,k)=>p.kind==="local"&&p.global<0?[`ets::ir::Slot<${this.type(p.typeId)}> p${k};`]:[]);
     const values=f.values.map((t,k)=>`ets::ir::Slot<${this.type(t)}> v${k};`);
     const awaited=f.blocks.flatMap((b,k)=>b.terminator==="suspend"&&this.project.types[this.shape(f.values[b.value]).arguments[0]]!=="void"?[`ets::ir::Slot<${this.type(this.shape(f.values[b.value]).arguments[0])}> await${k};`]:[]);

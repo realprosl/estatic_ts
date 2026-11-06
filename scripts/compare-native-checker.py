@@ -25,6 +25,7 @@ cases = {
     'missing-member': (1, {'main.ets': 'class C{value:number=1;}print(new C().missing);'}),
     'transitive-borrow-aliases': (0, {'main.ets': 'class Box{value:number=1;} function f():void{let b=new Box();const a=constRef(b);const c=a;const d=c;print(d.value);b.value=2;} f();'}),
     'write-through-live-alias': (1, {'main.ets': 'class Box{value:number=1;} function f():void{let b=new Box();const a=constRef(b);const c=a;const d=c;b.value=2;print(d.value);} f();'}),
+    'async-default-at-creation': (0, {'main.ets': 'class B{}let p:ptr<B> = new B();async function f(x:ptr<B> = move(p)):Promise<void>{}const t=f();p=new B();const q=move(p);await t;'}),
 }
 report = dict(cases=[], binaries={})
 for label, binary in [('baseline', args.baseline), ('candidate', args.candidate)]:
