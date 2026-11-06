@@ -86,9 +86,9 @@ export class IrVerifier {
       if (i.operands.length != 0 || !hasResult || this.project.typeDefinitions[i.typeId].kind != "Optional") this.error(i.source,"None incompatible");
     } else if (i.op == "closure") {
       if ((i.callee) < 0 || i.callee >= this.project.functions.length) this.error(i.source,"Closure sin destino");
-      else { const target = this.project.functions[i.callee];
-        if (target.signature != this.project.types[i.typeId] || i.operands.length != target.captureTypes.length || !hasResult) this.error(i.source,"Entorno de closure incompatible");
-        for (let at: number = 0; at < i.operands.length && at < target.captureTypes.length; at = at+1) if (this.value(f,i.operands[at])) { const actual: number = f.values[i.operands[at]]; const shape = this.project.typeDefinitions[actual]; if (target.captureModes[at] == "reference" ? shape.kind != "ref" || shape.arguments[0] != target.captureTypes[at] : actual != target.captureTypes[at]) this.error(i.source,"Tipo de captura incompatible"); }
+      else {
+        if (this.project.functions[i.callee].signature != this.project.types[i.typeId] || i.operands.length != this.project.functions[i.callee].captureTypes.length || !hasResult) this.error(i.source,"Entorno de closure incompatible");
+        for (let at: number = 0; at < i.operands.length && at < this.project.functions[i.callee].captureTypes.length; at = at+1) if (this.value(f,i.operands[at])) { const actual: number = f.values[i.operands[at]]; const shape = this.project.typeDefinitions[actual]; if (this.project.functions[i.callee].captureModes[at] == "reference" ? shape.kind != "ref" || shape.arguments[0] != this.project.functions[i.callee].captureTypes[at] : actual != this.project.functions[i.callee].captureTypes[at]) this.error(i.source,"Tipo de captura incompatible"); }
       }
     } else if (i.op == "interfaceCall") {
       if (!this.typeId(i.signature) || this.project.typeDefinitions[i.signature].kind != "function" || i.operands.length == 0 || !this.value(f,i.operands[0])) this.error(i.source,"Dispatch de interfaz sin firma/receptor");
@@ -107,13 +107,12 @@ export class IrVerifier {
       }
     } else if (i.op == "call" || i.op == "taskCreate") {
       if ((i.callee) < 0 || i.callee >= this.project.functions.length) { this.error(i.source,"Destino de llamada inexistente"); return; }
-      const target = this.project.functions[i.callee];
-      if ((i.op == "taskCreate") != target.asynchronous) this.error(i.source,"Creación de tarea/invocación incompatible");
-      if (i.typeId != target.returns || i.operands.length != target.parameterTypes.length || hasResult != (resultType != "void")) this.error(i.source,"Firma de llamada incompatible");
-      for (let p: number = 0; p < i.operands.length && p < target.parameterTypes.length; p = p+1) if (!this.value(f,i.operands[p]) || f.values[i.operands[p]] != target.parameterTypes[p]) this.error(i.source,"Argumento de llamada incompatible");
+      if ((i.op == "taskCreate") != this.project.functions[i.callee].asynchronous) this.error(i.source,"Creación de tarea/invocación incompatible");
+      if (i.typeId != this.project.functions[i.callee].returns || i.operands.length != this.project.functions[i.callee].parameterTypes.length || hasResult != (resultType != "void")) this.error(i.source,"Firma de llamada incompatible");
+      for (let p: number = 0; p < i.operands.length && p < this.project.functions[i.callee].parameterTypes.length; p = p+1) if (!this.value(f,i.operands[p]) || f.values[i.operands[p]] != this.project.functions[i.callee].parameterTypes[p]) this.error(i.source,"Argumento de llamada incompatible");
     } else if (i.op == "backendEscape") {
       if ((i.callee) < 0 || i.callee >= this.project.functions.length || hasResult || resultType != "void") this.error(i.source,"Escape de backend sin generador");
-      else { const target = this.project.functions[i.callee]; if (this.project.types[target.returns] != "string" || target.parameterTypes.length != i.operands.length) this.error(i.source,"Firma de generador incompatible"); for (let at: number = 0; at < i.operands.length && at < target.parameterTypes.length; at = at+1) if (!this.value(f,i.operands[at]) || f.values[i.operands[at]] != target.parameterTypes[at]) this.error(i.source,"Argumento de generador incompatible"); }
+      else { if (this.project.types[this.project.functions[i.callee].returns] != "string" || this.project.functions[i.callee].parameterTypes.length != i.operands.length) this.error(i.source,"Firma de generador incompatible"); for (let at: number = 0; at < i.operands.length && at < this.project.functions[i.callee].parameterTypes.length; at = at+1) if (!this.value(f,i.operands[at]) || f.values[i.operands[at]] != this.project.functions[i.callee].parameterTypes[at]) this.error(i.source,"Argumento de generador incompatible"); }
     } else if (i.op == "runtimeCall") {
       if ((i.contract) < 0 || i.contract >= this.project.runtimeContracts.length) this.error(i.source,"Contrato runtime inexistente");
       else { const contract = this.project.runtimeContracts[i.contract]; if (contract.returns != i.typeId || contract.parameters.length != i.operands.length || hasResult != (resultType != "void") || contract.capability == "" || contract.effects.length == 0) this.error(i.source,"Contrato runtime incompatible");
@@ -242,11 +241,11 @@ export class IrVerifier {
       const source = new IrSource("","","",-1,0,0);
       if (!this.typeId(d.interfaceType) || !this.typeId(d.concreteType) || !this.typeId(d.signature) || (d.callee) < 0 || d.callee >= this.project.functions.length) this.error(source,"Identidad de dispatch inválida");
       else {
-        const target = this.project.functions[d.callee]; const signature = this.project.typeDefinitions[d.signature];
-        if (!["interface","intersection"].includes(this.project.typeDefinitions[d.interfaceType].kind) || !this.project.typeDefinitions[d.interfaceType].variants.includes(d.concreteType) || signature.kind != "function" || target.parameterTypes.length != signature.arguments.length || (target.receiverType) < 0) this.error(source,"Contrato de dispatch inválido");
+        const signature = this.project.typeDefinitions[d.signature];
+        if (!["interface","intersection"].includes(this.project.typeDefinitions[d.interfaceType].kind) || !this.project.typeDefinitions[d.interfaceType].variants.includes(d.concreteType) || signature.kind != "function" || this.project.functions[d.callee].parameterTypes.length != signature.arguments.length || (this.project.functions[d.callee].receiverType) < 0) this.error(source,"Contrato de dispatch inválido");
         else {
-          if (this.project.typeDefinitions[target.receiverType].kind != "ref" || this.project.typeDefinitions[target.receiverType].arguments[0] != d.concreteType || !irAssignable(this.project,target.returns,signature.arguments[signature.arguments.length-1],0)) this.error(source,"Destino de dispatch incompatible");
-          for (let at: number = 1; at < target.parameterTypes.length; at = at+1) if (!irAssignable(this.project,signature.arguments[at-1],target.parameterTypes[at],0)) this.error(source,"Parámetro de dispatch incompatible");
+          if (this.project.typeDefinitions[this.project.functions[d.callee].receiverType].kind != "ref" || this.project.typeDefinitions[this.project.functions[d.callee].receiverType].arguments[0] != d.concreteType || !irAssignable(this.project,this.project.functions[d.callee].returns,signature.arguments[signature.arguments.length-1],0)) this.error(source,"Destino de dispatch incompatible");
+          for (let at: number = 1; at < this.project.functions[d.callee].parameterTypes.length; at = at+1) if (!irAssignable(this.project,signature.arguments[at-1],this.project.functions[d.callee].parameterTypes[at],0)) this.error(source,"Parámetro de dispatch incompatible");
         }
       }
     }

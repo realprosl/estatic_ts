@@ -23,7 +23,7 @@ function memoryValue(text: string): string { let value: string = text; while (me
 function irSameNumbers(left: number[], right: number[]): boolean { if (left.length != right.length) return false; for (let i: number = 0; i < left.length; i = i+1) if (left[i] != right[i]) return false; return true; }
 
 export class IrLowering {
-  interfaceFrom: number[]; interfaceTo: number[];
+  interfaceFrom: number[]; interfaceTo: number[]; typeIds: Map<string,number>;
   dispatchInterfaces: number[]; dispatchNames: string[]; dispatchSignatures: number[];
   contextFrom: string[]; contextTo: string[];
   graph: ModuleGraph; binding: BindingResult; checked: CheckResult; result: IrProject;
@@ -34,6 +34,7 @@ export class IrLowering {
   argumentSymbols: number[]; argumentValues: number[];
   functionModules: number[]; functionNodes: number[]; globalSymbols: number[]; orderState: number[];
   constructor(graph: ModuleGraph, binding: BindingResult, checked: CheckResult) {
+    this.typeIds = new Map<string,number>();
     this.interfaceFrom = []; this.interfaceTo = []; this.dispatchInterfaces = []; this.dispatchNames = []; this.dispatchSignatures = [];
     this.contextFrom = []; this.contextTo = [];
     this.graph = graph; this.binding = binding; this.checked = checked; this.result = new IrProject();
@@ -59,8 +60,8 @@ export class IrLowering {
   typeId(input: string, id: number): number {
     let text: string = this.resolved(input);
     while (genericBase(text) == "pack" && genericArguments(text).length == 1 && genericBase(genericArguments(text)[0]) == "pack") text = genericArguments(text)[0];
-    for (let i: number = 0; i < this.result.types.length; i = i+1) if (this.result.types[i] == text) return i;
-    const index: number = this.result.types.length; this.result.types.push(text); this.result.typeDefinitions.push(new IrType("pending"));
+    if (this.typeIds.has(text)) return this.typeIds.get(text).valueOr(-1);
+    const index: number = this.result.types.length; this.typeIds.set(text,index); this.result.types.push(text); this.result.typeDefinitions.push(new IrType("pending"));
     if (text == "" || text == "!error" || text.startsWith("!")) { this.fail(id,"Tipo incompleto: "+text); this.result.typeDefinitions[index].kind = "invalid"; return index; }
     let kind: string = ""; let arguments: string[] = [];
     const mode: string = memoryMode(text); const nominal: number = canonicalSymbol(text);
