@@ -1,0 +1,827 @@
+{
+  "exitCode": 124,
+  "timedOut": true,
+  "elapsedSeconds": 300.0927675480002,
+  "traceEvents": 270,
+  "completedPhases": [
+    {
+      "phase": "analyze.loader",
+      "startSeconds": 0.008611608000137494,
+      "endSeconds": 115.67792311200014,
+      "durationSeconds": 115.669311504
+    },
+    {
+      "phase": "analyze.expansion.construct",
+      "startSeconds": 116.19198102900009,
+      "endSeconds": 118.64802831100019,
+      "durationSeconds": 2.4560472820000996
+    },
+    {
+      "phase": "analyze.binding.construct",
+      "startSeconds": 119.40856098200015,
+      "endSeconds": 121.74310240800014,
+      "durationSeconds": 2.334541425999987
+    },
+    {
+      "phase": "analyze.binding.initialize",
+      "startSeconds": 121.74316588600004,
+      "endSeconds": 121.74757382100006,
+      "durationSeconds": 0.00440793500001746
+    },
+    {
+      "phase": "analyze.binding.collect.0",
+      "startSeconds": 121.74759034000022,
+      "endSeconds": 121.8818396160002,
+      "durationSeconds": 0.13424927599999137
+    },
+    {
+      "phase": "analyze.binding.collect.1",
+      "startSeconds": 121.88190754300012,
+      "endSeconds": 122.37904586600007,
+      "durationSeconds": 0.49713832299994465
+    },
+    {
+      "phase": "analyze.binding.collect.2",
+      "startSeconds": 122.37909760600019,
+      "endSeconds": 122.50473777700017,
+      "durationSeconds": 0.12564017099998637
+    },
+    {
+      "phase": "analyze.binding.collect.3",
+      "startSeconds": 122.50478759300017,
+      "endSeconds": 122.54112448600017,
+      "durationSeconds": 0.03633689299999787
+    },
+    {
+      "phase": "analyze.binding.collect.4",
+      "startSeconds": 122.54117162400007,
+      "endSeconds": 122.54169896200005,
+      "durationSeconds": 0.0005273379999835015
+    },
+    {
+      "phase": "analyze.binding.collect.5",
+      "startSeconds": 122.54171659500003,
+      "endSeconds": 122.62062236500014,
+      "durationSeconds": 0.07890577000011945
+    },
+    {
+      "phase": "analyze.binding.collect.6",
+      "startSeconds": 122.62067256,
+      "endSeconds": 122.69112980800014,
+      "durationSeconds": 0.07045724800013886
+    },
+    {
+      "phase": "analyze.binding.collect.7",
+      "startSeconds": 122.69118020700012,
+      "endSeconds": 122.69222379500002,
+      "durationSeconds": 0.001043587999902229
+    },
+    {
+      "phase": "analyze.binding.collect.8",
+      "startSeconds": 122.6922385050002,
+      "endSeconds": 122.77539388800005,
+      "durationSeconds": 0.08315538299984837
+    },
+    {
+      "phase": "analyze.binding.collect.9",
+      "startSeconds": 122.77544161600008,
+      "endSeconds": 123.0224600030001,
+      "durationSeconds": 0.24701838700002554
+    },
+    {
+      "phase": "analyze.binding.collect.10",
+      "startSeconds": 123.02260586800003,
+      "endSeconds": 123.11145468600012,
+      "durationSeconds": 0.0888488180000877
+    },
+    {
+      "phase": "analyze.binding.collect.11",
+      "startSeconds": 123.11158485100009,
+      "endSeconds": 123.15011006200007,
+      "durationSeconds": 0.0385252109999783
+    },
+    {
+      "phase": "analyze.binding.collect.12",
+      "startSeconds": 123.15016052700003,
+      "endSeconds": 123.26336412200021,
+      "durationSeconds": 0.1132035950001864
+    },
+    {
+      "phase": "analyze.binding.collect.13",
+      "startSeconds": 123.26341390100015,
+      "endSeconds": 123.36240829500002,
+      "durationSeconds": 0.09899439399987386
+    },
+    {
+      "phase": "analyze.binding.collect.14",
+      "startSeconds": 123.3624650820002,
+      "endSeconds": 123.39960046200008,
+      "durationSeconds": 0.03713537999988148
+    },
+    {
+      "phase": "analyze.binding.collect.15",
+      "startSeconds": 123.39965154600009,
+      "endSeconds": 124.05221120500005,
+      "durationSeconds": 0.6525596589999623
+    },
+    {
+      "phase": "analyze.binding.collect.16",
+      "startSeconds": 124.05233263900004,
+      "endSeconds": 124.58841194300021,
+      "durationSeconds": 0.5360793040001681
+    },
+    {
+      "phase": "analyze.binding.collect.17",
+      "startSeconds": 124.58847968100008,
+      "endSeconds": 124.6229416870001,
+      "durationSeconds": 0.03446200600001248
+    },
+    {
+      "phase": "analyze.binding.collect.18",
+      "startSeconds": 124.62299059800011,
+      "endSeconds": 125.44907454200006,
+      "durationSeconds": 0.8260839439999472
+    },
+    {
+      "phase": "analyze.binding.collect.19",
+      "startSeconds": 125.44914104200006,
+      "endSeconds": 127.12234739500013,
+      "durationSeconds": 1.6732063530000687
+    },
+    {
+      "phase": "analyze.binding.collect.20",
+      "startSeconds": 127.12240421500019,
+      "endSeconds": 127.269317924,
+      "durationSeconds": 0.14691370899981848
+    },
+    {
+      "phase": "analyze.binding.collect.21",
+      "startSeconds": 127.26971313700005,
+      "endSeconds": 127.37028426100005,
+      "durationSeconds": 0.10057112399999824
+    },
+    {
+      "phase": "analyze.binding.collect.22",
+      "startSeconds": 127.37033535800015,
+      "endSeconds": 127.387966732,
+      "durationSeconds": 0.01763137399984771
+    },
+    {
+      "phase": "analyze.binding.collect.23",
+      "startSeconds": 127.38809112100012,
+      "endSeconds": 127.46723007700007,
+      "durationSeconds": 0.07913895599995158
+    },
+    {
+      "phase": "analyze.binding.collect.24",
+      "startSeconds": 127.46736008200014,
+      "endSeconds": 127.48359358000016,
+      "durationSeconds": 0.01623349800001961
+    },
+    {
+      "phase": "analyze.binding.collect.25",
+      "startSeconds": 127.48363978400016,
+      "endSeconds": 127.5771372810002,
+      "durationSeconds": 0.09349749700004395
+    },
+    {
+      "phase": "analyze.binding.collect.26",
+      "startSeconds": 127.57719312900008,
+      "endSeconds": 127.72306341800004,
+      "durationSeconds": 0.14587028899995858
+    },
+    {
+      "phase": "analyze.binding.collect.27",
+      "startSeconds": 127.72311378100017,
+      "endSeconds": 127.89442336300021,
+      "durationSeconds": 0.17130958200004898
+    },
+    {
+      "phase": "analyze.binding.collect.28",
+      "startSeconds": 127.8944813930002,
+      "endSeconds": 127.90453636300003,
+      "durationSeconds": 0.010054969999828245
+    },
+    {
+      "phase": "analyze.binding.collect.29",
+      "startSeconds": 127.90457860300012,
+      "endSeconds": 127.93962676900014,
+      "durationSeconds": 0.03504816600002414
+    },
+    {
+      "phase": "analyze.binding.collect.30",
+      "startSeconds": 127.93967030900012,
+      "endSeconds": 128.19509350900012,
+      "durationSeconds": 0.25542319999999563
+    },
+    {
+      "phase": "analyze.binding.collect.31",
+      "startSeconds": 128.1951436050001,
+      "endSeconds": 129.0716777250002,
+      "durationSeconds": 0.8765341200000876
+    },
+    {
+      "phase": "analyze.binding.collect.32",
+      "startSeconds": 129.071851402,
+      "endSeconds": 129.09420470500004,
+      "durationSeconds": 0.022353303000045344
+    },
+    {
+      "phase": "analyze.binding.collect.33",
+      "startSeconds": 129.09424788800015,
+      "endSeconds": 129.09717180500002,
+      "durationSeconds": 0.002923916999861831
+    },
+    {
+      "phase": "analyze.binding.collect.34",
+      "startSeconds": 129.0972052640002,
+      "endSeconds": 129.11061502500002,
+      "durationSeconds": 0.013409760999820719
+    },
+    {
+      "phase": "analyze.binding.collect.35",
+      "startSeconds": 129.110673207,
+      "endSeconds": 129.15597359700018,
+      "durationSeconds": 0.04530039000019315
+    },
+    {
+      "phase": "analyze.binding.collect.36",
+      "startSeconds": 129.15601385100013,
+      "endSeconds": 129.17169263100004,
+      "durationSeconds": 0.015678779999916514
+    },
+    {
+      "phase": "analyze.binding.imports.0",
+      "startSeconds": 129.17173825500004,
+      "endSeconds": 129.18767911200007,
+      "durationSeconds": 0.015940857000032338
+    },
+    {
+      "phase": "analyze.binding.exports.0",
+      "startSeconds": 129.187713175,
+      "endSeconds": 129.2001256960002,
+      "durationSeconds": 0.012412521000214838
+    },
+    {
+      "phase": "analyze.binding.imports.1",
+      "startSeconds": 129.20014972100012,
+      "endSeconds": 129.24851365300015,
+      "durationSeconds": 0.04836393200002931
+    },
+    {
+      "phase": "analyze.binding.exports.1",
+      "startSeconds": 129.24856020900006,
+      "endSeconds": 129.3017683170001,
+      "durationSeconds": 0.05320810800003528
+    },
+    {
+      "phase": "analyze.binding.imports.2",
+      "startSeconds": 129.30181584800016,
+      "endSeconds": 129.3120051320002,
+      "durationSeconds": 0.010189284000034604
+    },
+    {
+      "phase": "analyze.binding.exports.2",
+      "startSeconds": 129.31205165000006,
+      "endSeconds": 129.3217123710001,
+      "durationSeconds": 0.009660721000045669
+    },
+    {
+      "phase": "analyze.binding.imports.3",
+      "startSeconds": 129.3217379900002,
+      "endSeconds": 129.32558993300017,
+      "durationSeconds": 0.0038519429999723798
+    },
+    {
+      "phase": "analyze.binding.exports.3",
+      "startSeconds": 129.3256130310001,
+      "endSeconds": 129.32973911600016,
+      "durationSeconds": 0.004126085000052626
+    },
+    {
+      "phase": "analyze.binding.imports.4",
+      "startSeconds": 129.32975873100008,
+      "endSeconds": 129.33012221100012,
+      "durationSeconds": 0.0003634800000327232
+    },
+    {
+      "phase": "analyze.binding.exports.4",
+      "startSeconds": 129.33013082700018,
+      "endSeconds": 129.3310913270002,
+      "durationSeconds": 0.0009605000000192376
+    },
+    {
+      "phase": "analyze.binding.imports.5",
+      "startSeconds": 129.33109976200012,
+      "endSeconds": 129.33947454200006,
+      "durationSeconds": 0.008374779999940074
+    },
+    {
+      "phase": "analyze.binding.exports.5",
+      "startSeconds": 129.3394975210001,
+      "endSeconds": 129.34791247500016,
+      "durationSeconds": 0.008414954000045327
+    },
+    {
+      "phase": "analyze.binding.imports.6",
+      "startSeconds": 129.3479276810001,
+      "endSeconds": 129.3540401150001,
+      "durationSeconds": 0.006112433999987843
+    },
+    {
+      "phase": "analyze.binding.exports.6",
+      "startSeconds": 129.35405140500006,
+      "endSeconds": 129.36079681800015,
+      "durationSeconds": 0.006745413000089684
+    },
+    {
+      "phase": "analyze.binding.imports.7",
+      "startSeconds": 129.36091079200014,
+      "endSeconds": 129.3610327660001,
+      "durationSeconds": 0.00012197399996694003
+    },
+    {
+      "phase": "analyze.binding.exports.7",
+      "startSeconds": 129.36103958500007,
+      "endSeconds": 129.361345281,
+      "durationSeconds": 0.00030569599994123564
+    },
+    {
+      "phase": "analyze.binding.imports.8",
+      "startSeconds": 129.3613547030002,
+      "endSeconds": 129.3686147530002,
+      "durationSeconds": 0.007260050000013507
+    },
+    {
+      "phase": "analyze.binding.exports.8",
+      "startSeconds": 129.36863207600004,
+      "endSeconds": 129.3762177760002,
+      "durationSeconds": 0.007585700000163342
+    },
+    {
+      "phase": "analyze.binding.imports.9",
+      "startSeconds": 129.37644687600005,
+      "endSeconds": 129.3992900610001,
+      "durationSeconds": 0.02284318500005611
+    },
+    {
+      "phase": "analyze.binding.exports.9",
+      "startSeconds": 129.3993179260001,
+      "endSeconds": 129.4220113010001,
+      "durationSeconds": 0.022693375000017113
+    },
+    {
+      "phase": "analyze.binding.imports.10",
+      "startSeconds": 129.42205443800003,
+      "endSeconds": 129.42807352700015,
+      "durationSeconds": 0.006019089000119493
+    },
+    {
+      "phase": "analyze.binding.exports.10",
+      "startSeconds": 129.42810453300012,
+      "endSeconds": 129.4395739170002,
+      "durationSeconds": 0.011469384000065475
+    },
+    {
+      "phase": "analyze.binding.imports.11",
+      "startSeconds": 129.43959639500008,
+      "endSeconds": 129.44308178100005,
+      "durationSeconds": 0.003485385999965729
+    },
+    {
+      "phase": "analyze.binding.exports.11",
+      "startSeconds": 129.4430959440001,
+      "endSeconds": 129.447269559,
+      "durationSeconds": 0.004173614999899655
+    },
+    {
+      "phase": "analyze.binding.imports.12",
+      "startSeconds": 129.447283598,
+      "endSeconds": 129.45711283200012,
+      "durationSeconds": 0.009829234000108045
+    },
+    {
+      "phase": "analyze.binding.exports.12",
+      "startSeconds": 129.45713539300004,
+      "endSeconds": 129.46577150500002,
+      "durationSeconds": 0.008636111999976492
+    },
+    {
+      "phase": "analyze.binding.imports.13",
+      "startSeconds": 129.465797652,
+      "endSeconds": 129.47165279700016,
+      "durationSeconds": 0.005855145000168704
+    },
+    {
+      "phase": "analyze.binding.exports.13",
+      "startSeconds": 129.4716761210002,
+      "endSeconds": 129.48077632800005,
+      "durationSeconds": 0.009100206999846705
+    },
+    {
+      "phase": "analyze.binding.imports.14",
+      "startSeconds": 129.48079668000014,
+      "endSeconds": 129.48384784500013,
+      "durationSeconds": 0.003051164999988032
+    },
+    {
+      "phase": "analyze.binding.exports.14",
+      "startSeconds": 129.48385874200017,
+      "endSeconds": 129.48804583900005,
+      "durationSeconds": 0.004187096999885398
+    },
+    {
+      "phase": "analyze.binding.imports.15",
+      "startSeconds": 129.48806883300017,
+      "endSeconds": 129.54898029000015,
+      "durationSeconds": 0.06091145699997469
+    },
+    {
+      "phase": "analyze.binding.exports.15",
+      "startSeconds": 129.5490299720002,
+      "endSeconds": 129.61259297000015,
+      "durationSeconds": 0.06356299799995213
+    },
+    {
+      "phase": "analyze.binding.imports.16",
+      "startSeconds": 129.61264300100015,
+      "endSeconds": 129.650955522,
+      "durationSeconds": 0.038312520999852495
+    },
+    {
+      "phase": "analyze.binding.exports.16",
+      "startSeconds": 129.65100313300013,
+      "endSeconds": 129.69074451000006,
+      "durationSeconds": 0.039741376999927525
+    },
+    {
+      "phase": "analyze.binding.imports.17",
+      "startSeconds": 129.6907916030002,
+      "endSeconds": 129.69615113500004,
+      "durationSeconds": 0.005359531999829414
+    },
+    {
+      "phase": "analyze.binding.exports.17",
+      "startSeconds": 129.6961794130002,
+      "endSeconds": 129.70014570400008,
+      "durationSeconds": 0.0039662909998696705
+    },
+    {
+      "phase": "analyze.binding.imports.18",
+      "startSeconds": 129.70016499200005,
+      "endSeconds": 129.7817822930001,
+      "durationSeconds": 0.08161730100005116
+    },
+    {
+      "phase": "analyze.binding.exports.18",
+      "startSeconds": 129.7818309480001,
+      "endSeconds": 129.85644426700014,
+      "durationSeconds": 0.07461331900003643
+    },
+    {
+      "phase": "analyze.binding.imports.19",
+      "startSeconds": 129.8564926890001,
+      "endSeconds": 129.98939366700006,
+      "durationSeconds": 0.13290097799995237
+    },
+    {
+      "phase": "analyze.binding.exports.19",
+      "startSeconds": 129.9894455010001,
+      "endSeconds": 130.12107157200012,
+      "durationSeconds": 0.13162607100002788
+    },
+    {
+      "phase": "analyze.binding.imports.20",
+      "startSeconds": 130.12112177200015,
+      "endSeconds": 130.13635928300005,
+      "durationSeconds": 0.015237510999895676
+    },
+    {
+      "phase": "analyze.binding.exports.20",
+      "startSeconds": 130.136503339,
+      "endSeconds": 130.1487194870001,
+      "durationSeconds": 0.012216148000106841
+    },
+    {
+      "phase": "analyze.binding.imports.21",
+      "startSeconds": 130.14876035800012,
+      "endSeconds": 130.15330786100003,
+      "durationSeconds": 0.004547502999912467
+    },
+    {
+      "phase": "analyze.binding.exports.21",
+      "startSeconds": 130.15333105600007,
+      "endSeconds": 130.16136663700013,
+      "durationSeconds": 0.0080355810000583
+    },
+    {
+      "phase": "analyze.binding.imports.22",
+      "startSeconds": 130.161388494,
+      "endSeconds": 130.1626905180001,
+      "durationSeconds": 0.0013020240000969352
+    },
+    {
+      "phase": "analyze.binding.exports.22",
+      "startSeconds": 130.1627012570002,
+      "endSeconds": 130.16511528200022,
+      "durationSeconds": 0.002414025000007314
+    },
+    {
+      "phase": "analyze.binding.imports.23",
+      "startSeconds": 130.16513968100003,
+      "endSeconds": 130.17081255900007,
+      "durationSeconds": 0.005672878000041237
+    },
+    {
+      "phase": "analyze.binding.exports.23",
+      "startSeconds": 130.17083760000014,
+      "endSeconds": 130.17879495600005,
+      "durationSeconds": 0.007957355999906213
+    },
+    {
+      "phase": "analyze.binding.imports.24",
+      "startSeconds": 130.17881882400002,
+      "endSeconds": 130.18132000100013,
+      "durationSeconds": 0.0025011770001128752
+    },
+    {
+      "phase": "analyze.binding.exports.24",
+      "startSeconds": 130.18133566300003,
+      "endSeconds": 130.18577085000015,
+      "durationSeconds": 0.0044351870001264615
+    },
+    {
+      "phase": "analyze.binding.imports.25",
+      "startSeconds": 130.1857941080002,
+      "endSeconds": 130.19399889500005,
+      "durationSeconds": 0.008204786999840508
+    },
+    {
+      "phase": "analyze.binding.exports.25",
+      "startSeconds": 130.19402322700012,
+      "endSeconds": 130.20213081500015,
+      "durationSeconds": 0.008107588000029864
+    },
+    {
+      "phase": "analyze.binding.imports.26",
+      "startSeconds": 130.202157875,
+      "endSeconds": 130.208585331,
+      "durationSeconds": 0.006427455999983067
+    },
+    {
+      "phase": "analyze.binding.exports.26",
+      "startSeconds": 130.20860716100015,
+      "endSeconds": 130.21369817100003,
+      "durationSeconds": 0.005091009999887319
+    },
+    {
+      "phase": "analyze.binding.imports.27",
+      "startSeconds": 130.21372049900015,
+      "endSeconds": 130.22248079300016,
+      "durationSeconds": 0.008760294000012436
+    },
+    {
+      "phase": "analyze.binding.exports.27",
+      "startSeconds": 130.22251225800005,
+      "endSeconds": 130.23193239900002,
+      "durationSeconds": 0.009420140999964133
+    },
+    {
+      "phase": "analyze.binding.imports.28",
+      "startSeconds": 130.23195395800008,
+      "endSeconds": 130.23323575500012,
+      "durationSeconds": 0.0012817970000469359
+    },
+    {
+      "phase": "analyze.binding.exports.28",
+      "startSeconds": 130.23324641,
+      "endSeconds": 130.23461089800003,
+      "durationSeconds": 0.0013644880000356352
+    },
+    {
+      "phase": "analyze.binding.imports.29",
+      "startSeconds": 130.23461958400003,
+      "endSeconds": 130.23932707900008,
+      "durationSeconds": 0.004707495000047857
+    },
+    {
+      "phase": "analyze.binding.exports.29",
+      "startSeconds": 130.23933700200018,
+      "endSeconds": 130.2423999890002,
+      "durationSeconds": 0.0030629870000211668
+    },
+    {
+      "phase": "analyze.binding.imports.30",
+      "startSeconds": 130.2424082020002,
+      "endSeconds": 130.27081260800014,
+      "durationSeconds": 0.02840440599993599
+    },
+    {
+      "phase": "analyze.binding.exports.30",
+      "startSeconds": 130.27084096900012,
+      "endSeconds": 130.297031242,
+      "durationSeconds": 0.026190272999883746
+    },
+    {
+      "phase": "analyze.binding.imports.31",
+      "startSeconds": 130.29706173900013,
+      "endSeconds": 130.39138862900018,
+      "durationSeconds": 0.09432689000004757
+    },
+    {
+      "phase": "analyze.binding.exports.31",
+      "startSeconds": 130.39143263100004,
+      "endSeconds": 130.48559687700003,
+      "durationSeconds": 0.09416424599999118
+    },
+    {
+      "phase": "analyze.binding.imports.32",
+      "startSeconds": 130.48565260600003,
+      "endSeconds": 130.4885653790002,
+      "durationSeconds": 0.0029127730001619057
+    },
+    {
+      "phase": "analyze.binding.exports.32",
+      "startSeconds": 130.48858767600018,
+      "endSeconds": 130.49158350800008,
+      "durationSeconds": 0.0029958319998968364
+    },
+    {
+      "phase": "analyze.binding.imports.33",
+      "startSeconds": 130.49160043200004,
+      "endSeconds": 130.492256774,
+      "durationSeconds": 0.0006563419999565667
+    },
+    {
+      "phase": "analyze.binding.exports.33",
+      "startSeconds": 130.4922644940002,
+      "endSeconds": 130.4930042860001,
+      "durationSeconds": 0.0007397919998766156
+    },
+    {
+      "phase": "analyze.binding.imports.34",
+      "startSeconds": 130.49301603000004,
+      "endSeconds": 130.4950722120002,
+      "durationSeconds": 0.0020561820001603337
+    },
+    {
+      "phase": "analyze.binding.exports.34",
+      "startSeconds": 130.49509212400017,
+      "endSeconds": 130.49631314700014,
+      "durationSeconds": 0.0012210229999709554
+    },
+    {
+      "phase": "analyze.binding.imports.35",
+      "startSeconds": 130.49632136500009,
+      "endSeconds": 130.50277214400012,
+      "durationSeconds": 0.006450779000033435
+    },
+    {
+      "phase": "analyze.binding.exports.35",
+      "startSeconds": 130.502799481,
+      "endSeconds": 130.50882029800005,
+      "durationSeconds": 0.006020817000035095
+    },
+    {
+      "phase": "analyze.binding.imports.36",
+      "startSeconds": 130.50884546700013,
+      "endSeconds": 130.51172660700013,
+      "durationSeconds": 0.0028811399999995047
+    },
+    {
+      "phase": "analyze.binding.exports.36",
+      "startSeconds": 130.51173886200013,
+      "endSeconds": 130.51372203900019,
+      "durationSeconds": 0.0019831770000564575
+    },
+    {
+      "phase": "analyze.binding.duplicates",
+      "startSeconds": 130.51374563000013,
+      "endSeconds": 130.6501591550002,
+      "durationSeconds": 0.13641352500007997
+    },
+    {
+      "phase": "analyze.binding.uses.0",
+      "startSeconds": 130.65020945300012,
+      "endSeconds": 131.17557936800017,
+      "durationSeconds": 0.5253699150000557
+    },
+    {
+      "phase": "analyze.binding.uses.1",
+      "startSeconds": 131.17564030300014,
+      "endSeconds": 150.7634464360001,
+      "durationSeconds": 19.587806132999958
+    },
+    {
+      "phase": "analyze.binding.uses.2",
+      "startSeconds": 150.763511698,
+      "endSeconds": 155.67210439200016,
+      "durationSeconds": 4.908592694000163
+    },
+    {
+      "phase": "analyze.binding.uses.3",
+      "startSeconds": 155.67215600400004,
+      "endSeconds": 157.61036030600008,
+      "durationSeconds": 1.938204302000031
+    },
+    {
+      "phase": "analyze.binding.uses.4",
+      "startSeconds": 157.61048727700017,
+      "endSeconds": 157.61862994700004,
+      "durationSeconds": 0.008142669999870122
+    },
+    {
+      "phase": "analyze.binding.uses.5",
+      "startSeconds": 157.61878336600012,
+      "endSeconds": 160.8239487830001,
+      "durationSeconds": 3.2051654169999892
+    },
+    {
+      "phase": "analyze.binding.uses.6",
+      "startSeconds": 160.82401135600003,
+      "endSeconds": 163.63761925900008,
+      "durationSeconds": 2.8136079030000474
+    },
+    {
+      "phase": "analyze.binding.uses.7",
+      "startSeconds": 163.63766929300004,
+      "endSeconds": 163.6404108470001,
+      "durationSeconds": 0.002741554000067481
+    },
+    {
+      "phase": "analyze.binding.uses.8",
+      "startSeconds": 163.64043427700017,
+      "endSeconds": 163.68800183000008,
+      "durationSeconds": 0.047567552999908
+    },
+    {
+      "phase": "analyze.binding.uses.9",
+      "startSeconds": 163.6881088240002,
+      "endSeconds": 178.91534626400016,
+      "durationSeconds": 15.227237439999953
+    },
+    {
+      "phase": "analyze.binding.uses.10",
+      "startSeconds": 178.91539567500013,
+      "endSeconds": 180.65919943500012,
+      "durationSeconds": 1.7438037599999916
+    },
+    {
+      "phase": "analyze.binding.uses.11",
+      "startSeconds": 180.6592511010001,
+      "endSeconds": 182.93435619000002,
+      "durationSeconds": 2.275105088999908
+    },
+    {
+      "phase": "analyze.binding.uses.12",
+      "startSeconds": 182.9344840340002,
+      "endSeconds": 190.26679486600005,
+      "durationSeconds": 7.332310831999848
+    },
+    {
+      "phase": "analyze.binding.uses.13",
+      "startSeconds": 190.26684564700008,
+      "endSeconds": 192.08121712300021,
+      "durationSeconds": 1.814371476000133
+    },
+    {
+      "phase": "analyze.binding.uses.14",
+      "startSeconds": 192.08126727100012,
+      "endSeconds": 192.98636826100005,
+      "durationSeconds": 0.9051009899999372
+    },
+    {
+      "phase": "analyze.binding.uses.15",
+      "startSeconds": 192.9864205670001,
+      "endSeconds": 255.81767069400007,
+      "durationSeconds": 62.831250126999976
+    }
+  ],
+  "openPhases": [
+    {
+      "phase": "analyze.project",
+      "startSeconds": 115.67798093800002,
+      "observedSeconds": 184.4147866100002
+    },
+    {
+      "phase": "analyze.expansion.run",
+      "startSeconds": 118.64808163900011,
+      "observedSeconds": 181.4446859090001
+    },
+    {
+      "phase": "analyze.expansion.bind",
+      "startSeconds": 118.64809790200002,
+      "observedSeconds": 181.4446696460002
+    },
+    {
+      "phase": "analyze.binding.run",
+      "startSeconds": 121.74315431900004,
+      "observedSeconds": 178.34961322900017
+    },
+    {
+      "phase": "analyze.binding.uses.16",
+      "startSeconds": 255.81772465900008,
+      "observedSeconds": 44.27504288900013
+    }
+  ]
+}
