@@ -671,6 +671,19 @@ export class NativeChecker {
     if (parts.length > 1) { for (const part of parts) { const found: number = this.memberSymbol(part,name); if (found >= 0) return found; } return -1; }
     const owner: number = this.nominalSymbol(receiver); if (owner < 0) return -1;
     const s: BindingSymbol = this.binding.symbols[owner];
+    // collect() records the declaration's own scope after creating it. Its
+    // symbols retain declaration order, so the first match is the same as in
+    // the global scan without visiting declarations from unrelated scopes.
+    if (s.module >= 0 && s.node >= 0) {
+      const scope: number = this.binding.files[s.module].nodeScopes[s.node];
+      if (scope >= 0 && this.binding.scopes[scope].module == s.module && this.binding.scopes[scope].node == s.node) {
+        for (const sid of this.binding.scopes[scope].symbols) {
+          const item: BindingSymbol = this.binding.symbols[sid];
+          if (item.name == name && item.module == s.module) return sid;
+        }
+        return -1;
+      }
+    }
     for (let i: number = 0; i < this.binding.symbols.length; i = i + 1) {
       const item: BindingSymbol = this.binding.symbols[i];
       if (item.name == name && item.module == s.module && item.scope >= 0 && this.binding.scopes[item.scope].node == s.node) return i;

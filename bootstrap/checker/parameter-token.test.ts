@@ -18,8 +18,8 @@ async function run(arg:string){
     stderr+=chunk;pending+=chunk;let end:number;
     while((end=pending.indexOf('\n'))>=0){
       const line=pending.slice(0,end);pending=pending.slice(end+1);
-      if(line==='TRACE analyze.checker.tokenProbe BEGIN')start=performance.now();
-      if(line==='TRACE analyze.checker.tokenProbe END')elapsed=performance.now()-start;
+      if(/^TRACE analyze\.checker\.(tokenProbe|memberProbe) BEGIN$/.test(line))start=performance.now();
+      if(/^TRACE analyze\.checker\.(tokenProbe|memberProbe) END$/.test(line))elapsed=performance.now()-start;
     }
   });
   const timer=setTimeout(()=>child.kill('SIGKILL'),60000);
@@ -49,4 +49,18 @@ test('checker ordinary type probes do not scan the symbol table',{timeout:60000}
   t.diagnostic(JSON.stringify(samples));
   for(let i=1;i<samples.length;i++)assert(samples[i].milliseconds<=samples[i-1].milliseconds*1.5+20,
     `type probes scan unrelated symbols: ${JSON.stringify(samples)}`);
+});
+test('checker class member lookup ignores unrelated class symbols',{timeout:60000},async t=>{
+  const samples:{symbols:number;milliseconds:number}[]=[];
+  for(const symbols of [512,1024,2048]){
+    const durations:number[]=[];
+    for(let repeat=0;repeat<3;repeat++){
+      const {value,elapsed}=await run('m'+symbols);assert.equal(value.success,true);assert(elapsed>=0);
+      durations.push(elapsed);
+    }
+    durations.sort((a,b)=>a-b);samples.push({symbols,milliseconds:durations[1]});
+  }
+  t.diagnostic(JSON.stringify(samples));
+  for(let i=1;i<samples.length;i++)assert(samples[i].milliseconds<=samples[i-1].milliseconds*1.5+20,
+    `class member lookup scans unrelated symbols: ${JSON.stringify(samples)}`);
 });
