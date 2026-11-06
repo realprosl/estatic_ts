@@ -13,8 +13,8 @@ export class IrFacts {
   constructor(blocks: number, places: number) { this.reachable = false; this.dominators = []; this.initialized = []; for (let i: number = 0; i < blocks; i = i+1) this.dominators.push(true); for (let i: number = 0; i < places; i = i+1) this.initialized.push(true); }
 }
 export class IrVerifier {
-  project: IrProject; issues: IrIssue[]; definitions: number[]; positions: number[]; facts: IrFacts[];
-  constructor(project: IrProject) { this.project = project; this.issues = []; this.definitions = []; this.positions = []; this.facts = []; }
+  project: IrProject; issues: IrIssue[]; definitions: number[]; positions: number[]; facts: IrFacts[]; placePaths: string[];
+  constructor(project: IrProject) { this.project = project; this.issues = []; this.definitions = []; this.positions = []; this.facts = []; this.placePaths = []; }
   error(source: IrSource, message: string): void { this.issues.push(new IrIssue("IR_INVALID",message,source)); }
   nativeBinding(f: constRef<IrFunction>): boolean {
     for (const annotation of this.project.annotations) {
@@ -128,21 +128,24 @@ export class IrVerifier {
   }
   updateInitialization(f: constRef<IrFunction>, i: constRef<IrInstruction>, initialized: boolean[]): boolean[] {
     if ((i.place) < 0 || i.place >= f.places.length) return initialized;
-    const projectionKey: string = irPlacePath(f,i.place,0);
+    const projectionKey: string = this.placePaths[i.place];
     if (i.op == "store") {
-      for (let p: number = 0; p < f.places.length; p = p+1) { const key: string = irPlacePath(f,p,0); if (key == projectionKey || key.startsWith(projectionKey+".")) initialized[p] = true; }
+      for (let p: number = 0; p < f.places.length; p = p+1) { const key: string = this.placePaths[p]; if (key == projectionKey || key.startsWith(projectionKey+".")) initialized[p] = true; }
       let parent: number = f.places[i.place].base;
       while (parent >= 0) { let all: boolean = true; for (let p: number = 0; p < f.places.length; p = p+1) if (f.places[p].base == parent && !initialized[p]) all = false; if (all) initialized[parent] = true; parent = f.places[parent].base; }
     }
-    if (i.op == "dropRemaining" || (i.op == "move" && this.project.typeDefinitions[f.places[i.place].typeId].resource)) for (let p: number = 0; p < f.places.length; p = p+1) { const key: string = irPlacePath(f,p,0); if (key == projectionKey || key.startsWith(projectionKey+".") || projectionKey.startsWith(key+".")) initialized[p] = false; }
+    if (i.op == "dropRemaining" || (i.op == "move" && this.project.typeDefinitions[f.places[i.place].typeId].resource)) for (let p: number = 0; p < f.places.length; p = p+1) { const key: string = this.placePaths[p]; if (key == projectionKey || key.startsWith(projectionKey+".") || projectionKey.startsWith(key+".")) initialized[p] = false; }
     return initialized;
   }
   functionBody(f: constRef<IrFunction>): void {
-    this.definitions = []; this.positions = []; this.facts = [];
+    this.definitions = []; this.positions = []; this.facts = []; this.placePaths = [];
     if (!this.typeId(f.returns) || f.blocks.length == 0) { this.error(f.source,"Función sin entrada/tipo de retorno"); return; }
     for (const typeId of f.values) { if (!this.typeId(typeId) || this.project.types[typeId] == "void") this.error(f.source,"Tipo de valor inválido"); this.definitions.push(-1); this.positions.push(-1); }
     let parameter: number = 0;
+    // Places and value definitions stay immutable during verification. Resolve
+    // each path once instead of rescanning the IR at every store/fixed-point pass.
     for (let place: number = 0; place < f.places.length; place = place+1) {
+      this.placePaths.push(irPlacePath(f,place,0));
       const p = f.places[place];
       if (p.kind == "capture") { if ((p.field) < 0 || p.field >= f.captureTypes.length || f.captureTypes[p.field] != p.typeId) this.error(p.source,"Place de entorno incompatible"); }
       else if (p.kind != "local") {
