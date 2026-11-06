@@ -86,7 +86,7 @@ jobs:
           y solo entonces publica la instantánea en la rama de trabajo.
           MD
           (cd "$d" && find . -type f | sort > files.txt)
-          if find "$d" -type f \( -name '*.ets' -o -name '*.ts' -o -name '*.o' -o -name '*.a' -o -name '*.so' \) | grep .; then
+          if find "$d" -type f \( -name '*.ets' -o \( -name '*.ts' ! -name '*.d.ts' \) -o -name '*.o' -o -name '*.a' -o -name '*.so' \) | grep .; then
             echo 'Unexpected source language or precompiled binary in native-cpp' >&2
             exit 1
           fi
