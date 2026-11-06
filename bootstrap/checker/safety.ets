@@ -317,12 +317,24 @@ export class SafetyAnalyzer {
         }
       }
     }
-    // Alias use extends the source lease, including aliases declared later.
-    for (let pass: number = 0; pass < this.leases.length; pass = pass + 1) for (let a: number = 0; a < this.leases.length; a = a + 1) for (let b: number = 0; b < this.leases.length; b = b + 1) {
-      const left: BorrowLease = this.leases[a]; const right: BorrowLease = this.leases[b];
+    // Alias roots are immutable during propagation; only end offsets change.
+    traceAnalysis(this.trace,"safety.memory.aliases","BEGIN");
+    let aliasSources: number[] = [];
+    for (const right of this.leases) {
       const init: number = bindingChild(this.node(right.module,this.binding.symbols[right.symbol].node),EdgeRole.Initializer);
-      if (this.reference(right.module,init) == left.symbol && right.end > left.end) this.leases[a].end = right.end;
+      aliasSources.push(this.reference(right.module,init));
     }
+    // Alias use extends the source lease, including aliases declared later.
+    // Stop at the fixed point instead of repeating all pairs for every lease.
+    let aliasesChanged: boolean = true;
+    for (let pass: number = 0; pass < this.leases.length && aliasesChanged; pass = pass + 1) {
+      aliasesChanged = false;
+      for (let a: number = 0; a < this.leases.length; a = a + 1) for (let b: number = 0; b < this.leases.length; b = b + 1) {
+      const left: BorrowLease = this.leases[a]; const right: BorrowLease = this.leases[b];
+        if (aliasSources[b] == left.symbol && right.end > left.end) { this.leases[a].end = right.end; aliasesChanged = true; }
+      }
+    }
+    traceAnalysis(this.trace,"safety.memory.aliases","END");
     for (let a: number = 0; a < this.leases.length; a = a + 1) for (let b: number = 0; b < a; b = b + 1) {
       const left: BorrowLease = this.leases[a]; const right: BorrowLease = this.leases[b];
       if (left.module == right.module && left.owner == right.owner && left.root == right.root && (left.begin) < right.end && (right.begin) < left.end && (left.mode == "ref" || right.mode == "ref")) {

@@ -79,6 +79,10 @@ def main():
                                        '-o', output / 'frontend-gen2.cpp', '--binary', generated,
                                        '--cxx-flag', '-O1', '--no-progress'])
         report['secondGenerationSha256'] = digest(generated)
+        repeated = profile('second-generation-self-ir', generated, 'bootstrap/ir/demo.ets', args.target_source_commit)
+        if digest(ir) != digest(repeated):
+            raise ValueError('Second generation changed its own frontend IR')
+        report['selfIrIdentical'] = True
         control = profile('control-gen2', generated, 'examples/hello.ets', args.target_source_commit)
         original = profile('control-seed', frontend, 'examples/hello.ets', args.seed_source_commit)
         if digest(control) != digest(original):

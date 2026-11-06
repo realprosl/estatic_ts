@@ -105,7 +105,9 @@ def main():
                      cpuPercent=100 * (usage.ru_utime + usage.ru_stime) / duration,
                      scope="timeout process and reaped frontend child; Linux wait4")
     (output / "resources.json").write_text(json.dumps(resources, indent=2) + "\n")
-    summary = dict(exitCode=code, timedOut=code in (124, 137), elapsedSeconds=duration,
+    summary = dict(exitCode=code, timedOut=code == 124, killed=code in (137, -9),
+                   timeoutMayHaveKilled=code in (137, -9) and duration >= args.timeout,
+                   elapsedSeconds=duration,
                    traceEvents=len(events), completedPhases=phases,
                    openPhases=[dict(phase=e["phase"], startSeconds=e["seconds"],
                                     observedSeconds=duration - e["seconds"]) for e in opened])
