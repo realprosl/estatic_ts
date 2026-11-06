@@ -329,3 +329,10 @@ test('native IR keeps interned types distinct across generic substitutions and r
   assert(ir.typeDefinitions.every((shape:any)=>shape.kind!=="pending"));
   assert.deepEqual(execute(ir),['1','x','2']);
 });
+
+test('native IR retains caller argument tables across cross-module defaults and named calls',()=>{
+  const ir=run('import {f} from "./lib";print(f(second:4));print(f(10,2));',{
+    'lib.ets':'function helper(n:number):number{return n+1;}export function f(first:number=helper(2),second:number=3):number{return first+second;}'
+  });
+  assert.deepEqual(execute(ir),['7','12']);
+});

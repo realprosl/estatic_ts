@@ -549,12 +549,12 @@ export class IrLowering {
     const stored: number = this.result.functions[this.currentFunction].places[p].typeId; return this.convert(this.emit("load",stored,[],p,-1,"",id),typeId,id);
   }
   call(id: number, typeId: number, receiver: number = -1, indirect: number = -1, target: number = -1, targetModule: number = -1): number {
-    const n = this.node(id); const file = this.checked.files[this.module]; const selected: number = target >= 0 ? target : file.selected[id]; const owner: number = target >= 0 ? targetModule : file.selectedModules[id];
+    const n = this.node(id); const callModule: number = this.module; const selected: number = target >= 0 ? target : this.checked.files[callModule].selected[id]; const owner: number = target >= 0 ? targetModule : this.checked.files[callModule].selectedModules[id];
     const symbol: number = this.reference(id);
     if (symbol >= 0 && (this.binding.symbols[symbol].module) < 0 && this.binding.symbols[symbol].name == "match") return this.matchExpression(id,typeId);
     if (symbol >= 0 && (this.binding.symbols[symbol].module) < 0 && ["move","ref","constRef"].includes(this.binding.symbols[symbol].name)) return this.memoryBuiltin(id,this.binding.symbols[symbol].name,typeId);
     let intrinsic: string = ""; let callable: number = -1; let callee: number = -1;
-    const signature: string = this.resolved(file.signatures[id]);
+    const signature: string = this.resolved(this.checked.files[callModule].signatures[id]);
     let escape: boolean = false;
     if (selected >= 0) for (const e of this.graph.modules[owner].cached.result.ast.nodes[selected].edges) if (e.role == EdgeRole.Decorators && this.graph.modules[owner].cached.result.ast.nodes[e.node].get(AttributeKind.Name) == "cppgen") escape = true;
     if (indirect >= 0) callable = indirect;
@@ -576,10 +576,10 @@ export class IrLowering {
     let operands: number[] = []; let positions: number[] = []; let spread: boolean[] = [];
     const formals: string[] = functionParams(signature);
     for (const e of n.edges) if (e.role == EdgeRole.Args) {
-      const position: number = file.argumentParameters[e.node] >= 0 ? file.argumentParameters[e.node] : positions.length; positions.push(position);
+      const position: number = this.checked.files[callModule].argumentParameters[e.node] >= 0 ? this.checked.files[callModule].argumentParameters[e.node] : positions.length; positions.push(position);
       let value: number = -1;
       if (this.preparedCall == id) value = this.preparedArguments[operands.length];
-      else if (intrinsic != "" && this.result.typeDefinitions[this.typeId(file.types[e.node],e.node)].resource && [NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.node(e.node).kind)) value = this.emit("borrow",this.typeId("constRef<"+this.resolved(file.types[e.node])+">",e.node),[],this.rootPlace(e.node),-1,"constRef",e.node);
+      else if (intrinsic != "" && this.result.typeDefinitions[this.typeId(this.checked.files[callModule].types[e.node],e.node)].resource && [NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.node(e.node).kind)) value = this.emit("borrow",this.typeId("constRef<"+this.resolved(this.checked.files[callModule].types[e.node])+">",e.node),[],this.rootPlace(e.node),-1,"constRef",e.node);
       else if (position < formals.length && !formals[position].startsWith("...")) value = this.argumentValue(e.node,formals[position]);
       else value = this.expression(e.node);
       operands.push(value); spread.push(this.node(e.node).kind == NodeKind.SpreadElement);

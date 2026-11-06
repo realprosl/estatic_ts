@@ -13,13 +13,15 @@ before(async()=>{frontend=process.env.ESTATIC_ANALYSIS_FRONTEND??await buildIrFr
 after(()=>rmSync(directory,{recursive:true,force:true,maxRetries:3,retryDelay:100}));
 async function lower(entry:string){
   const child=spawn(frontend,[entry,'--trace']);let stdout='',stderr='',pending='';
-  let started=-1,lowerMs=-1;
+  let started=-1,lowerMs=-1,functionsStart=-1,functionsMs=-1;
   child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');
   child.stdout.on('data',chunk=>{stdout+=chunk;});
   child.stderr.on('data',chunk=>{
     stderr+=chunk;pending+=chunk;let end:number;
     while((end=pending.indexOf('\n'))>=0){
       const line=pending.slice(0,end);pending=pending.slice(end+1);
+      if(line==='TRACE analyze.lower.functions BEGIN')functionsStart=performance.now();
+      if(line==='TRACE analyze.lower.functions END'){assert(functionsStart>=0);functionsMs=performance.now()-functionsStart;}
       if(line==='TRACE analyze.lower BEGIN')started=performance.now();
       if(line==='TRACE analyze.lower END'){assert(started>=0);lowerMs=performance.now()-started;}
     }
@@ -31,7 +33,7 @@ async function lower(entry:string){
   assert.equal(status,0,stderr+stdout.slice(-3000));
   const project=JSON.parse(stdout);assert.equal(project.success,true);assert.deepEqual(project.diagnostics,[]);
   assert(lowerMs>=0,'lower must finish');
-  return {project,lowerMs};
+  return {project,lowerMs,functionsMs};
 }
 
 test('IR initialization paths avoid repeated whole-function scans',{timeout:120000},async t=>{
@@ -53,4 +55,27 @@ test('IR initialization paths avoid repeated whole-function scans',{timeout:1200
   t.diagnostic(JSON.stringify(samples));
   assert(samples[1].lowerMs<=samples[0].lowerMs*5.5+30,
     `initialization paths regained cubic work: ${JSON.stringify(samples)}`);
+});
+
+
+test('IR call lowering avoids copying module analysis tables',{timeout:120000},async t=>{
+  const samples:{calls:number;functionsMs:number}[]=[];
+  for(const count of [512,1024]){
+    const entry=join(directory,'calls-'+count+'.ets');
+    writeFileSync(entry,'function bump(n:number):number{return n+1;}function unrelated():void{'+
+      Array.from({length:count},(_,i)=>`let v${i}=${i};`).join('')+'}function runner():void{'+
+      'print(bump(1));'.repeat(count)+'}runner();');
+    const times:number[]=[];
+    for(let repeat=0;repeat<3;repeat++){
+      const {project,functionsMs}=await lower(entry);assert(functionsMs>=0);
+      const runner=project.functions.find((f:any)=>f.name==='runner');assert(runner);
+      assert.equal(runner.blocks.flatMap((b:any)=>b.instructions).filter((i:any)=>
+        i.op==='call'&&project.functions[i.callee]?.name==='bump').length,count);
+      times.push(functionsMs);
+    }
+    times.sort((a,b)=>a-b);samples.push({calls:count,functionsMs:times[1]});
+  }
+  t.diagnostic(JSON.stringify(samples));
+  assert(samples[1].functionsMs<=samples[0].functionsMs*3.3+30,
+    `call lowering regained whole-module copies: ${JSON.stringify(samples)}`);
 });
