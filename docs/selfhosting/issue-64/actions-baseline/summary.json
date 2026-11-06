@@ -1,0 +1,27 @@
+{
+  "exitCode": 124,
+  "timedOut": true,
+  "traceEvents": 276,
+  "lastTraceEvents": [
+    "TRACE analyze.binding.uses.9 END",
+    "TRACE analyze.binding.uses.10 BEGIN",
+    "TRACE analyze.binding.uses.10 END",
+    "TRACE analyze.binding.uses.11 BEGIN",
+    "TRACE analyze.binding.uses.11 END",
+    "TRACE analyze.binding.uses.12 BEGIN",
+    "TRACE analyze.binding.uses.12 END",
+    "TRACE analyze.binding.uses.13 BEGIN",
+    "TRACE analyze.binding.uses.13 END",
+    "TRACE analyze.binding.uses.14 BEGIN",
+    "TRACE analyze.binding.uses.14 END",
+    "TRACE analyze.binding.uses.15 BEGIN",
+    "TRACE analyze.binding.uses.15 END",
+    "TRACE analyze.binding.uses.16 BEGIN",
+    "TRACE analyze.binding.uses.16 END",
+    "TRACE analyze.binding.uses.17 BEGIN",
+    "TRACE analyze.binding.uses.17 END",
+    "TRACE analyze.binding.uses.18 BEGIN",
+    "TRACE analyze.binding.uses.18 END",
+    "TRACE analyze.binding.uses.19 BEGIN"
+  ]
+}
