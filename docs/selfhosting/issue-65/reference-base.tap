@@ -1,0 +1,48 @@
+TAP version 13
+# Subtest: binder index preserves namespace chains, module identities and ordinary members
+ok 1 - binder index preserves namespace chains, module identities and ordinary members
+  ---
+  duration_ms: 99.165639
+  type: 'test'
+  ...
+# Subtest: binder index keeps the last value reference when a node has generic type references
+ok 2 - binder index keeps the last value reference when a node has generic type references
+  ---
+  duration_ms: 76.235212
+  type: 'test'
+  ...
+# Subtest: binder index preserves errors for missing and type-only namespace members
+ok 3 - binder index preserves errors for missing and type-only namespace members
+  ---
+  duration_ms: 278.416962
+  type: 'test'
+  ...
+# Subtest: binder member resolution scales without repeated full reference scans
+not ok 4 - binder member resolution scales without repeated full reference scans
+  ---
+  duration_ms: 33322.859397
+  type: 'test'
+  location: '/workspace/scratch/7a1d257a6397/estatic_ts/bootstrap/binder/reference-index.test.ts:85:1'
+  failureType: 'testCodeFailure'
+  error: 'member resolution regressed: [{"members":256,"milliseconds":313.93600800000013},{"members":512,"milliseconds":806.8991609999994},{"members":1024,"milliseconds":3812.5311250000013}]'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/7a1d257a6397/estatic_ts/bootstrap/binder/reference-index.test.ts:106:5)
+    process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# [{"members":256,"milliseconds":313.93600800000013},{"members":512,"milliseconds":806.8991609999994},{"members":1024,"milliseconds":3812.5311250000013}]
+1..4
+# tests 4
+# suites 0
+# pass 3
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 34096.834926

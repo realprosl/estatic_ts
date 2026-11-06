@@ -1,0 +1,141 @@
+TRACE analyze.loader BEGIN
+TRACE analyze.loader END
+TRACE analyze.project BEGIN
+frontend: expansion and binding
+TRACE analyze.expansion.construct BEGIN
+TRACE analyze.expansion.construct END
+TRACE analyze.expansion.run BEGIN
+TRACE analyze.expansion.round.0 POINT
+TRACE analyze.expansion.bind BEGIN
+TRACE analyze.binding.construct BEGIN
+TRACE analyze.binding.construct END
+TRACE analyze.binding.run BEGIN
+TRACE analyze.binding.initialize BEGIN
+TRACE analyze.binding.initialize END
+TRACE analyze.binding.collect.0 BEGIN
+TRACE analyze.binding.collect.0 END
+TRACE analyze.binding.collect.1 BEGIN
+TRACE analyze.binding.collect.1 END
+TRACE analyze.binding.collect.2 BEGIN
+TRACE analyze.binding.collect.2 END
+TRACE analyze.binding.imports.0 BEGIN
+TRACE analyze.binding.imports.0 END
+TRACE analyze.binding.exports.0 BEGIN
+TRACE analyze.binding.exports.0 END
+TRACE analyze.binding.imports.1 BEGIN
+TRACE analyze.binding.imports.1 END
+TRACE analyze.binding.exports.1 BEGIN
+TRACE analyze.binding.exports.1 END
+TRACE analyze.binding.imports.2 BEGIN
+TRACE analyze.binding.imports.2 END
+TRACE analyze.binding.exports.2 BEGIN
+TRACE analyze.binding.exports.2 END
+TRACE analyze.binding.duplicates BEGIN
+TRACE analyze.binding.duplicates END
+TRACE analyze.binding.uses.0 BEGIN
+TRACE analyze.binding.uses.0 END
+TRACE analyze.binding.uses.1 BEGIN
+TRACE analyze.binding.uses.1 END
+TRACE analyze.binding.uses.2 BEGIN
+TRACE analyze.binding.uses.2 END
+TRACE analyze.binding.targets BEGIN
+TRACE analyze.binding.targets END
+TRACE analyze.binding.run END
+TRACE analyze.expansion.bind END
+TRACE analyze.expansion.search BEGIN
+TRACE analyze.expansion.search END
+TRACE analyze.expansion.order BEGIN
+TRACE analyze.expansion.order END
+TRACE analyze.expansion.run END
+TRACE analyze.binding.final BEGIN
+TRACE analyze.binding.construct BEGIN
+TRACE analyze.binding.construct END
+TRACE analyze.binding.run BEGIN
+TRACE analyze.binding.initialize BEGIN
+TRACE analyze.binding.initialize END
+TRACE analyze.binding.collect.0 BEGIN
+TRACE analyze.binding.collect.0 END
+TRACE analyze.binding.collect.1 BEGIN
+TRACE analyze.binding.collect.1 END
+TRACE analyze.binding.collect.2 BEGIN
+TRACE analyze.binding.collect.2 END
+TRACE analyze.binding.imports.0 BEGIN
+TRACE analyze.binding.imports.0 END
+TRACE analyze.binding.exports.0 BEGIN
+TRACE analyze.binding.exports.0 END
+TRACE analyze.binding.imports.1 BEGIN
+TRACE analyze.binding.imports.1 END
+TRACE analyze.binding.exports.1 BEGIN
+TRACE analyze.binding.exports.1 END
+TRACE analyze.binding.imports.2 BEGIN
+TRACE analyze.binding.imports.2 END
+TRACE analyze.binding.exports.2 BEGIN
+TRACE analyze.binding.exports.2 END
+TRACE analyze.binding.duplicates BEGIN
+TRACE analyze.binding.duplicates END
+TRACE analyze.binding.uses.0 BEGIN
+TRACE analyze.binding.uses.0 END
+TRACE analyze.binding.uses.1 BEGIN
+TRACE analyze.binding.uses.1 END
+TRACE analyze.binding.uses.2 BEGIN
+TRACE analyze.binding.uses.2 END
+TRACE analyze.binding.targets BEGIN
+TRACE analyze.binding.targets END
+TRACE analyze.binding.run END
+TRACE analyze.binding.final END
+TRACE analyze.project.assemble POINT
+TRACE analyze.checker.construct BEGIN
+TRACE analyze.checker.construct END
+TRACE analyze.checker.run BEGIN
+frontend: types
+TRACE analyze.checker.types BEGIN
+TRACE analyze.checker.types END
+TRACE analyze.checker.safety BEGIN
+TRACE analyze.safety.construct BEGIN
+TRACE analyze.safety.construct END
+frontend: memory and captures
+TRACE analyze.safety.memory BEGIN
+TRACE analyze.safety.memory END
+TRACE analyze.safety.captures BEGIN
+TRACE analyze.safety.captures END
+frontend: effects
+TRACE analyze.safety.effects BEGIN
+frontend: effects graph
+frontend: effect functions
+frontend: effect points 1765
+frontend: effect module 0
+frontend: effect module 1
+frontend: effect module 2
+frontend: effect graph pass 1, 769 edges
+frontend: effects summaries
+TRACE analyze.safety.effects END
+frontend: provenance and visibility
+TRACE analyze.safety.provenance BEGIN
+TRACE analyze.safety.provenance END
+TRACE analyze.safety.visibility BEGIN
+TRACE analyze.safety.visibility END
+frontend: flow
+TRACE analyze.safety.flow BEGIN
+frontend: global flow 0
+frontend: global flow 1
+frontend: global flow 2
+frontend: definitions flow 0
+frontend: definitions flow 1
+frontend: definitions flow 2
+frontend: flow complete, 0 precise calls
+TRACE analyze.safety.flow END
+TRACE analyze.checker.safety END
+frontend: comptime
+TRACE analyze.checker.comptime BEGIN
+TRACE analyze.checker.comptime END
+TRACE analyze.checker.run END
+frontend: module records
+TRACE analyze.checker.records.construct BEGIN
+TRACE analyze.checker.records.construct END
+TRACE analyze.checker.records.build BEGIN
+TRACE analyze.checker.records.build END
+TRACE analyze.project END
+TRACE analyze.lower BEGIN
+TRACE analyze.lower END
+TRACE analyze.format BEGIN
+TRACE analyze.format END

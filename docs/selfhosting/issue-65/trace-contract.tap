@@ -1,0 +1,52 @@
+TAP version 13
+# Subtest: analysis trace preserves empty IR and diagnostics
+ok 1 - analysis trace preserves empty IR and diagnostics
+  ---
+  duration_ms: 108.591093
+  type: 'test'
+  ...
+# Subtest: analysis trace preserves valid IR and diagnostics
+ok 2 - analysis trace preserves valid IR and diagnostics
+  ---
+  duration_ms: 369.894309
+  type: 'test'
+  ...
+# Subtest: analysis trace preserves imports IR and diagnostics
+ok 3 - analysis trace preserves imports IR and diagnostics
+  ---
+  duration_ms: 227.474462
+  type: 'test'
+  ...
+# Subtest: analysis trace preserves expansion IR and diagnostics
+ok 4 - analysis trace preserves expansion IR and diagnostics
+  ---
+  duration_ms: 364.352749
+  type: 'test'
+  ...
+# Subtest: analysis trace preserves checker-error IR and diagnostics
+ok 5 - analysis trace preserves checker-error IR and diagnostics
+  ---
+  duration_ms: 106.577624
+  type: 'test'
+  ...
+# Subtest: analysis trace preserves binding-error IR and diagnostics
+ok 6 - analysis trace preserves binding-error IR and diagnostics
+  ---
+  duration_ms: 100.83652
+  type: 'test'
+  ...
+# Subtest: analysis trace preserves syntax-error IR and diagnostics
+ok 7 - analysis trace preserves syntax-error IR and diagnostics
+  ---
+  duration_ms: 30.889414
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1565.303433
