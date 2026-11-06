@@ -1,6 +1,9 @@
 name: Issue 66 self-hosting verification
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/issue-66-selfhosting.yml']
 permissions:
   contents: read
 jobs:
