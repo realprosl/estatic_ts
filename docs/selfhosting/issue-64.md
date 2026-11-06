@@ -131,8 +131,19 @@ CPU/RSS, duraciones locales de fases y comprobación de la operación anidada
 en C++ original. La evidencia permite investigar el binder en #65 cuando se
 resuelva #64, sin afirmar que sea el único coste: loader también es significativo.
 
-#64 permanece abierta. Falta revisar/integrar la PR #69 y resolver explícitamente
-el criterio de duraciones por fase **en Actions**: la ejecución histórica no las
-recogió, y la nueva medición es local. No se restaura un workflow para cubrir ese
-criterio, dado que el usuario ha solicitado eliminarlos todos. #65 y #66 siguen
-en espera; este informe no certifica self-hosting completo.
+La revisión de evidencia comprueba los 270 eventos, la consistencia aritmética
+de todos los intervalos, el timeout explícito y el control de 42 intervalos.
+El diagnóstico de #64 está completo: existe una reproducción identificada,
+medición de CPU/RSS y subfases, distinción entre fases completas/abiertas/no
+alcanzadas y una operación O(M×R) comprobada en el C++ ejecutado.
+
+El 2026-11-06 el usuario solicitó eliminar todos los workflows y continuar
+resolviendo el problema. En consecuencia, el lugar de ejecución del criterio
+se adapta a validación local reproducible, conservando las referencias originales
+de Actions. Esto sustituye la exigencia de una nueva ejecución de Actions;
+no se presenta la medición local como CI. No se restablece ningún workflow.
+
+Tras integrar este informe y cerrar #64 se puede retomar #65: aplicar la
+corrección, añadir regresión y medir antes/después en el mismo entorno.
+El timeout esperado del diagnóstico no certifica self-hosting completo;
+la segunda generación sigue reservada para #66.
