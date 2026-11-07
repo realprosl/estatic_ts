@@ -35,6 +35,23 @@ test("install protects an unrelated command before modifying its prefix",()=>{
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
+test("installed etsc compiles bootstrap native headers outside the checkout",async()=>{
+ const dir=temporary(),prefix=join(dir,"prefix");
+ try{
+  const frontend=process.env.ESTATIC_IR_BINARY??await buildIrFrontend();
+  const installed=install(prefix,["--frontend",frontend]);
+  assert.equal(installed.status,0,installed.stderr+installed.stdout);
+  const moved=join(dir,"moved-prefix");renameSync(prefix,moved);
+  const boundary=join(dir,"platform.ets"),probe=join(dir,"bootstrap-header.ets");
+  writeFileSync(boundary,readFileSync(join(root,"bootstrap/modules/platform.ets"),"utf8"));
+  writeFileSync(probe,'import {contentHash} from "./platform"; print(contentHash("abc"));');
+  // Neither the working directory nor include flags point at the checkout.
+  const p=spawnSync(join(moved,"bin/etsc"),["run",probe,"--binary",join(dir,"bootstrap-header")],{cwd:dir,encoding:"utf8",timeout:120000,env:{...process.env,ESTC_ROOT:""}});
+  assert.equal(p.status,0,p.stderr+p.stdout);
+  assert.equal(p.stdout,"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n");
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
 test("installed etsc initializes, builds and runs independently of the clone with precompiled runtime",async()=>{
  const dir=temporary(),prefix=join(dir,"prefix"),project=join(dir,"project with spaces"),cache=join(dir,"user-cache");
  try{
@@ -46,7 +63,9 @@ test("installed etsc initializes, builds and runs independently of the clone wit
   assert.equal(readFileSync(join(root,"src/cli.ts"),"utf8"),sourceBefore);assert.equal(installed.status,0,installed.stderr+installed.stdout);
   const bin=join(prefix,"bin/etsc"),home=realpathSync(join(prefix,"lib/estc/current"));if(process.platform==="linux")assert.equal(readFileSync(bin).subarray(0,4).toString(),"\x7fELF");
   // Installed use must not import the stage-0 compiler or build its frontend.
-  assert(!existsSync(join(home,"src")));assert(!existsSync(join(home,"bootstrap")));
+  assert(!existsSync(join(home,"src")));
+  assert.equal(readFileSync(join(home,"bootstrap/modules/platform.hpp"),"utf8"),readFileSync(join(root,"native-cpp/bootstrap/modules/platform.hpp"),"utf8"));
+  assert(readdirSync(join(home,"bootstrap"),{recursive:true}).filter(path=>statSync(join(home,"bootstrap",path)).isFile()).every(path=>/\.(hpp|h)$/.test(path)));
   const poison=join(dir,"without-node"),sentinel=join(dir,"node-was-used");mkdirSync(poison);
   for(const executable of ["node","nodejs","npm"]){const path=join(poison,executable);writeFileSync(path,`#!/bin/sh\necho forbidden >> '${sentinel}'\nexit 99\n`);chmodSync(path,0o755);}
   const nativeEnv={...process.env,PATH:poison+":"+process.env.PATH,NATIVO_NODE:"/missing/node",NODE:"/missing/node",XDG_CACHE_HOME:cache,ESTC_RUNTIME_CACHE:"",ESTATIC_RUNTIME_CACHE:""};
@@ -128,7 +147,9 @@ test("install compiles the C++ seed without Node",async()=>{
   assert(existsSync(join(home,"types/estatic.d.ts")));
   assert(existsSync(join(home,"templates/estatic.config.json")));
   // La instalacion no arrastra el compilador de stage 0.
-  assert(!existsSync(join(home,"src")));assert(!existsSync(join(home,"bootstrap")));
+  assert(!existsSync(join(home,"src")));
+  assert.equal(readFileSync(join(home,"bootstrap/modules/platform.hpp"),"utf8"),readFileSync(join(root,"native-cpp/bootstrap/modules/platform.hpp"),"utf8"));
+  assert(readdirSync(join(home,"bootstrap"),{recursive:true}).filter(path=>statSync(join(home,"bootstrap",path)).isFile()).every(path=>/\.(hpp|h)$/.test(path)));
   const version=spawnSync(bin,["--version"],{encoding:"utf8",env:{...env,ESTC_ROOT:home}});assert.equal(version.status,0,version.stderr);assert.match(version.stdout,/^etsc /);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });

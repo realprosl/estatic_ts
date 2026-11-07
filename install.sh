@@ -145,6 +145,11 @@ stage="$library/.install-$$"
 mkdir -p "$stage/native" "$stage/templates"
 
 cp -R "$seed_dir/runtime" "$stage/runtime"
+# Generated bootstrap C++ includes these native boundary headers by this path.
+# Ship only headers, without the ETS/TS compiler sources or native driver.
+mkdir -p "$stage/bootstrap/modules"
+find "$seed_dir/bootstrap/modules" -maxdepth 1 -type f \
+  \( -name '*.hpp' -o -name '*.h' \) -exec cp {} "$stage/bootstrap/modules/" \;
 cp -R "$seed_dir/types" "$stage/types"
 cp -R "$seed_dir/templates/." "$stage/templates/"
 # Las declaraciones canonicas son la unica fuente de verdad: si el checkout las
