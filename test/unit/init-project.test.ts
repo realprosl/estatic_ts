@@ -76,7 +76,9 @@ test("init-project: estatic.d.ts declara los built-ins del dialecto", async () =
   // (los reemplaza `ptr<T>` y el futuro `weak<T>`); siguen reconociéndose
   // por el codegen para diagnóstico de código legacy, pero el editor ya
   // no debe verlos como tipos del dialecto.
-  for (const symbol of ["Optional", "Result", "Promise", "Map", "Set"]) {
+  // `Promise` queda fuera a proposito: declararlo en el .d.ts choca con el
+  // `Promise` estandar del servidor de TypeScript.
+  for (const symbol of ["Optional", "Result", "Map", "Set"]) {
     assert.match(dts, new RegExp(`\\bclass\\s+${symbol}\\b`), `falta class ${symbol}`);
   }
   // Modificadores de memoria V22 (4) + readonly (existente).
@@ -174,8 +176,11 @@ test("init-project: todo builtin registrado tiene declaración para el editor", 
   const registeredTypes = new Set(
     [...registry.matchAll(/registerBuiltin(?:Interface|Class)\([^,]+,\s*"([^"]+)"/g)].map(match => match[1]),
   );
+  // `Promise` se registra como builtin pero no se declara en el .d.ts a
+  // proposito: declararlo choca con el `Promise` estandar del servidor de
+  // TypeScript. Se excluye de la comparacion, no se anade al .d.ts.
   assert.deepEqual(
-    [...registeredTypes].filter(name => !declaredTypes.has(name)),
+    [...registeredTypes].filter(name => !declaredTypes.has(name) && name !== "Promise"),
     [],
     "hay tipos builtin sin declarar en types/estatic.d.ts",
   );

@@ -272,8 +272,8 @@ Los fallos se reparten así:
 | Causa | Nº | Comentario |
 |---|---:|---|
 | Entorno: falta `libuv1-dev` (`uv.h: No such file or directory`), drogon y red | la mayoría | Pasan en CI con `libuv1-dev libcurl4-openssl-dev libssl-dev` |
-| Decisión de diseño: `Promise` no se declara en `types/estatic.d.ts` | 3 | `binder: builtin declarations stay synchronized with canonical d.ts` y dos de `init-project`. El `d.ts` omite `Promise` **a propósito** (choca con el `Promise` estándar del servidor de TS), así que el test es quien está desactualizado. |
-| Decisión de diseño: `includes` con offset opcional | 1 | `checker: string includes keeps the required offset parameter` espera un error `/Aridad/` para `includes("b")`, pero el offset es opcional como en JS y TS. El test está desactualizado. |
+| Decisión de diseño: `Promise` no se declara en `types/estatic.d.ts` | 3 | `binder: builtin declarations stay synchronized with canonical d.ts` y dos de `init-project`. El `d.ts` omite `Promise` **a propósito** (choca con el `Promise` estándar del servidor de TS), así que el test es quien está desactualizado. **Corregido en esta rama**: se excluye `Promise` de la comparación, no se añade al `.d.ts`. |
+| Decisión de diseño: `includes` con offset opcional | 1 | `checker: string includes keeps the required offset parameter` esperaba un error `/Aridad/` para `includes("b")`, pero el offset es opcional como en JS y TS. **Corregido en esta rama**: el test ahora acepta las dos formas. |
 
 Esto es relevante para CI: **la suite está roja en `main` hoy**, y un workflow que la ejecute
 tal cual fallará hasta que se actualicen esos tests o se acepte el estado.
