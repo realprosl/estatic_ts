@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/regenerate-native-cpp.yml
       - scripts/generate-native-cpp-snapshot.mjs
+      - install.sh
 
 permissions:
   contents: write
@@ -124,6 +125,17 @@ jobs:
           "$RUNNER_TEMP/native-smoke/hello" > "$RUNNER_TEMP/native-smoke/output"
           printf 'Hola, mundo\n120\n' > "$RUNNER_TEMP/native-smoke/expected"
           diff -u "$RUNNER_TEMP/native-smoke/expected" "$RUNNER_TEMP/native-smoke/output"
+
+      - name: Verify installation with self-hosted Bootstrap frontend
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash install.sh --prefix "$RUNNER_TEMP/etsc-selfhost" --self-host
+          test -x "$RUNNER_TEMP/etsc-selfhost/bin/etsc"
+          "$RUNNER_TEMP/etsc-selfhost/bin/etsc" --version
+          ESTC_ROOT="$RUNNER_TEMP/etsc-selfhost/lib/estc/current" \
+            "$RUNNER_TEMP/etsc-selfhost/bin/etsc" --check examples/hello.ets --no-progress
 
       - name: Publish only tested sources
         if: github.event_name == 'workflow_dispatch'
