@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   getTs2cppRevision,
@@ -19,17 +20,22 @@ function cli(flag: "--version" | "-v") {
   );
 }
 
+const pkg = JSON.parse(readFileSync(join(compilerRoot, "package.json"), "utf8"));
+const expectedLabel = `estatic ${pkg.version} (v${pkg.estaticRevision})`;
+
 test("cli version: package y revisión exponen la versión actual", () => {
-  assert.equal(getTs2cppVersion(), "1.26.0");
-  assert.equal(getTs2cppRevision(), 64);
-  assert.equal(getTs2cppVersionLabel(), "estatic 1.26.0 (v64)");
+  assert.match(pkg.version, /^\\d+\\.\\d+\\.\\d+$/);
+  assert.ok(Number.isInteger(pkg.estaticRevision) && pkg.estaticRevision > 0);
+  assert.equal(getTs2cppVersion(), pkg.version);
+  assert.equal(getTs2cppRevision(), pkg.estaticRevision);
+  assert.equal(getTs2cppVersionLabel(), expectedLabel);
 });
 
 for (const flag of ["--version", "-v"] as const) {
   test(`cli version: ${flag}`, () => {
     const result = cli(flag);
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(result.stdout.trim(), "estatic 1.26.0 (v64)");
+    assert.equal(result.stdout.trim(), expectedLabel);
     assert.equal(result.stderr, "");
   });
 }
