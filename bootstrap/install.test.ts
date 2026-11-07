@@ -65,7 +65,8 @@ test("installed etsc initializes, builds and runs independently of the clone wit
   p=run(["init",project]);assert.equal(p.status,1);assert.equal(readFileSync(join(project,"existing.txt"),"utf8"),"keep me");
   // El runtime precompilado requiere cabeceras de libuv: sin ellas el
   // instalador avisa y deja que el compilador lo haga en el primer uso.
-  const prepared=readdirSync(join(home,"build/runtime-cache"),{recursive:true}).map(String).filter(p=>p.endsWith(".a")).map(p=>join(home,"build/runtime-cache",p));
+  const preparedRoot=join(home,"build/runtime-cache");
+  const prepared=existsSync(preparedRoot)?readdirSync(preparedRoot,{recursive:true}).map(String).filter(p=>p.endsWith(".a")).map(p=>join(preparedRoot,p)):[];
   const libraries=prepared.length?prepared:readdirSync(join(project,".build/runtime"),{recursive:true}).map(String).filter(p=>p.endsWith(".a")).map(p=>join(project,".build/runtime",p));
   const before=libraries.map(p=>statSync(p).mtimeMs);
   writeFileSync(join(project,"src/main.ts"),'async function f():Promise<void>{await sleep(1);print("native installed");}await f();');

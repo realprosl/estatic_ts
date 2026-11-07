@@ -89,6 +89,17 @@ if [ -L "$current" ]; then
   format=""
   [ -f "$current/installation.json" ] && format="$(sed -n 's/.*"format"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$current/installation.json" | head -1)"
   [ "$format" = "estc-install-1" ] || fail "No se sustituye una distribucion ajena: $current"
+  # El comando legacy `estc` se retira solo si la instalacion ACTUAL lo
+  # declara suyo. Hay que decidirlo antes de publicar: `current` pasara a
+  # apuntar a la distribucion nueva, con otro hash.
+  legacy_hash="$(sed -n 's/.*"commandHash"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$current/installation.json" | head -1)"
+  if [ -e "$legacy" ] && [ "$legacy_hash" = "$(hash_file "$legacy")" ]; then
+    owned_legacy=1
+  else
+    owned_legacy=0
+  fi
+else
+  owned_legacy=0
 fi
 if [ -e "$destination" ]; then
   owned=0
@@ -178,11 +189,19 @@ cp "$work/native/etsc" "$command_tmp"
 chmod +x "$command_tmp"
 mv -T "$command_tmp" "$destination" 2>/dev/null || { rm -f "$destination"; mv "$command_tmp" "$destination"; }
 
-# El comando legacy `estc` lo elimina esta distribucion si era suyo.
-if [ -f "$current/installation.json" ] && [ -e "$legacy" ]; then
-  legacy_hash="$(hash_file "$legacy")"
-  expected="$(sed -n 's/.*"commandHash"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$current/installation.json" | head -1)"
-  [ "$legacy_hash" = "$expected" ] && rm -f "$legacy"
+# El comando legacy `estc` lo elimina esta distribucion si era suyo, y el
+# `nativo` de la v1 si su manifiesto declara que le pertenece.
+if [ "$owned_legacy" -eq 1 ] && [ -e "$legacy" ]; then
+  rm -f "$legacy"
+fi
+legacy_nativo="$prefix/bin/nativo"
+legacy_nativo_manifest="$prefix/lib/nativo/current/installation.json"
+if [ -e "$legacy_nativo" ] && [ -f "$legacy_nativo_manifest" ]; then
+  legacy_format="$(sed -n 's/.*"format"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$legacy_nativo_manifest" | head -1)"
+  legacy_nativo_hash="$(sed -n 's/.*"commandHash"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$legacy_nativo_manifest" | head -1)"
+  if [ "$legacy_format" = "nativo-install-1" ] && [ "$legacy_nativo_hash" = "$(hash_file "$legacy_nativo")" ]; then
+    rm -f "$legacy_nativo"
+  fi
 fi
 
 # --- Runtime precompilado ----------------------------------------------------
