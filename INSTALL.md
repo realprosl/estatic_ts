@@ -29,6 +29,10 @@ intérprete JavaScript ni las fuentes TypeScript de stage 0. El frontend es ETS
 compilado; el driver y el backend son C++20. Esto no afirma que todo el
 compilador esté escrito en ETS o sea autoalojado.
 
+La distribución incluye `bootstrap/modules/platform.hpp`, necesaria para
+compilar los fuentes de bootstrap con el compilador instalado. La cabecera
+mantiene su ruta de inclusión también al mover la instalación.
+
 Node sólo hace falta para **regenerar la semilla** cuando cambian las fuentes de
 `bootstrap/*.ets`:
 
