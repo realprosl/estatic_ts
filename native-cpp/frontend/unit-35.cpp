@@ -2,32 +2,38 @@
 #include "estatic_common.hpp"
 
 static inline void runIr() {
+    bool verbose = false;
     std::string entry = std::string("");
     auto options = LoaderOptions{}.constructor();
     for (double at = 1.0; (at < argumentCount()); (at = (at + 1.0))) {
         const std::string arg = argument(at);
-        if (((arg == std::string("--root")) || (arg == std::string("--cache")))) {
-            (at = (at + 1.0));
-            if ((at >= argumentCount())) {
-                exitProcess(2.0);
-            }
-            if ((arg == std::string("--root"))) {
-                ets_push_vec<std::string>(options.roots, normalizePath(argument(at)));
-            } else {
-                (options.cacheDirectory = argument(at));
-            }
+        if ((arg == std::string("--verbose"))) {
+            (verbose = true);
+            (options.verbose = true);
         } else {
-            if ((arg == std::string("--alias"))) {
-                if (((at + 2.0) >= argumentCount())) {
+            if (((arg == std::string("--root")) || (arg == std::string("--cache")))) {
+                (at = (at + 1.0));
+                if ((at >= argumentCount())) {
                     exitProcess(2.0);
                 }
-                ets_push_vec<PathAlias>(options.aliases, PathAlias{}.constructor(argument((at + 1.0)), argument((at + 2.0))));
-                (at = (at + 2.0));
-            } else {
-                if (((entry == std::string("")) && (!::ets::string_startsWith(arg, std::string("-"))))) {
-                    (entry = arg);
+                if ((arg == std::string("--root"))) {
+                    ets_push_vec<std::string>(options.roots, normalizePath(argument(at)));
                 } else {
-                    exitProcess(2.0);
+                    (options.cacheDirectory = argument(at));
+                }
+            } else {
+                if ((arg == std::string("--alias"))) {
+                    if (((at + 2.0) >= argumentCount())) {
+                        exitProcess(2.0);
+                    }
+                    ets_push_vec<PathAlias>(options.aliases, PathAlias{}.constructor(argument((at + 1.0)), argument((at + 2.0))));
+                    (at = (at + 2.0));
+                } else {
+                    if (((entry == std::string("")) && (!::ets::string_startsWith(arg, std::string("-"))))) {
+                        (entry = arg);
+                    } else {
+                        exitProcess(2.0);
+                    }
                 }
             }
         }
@@ -38,7 +44,10 @@ static inline void runIr() {
     }
     auto loader = ModuleLoader{}.constructor(options);
     const auto graph = loader.load(entry);
-    const auto project = analyzeProject(graph);
+    const auto project = analyzeProject(graph, verbose);
+    if (verbose) {
+        printError(std::string("frontend: lowering IR"));
+    }
     auto ir = lowerProject(project.graph, project.binding, project.checked);
     auto diagnostics = project.graph.diagnostics;
     for (const auto& d : project.binding.diagnostics) {
@@ -54,6 +63,9 @@ static inline void runIr() {
             ets_push_vec<std::string>(seen, key);
             ets_push_vec<IrIssue>(ir.diagnostics, IrIssue{}.constructor(d.code, d.message, IrSource{}.constructor(std::string(""), std::string(""), d.file, (-1.0), d.token.offset, d.endToken.endOffset)));
         }
+    }
+    if (verbose) {
+        printError(std::string("frontend: serializing verified IR"));
     }
     print(formatIr(ir));
     if ((!ir.success)) {
