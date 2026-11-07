@@ -17,6 +17,6 @@ export ESTC_ROOT="$(pwd)"
 Ambos se reconstruyen exclusivamente desde este directorio.
 Para compilar programas se requieren sus fuentes de entrada, pero no Node.
 
-La Action `native-cpp-bootstrap.yml` genera este árbol, lo empaqueta,
+La Action `regenerate-native-cpp.yml` genera este árbol, lo empaqueta,
 reconstruye y prueba los ejecutables desde el artefacto descargado,
 y solo entonces publica la instantánea en la rama de trabajo.
