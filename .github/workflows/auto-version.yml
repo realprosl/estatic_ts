@@ -1,4 +1,4 @@
-name: Auto-increment minor version
+name: Propose minor version bump
 
 on:
   pull_request:
@@ -7,51 +7,53 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
-  group: auto-version-main
+  group: propose-version-main
   cancel-in-progress: false
 
 jobs:
-  bump:
-    if: github.event.pull_request.merged == true
+  propose:
+    if: >-
+      github.event.pull_request.merged == true &&
+      !startsWith(github.event.pull_request.head.ref, 'automation/version-bump-')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
         with:
           ref: main
-          persist-credentials: true
           fetch-depth: 0
 
       - name: Increment minor version and revision
         id: version
-        shell: bash
         run: |
-          set -euo pipefail
-          git pull --ff-only origin main
           node <<'NODE'
           const fs = require('node:fs');
-          const p = 'package.json';
-          const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+          const file = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
           const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(pkg.version);
           if (!match) throw new Error('Unsupported version: ' + pkg.version);
           if (!Number.isSafeInteger(pkg.estaticRevision)) throw new Error('Invalid estaticRevision');
           pkg.version = `${match[1]}.${Number(match[2]) + 1}.0`;
           pkg.estaticRevision += 1;
-          fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'version=' + pkg.version + '\n');
+          fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${pkg.version}\n`);
           NODE
 
-      - name: Commit and tag
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="${{ steps.version.outputs.version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json
-          git commit -m "chore(release): v${version} [skip ci]"
-          git tag "v${version}"
-          git push origin HEAD:main
-          git push origin "v${version}"
+      - name: Create version bump pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: main
+          branch: automation/version-bump-next
+          delete-branch: true
+          commit-message: "chore(release): propose v${{ steps.version.outputs.version }}"
+          title: "chore(release): v${{ steps.version.outputs.version }}"
+          body: |
+            Propuesta automática de incremento de versión tras fusionar una PR en main.
+            Actualiza package.json (minor +1, patch 0, estaticRevision +1).
+            Requiere revisión y merge manual; no hace push a main ni crea tags.
+          add-paths: |
+            package.json
