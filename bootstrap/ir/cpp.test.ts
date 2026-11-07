@@ -9,6 +9,7 @@ import { buildLoader, root } from "../modules/build.ts";
 import { nativeIr, buildIrCpp as referenceBuild } from "./cpp.ts";
 import { generateCppFromIr as referenceCpp, IrCppGenerator } from "../../src/codegen/ir/cpp-generator.ts";
 import { IrCodegenError } from "../../src/codegen/ir/model.ts";
+import { compile as compileStage0 } from "../../src/compiler.ts";
 const nativeProjects=new WeakMap<object,Parameters<typeof referenceCpp>[0]>();
 function generateCppFromIr(project:Parameters<typeof referenceCpp>[0]):ReturnType<typeof referenceCpp>{
  let result:ReturnType<typeof referenceCpp>;
@@ -204,3 +205,42 @@ test("bootstrap CLI reuses project config and passes aliases/roots to native loa
 
 
 test("IR C++ recursive interface copies pass ASan/UBSan",()=>assert.equal(execute('interface I{render():string;}class Leaf{render():string{return "L";}}class Group{children:I[];render():string{let s="";for(const c of this.children)s+=c.render();return s;}}const x:I=new Group([new Leaf(),new Group([new Leaf()])]);const y:I=x;print(x.render());print(y.render());',{},["-fsanitize=address,undefined","-fno-omit-frame-pointer"]),"LL\nLL\n"));
+
+
+// V22: el contrato de paso es el MISMO en stage 0 (src/) y en el frontend
+// nativo (bootstrap/ir). `ref<T>` es `T&`, `constRef<T>` es `const T&`,
+// `ptr<T>` es `std::unique_ptr<T>` y `T` se copia por valor. El IR usa
+// punteros internamente (std::optional no admite referencias), pero eso es
+// un detalle del backend: lo que se escribe es lo que se obtiene.
+test("IR C++ parity: ref/constRef/ptr/valor emiten el mismo contrato que stage 0",()=>{
+ const source=[
+  "class Counter{value:number;constructor(v:number){this.value=v;}}",
+  "function muta(c:ref<Counter>):void{c.value=c.value+1;}",
+  "function lee(c:constRef<Counter>):number{return c.value;}",
+  "function copia(c:Counter):number{return c.value;}",
+  "function toma(p:ptr<Counter>):number{return p.value;}",
+  "function main():void{let c=new Counter(1);muta(c);print(lee(c));print(copia(c));}"
+ ].join("\n");
+ const native=generateCppFromIr(ir(source)).cpp;
+ const stage0=compileStage0(source).cpp;
+ // Stage 0 (src/codegen/cpp-types.ts).
+ assert.match(stage0,/void muta\(Counter& c\)/);
+ assert.match(stage0,/double lee\(const Counter& c\)/);
+ assert.match(stage0,/double copia\(Counter c\)/);
+ assert.match(stage0,/std::unique_ptr<Counter> p/);
+ // Nativo (src/codegen/ir/cpp-generator.ts): el mismo contrato observable.
+ assert.match(native,/void ir_f\d+\(ir_t\d+& a\d+\)/);
+ assert.match(native,/double ir_f\d+\(const ir_t\d+& a\d+\)/);
+ assert.match(native,/double ir_f\d+\(ir_t\d+ a\d+\)/);
+ assert.match(native,/std::unique_ptr<ir_t\d+> a\d+/);
+});
+
+test("IR C++ parity: un parametro `out` es una referencia, igual que en stage 0",()=>{
+ const source=[
+  "class Box{value:number;constructor(v:number){this.value=v;}}",
+  "function rellena(out b:Box):void{b.value=7;}",
+  "function main():void{let b=new Box(1);rellena(b);print(b.value);}"
+ ].join("\n");
+ const native=generateCppFromIr(ir(source)).cpp;
+ assert.match(native,/void ir_f\d+\(ir_t\d+& a\d+\)/);
+});
