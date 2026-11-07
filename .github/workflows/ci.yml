@@ -13,7 +13,7 @@ concurrency:
   # Un unico run por rama: el evento `push` y el `pull_request` comparten
   # grupo, asi que el segundo cancela al primero en vez de duplicar la
   # corrida. Un push directo a una rama sin PR sigue teniendo su run.
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -38,7 +38,8 @@ jobs:
           # unico test falla por entorno y el resto de la suite sigue valida.
           # libjsoncpp-dev aporta las cabeceras `json/json.h` que drogon
           # incluye; libdrogon-dev solo arrastra el runtime de jsoncpp.
-          sudo apt-get install -y libdrogon-dev libjsoncpp-dev || echo "::warning::libdrogon-dev no disponible"
+          # Drogon ademas de jsoncpp necesita libuuid (-luuid) y zlib (-lz).
+          sudo apt-get install -y libdrogon-dev libjsoncpp-dev uuid-dev zlib1g-dev || echo "::warning::libdrogon-dev no disponible"
 
       - name: Install project (precompiles the C++ runtime)
         run: npm install
