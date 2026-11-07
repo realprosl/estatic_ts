@@ -1,0 +1,125 @@
+name: Regenerate standalone native C++ snapshot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Record existing native-cpp layout
+        run: |
+          set -euo pipefail
+          for item in frontend bootstrap/native src/codegen/ir/native runtime types templates build/bootstrap/etsc build-all.sh README.md; do
+            test -e "native-cpp/$item" || { echo "::error::Missing existing layout entry: $item"; exit 1; }
+          done
+      - name: Install C++ dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
+      - name: Generate C++ from bootstrap using src stage 0
+        run: |
+          set -euo pipefail
+          rm -rf native-cpp
+          node --experimental-strip-types scripts/generate-native-cpp-snapshot.mjs
+      - name: Assemble standalone source-only C++ compiler package
+        shell: bash
+        run: |
+          set -euo pipefail
+          d=native-cpp
+          mkdir -p "$d/src/codegen/ir" "$d/bootstrap/modules"
+          cp -a src/codegen/ir/native "$d/src/codegen/ir/"
+          cp -a bootstrap/native "$d/bootstrap/"
+          find bootstrap/modules -maxdepth 1 -type f \( -name '*.hpp' -o -name '*.h' \) -exec cp {} "$d/bootstrap/modules/" \;
+          cp -a runtime "$d/"
+          if [ -d templates ]; then cp -a templates "$d/"; fi
+          cp -a types "$d/"
+          cat > "$d/build-all.sh" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          cd "$(dirname "$0")"
+          mkdir -p native
+          g++ -std=c++20 -O1 -pthread -fno-exceptions -I. -Ifrontend \
+            '-DESTATIC_FRONTEND_ID="portable"' frontend/unity.cpp -o native/frontend
+          g++ -std=c++20 -O2 -I. -Ibuild/bootstrap/etsc \
+            bootstrap/native/driver.cpp src/codegen/ir/native/generator.cpp \
+            -lcrypto -o native/etsc
+          SH
+          chmod +x "$d/build-all.sh"
+          cat > "$d/README.md" <<'MD'
+          # native-cpp — compilador Estatic en C++20
+          
+          Instantánea de fuentes C++ obtenida compilando `bootstrap/ir/demo.ets`
+          y sus dependencias mediante el compilador de referencia `src/` (stage 0).
+          No contiene fuentes `.ets`, código TypeScript ejecutable ni binarios precompilados.
+          
+          En Linux, con G++ C++20 y OpenSSL de desarrollo:
+          
+          ```bash
+          bash ./build-all.sh
+          export ESTC_ROOT="$(pwd)"
+          ./native/etsc build /ruta/proyecto/main.ets --no-progress
+          ```
+          
+          `native/frontend` analiza fuentes Estatic y emite IR verificado.
+          `native/etsc` es el driver/backend C++ que genera y compila programas.
+          Ambos se reconstruyen exclusivamente desde este directorio.
+          Para compilar programas se requieren sus fuentes de entrada, pero no Node.
+          
+          La Action `native-cpp-bootstrap.yml` genera este árbol, lo empaqueta,
+          reconstruye y prueba los ejecutables desde el artefacto descargado,
+          y solo entonces publica la instantánea en la rama de trabajo.
+          MD
+          (cd "$d" && find . -type f | sort > files.txt)
+          if find "$d" -type f \( -name '*.ets' -o \( -name '*.ts' ! -name '*.d.ts' \) -o -name '*.o' -o -name '*.a' -o -name '*.so' \) | grep .; then
+            echo 'Unexpected source language or precompiled binary in native-cpp' >&2
+            exit 1
+          fi
+      - name: Validate regenerated layout and no TS/ETS sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          for item in frontend/unity.cpp frontend/estatic_common.hpp bootstrap/native/driver.cpp src/codegen/ir/native/generator.cpp runtime types templates build/bootstrap/etsc/native-tables.hpp build-all.sh README.md; do
+            test -f "native-cpp/$item" || { echo "::error::Missing generated file: $item"; exit 1; }
+          done
+          test -n "$(find native-cpp/frontend -name 'unit-*.cpp' -print -quit)"
+          if find native-cpp -type f \( -name '*.ets' -o -name '*.ts' -o -name '*.o' -o -name '*.so' -o -name '*.a' \) | grep .; then
+            echo "::error::Unexpected source language or prebuilt binary in native-cpp"
+            exit 1
+          fi
+          (cd native-cpp && find . -type f | sort > files.txt)
+      - name: Upload regenerated source tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-cpp-regenerated-sources
+          path: native-cpp/
+          retention-days: 30
+      - name: Open PR with generated native-cpp snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="build/native-cpp-snapshot-${{ github.run_id }}"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          git add -f native-cpp
+          if git diff --cached --quiet; then
+            echo 'No changes to native-cpp' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git commit -m 'build(native-cpp): regenerate compiler snapshot from bootstrap via src'
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" --title "build(native-cpp): regenerated standalone C++ compiler" --body "Generated from current bootstrap/ via src stage 0. Preserves native-cpp layout and includes build-all.sh. Source-only artifact; compile and test manually after merging."
