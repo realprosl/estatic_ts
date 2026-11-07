@@ -31,6 +31,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
+          # El backend HTTP de drogon es opcional: si el paquete no esta, un
+          # unico test falla por entorno y el resto de la suite sigue valida.
+          sudo apt-get install -y libdrogon-dev || echo "::warning::libdrogon-dev no disponible"
 
       - name: Install project (precompiles the C++ runtime)
         run: npm install
@@ -39,6 +42,10 @@ jobs:
         run: npm test
 
       - name: End-to-end suite (compiles and runs real programs)
+        # Se ejecuta siempre, incluso si la suite anterior falla: el e2e
+        # compila y ejecuta programas reales, y es la senal mas valuable
+        # cuando el resto ya esta verde.
+        if: always()
         env:
           SKIP_NETWORK: '1'
         run: npm run test:e2e
