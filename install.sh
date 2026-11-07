@@ -11,7 +11,7 @@
 # semilla. Node sólo hace falta para REGENERAR la semilla cuando cambian las
 # fuentes de `bootstrap/*.ets` (scripts/generate-native-cpp-snapshot.mjs).
 #
-# Uso:  ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario]
+# Uso:  ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario] [--self-host]
 #
 set -euo pipefail
 
@@ -20,17 +20,19 @@ seed_dir="$repo_dir/native-cpp"
 prefix="/usr/local"
 cxx="${CXX:-g++}"
 frontend=""
+self_host=0
 ar_tool="${AR:-ar}"
 
 usage() {
   cat <<'EOF'
-Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario]
+Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario] [--self-host]
 
 Compila la semilla C++ de native-cpp/ y instala el compilador nativo etsc.
 
   --prefix DIR     donde instalar (por defecto /usr/local)
   --cxx COMPILADOR compilador C++20 (por defecto g++, o $CXX)
   --frontend BIN   usar un frontend ya construido en vez de compilar la semilla
+  --self-host      recompilar bootstrap/ir/demo.ets con el etsc nativo antes de instalar
   --help           esta ayuda
 
 No requiere Node.js. Requisitos: un compilador C++20, `ar` y las cabeceras de
@@ -44,6 +46,7 @@ fail() { echo "ERROR: $*" >&2; exit 1; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
+    --self-host) self_host=1; shift ;;
     --prefix|--cxx|--frontend)
       [ $# -ge 2 ] || fail "Opcion sin valor: $1"
       case "$1" in
@@ -57,6 +60,8 @@ while [ $# -gt 0 ]; do
 done
 
 case "$prefix" in /*) ;; *) prefix="$PWD/$prefix" ;; esac
+
+[ "$self_host" -eq 0 ] || [ -z "$frontend" ] || fail "--self-host y --frontend son opciones incompatibles."
 
 command -v "$cxx" >/dev/null 2>&1 || fail "No se encuentra el compilador '$cxx'. Instala g++ o usa --cxx."
 command -v "$ar_tool" >/dev/null 2>&1 || fail "No se encuentra '$ar_tool'. Forma parte de binutils."
@@ -136,6 +141,39 @@ echo "    driver y emisor IR -> native/etsc"
   "$seed_dir/bootstrap/native/driver.cpp" \
   "$seed_dir/src/codegen/ir/native/generator.cpp" \
   -lcrypto -o "$work/native/etsc"
+
+# --- Autocompilacion opcional: stage 1 compila bootstrap, sin Node/src ------
+if [ "$self_host" -eq 1 ]; then
+  echo "==> Autocompilando frontend desde bootstrap/ir/demo.ets con etsc nativo"
+  [ -f "$repo_dir/bootstrap/ir/demo.ets" ] || fail "Falta bootstrap/ir/demo.ets"
+  [ -f "$repo_dir/examples/hello.ets" ] || fail "Falta examples/hello.ets para comprobar el nuevo frontend"
+
+  # El driver necesita runtime, tipos y plantillas bajo ESTC_ROOT, aunque
+  # todos los ejecutables y salidas temporales se construyen en $work.
+  ln -s "$seed_dir/runtime" "$work/runtime"
+  ln -s "$seed_dir/types" "$work/types"
+  ln -s "$seed_dir/templates" "$work/templates"
+
+  (
+    cd "$repo_dir"
+    ESTC_ROOT="$work" "$work/native/etsc" build "$repo_dir/bootstrap/ir/demo.ets" \
+      -o "$work/bootstrap-frontend.cpp" \
+      --binary "$work/native/frontend-selfhost" \
+      --cxx "$cxx" --no-progress
+  ) || fail "No se ha podido compilar Bootstrap con el compilador nativo anterior"
+  [ -s "$work/bootstrap-frontend.cpp" ] || fail "No se ha generado C++ desde Bootstrap"
+  [ -x "$work/native/frontend-selfhost" ] || fail "Bootstrap no ha generado un frontend ejecutable"
+
+  # El nuevo frontend debe producir IR verificado para un programa ETS real.
+  (
+    cd "$repo_dir"
+    ESTC_ROOT="$work" "$work/native/etsc" --frontend "$work/native/frontend-selfhost" \
+      --check "$repo_dir/examples/hello.ets" --no-progress
+  ) || fail "El frontend autocompilado no supera la verificacion ETS"
+
+  mv "$work/native/frontend-selfhost" "$work/native/frontend"
+  echo "    frontend autocompilado validado; se instalara junto al driver nativo"
+fi
 
 command_hash="$(hash_file "$work/native/etsc")"
 
