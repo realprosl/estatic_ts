@@ -10,7 +10,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # Un unico run por rama: el evento `push` y el `pull_request` comparten
+  # grupo, asi que el segundo cancela al primero en vez de duplicar la
+  # corrida. Un push directo a una rama sin PR sigue teniendo su run.
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
