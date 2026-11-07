@@ -2,15 +2,22 @@ name: Regenerate standalone native C++ snapshot
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/regenerate-native-cpp.yml
+      - scripts/generate-native-cpp-snapshot.mjs
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+
+concurrency:
+  group: regenerate-native-cpp-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   regenerate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -18,12 +25,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Record existing native-cpp layout
+      - name: Save original native-cpp layout and existing build helpers
         run: |
           set -euo pipefail
-          for item in frontend bootstrap/native src/codegen/ir/native runtime types templates build/bootstrap/etsc build-all.sh README.md; do
-            test -e "native-cpp/$item" || { echo "::error::Missing existing layout entry: $item"; exit 1; }
+          for item in frontend bootstrap src runtime types templates build build-all.sh README.md files.txt; do
+            test -e "native-cpp/$item" || { echo "::error::Missing $item"; exit 1; }
           done
+          find native-cpp -mindepth 1 -maxdepth 1 -printf '%f %y\n' | LC_ALL=C sort > "$RUNNER_TEMP/layout.before"
+          cp native-cpp/build-all.sh "$RUNNER_TEMP/build-all.sh"
+          cp native-cpp/README.md "$RUNNER_TEMP/README.md"
       - name: Install C++ dependencies
         run: |
           sudo apt-get update
@@ -33,8 +43,7 @@ jobs:
           set -euo pipefail
           rm -rf native-cpp
           node --experimental-strip-types scripts/generate-native-cpp-snapshot.mjs
-      - name: Assemble standalone source-only C++ compiler package
-        shell: bash
+      - name: Assemble source-only C++ compiler package
         run: |
           set -euo pipefail
           d=native-cpp
@@ -43,85 +52,98 @@ jobs:
           cp -a bootstrap/native "$d/bootstrap/"
           find bootstrap/modules -maxdepth 1 -type f \( -name '*.hpp' -o -name '*.h' \) -exec cp {} "$d/bootstrap/modules/" \;
           cp -a runtime "$d/"
-          if [ -d templates ]; then cp -a templates "$d/"; fi
           cp -a types "$d/"
-          cat > "$d/build-all.sh" <<'SH'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          cd "$(dirname "$0")"
-          mkdir -p native
-          g++ -std=c++20 -O1 -pthread -fno-exceptions -I. -Ifrontend \
-            '-DESTATIC_FRONTEND_ID="portable"' frontend/unity.cpp -o native/frontend
-          g++ -std=c++20 -O2 -I. -Ibuild/bootstrap/etsc \
-            bootstrap/native/driver.cpp src/codegen/ir/native/generator.cpp \
-            -lcrypto -o native/etsc
-          SH
+          # Retain the JSON-native templates produced by the generator.
+          cp "$RUNNER_TEMP/build-all.sh" "$d/build-all.sh"
           chmod +x "$d/build-all.sh"
-          cat > "$d/README.md" <<'MD'
-          # native-cpp — compilador Estatic en C++20
-          
-          Instantánea de fuentes C++ obtenida compilando `bootstrap/ir/demo.ets`
-          y sus dependencias mediante el compilador de referencia `src/` (stage 0).
-          No contiene fuentes `.ets`, código TypeScript ejecutable ni binarios precompilados.
-          
-          En Linux, con G++ C++20 y OpenSSL de desarrollo:
-          
-          ```bash
-          bash ./build-all.sh
-          export ESTC_ROOT="$(pwd)"
-          ./native/etsc build /ruta/proyecto/main.ets --no-progress
-          ```
-          
-          `native/frontend` analiza fuentes Estatic y emite IR verificado.
-          `native/etsc` es el driver/backend C++ que genera y compila programas.
-          Ambos se reconstruyen exclusivamente desde este directorio.
-          Para compilar programas se requieren sus fuentes de entrada, pero no Node.
-          
-          La Action `regenerate-native-cpp.yml` genera este árbol y lo empaqueta,
-          reconstruye y prueba los ejecutables desde el artefacto descargado,
-          y solo entonces publica la instantánea en la rama de trabajo.
-          MD
-          # Project templates may legitimately contain .ts/.ets files.
-          if find "$d" -type f \( \( \( -name '*.ets' -o \( -name '*.ts' ! -name '*.d.ts' \) \) ! -path "$d/templates/*" \) -o -name '*.o' -o -name '*.a' -o -name '*.so' \) | grep -q .; then
-            echo 'Unexpected source language or precompiled binary in native-cpp' >&2
-            exit 1
-          fi
-      - name: Validate regenerated layout and no TS/ETS sources
-        shell: bash
+          cp "$RUNNER_TEMP/README.md" "$d/README.md"
+          sed -i 's/native-cpp-bootstrap.yml/regenerate-native-cpp.yml/g' "$d/README.md"
+          (cd "$d" && find . -type f | LC_ALL=C sort > files.txt)
+
+      - name: Validate complete snapshot, structure and source-only policy
         run: |
           set -euo pipefail
-          for item in frontend/unity.cpp frontend/estatic_common.hpp bootstrap/native/driver.cpp src/codegen/ir/native/generator.cpp build/bootstrap/etsc/native-tables.hpp build-all.sh README.md; do
+          for item in frontend/unity.cpp frontend/estatic_common.hpp bootstrap/native/driver.cpp src/codegen/ir/native/generator.cpp build/bootstrap/etsc/install_config.hpp build/bootstrap/etsc/native-tables.hpp build-all.sh README.md files.txt templates/estatic.config.json templates/src/main.ts; do
             test -f "native-cpp/$item" || { echo "::error::Missing generated file: $item"; exit 1; }
           done
-          for item in runtime types templates; do
-            test -d "native-cpp/$item" || { echo "::error::Missing generated directory: $item"; exit 1; }
+          for item in frontend bootstrap src runtime types templates build; do
+            test -d "native-cpp/$item" || { echo "::error::Missing directory: $item"; exit 1; }
           done
           test -n "$(find native-cpp/frontend -name 'unit-*.cpp' -print -quit)"
-          if find native-cpp -type f \( \( \( -name '*.ets' -o \( -name '*.ts' ! -name '*.d.ts' \) \) ! -path 'native-cpp/templates/*' \) -o -name '*.o' -o -name '*.so' -o -name '*.a' \) | grep -q .; then
-            echo "::error::Unexpected source language or prebuilt binary in native-cpp"
+          find native-cpp -mindepth 1 -maxdepth 1 -printf '%f %y\n' | LC_ALL=C sort > "$RUNNER_TEMP/layout.after"
+          diff -u "$RUNNER_TEMP/layout.before" "$RUNNER_TEMP/layout.after"
+          # Templates under templates/ may contain ETS/TS; compiler sources may not.
+          bad_sources="$(find native-cpp -type f \( -name '*.ets' -o \( -name '*.ts' ! -name '*.d.ts' \) \) ! -path 'native-cpp/templates/*' -print)"
+          if [ -n "$bad_sources" ]; then
+            echo "::error::Unexpected ETS/TS compiler sources"
+            printf '%s\n' "$bad_sources"
             exit 1
           fi
+          bad_objects="$(find native-cpp -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.exe' \) -print)"
+          if [ -n "$bad_objects" ] || [ -d native-cpp/native ]; then
+            echo "::error::Prebuilt binaries in source-only snapshot"
+            printf '%s\n' "$bad_objects"
+            exit 1
+          fi
+          (cd native-cpp && find . -type f | LC_ALL=C sort | diff -u files.txt -)
+
       - name: Upload regenerated source tree
         uses: actions/upload-artifact@v4
         with:
           name: native-cpp-regenerated-sources
           path: native-cpp/
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 30
-      - name: Open PR with generated native-cpp snapshot
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
+      - name: Download source snapshot to isolated verification directory
+        uses: actions/download-artifact@v4
+        with:
+          name: native-cpp-regenerated-sources
+          path: verify/native-cpp
+
+      - name: Build compiler from downloaded snapshot (no Node or TS)
         run: |
           set -euo pipefail
-          branch="build/native-cpp-snapshot-${{ github.run_id }}"
+          cd verify/native-cpp
+          bash build-all.sh
+          test -x native/frontend
+          test -x native/etsc
+          ./native/etsc --version
+
+      - name: Compile and run standalone ETS smoke test
+        run: |
+          set -euo pipefail
+          export ESTC_ROOT="$GITHUB_WORKSPACE/verify/native-cpp"
+          mkdir -p "$RUNNER_TEMP/native-smoke"
+          verify/native-cpp/native/etsc build examples/hello.ets \
+            -o "$RUNNER_TEMP/native-smoke/hello.cpp" \
+            --binary "$RUNNER_TEMP/native-smoke/hello" --no-progress
+          test -s "$RUNNER_TEMP/native-smoke/hello.cpp"
+          test -x "$RUNNER_TEMP/native-smoke/hello"
+          "$RUNNER_TEMP/native-smoke/hello" > "$RUNNER_TEMP/native-smoke/output"
+          printf 'Hola, mundo\n120\n' > "$RUNNER_TEMP/native-smoke/expected"
+          diff -u "$RUNNER_TEMP/native-smoke/expected" "$RUNNER_TEMP/native-smoke/output"
+
+      - name: Publish only tested sources
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git switch -c "$branch"
           git add -A native-cpp
           if git diff --cached --quiet; then
-            echo 'No changes to native-cpp' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Regenerated source snapshot is identical; no PR needed.' >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          git commit -m 'build(native-cpp): regenerate compiler snapshot from bootstrap via src'
+          branch="build/native-cpp-snapshot-${{ github.run_id }}"
+          git switch -c "$branch"
+          git commit -m 'build(native-cpp): verified regenerated standalone compiler'
           git push origin "$branch"
-          gh pr create --base main --head "$branch" --title "build(native-cpp): regenerated standalone C++ compiler" --body "Generated from current bootstrap/ via src stage 0. Preserves native-cpp layout and includes build-all.sh. Source-only artifact; compile and test manually after merging."
+          if ! gh pr create --base main --head "$branch" \
+            --title "build(native-cpp): verified standalone compiler snapshot" \
+            --body "Generated using bootstrap/ir/demo.ets and src stage 0. Downloaded snapshot was rebuilt with g++ and passed an ETS executable smoke test."; then
+            echo "::warning::Branch pushed, but PR creation was denied by GitHub Actions permissions."
+            echo "Create a PR for branch $branch manually." >> "$GITHUB_STEP_SUMMARY"
+          fi
