@@ -3726,12 +3726,14 @@ struct PathAlias {
 };
 
 struct LoaderOptions {
+    bool verbose;
     std::vector<std::string> roots;
     std::vector<PathAlias> aliases;
     std::string cacheDirectory;
     std::string syntaxKey;
 
     LoaderOptions& constructor() {
+        ((*this).verbose = false);
         ((*this).roots = std::vector<std::string>());
         ((*this).aliases = std::vector<PathAlias>());
         ((*this).cacheDirectory = std::string(""));
@@ -3901,6 +3903,9 @@ struct ModuleLoader {
             ((*this).cache = cache);
             return graph;
         }
+        if ((*this).options.verbose) {
+            printError(ets::concat(std::string("frontend: reading/parsing "), canonical));
+        }
         std::vector<LoadedFile> discovered = std::vector<LoadedFile>{readModule(canonical, graph, cache)};
         std::vector<double> stack = std::vector<double>{0.0};
         while ((stack.size() > 0.0)) {
@@ -3936,6 +3941,9 @@ struct ModuleLoader {
                         }
                     }
                     if ((existing < 0.0)) {
+                        if ((*this).options.verbose) {
+                            printError(ets::concat(std::string("frontend: reading/parsing "), dependency));
+                        }
                         ets_push_vec<LoadedFile>(discovered, readModule(dependency, graph, cache));
                         ets_push_vec<double>(stack, (discovered.size() - 1.0));
                     } else {
@@ -16444,6 +16452,9 @@ struct NativeChecker {
             ets_push_vec<ets_import_6_TypedFile>((*this).result.files, ets_import_6_TypedFile{}.constructor(m.cached.result.ast.nodes.size()));
         }
         for (double m = 0.0; (m < (*this).graph.modules.size()); (m = (m + 1.0))) {
+            if ((*this).trace) {
+                printError(ets::concat(std::string("frontend: checking ["), numberToString((m + 1.0)), std::string("/"), numberToString((*this).graph.modules.size()), std::string("] "), (*this).graph.modules[static_cast<std::size_t>(m)].file));
+            }
             (*this).statement(m, (*this).graph.modules[static_cast<std::size_t>(m)].cached.result.ast.root, std::string(""), 0.0);
         }
         for (double m = 0.0; (m < (*this).graph.modules.size()); (m = (m + 1.0))) {
