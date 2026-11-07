@@ -55,11 +55,14 @@ npm run bootstrap -- build --config estatic.config.ts --verbose --no-progress
 ```
 
 La preparación del frontend, el análisis/verificación del IR, la generación
-C++ y la compilación/enlace muestran spinners en terminales interactivas. La
+C++ y la compilación/enlace usan una única línea de progreso en terminales interactivas.
+La línea cambia con la tarea actual y muestra el tiempo transcurrido; solo el
+resumen final y los errores quedan impresos. Los contadores comunicados por el
+frontend, como `[19/36]`, aparecen sin inventar un porcentaje global. La
 animación continúa durante las herramientas bloqueantes porque el trabajo se
 ejecuta en un worker y el renderizado permanece en el hilo principal. La fase
-nativa de análisis incluye el checker y el IR; no muestra fases internas que
-el frontend no comunica. `--check` sigue comprobando el IR y omite C++.
+nativa de análisis muestra las tareas que comunica el frontend, incluido el
+archivo actual, tipos, seguridad, comptime y generación del IR. `--check` sigue comprobando el IR y omite C++.
 
 `--no-progress`, `NO_COLOR`, `TERM=dumb` y `CI` desactivan las animaciones.
 Al redirigir stderr se usa texto plano con `--verbose`; sin verbose el progreso
@@ -85,8 +88,8 @@ Con `--verbose`, la preparación del frontend indica si se reutiliza la caché
 o se reconstruye, y muestra la transpilación y el comando C++ antes de ejecutarlo.
 El runtime informa de la caché, cada unidad que compila y la creación del archivo
 estático. También se imprime el comando de análisis y el de compilación/enlace
-del programa. Estos mensajes se publican al comenzar cada operación en stderr,
-incluido cuando hay una animación activa.
+del programa. En terminales interactivas estos detalles actualizan la línea activa en stderr.
+Usa `--verbose --no-progress` para conservar el historial completo de mensajes.
 
 Durante «Analizando fuentes y verificando IR», `--verbose` transmite los
 mensajes del frontend en tiempo real: lectura y análisis de cada archivo,

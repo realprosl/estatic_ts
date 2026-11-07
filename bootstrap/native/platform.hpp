@@ -40,7 +40,9 @@ inline Process execute(const V<S>& arguments,bool capture=false){
   V<char*> args;for(auto& s:arguments)args.push_back(const_cast<char*>(s.c_str()));args.push_back(nullptr);
   execvp(args[0],args.data());std::cerr<<"No se puede ejecutar "<<arguments[0]<<'\n';_exit(127);
  }
- closeFd(output[1]);closeFd(errors[1]);Process result;S errorText;int status=0;bool exited=false;
+ closeFd(output[1]);closeFd(errors[1]);Process result;S errorText;
+ auto errorLine=[&](const S& line){if(line.starts_with("frontend: "))activeProgress->detail(line);else{activeProgress->clear();std::cerr<<line<<'\n'<<std::flush;}};
+ int status=0;bool exited=false;
  try{
   while(!exited||output[0]>=0||errors[0]>=0){
    if(!exited){auto waited=waitpid(pid,&status,WNOHANG);if(waited==pid)exited=true;else if(waited<0&&errno!=EINTR)throw std::runtime_error("No se puede esperar al proceso");}
@@ -48,14 +50,18 @@ inline Process execute(const V<S>& arguments,bool capture=false){
    if(poll(fds,2,exited?0:40)<0&&errno!=EINTR)throw std::runtime_error("No se puede leer la salida del proceso");
    for(int at=0;at<2;at++)if(fds[at].fd>=0&&(fds[at].revents&(POLLIN|POLLHUP|POLLERR))){
     char buffer[8192];auto count=::read(fds[at].fd,buffer,sizeof(buffer));
-    if(count>0){if(at==1){activeProgress->clear();std::cerr.write(buffer,count);std::cerr.flush();}auto& text=at==0?result.output:errorText;text.append(buffer,count);if(text.size()>128*1024*1024)throw std::runtime_error("Salida de herramienta demasiado grande");}
+    if(count>0){
+     auto& text=at==0?result.output:errorText;text.append(buffer,count);
+     if(text.size()>128*1024*1024)throw std::runtime_error("Salida de herramienta demasiado grande");
+     if(at==1){size_t end;while((end=errorText.find('\n'))!=S::npos){errorLine(errorText.substr(0,end));errorText.erase(0,end+1);}}
+    }
     else if(count==0)closeFd(at==0?output[0]:errors[0]);
     else if(errno!=EINTR)throw std::runtime_error("No se puede leer la salida del proceso");
    }
    activeProgress->tick();
   }
  }catch(...){if(!exited){kill(pid,SIGKILL);while(waitpid(pid,nullptr,0)<0&&errno==EINTR){}}cleanup();throw;}
- cleanup();
+ cleanup();if(!errorText.empty())errorLine(errorText);
  result.status=WIFEXITED(status)?WEXITSTATUS(status):128+WTERMSIG(status);return result;
 }
 inline void checked(const V<S>& args){J::Array command;for(auto& arg:args)command.emplace_back(arg);progressDetail("Comando: "+json(J(command)));auto p=execute(args);if(p.status)throw std::runtime_error(args[0]+" terminó con "+n(p.status));}

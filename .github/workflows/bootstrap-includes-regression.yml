@@ -62,3 +62,4 @@ jobs:
           compile_case loop pass 'const allowed: string = "abc"; const word: string = "cab"; for (let k: number = 0; k < 3; k = k + 1) { if (!allowed.includes(word.charAt(k))) print("bad"); }'
           compile_case conditional pass 'const s: string = "abc"; if (s.includes("a") && !s.includes("z", 1)) print("ok");'
           compile_case function_arg pass 'function check(s: string): boolean { return s.includes("x"); } print(check("xyz"));'
+          compile_case checker_identifier pass 'function validSymbol(part:string):boolean { let valid:boolean=true; const allowedFirst:string="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_"; const allowedRest:string=allowedFirst+"0123456789"; if(!allowedFirst.includes(part.charAt(0))) valid=false; for(let k:number=1;k<part.length;k=k+1){if(!allowedRest.includes(part.charAt(k))) valid=false;} return valid; } print(validSymbol("abc_12"));'
