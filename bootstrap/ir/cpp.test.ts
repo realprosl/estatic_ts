@@ -204,5 +204,3 @@ test("bootstrap CLI reuses project config and passes aliases/roots to native loa
 
 
 test("IR C++ recursive interface copies pass ASan/UBSan",()=>assert.equal(execute('interface I{render():string;}class Leaf{render():string{return "L";}}class Group{children:I[];render():string{let s="";for(const c of this.children)s+=c.render();return s;}}const x:I=new Group([new Leaf(),new Group([new Leaf()])]);const y:I=x;print(x.render());print(y.render());',{},["-fsanitize=address,undefined","-fno-omit-frame-pointer"]),"LL\nLL\n"));
-
-
