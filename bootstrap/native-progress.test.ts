@@ -76,8 +76,13 @@ test("native verbose frontend traces update one line even across split writes",(
  assert.match(p.stderr,/frontend: reading one/);
  assert.match(p.stderr,/frontend: checking/);
  const lines=p.stderr.replace(/\r\n/g,"\n").split("\n").filter(Boolean);
- assert.equal(lines.length,1,p.stderr);
- assert.match(lines[0],/Compilación completada/);
+ assert.equal(lines.length,4,p.stderr);
+ for(const [index,label] of ["Cargando configuración","Analizando fuentes y verificando IR","Generando C++ desde IR verificado","Compilación completada"].entries()){
+  assert.match(lines[index],/✓/);
+  assert(lines[index].includes(label),p.stderr);
+ }
+ // Only phase completion creates lines; frontend traces stay on the active row.
+ assert(!lines.some(line=>line.endsWith("frontend: reading one")),p.stderr);
 });
 test("native etsc disables terminal animation with flags and environment",()=>{
  const input=source("plain",'print("plain");');
