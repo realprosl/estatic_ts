@@ -50,7 +50,7 @@ public:
  void start(const std::string& label){finish();label_=label;detail_.clear();phase_=Clock::now();frame_=0;if(animated_)tick(true);else if(verbose_)std::cerr<<"> "<<label_<<'\n';}
  void finish(bool failed=false){
   if(label_.empty())return;clear();
-  if((animated_&&failed)||(!animated_&&verbose_)){if(animated_)std::cerr<<(failed?"\x1b[31m":"\x1b[32m");std::cerr<<(failed?"✗":"✓");if(animated_)std::cerr<<"\x1b[0m";std::cerr<<' '<<label_<<" ("<<milliseconds(phase_)<<" ms)\n";}
+  if(animated_||verbose_){if(animated_)std::cerr<<(failed?"\x1b[31m":"\x1b[32m");std::cerr<<(failed?"✗":"✓");if(animated_)std::cerr<<"\x1b[0m";std::cerr<<' '<<label_<<" ("<<milliseconds(phase_)<<" ms)\n";}
   label_.clear();
  }
  void detail(const std::string& text){

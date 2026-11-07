@@ -56,8 +56,10 @@ npm run bootstrap -- build --config estatic.config.ts --verbose --no-progress
 
 La preparación del frontend, el análisis/verificación del IR, la generación
 C++ y la compilación/enlace usan una única línea de progreso en terminales interactivas.
-La línea cambia con la tarea actual y muestra el tiempo transcurrido; solo el
-resumen final y los errores quedan impresos. Los contadores comunicados por el
+La línea cambia con la tarea actual y muestra el tiempo transcurrido. Al terminar
+cada sección, queda una línea con ✓, su nombre y duración; la siguiente sección
+empieza en una nueva línea dinámica. Los detalles internos se reemplazan sobre
+esa línea activa, y los errores permanecen visibles. Los contadores comunicados por el
 frontend, como `[19/36]`, aparecen sin inventar un porcentaje global. La
 animación continúa durante las herramientas bloqueantes porque el trabajo se
 ejecuta en un worker y el renderizado permanece en el hilo principal. La fase

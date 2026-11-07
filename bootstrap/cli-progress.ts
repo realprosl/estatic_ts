@@ -51,7 +51,7 @@ export class CliProgress {
       } else if (this.verbose) this.stream.write(`> ${event.label}\n`);
     } else if (event.type === "finish") {
       this.clear();
-      if ((this.animated && event.failed) || (!this.animated && this.verbose)) {
+      if (this.animated || this.verbose) {
         const marker = event.failed ? "✗" : "✓";
         this.stream.write(`${this.paint(marker, event.failed ? 31 : 32)} ${event.label} (${Math.round(event.elapsed)} ms)\n`);
       }

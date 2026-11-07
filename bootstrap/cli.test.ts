@@ -34,7 +34,7 @@ test("bootstrap progress: animation advances and is cleared after a failed phase
   assert.match(c.output(),/⠋/);assert.match(c.output(),/⠙/);assert.match(c.output(),/✗/);
   const done=c.output();await new Promise(resolve=>setTimeout(resolve,100));assert.equal(c.output(),done);
 });
-test("bootstrap progress: terminal updates one line and keeps only the final summary",()=>{
+test("bootstrap progress: terminal keeps completed sections and updates details on the active line",()=>{
   const c=capture(true);
   c.progress.handle({type:"start",label:"Runtime"});
   c.progress.handle({type:"detail",text:"Compilando unidad 1/2"});
@@ -42,9 +42,15 @@ test("bootstrap progress: terminal updates one line and keeps only the final sum
   assert.match(c.output(),/Compilando unidad 2\/2/);
   assert.doesNotMatch(c.output(),/\n/);
   c.progress.handle({type:"finish",label:"Runtime",elapsed:12,failed:false});
-  assert.doesNotMatch(c.output(),/\n/);
+  assert.match(c.output(),/✓\x1b\[0m Runtime \(12 ms\)\n/);
+  const completed=c.output();
+  c.progress.handle({type:"start",label:"Compilando"});
+  c.progress.handle({type:"detail",text:"Enlazando"});
+  assert(c.output().startsWith(completed));
+  assert.doesNotMatch(c.output().slice(completed.length),/\n/);
+  c.progress.handle({type:"finish",label:"Compilando",elapsed:3,failed:false});
   c.progress.handle({type:"summary",elapsed:15});
-  assert.equal(c.output().split("\n").length,2);
+  assert.equal(c.output().split("\n").length,4);
   assert.match(c.output(),/Compilación completada/);
 });
 test("bootstrap progress: long tasks fit the terminal width",()=>{
