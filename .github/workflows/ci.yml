@@ -36,7 +36,9 @@ jobs:
           sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
           # El backend HTTP de drogon es opcional: si el paquete no esta, un
           # unico test falla por entorno y el resto de la suite sigue valida.
-          sudo apt-get install -y libdrogon-dev || echo "::warning::libdrogon-dev no disponible"
+          # libjsoncpp-dev aporta las cabeceras `json/json.h` que drogon
+          # incluye; libdrogon-dev solo arrastra el runtime de jsoncpp.
+          sudo apt-get install -y libdrogon-dev libjsoncpp-dev || echo "::warning::libdrogon-dev no disponible"
 
       - name: Install project (precompiles the C++ runtime)
         run: npm install
