@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feature/native-cpp-bootstrap-snapshot
+      - feat/consistent-ref-semantics
     paths:
       - .github/workflows/native-cpp-bootstrap.yml
       - scripts/generate-native-cpp-snapshot.mjs
@@ -151,7 +152,12 @@ jobs:
             echo 'No generated source changes'
           else
             git commit -m 'build(native-cpp): record verified standalone C++ compiler snapshot'
-            git push origin HEAD:feature/native-cpp-bootstrap-snapshot
+            # A la rama que disparo el workflow, no a una fija: el paso se
+            # llama "to working branch" y antes escribia siempre en
+            # feature/native-cpp-bootstrap-snapshot, incluso al correr desde
+            # otra rama. `native-cpp/` no esta en los `paths` del gatillo, asi
+            # que este commit no se re-dispara.
+            git push origin "HEAD:$GITHUB_REF_NAME"
           fi
       - name: Upload verification evidence
         if: always()

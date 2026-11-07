@@ -18,6 +18,7 @@ Esta carpeta contiene la documentación técnica de Ts2cpp.
 | [`http-limits.md`](./http-limits.md) | Límites de recursos HTTP, configuración y regresiones por backend. |
 | [`comptime-scopes.md`](./comptime-scopes.md) | Ámbitos léxicos del evaluador, regresiones y límites pendientes. |
 | [`memory-model.md`](./memory-model.md) | Ownership, préstamos, punteros V22. Verificado contra `src/semantic/type-checker.ts`. |
+| [`audit-object-passing.md`](./audit-object-passing.md) | Auditoría del paso de objetos en `bootstrap/`: cuántas copias evita `ref<T>`/`constRef<T>` y cuáles quedan. |
 | [`match-syntax.md`](./match-syntax.md) | Sintaxis V23 única de `match` (V30.5.1+). |
 | [`TUTORIAL.md`](./TUTORIAL.md) | Tutorial del dialecto. Cada ejemplo es un test e2e real (`test/e2e/<bucket>/<name>/`). |
 | [`vision.md`](./vision.md) | Visión a largo plazo. Aspiracional, no refleja el estado actual. |

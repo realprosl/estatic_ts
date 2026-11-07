@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Un unico run por rama: el evento `push` y el `pull_request` comparten
+  # grupo, asi que el segundo cancela al primero en vez de duplicar la
+  # corrida. Un push directo a una rama sin PR sigue teniendo su run.
+  group: ci-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Suite (unit + bootstrap + e2e)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
+          # El backend HTTP de drogon es opcional: si el paquete no esta, un
+          # unico test falla por entorno y el resto de la suite sigue valida.
+          # libjsoncpp-dev aporta las cabeceras `json/json.h` que drogon
+          # incluye; libdrogon-dev solo arrastra el runtime de jsoncpp.
+          # Drogon ademas de jsoncpp necesita libuuid (-luuid) y zlib (-lz).
+          sudo apt-get install -y libdrogon-dev libjsoncpp-dev uuid-dev zlib1g-dev || echo "::warning::libdrogon-dev no disponible"
+
+      - name: Install project (precompiles the C++ runtime)
+        run: npm install
+
+      - name: Unit + bootstrap test suite
+        run: npm test
+
+      - name: End-to-end suite (compiles and runs real programs)
+        # Se ejecuta siempre, incluso si la suite anterior falla: el e2e
+        # compila y ejecuta programas reales, y es la senal mas valuable
+        # cuando el resto ya esta verde.
+        if: always()
+        env:
+          SKIP_NETWORK: '1'
+        run: npm run test:e2e

@@ -28,7 +28,10 @@ export class IrCppGenerator {
       case "array": return `std::vector<${this.elementType(a[0])}>`;
       case "fixedArray": return `std::array<${t(a[0])},${s.length}>`;
       case "tuple": case "pack": return `std::tuple<${a.map(t).join(",")}>`;
-      case "function": return `std::function<${t(a.at(-1)!)}(${a.slice(0,-1).map(t).join(",")})>`;
+      // El `std::function` de un callback es parte del contrato observable: un
+      // callback `(x: constRef<T>) => void` se declara `std::function<void(const T&)>`,
+      // igual que stage 0 y que los overloads del runtime.
+      case "function": return `std::function<${t(a.at(-1)!)}(${a.slice(0,-1).map(x=>this.parameterType(x)).join(",")})>`;
       case "Optional": return `ets::Optional<${t(a[0])}>`;
       case "Result": {
         if (this.project.types[a[1]] !== "string") this.fail("El runtime C++ requiere Result<T,string>");
@@ -57,6 +60,32 @@ export class IrCppGenerator {
       }
     }
     return this.fail(`Shape C++ sin representación: ${s.kind}`);
+  }
+  // Contrato de paso observable del dialecto (V22). Un `ref<T>` declarado es
+  // una referencia C++ `T&` y un `constRef<T>` es `const T&`, igual que emite
+  // stage 0 en `cppMemoryType`. `type()` sigue devolviendo `T*`/`const T*`
+  // porque ese es el valor INTERNO que el IR necesita para los slots
+  // (`std::optional` no admite referencias) y para los temporales de
+  // préstamo; el backend que lo necesita es un detalle del backend.
+  parameterType(id:number):string {
+    const s=this.shape(id);
+    if(s.kind==="ref") return `${this.type(s.arguments[0])}&`;
+    if(s.kind==="constRef") return `const ${this.type(s.arguments[0])}&`;
+    return this.type(id);
+  }
+  // Un argumento de un parámetro prestado viaja como puntero dentro del IR y
+  // se desreferencia al llegar a la firma: `T&`/`const T&`.
+  dereferenceIfBorrowed(text:string,formal:number|undefined):string {
+    if(formal===undefined)return text;
+    return ["ref","constRef"].includes(this.shape(formal).kind)?`(*(${text}))`:text;
+  }
+  borrowArgument(f:IrFunction,i:IrInstruction,k:number,formal:number|undefined):string {
+    if(formal===undefined) return this.operand(f,i,k);
+    const s=this.shape(formal);
+    if(!["ref","constRef"].includes(s.kind)) return this.operand(f,i,k);
+    const actual=f.values[i.operands[k]];
+    if(actual===undefined||!["ref","constRef"].includes(this.shape(actual).kind)) this.fail("Un parámetro prestado exige un argumento prestado",i.source);
+    return this.dereferenceIfBorrowed(this.operand(f,i,k,false),formal);
   }
   interface(id:number):boolean { return ["interface","intersection"].includes(this.shape(id).kind)&&(this.shape(id).methods?.length??0)>0; }
   interfaceVariant(id:number):string { return `std::variant<${this.shape(id).variants.length?this.shape(id).variants.map(t=>`ets::ir::Box<${this.type(t)}>`).join(","):"std::monostate"}>`; }
@@ -119,7 +148,7 @@ export class IrCppGenerator {
     if(a.kind==="function"&&b.kind==="function") {
       const args=b.arguments.slice(0,-1), ret=b.arguments.at(-1)!;
       const call=`fn(${a.arguments.slice(0,-1).map((x,k)=>this.convert(`x${k}`,args[k],x)).join(",")})`;
-      return `([fn=${value}](${args.map((x,k)=>`${this.type(x)} x${k}`).join(",")})mutable->${this.type(ret)}{${this.project.types[ret]==="void"?`${call};`:`return ${this.convert(call,a.arguments.at(-1)!,ret)};`}})`;
+      return `([fn=${value}](${args.map((x,k)=>`${this.parameterType(x)} x${k}`).join(",")})mutable->${this.type(ret)}{${this.project.types[ret]==="void"?`${call};`:`return ${this.convert(call,a.arguments.at(-1)!,ret)};`}})`;
     }
     // Structural container conversions remain explicit, never C++ reinterpret casts.
     if(["array","fixedArray"].includes(a.kind)&&["array","fixedArray"].includes(b.kind))return `([&](){auto input=${value};${T} out;${b.kind==="array"?"out.reserve(input.size());":"std::size_t k=0;"}for(auto&& x:input){${b.kind==="array"?"out.push_back(":"out[k++]=("}${this.convert(this.shape(a.arguments[0]).resource?"std::move(x)":"x",a.arguments[0],b.arguments[0])});}return out;}())`;
@@ -166,7 +195,7 @@ export class IrCppGenerator {
   }
   callback(f:IrFunction,i:IrInstruction,k:number):string {
     const id=f.values[i.operands[k]], s=this.shape(id), args=s.arguments.slice(0,-1);
-    return `[&](${args.map((_,n)=>`auto&& x${n}`).join(",")})->${this.type(s.arguments.at(-1)!)}{${this.project.types[s.arguments.at(-1)!]==="void"?"":"return "}${this.operand(f,i,k,false)}(${args.map((t,n)=>["ref","constRef"].includes(this.shape(t).kind)?`std::addressof(ets::ir::read(x${n}))`:`x${n}`).join(",")});}`;
+    return `[&](${args.map((_,n)=>`auto&& x${n}`).join(",")})->${this.type(s.arguments.at(-1)!)}{${this.project.types[s.arguments.at(-1)!]==="void"?"":"return "}${this.operand(f,i,k,false)}(${args.map((t,n)=>["ref","constRef"].includes(this.shape(t).kind)?`ets::ir::read(x${n})`:`x${n}`).join(",")});}`;
   }
   instruction(f:IrFunction,i:IrInstruction,block:number):string {
     const a=(k:number,consume=true)=>this.operand(f,i,k,consume), s=this.shape.bind(this), T=i.typeId>=0?this.type(i.typeId):"void";
@@ -243,19 +272,34 @@ export class IrCppGenerator {
       case "typeTag": {const id=this.inner(i.signature), name=this.project.types[id];value=this.literal(this.numeric(id)?"number":["string","boolean"].includes(name)?name:name==="void"?"undefined":"object",i.typeId);break;}
       case "typeTest": {const id=this.inner(f.values[i.operands[0]]);value=sumKinds.has(s(id).kind)?`(${this.deref(a(0,false),f.values[i.operands[0]])}.data.index()==${this.choices(id).indexOf(i.signature)})`:id===i.signature?"true":"false";break;}
       case "closure": {
-        const target=this.project.functions[i.callee];const args=target.parameterTypes.map((t,k)=>`${this.type(t)} x${k}`).join(",");
+        const target=this.project.functions[i.callee];const args=target.parameterTypes.map((t,k)=>`${this.parameterType(t)} x${k}`).join(",");
         const captures=i.operands.map((_,k)=>`c${k}=${a(k)}`).join(",");
-        value=`[${captures}](${args})mutable->${this.type(target.returns)}{${this.project.types[target.returns]==="void"?"":"return "}ir_f${i.callee}(${[...target.captureTypes.map((_,k)=>`c${k}`),...target.parameterTypes.map((_,k)=>`std::move(x${k})`)].join(",")});}`;break;
+        // Un parámetro prestado ya es una referencia: reenviarlo con
+        // `std::move` la degradaría a un rvalue que no enlaza con `T&`.
+        const forwarded=target.parameterTypes.map((t,k)=>["ref","constRef"].includes(this.shape(t).kind)?`x${k}`:`std::move(x${k})`);
+        value=`[${captures}](${args})mutable->${this.type(target.returns)}{${this.project.types[target.returns]==="void"?"":"return "}ir_f${i.callee}(${[...target.captureTypes.map((_,k)=>`c${k}`),...forwarded].join(",")});}`;break;
       }
-      case "call": case "taskCreate": value=`ir_f${i.callee}(${i.operands.map((_,k)=>a(k)).join(",")})`;break;
-      case "callIndirect": value=`${a(0)}(${i.operands.slice(1).map((_,k)=>a(k+1)).join(",")})`;break;
+      case "call": case "taskCreate": {
+        const target=this.project.functions[i.callee];
+        value=`ir_f${i.callee}(${i.operands.map((_,k)=>this.borrowArgument(f,i,k,target?.parameterTypes?.[k])).join(",")})`;break;
+      }
+      case "callIndirect": {
+        const formals=this.shape(i.signature).arguments.slice(0,-1);
+        value=`${a(0)}(${i.operands.slice(1).map((_,k)=>this.borrowArgument(f,i,k+1,formals[k])).join(",")})`;break;
+      }
       case "interfaceCall": {
         const receiver=this.inner(f.values[i.operands[0]]),returnType=this.type(i.typeId);
         const branches=this.shape(receiver).variants.map((concrete,k)=>{
           const d=this.project.dispatches?.find(d=>d.interfaceType===receiver&&d.concreteType===concrete&&d.name===i.text&&d.signature===i.signature);
           if(!d)this.fail("Dispatch de interfaz incompleto",i.source);
           const target=this.project.functions[d.callee];
-          const call=`ir_f${d.callee}(${[`std::addressof(box.get())`,...i.operands.slice(1).map((v,n)=>this.convert(a(n+1),f.values[v],target.parameterTypes[n+1]))].join(",")})`;
+          // El receptor implícito es un `ref<T>` → llega a la firma como `T&`.
+          const args=[`box.get()`];
+          for(let n=1;n<i.operands.length;n++){
+            const formal=target.parameterTypes[n];
+            args.push(this.dereferenceIfBorrowed(this.convert(a(n),f.values[i.operands[n]],formal),formal));
+          }
+          const call=`ir_f${d.callee}(${args.join(",")})`;
           return `${k?"else ":""}if constexpr(std::is_same_v<B,ets::ir::Box<${this.type(concrete)}>>){${this.project.types[i.typeId]==="void"?`${call};return;`:`return ${this.convert(call,target.returns,i.typeId)};`}}`;
         }).join("");
         value=`std::visit([&](auto& box)->${returnType}{using B=std::remove_cvref_t<decltype(box)>;${branches}${branches?"else ":""}std::abort();},(${this.deref(a(0,false),f.values[i.operands[0]])}).data)`;break;
@@ -304,7 +348,7 @@ export class IrCppGenerator {
   signature(f:IrFunction,index:number):string {
     const ret=f.asynchronous&&this.shape(f.returns).kind!=="Promise"?`ets::Task<${this.type(f.bodyReturns)}>`:this.type(f.returns);
     if(f.asynchronous){this.headers.add("runtime/ets_async.hpp");this.backends.libuv=true;}
-    return `${ret} ir_f${index}(${[...f.captureTypes.map((t,k)=>`${this.type(t)}${f.captureModes[k]==="reference"?"*":""} c${k}`),...f.parameterTypes.map((t,k)=>`${this.type(t)} a${k}`)].join(",")})`;
+    return `${ret} ir_f${index}(${[...f.captureTypes.map((t,k)=>`${this.type(t)}${f.captureModes[k]==="reference"?"*":""} c${k}`),...f.parameterTypes.map((t,k)=>`${this.parameterType(t)} a${k}`)].join(",")})`;
   }
   nativeBinding(f:IrFunction):string|undefined {
     const matches=(this.project.annotations??[]).filter(a=>a.name==="cpp_native"&&a.target.moduleId===f.source.moduleId&&a.target.node===f.source.node);
@@ -326,7 +370,14 @@ export class IrCppGenerator {
     const locals=f.places.flatMap((p,k)=>p.kind==="local"&&p.global<0?[`ets::ir::Slot<${this.type(p.typeId)}> p${k};`]:[]);
     const values=f.values.map((t,k)=>`ets::ir::Slot<${this.type(t)}> v${k};`);
     const awaited=f.blocks.flatMap((b,k)=>b.terminator==="suspend"&&this.project.types[this.shape(f.values[b.value]).arguments[0]]!=="void"?[`ets::ir::Slot<${this.type(this.shape(f.values[b.value]).arguments[0])}> await${k};`]:[]);
-    let parameter=0;const initialize=f.places.flatMap((p,k)=>p.parameter?[`p${k}.set(std::move(a${parameter++}));`]:[]);
+    let parameter=0;const initialize=f.places.flatMap((p,k)=>{
+      if(!p.parameter)return [];
+      // Un parámetro prestado llega a la firma como `T&`/`const T&`; el slot
+      // guarda el puntero al referente, que es lo que el IR necesita para
+      // proyectar el `deref` sin copiar el objeto.
+      const borrowed=["ref","constRef"].includes(this.shape(p.typeId).kind);
+      return [borrowed?`p${k}.set(std::addressof(a${parameter++}));`:`p${k}.set(std::move(a${parameter++}));`];
+    });
     const blocks=f.blocks.map((b,k)=>{
       const lines=b.instructions.map(i=>this.instruction(f,i,k));const ret=f.asynchronous?"co_return":"return";
       switch(b.terminator) {

@@ -127,3 +127,26 @@ Iba a compilar una herramienta `ets-ast-dump` reutilizando los `.o` de
 - Añadir `tools/ets-ast-dump.cpp` con un `main()` que use
   `runtime/ets_syntax.hpp`.
 - Reajustar flags para reflejar el código real.
+
+## Comprobaciones de coherencia
+
+### `check-ref-parity.ts`
+
+Verifica que el **contrato de paso de objetos** sea el mismo en stage 0
+(`src/`) y en el frontend nativo (`bootstrap/ir`): `ref<T>` → `T&`,
+`constRef<T>` → `const T&`, `out T` → `T&`, `ptr<T>` → `std::unique_ptr<T>`,
+`constPtr<T>` → `std::unique_ptr<const T>` y `T` → copia.
+
+Compara el *observable* —la forma del parámetro en la firma C++—, no el texto:
+los dos backends emiten C++ estructuralmente distinto.
+
+```
+node --experimental-strip-types scripts/check-ref-parity.ts
+```
+
+Exit 0 si los contratos coinciden; exit 1 + lista de divergencias si no.
+
+> **Es transitoria y por eso no está en `npm test`.** `src/` existe hoy
+> únicamente para compilar `bootstrap/`: cuando el compilador nativo sea el
+> único que evoluciona, la paridad dejará de ser un invariante y este script
+> debe dejar de usarse. Ejecútala a mano mientras ambos pipelines conviven.

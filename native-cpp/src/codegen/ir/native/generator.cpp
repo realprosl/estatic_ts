@@ -29,7 +29,10 @@ public:
   if(k=="array")return "std::vector<"+elementType(a.at(0))+">";
   if(k=="fixedArray")return "std::array<"+type(a.at(0))+","+n(s.length)+">";
   if(k=="tuple"||k=="pack")return "std::tuple<"+types(a)+">";
-  if(k=="function")return "std::function<"+type(a.back())+"("+types(V<int>(a.begin(),a.end()-1))+")>";
+  // El `std::function` de un callback es parte del contrato observable: un
+  // callback `(x: constRef<T>) => void` se declara `std::function<void(const T&)>`,
+  // igual que stage 0 y que los overloads del runtime.
+  if(k=="function"){V<S> params;for(int id:V<int>(a.begin(),a.end()-1))params.push_back(parameterType(id));return "std::function<"+type(a.back())+"("+join(params)+")>";}
   if(k=="Optional")return "ets::Optional<"+type(a.at(0))+">";
   if(k=="Result"){if(p.types.at(a.at(1))!="string")return fail("El runtime C++ requiere Result<T,string>");result.headers.insert("runtime/ets_async.hpp");result.libuv=true;return "ets::Result<"+type(a.at(0))+">";}
   if(k=="Promise"){result.headers.insert("runtime/ets_async.hpp");result.libuv=true;return "ets::Task<"+type(a.at(0))+">";}
@@ -84,7 +87,7 @@ public:
    return T+"{"+interfaceVariant(to)+"{std::in_place_type<ets::ir::Box<"+type(from)+">>,"+value+"}}";
   }
   if(record(from)&&record(to)){S fields;for(int k=0;k<int(b.names.size());k++){int at=index(a.names,b.names[k]);if(at<0)return fail("Campo ausente en conversión: "+b.names[k]);fields+="out.f"+n(k)+".set("+convert(field("input",from,at)+"."+(shape(a.fields.at(at)).resource?"take":"get")+"()",a.fields.at(at),b.fields.at(k))+");";}return "([&](){auto input="+value+";"+T+" out;"+fields+"return out;}())";}
-  if(a.kind=="function"&&b.kind=="function"){V<S> decl,args;for(int k=0;k<int(b.arguments.size())-1;k++)decl.push_back(type(b.arguments[k])+" x"+n(k));for(int k=0;k<int(a.arguments.size())-1;k++)args.push_back(convert("x"+n(k),b.arguments.at(k),a.arguments[k]));S call="fn("+join(args)+")";return "([fn="+value+"]("+join(decl)+")mutable->"+type(b.arguments.back())+"{"+(p.types.at(b.arguments.back())=="void"?call+";":"return "+convert(call,a.arguments.back(),b.arguments.back())+";")+"})";}
+  if(a.kind=="function"&&b.kind=="function"){V<S> decl,args;for(int k=0;k<int(b.arguments.size())-1;k++)decl.push_back(parameterType(b.arguments[k])+" x"+n(k));for(int k=0;k<int(a.arguments.size())-1;k++)args.push_back(convert("x"+n(k),b.arguments.at(k),a.arguments[k]));S call="fn("+join(args)+")";return "([fn="+value+"]("+join(decl)+")mutable->"+type(b.arguments.back())+"{"+(p.types.at(b.arguments.back())=="void"?call+";":"return "+convert(call,a.arguments.back(),b.arguments.back())+";")+"})";}
   if(in(a.kind,{"array","fixedArray"})&&in(b.kind,{"array","fixedArray"}))return "([&](){auto input="+value+";"+T+" out;"+(b.kind=="array"?"out.reserve(input.size());":"std::size_t k=0;")+"for(auto&& x:input){"+(b.kind=="array"?"out.push_back(":"out[k++]=(")+convert(shape(a.arguments.at(0)).resource?"std::move(x)":"x",a.arguments.at(0),b.arguments.at(0))+");}return out;}())";
   if(a.kind=="ref"&&b.kind=="constRef"&&a.arguments.at(0)==b.arguments.at(0))return value;
   return fail("Conversión C++ no soportada: "+p.types.at(from)+" -> "+p.types.at(to));
@@ -105,7 +108,16 @@ public:
   return fail("Place C++ desconocido: "+p.kind,p.source);
  }
  S operand(const Function& f,const Instruction& i,int k,bool consume=true){int value=i.operands.at(k);return "v"+n(value)+"."+(consume&&shape(f.values.at(value)).resource?"take":"get")+"()";}
- S callback(const Function& f,const Instruction& i,int k){int id=f.values.at(i.operands.at(k));const auto& s=shape(id);V<S> decl,args;for(int at=0;at<int(s.arguments.size())-1;at++){decl.push_back("auto&& x"+n(at));args.push_back(in(shape(s.arguments[at]).kind,{"ref","constRef"})?"std::addressof(ets::ir::read(x"+n(at)+"))":"x"+n(at));}return "[&]("+join(decl)+")->"+type(s.arguments.back())+"{"+(p.types.at(s.arguments.back())=="void"?S{}:S("return "))+operand(f,i,k,false)+"("+join(args)+");}";}
+ // Contrato de paso observable del dialecto (V22): un `ref<T>` declarado es
+ // una referencia C++ `T&` y un `constRef<T>` es `const T&`, igual que emite
+ // stage 0 en `cppMemoryType`. `type()` sigue devolviendo `T*`/`const T*`
+ // porque ese es el valor interno que el IR necesita para los slots
+ // (`std::optional` no admite referencias) y para los temporales de
+ // préstamo; el backend que lo necesita es un detalle del backend.
+ S parameterType(int id){const auto& s=shape(id);if(s.kind=="ref")return type(s.arguments.at(0))+"&";if(s.kind=="constRef")return "const "+type(s.arguments.at(0))+"&";return type(id);}
+ S dereferenceIfBorrowed(const S& text,int formal){if(formal<0)return text;return in(shape(formal).kind,{"ref","constRef"})?"(*("+text+"))":text;}
+ S borrowArgument(const Function& f,const Instruction& i,int k,int formal){if(formal<0)return operand(f,i,k);if(!in(shape(formal).kind,{"ref","constRef"}))return operand(f,i,k);int value=i.operands.at(k);if(!in(shape(f.values.at(value)).kind,{"ref","constRef"}))return fail("Un parámetro prestado exige un argumento prestado",i.source);return dereferenceIfBorrowed(operand(f,i,k,false),formal);}
+ S callback(const Function& f,const Instruction& i,int k){int id=f.values.at(i.operands.at(k));const auto& s=shape(id);V<S> decl,args;for(int at=0;at<int(s.arguments.size())-1;at++){decl.push_back("auto&& x"+n(at));args.push_back(in(shape(s.arguments[at]).kind,{"ref","constRef"})?"ets::ir::read(x"+n(at)+")":"x"+n(at));}return "[&]("+join(decl)+")->"+type(s.arguments.back())+"{"+(p.types.at(s.arguments.back())=="void"?S{}:S("return "))+operand(f,i,k,false)+"("+join(args)+");}";}
  S runtimeCall(const Function&,const Instruction&);
  S instruction(const Function&,const Instruction&,int);
  S signature(const Function&,int);
@@ -154,11 +166,11 @@ S Generator::instruction(const Function& f,const Instruction& i,int block){
  else if(op=="extractIndex")v=in(shape(f.values.at(i.operands.at(0))).kind,{"tuple","pack"})?"std::get<"+n(constantIndex(f,i.operands.at(1)))+">("+a(0)+")":"("+a(0)+").at(static_cast<std::size_t>("+a(1)+"))";
  else if(op=="typeTag"){int id=inner(i.signature);S name=p.types.at(id);v=literal(numeric(id)?"number":in(name,{"string","boolean"})?name:name=="void"?"undefined":"object",i.typeId);}
  else if(op=="typeTest"){int id=inner(f.values.at(i.operands.at(0)));v=sum(id)?"("+deref(a(0,false),f.values.at(i.operands.at(0)))+".data.index()=="+n(index(choices(id),i.signature))+")":id==i.signature?"true":"false";}
- else if(op=="closure"){const auto& target=p.functions.at(i.callee);V<S> args,captures,params;for(int k=0;k<int(target.parameterTypes.size());k++){args.push_back(type(target.parameterTypes[k])+" x"+n(k));params.push_back("std::move(x"+n(k)+")");}for(int k=0;k<int(i.operands.size());k++)captures.push_back("c"+n(k)+"="+a(k));V<S> call;for(int k=0;k<int(target.captureTypes.size());k++)call.push_back("c"+n(k));call.insert(call.end(),params.begin(),params.end());v="["+join(captures)+"]("+join(args)+")mutable->"+type(target.returns)+"{"+(p.types.at(target.returns)=="void"?S{}:S("return "))+"ir_f"+n(i.callee)+"("+join(call)+");}";}
- else if(op=="call"||op=="taskCreate"){V<S> args;for(int k=0;k<int(i.operands.size());k++)args.push_back(a(k));v="ir_f"+n(i.callee)+"("+join(args)+")";}
- else if(op=="callIndirect"){V<S> args;for(int k=1;k<int(i.operands.size());k++)args.push_back(a(k));v=a(0)+"("+join(args)+")";}
+ else if(op=="closure"){const auto& target=p.functions.at(i.callee);V<S> args,captures,params;for(int k=0;k<int(target.parameterTypes.size());k++){args.push_back(parameterType(target.parameterTypes[k])+" x"+n(k));const bool borrowed=in(shape(target.parameterTypes[k]).kind,{"ref","constRef"});params.push_back(borrowed?"x"+n(k):"std::move(x"+n(k)+")");}for(int k=0;k<int(i.operands.size());k++)captures.push_back("c"+n(k)+"="+a(k));V<S> call;for(int k=0;k<int(target.captureTypes.size());k++)call.push_back("c"+n(k));call.insert(call.end(),params.begin(),params.end());v="["+join(captures)+"]("+join(args)+")mutable->"+type(target.returns)+"{"+(p.types.at(target.returns)=="void"?S{}:S("return "))+"ir_f"+n(i.callee)+"("+join(call)+");}";}
+ else if(op=="call"||op=="taskCreate"){const auto& target=p.functions.at(i.callee);V<S> args;for(int k=0;k<int(i.operands.size());k++)args.push_back(borrowArgument(f,i,k,k<int(target.parameterTypes.size())?target.parameterTypes[k]:-1));v="ir_f"+n(i.callee)+"("+join(args)+")";}
+ else if(op=="callIndirect"){const auto& sig=shape(i.signature);V<S> args;for(int k=1;k<int(i.operands.size());k++){const int formal=k-1<int(sig.arguments.size())-1?sig.arguments[k-1]:-1;args.push_back(borrowArgument(f,i,k,formal));}v=a(0)+"("+join(args)+")";}
  else if(op=="interfaceCall"){
-  int receiver=inner(f.values.at(i.operands.at(0)));S branches;for(int concrete:shape(receiver).variants){const Dispatch* found=nullptr;for(auto& d:p.dispatches)if(d.interfaceType==receiver&&d.concreteType==concrete&&d.name==i.text&&d.signature==i.signature){found=&d;break;}if(!found)return fail("Dispatch de interfaz incompleto",i.source);const auto& target=p.functions.at(found->callee);V<S> args{"std::addressof(box.get())"};for(int k=1;k<int(i.operands.size());k++)args.push_back(convert(a(k),f.values.at(i.operands[k]),target.parameterTypes.at(k)));S call="ir_f"+n(found->callee)+"("+join(args)+")";branches+=(branches.empty()?S{}:S("else "))+"if constexpr(std::is_same_v<B,ets::ir::Box<"+type(concrete)+">>){"+(p.types.at(i.typeId)=="void"?call+";return;":"return "+convert(call,target.returns,i.typeId)+";")+"}";}
+  int receiver=inner(f.values.at(i.operands.at(0)));S branches;for(int concrete:shape(receiver).variants){const Dispatch* found=nullptr;for(auto& d:p.dispatches)if(d.interfaceType==receiver&&d.concreteType==concrete&&d.name==i.text&&d.signature==i.signature){found=&d;break;}if(!found)return fail("Dispatch de interfaz incompleto",i.source);const auto& target=p.functions.at(found->callee);V<S> args{"box.get()"};for(int k=1;k<int(i.operands.size());k++){const int formal=target.parameterTypes.at(k);args.push_back(dereferenceIfBorrowed(convert(a(k),f.values.at(i.operands[k]),formal),formal));}S call="ir_f"+n(found->callee)+"("+join(args)+")";branches+=(branches.empty()?S{}:S("else "))+"if constexpr(std::is_same_v<B,ets::ir::Box<"+type(concrete)+">>){"+(p.types.at(i.typeId)=="void"?call+";return;":"return "+convert(call,target.returns,i.typeId)+";")+"}";}
   v="std::visit([&](auto& box)->"+T+"{using B=std::remove_cvref_t<decltype(box)>;"+branches+(branches.empty()?"":"else ")+"std::abort();},("+deref(a(0,false),f.values.at(i.operands.at(0)))+").data)";
  }
  else if(op=="runtimeCall")v=runtimeCall(f,i);
@@ -180,12 +192,12 @@ S Generator::instruction(const Function& f,const Instruction& i,int block){
  if(v.empty())return fail("Capacidad C++ no soportada: "+op,i.source);
  return i.result>=0?"v"+n(i.result)+".set("+v+");":v+";";
 }
-S Generator::signature(const Function& f,int id){S ret=f.asynchronous&&shape(f.returns).kind!="Promise"?"ets::Task<"+type(f.bodyReturns)+">":type(f.returns);if(f.asynchronous){result.headers.insert("runtime/ets_async.hpp");result.libuv=true;}V<S> args;for(int k=0;k<int(f.captureTypes.size());k++)args.push_back(type(f.captureTypes[k])+(f.captureModes.at(k)=="reference"?"*":"")+" c"+n(k));for(int k=0;k<int(f.parameterTypes.size());k++)args.push_back(type(f.parameterTypes[k])+" a"+n(k));return ret+" ir_f"+n(id)+"("+join(args)+")";}
+S Generator::signature(const Function& f,int id){S ret=f.asynchronous&&shape(f.returns).kind!="Promise"?"ets::Task<"+type(f.bodyReturns)+">":type(f.returns);if(f.asynchronous){result.headers.insert("runtime/ets_async.hpp");result.libuv=true;}V<S> args;for(int k=0;k<int(f.captureTypes.size());k++)args.push_back(type(f.captureTypes[k])+(f.captureModes.at(k)=="reference"?"*":"")+" c"+n(k));for(int k=0;k<int(f.parameterTypes.size());k++)args.push_back(parameterType(f.parameterTypes[k])+" a"+n(k));return ret+" ir_f"+n(id)+"("+join(args)+")";}
 S Generator::body(const Function& f,int id){V<S> out;int parameter=0;
  for(int k=0;k<int(f.places.size());k++){auto& p=f.places[k];if(p.kind=="local"&&p.global<0)out.push_back("ets::ir::Slot<"+type(p.typeId)+"> p"+n(k)+";");}
  for(int k=0;k<int(f.values.size());k++)out.push_back("ets::ir::Slot<"+type(f.values[k])+"> v"+n(k)+";");
  for(int k=0;k<int(f.blocks.size());k++){auto& b=f.blocks[k];if(b.terminator=="suspend"){int t=shape(f.values.at(b.value)).arguments.at(0);if(p.types.at(t)!="void")out.push_back("ets::ir::Slot<"+type(t)+"> await"+n(k)+";");}}
- for(int k=0;k<int(f.places.size());k++)if(f.places[k].parameter)out.push_back("p"+n(k)+".set(std::move(a"+n(parameter++)+"));");out.push_back("goto b0;");
+ for(int k=0;k<int(f.places.size());k++)if(f.places[k].parameter){const bool borrowed=in(shape(f.places[k].typeId).kind,{"ref","constRef"});out.push_back("p"+n(k)+".set("+(borrowed?"std::addressof(a":"std::move(a")+n(parameter++)+"));");}out.push_back("goto b0;");
  for(int k=0;k<int(f.blocks.size());k++){const auto& b=f.blocks[k];out.push_back("b"+n(k)+":");for(auto& i:b.instructions)out.push_back(instruction(f,i,k));S ret=f.asynchronous?"co_return":"return";
   if(b.terminator=="jump")out.push_back("goto b"+n(b.targets.at(0))+";");
   else if(b.terminator=="branch")out.push_back("if(v"+n(b.value)+".get())goto b"+n(b.targets.at(0))+";else goto b"+n(b.targets.at(1))+";");

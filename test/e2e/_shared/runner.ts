@@ -196,7 +196,11 @@ async function processE2E(bucket: Bucket, name: string, skipNetwork: boolean): P
     // error claro de drogon.h not found.
     const cppText = readFileSync(cppPath);
     const usesDrogon = cppText.includes("runtime/ets_http_drogon.hpp");
-    const usesCurl = cppText.includes("runtime/ets_http_curl_client.hpp");
+    // El cliente HTTP tiene dos cabeceras: la sincrona y la asincrona
+    // (V30.3, `await http.get(...)`). Detectando solo la sincrona, el
+    // cliente asincrono se enlazaba sin `-lcurl` y el binario no resolvia
+    // curl_easy_init.
+    const usesCurl = cppText.includes("runtime/ets_http_curl_client.hpp") || cppText.includes("runtime/ets_http_curl_async.hpp");
     // V30.5: TLS server-side (ets_tls.hpp) requiere OpenSSL.
     const usesTls = cppText.includes("runtime/ets_tls.hpp");
     // V30.10.1: el backend httplib (incluido por `http.createServer()`)
