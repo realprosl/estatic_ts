@@ -4,6 +4,18 @@ Todas las versiones siguen [Semantic Versioning](https://semver.org/).
 
 ## Sin publicar (2026-10-31)
 
+### Instalación sin Node.js
+
+- **`install.sh` deja de pasar por TypeScript.** Compila la semilla C++ de
+  `native-cpp/` (el C++ ya generado desde `bootstrap/`) con el compilador C++20
+  del sistema, precompila el runtime y publica `etsc` en `<prefix>/bin`. La
+  instalación ya no necesita Node, npm ni el compilador de stage 0 en `src/`.
+  Node sólo hace falta para **regenerar la semilla** cuando cambian las fuentes
+  de `bootstrap/*.ets` (`scripts/generate-native-cpp-snapshot.mjs`).
+- La semilla incorpora las plantillas de proyecto (`native-cpp/templates/`),
+  de modo que `etsc init` funciona en una instalación construida sin Node.
+- `bootstrap/install.ts` se retira: su contrato lo cubre ahora `install.sh`.
+
 ### En desarrollo: cierre del frontend nativo e IR
 
 - Registro de pendientes y criterios de cierre en `bootstrap/PENDING.md`

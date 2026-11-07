@@ -55,3 +55,40 @@ jobs:
         env:
           SKIP_NETWORK: '1'
         run: npm run test:e2e
+
+  install:
+    name: Instalación sin Node
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
+
+      - name: Install from the C++ seed without Node
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Node queda envenenado: si install.sh lo invoca, falla la job.
+          poison="$RUNNER_TEMP/without-node"
+          mkdir -p "$poison"
+          for tool in node nodejs npm; do
+            printf '#!/bin/sh\necho forbidden > %s\nexit 99\n' "$RUNNER_TEMP/node-used" > "$poison/$tool"
+            chmod +x "$poison/$tool"
+          done
+          rm -f "$RUNNER_TEMP/node-used"
+          PATH="$poison:$PATH" NODE=/missing/node bash install.sh --prefix "$RUNNER_TEMP/prefix"
+          test ! -e "$RUNNER_TEMP/node-used" || { echo "install.sh invocó Node"; exit 1; }
+          export ESTC_ROOT="$RUNNER_TEMP/prefix/lib/estc/current"
+          test -x "$RUNNER_TEMP/prefix/bin/etsc"
+          test ! -e "$ESTC_ROOT/src"
+          test ! -e "$ESTC_ROOT/bootstrap"
+          "$RUNNER_TEMP/prefix/bin/etsc" --version
+          "$RUNNER_TEMP/prefix/bin/etsc" init "$RUNNER_TEMP/proyecto"
+          cd "$RUNNER_TEMP/proyecto"
+          "$RUNNER_TEMP/prefix/bin/etsc" build
+          "$RUNNER_TEMP/prefix/bin/etsc" run
