@@ -129,4 +129,10 @@
 ./runtime/tests/test_http_routing.cpp
 ./src/codegen/ir/native/generator.cpp
 ./src/codegen/ir/native/model.hpp
+./templates/.gitignore
+./templates/README.md
+./templates/estatic.config.json
+./templates/src/main.ts
+./templates/tsconfig.json
+./templates/types/estatic.d.ts
 ./types/estatic.d.ts
