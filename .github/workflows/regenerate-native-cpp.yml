@@ -77,12 +77,12 @@ jobs:
           Ambos se reconstruyen exclusivamente desde este directorio.
           Para compilar programas se requieren sus fuentes de entrada, pero no Node.
           
-          La Action `native-cpp-bootstrap.yml` genera este árbol, lo empaqueta,
+          La Action `regenerate-native-cpp.yml` genera este árbol y lo empaqueta,
           reconstruye y prueba los ejecutables desde el artefacto descargado,
           y solo entonces publica la instantánea en la rama de trabajo.
           MD
-          (cd "$d" && find . -type f | sort > files.txt)
-          if find "$d" -type f \( -name '*.ets' -o \( -name '*.ts' ! -name '*.d.ts' \) -o -name '*.o' -o -name '*.a' -o -name '*.so' \) | grep .; then
+          # Project templates may legitimately contain .ts/.ets files.
+          if find "$d" -type f \( \( \( -name '*.ets' -o \( -name '*.ts' ! -name '*.d.ts' \) \) ! -path "$d/templates/*" \) -o -name '*.o' -o -name '*.a' -o -name '*.so' \) | grep -q .; then
             echo 'Unexpected source language or precompiled binary in native-cpp' >&2
             exit 1
           fi
@@ -94,11 +94,10 @@ jobs:
             test -f "native-cpp/$item" || { echo "::error::Missing generated file: $item"; exit 1; }
           done
           test -n "$(find native-cpp/frontend -name 'unit-*.cpp' -print -quit)"
-          if find native-cpp -type f \( -name '*.ets' -o -name '*.ts' -o -name '*.o' -o -name '*.so' -o -name '*.a' \) | grep .; then
+          if find native-cpp -type f \( \( \( -name '*.ets' -o \( -name '*.ts' ! -name '*.d.ts' \) \) ! -path 'native-cpp/templates/*' \) -o -name '*.o' -o -name '*.so' -o -name '*.a' \) | grep -q .; then
             echo "::error::Unexpected source language or prebuilt binary in native-cpp"
             exit 1
           fi
-          (cd native-cpp && find . -type f | sort > files.txt)
       - name: Upload regenerated source tree
         uses: actions/upload-artifact@v4
         with:
@@ -115,7 +114,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git switch -c "$branch"
-          git add -f native-cpp
+          git add -A native-cpp
           if git diff --cached --quiet; then
             echo 'No changes to native-cpp' >> "$GITHUB_STEP_SUMMARY"
             exit 0
