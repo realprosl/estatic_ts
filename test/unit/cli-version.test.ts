@@ -24,7 +24,7 @@ const pkg = JSON.parse(readFileSync(join(compilerRoot, "package.json"), "utf8"))
 const expectedLabel = `estatic ${pkg.version} (v${pkg.estaticRevision})`;
 
 test("cli version: package y revisión exponen la versión actual", () => {
-  assert.match(pkg.version, /^\\d+\\.\\d+\\.\\d+$/);
+  assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
   assert.ok(Number.isInteger(pkg.estaticRevision) && pkg.estaticRevision > 0);
   assert.equal(getTs2cppVersion(), pkg.version);
   assert.equal(getTs2cppRevision(), pkg.estaticRevision);
