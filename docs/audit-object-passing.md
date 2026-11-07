@@ -172,13 +172,52 @@ forma de **detectar** el abuso, así que el coste se paga en silencio:
 
 - `bootstrap/checker/SAFETY.md:56-68` describe las reglas de préstamo, pero no hay ningún
   diagnóstico que diga "este parámetro por valor es un objeto grande que solo se lee".
-- El backend nativo (`src/codegen/ir/cpp-generator.ts:26`) emite `ref<T>` como `T*` y
-  `constRef<T>` como `const T*` — **no** como `T&`/`const T&` como promete el README
-  (`README.md:161`, `README.md:375-378`). Es intencionado: `ets::ir::Slot<T>` es
-  `std::optional<T>` y no puede contener una referencia (`runtime/ets_ir.hpp:34`).
-  No es un bug, pero sí una divergencia entre lo documentado y lo emitido.
-- Las aserciones de `T&`/`const T&` que existen (`test/unit/codegen.test.ts:392-414`) cubren
-  **solo stage 0**; el pipeline nativo no tiene ninguna aserción sobre el texto del C++ emitido.
+- Las aserciones de `T&`/`const T&` que existían (`test/unit/codegen.test.ts:392-414`) cubrían
+  **solo stage 0**; el pipeline nativo no tenía ninguna aserción sobre el texto del C++ emitido.
+  La comprobación que faltaba vive ahora en `scripts/check-ref-parity.ts`, **fuera de `npm test`**
+  a propósito: `src/` solo existe hoy para compilar `bootstrap/`, así que la paridad entre ambos
+  pipelines es un invariante transitorio y no algo que deba imposto a la suite para siempre.
+
+### Corregido en esta rama: el contrato de paso ya es el mismo en los dos pipelines
+
+La auditoría destapó una divergencia real: el backend nativo emitía `ref<T>` como `T*` y
+`constRef<T>` como `const T*`, mientras stage 0 emite `T&`/`const T&` (`src/codegen/cpp-types.ts:114-122`).
+El dialecto promete lo mismo en los dos pipelines, así que **lo que se escribe es lo que se obtiene**.
+
+La causa era estructural, no un descuido: `ets::ir::Slot<T>` es `std::optional<T>` y no admite
+referencias (`runtime/ets_ir.hpp:34`), y el op `borrow`/`address` solo puede producir un puntero
+(`src/codegen/ir/cpp-generator.ts:182`). Por eso el shape `ref` del IR está **partido** en dos cosas
+que compartían la misma función `type()`:
+
+| Papel | Antes | Ahora |
+|---|---|---|
+| El **binding** de la firma (lo que ve el callee) | `T*` | **`T&` / `const T&`** |
+| El **valor** interno del shape (slots y temporales de préstamo) | `T*` | `T*` (sin cambios) |
+
+El arreglo separa ambos: `parameterType()` se usa solo para las firmas y `type()` sigue devolviendo
+punteros para el interior del IR. El slot del parámetro guarda el puntero al referente
+(`std::addressof(a0)`) y los call sites desreferencian al llegar a la firma.
+
+| Modificador | Stage 0 | Nativo (antes) | Nativo (ahora) |
+|---|---|---|---|
+| `ref<T>` | `T&` | `T*` | **`T&`** |
+| `constRef<T>` | `const T&` | `const T*` | **`const T&`** |
+| `ptr<T>` | `std::unique_ptr<T>` | `std::unique_ptr<T>` | `std::unique_ptr<T>` |
+| `constPtr<T>` | `std::unique_ptr<const T>` | `std::unique_ptr<const T>` | `std::unique_ptr<const T>` |
+| `T` | `T` (copia) | `T` (copia) | `T` (copia) |
+| `out T` | `T&` | `T*` | **`T&`** |
+
+Los parámetros `out` también se alinean: el checker nativo reescribe `out T` a `ref<T>`
+(`bootstrap/checker/checker.ets:437`), así que antes emitían `T*` cuando stage 0 emite `T&`.
+
+Se aplicó el mismo cambio en los dos backends nativos — el de TypeScript
+(`src/codegen/ir/cpp-generator.ts`) y el C++ standalone (`src/codegen/ir/native/generator.cpp`) —
+y se añadió `scripts/check-ref-parity.ts`, que comprueba el contrato de los seis modificadores
+(`ref`, `constRef`, `ptr`, `constPtr`, valor y `out`) en los dos pipelines.
+
+Esa comprobación **no forma parte de `npm test`**: es manual a propósito. `src/` existe hoy
+únicamente para compilar `bootstrap/`, así que la igualdad entre ambos pipelines es transitoria:
+cuando el compilador nativo sea el único que evoluciona, el script debe dejar de usarse.
 
 ---
 
