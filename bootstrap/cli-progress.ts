@@ -10,6 +10,7 @@ export type ProgressEvent =
 // Never put progress on stdout, which belongs to JSON and the user's program.
 export class CliProgress {
   private timer?: ReturnType<typeof setInterval>;
+  private draw?: () => void;
   private animated: boolean;
   private color: boolean;
   private verbose: boolean;
@@ -32,7 +33,7 @@ export class CliProgress {
         const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
         let frame = 0;
         const draw = () => this.stream.write(`\r\x1b[2K${this.paint(frames[frame++ % frames.length], 36)} ${event.label}`);
-        draw(); this.timer = setInterval(draw, 80);
+        this.draw = draw; draw(); this.timer = setInterval(draw, 80);
       } else if (this.verbose) this.stream.write(`> ${event.label}\n`);
     } else if (event.type === "finish") {
       this.clear();
@@ -41,14 +42,19 @@ export class CliProgress {
         this.stream.write(`${this.paint(marker, event.failed ? 31 : 32)} ${event.label} (${Math.round(event.elapsed)} ms)\n`);
       }
     } else if (event.type === "detail") {
-      // Details arrive between phases, so they cannot overwrite an animation.
-      if (this.verbose) this.stream.write(`  ${event.text}\n`);
+      // Keep details on their own line while preserving the active spinner.
+      if (this.verbose) {
+        if (this.draw) this.stream.write("\r\x1b[2K");
+        this.stream.write(`  ${event.text}\n`);
+        this.draw?.();
+      }
     } else {
       this.clear();
       if (this.animated || this.verbose) this.stream.write(`${this.paint("✓", 32)} Compilación completada (${Math.round(event.elapsed)} ms)\n`);
     }
   }
   clear(): void {
+    this.draw = undefined;
     if (this.timer) {
       clearInterval(this.timer); this.timer = undefined;
       this.stream.write("\r\x1b[2K");

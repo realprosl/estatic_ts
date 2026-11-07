@@ -80,3 +80,16 @@ etsc build --verbose --no-progress
 
 En ambos drivers, stdout se reserva para los resultados y el programa; el
 progreso se escribe por stderr y se desactiva en pipes salvo con verbose.
+
+Con `--verbose`, la preparación del frontend indica si se reutiliza la caché
+o se reconstruye, y muestra la transpilación y el comando C++ antes de ejecutarlo.
+El runtime informa de la caché, cada unidad que compila y la creación del archivo
+estático. También se imprime el comando de análisis y el de compilación/enlace
+del programa. Estos mensajes se publican al comenzar cada operación en stderr,
+incluido cuando hay una animación activa.
+
+Durante «Analizando fuentes y verificando IR», `--verbose` transmite los
+mensajes del frontend en tiempo real: lectura y análisis de cada archivo,
+expansión y binding, comprobación de tipos por módulo (con contador),
+seguridad, comptime, lowering y serialización del IR. El JSON sigue reservado
+a stdout; las trazas se escriben en stderr.

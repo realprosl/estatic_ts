@@ -4,28 +4,35 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 
 import { createHash } from "node:crypto";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { root } from "../root.ts";
 import { runtimeArchive } from "../build/runtime-cache.ts";
 import { generateCppFromIr, type IrCppResult } from "../../src/codegen/ir/cpp-generator.ts";
 import type { IrProject } from "../../src/codegen/ir/model.ts";
 
-export async function buildIrFrontend(directory=join(root,"build/bootstrap/ir-cpp")):Promise<string> {
+export async function buildIrFrontend(directory=join(root,"build/bootstrap/ir-cpp"), detail:(text:string)=>void=()=>{}):Promise<string> {
   if(existsSync(join(root,"installation.json"))){
     const binary=join(root,"native/frontend");
     if(!existsSync(binary))throw new Error("Instalación incompleta: falta native/frontend; vuelve a ejecutar install.sh");
+    detail(`Frontend instalado: ${JSON.stringify(binary)}`);
     return binary;
   }
+  detail("Comprobando caché del frontend nativo");
   const hash=createHash("sha256").update(root).update(process.platform).update(process.arch).update(process.env.CXX??"g++");
   for(const folder of ["src","bootstrap","runtime"])for(const path of readdirSync(join(root,folder),{recursive:true}).map(String).filter(p=>/\.(ts|ets|hpp|cpp)$/.test(p)&&!p.endsWith(".test.ts")).sort())hash.update(folder+"/"+path).update(readFileSync(join(root,folder,path)));
   hash.update(readFileSync(join(root,"package.json")));
   const identity=hash.digest("hex"),stamp=join(directory,"frontend.sha256"),binary=join(directory,"modules-demo");
-  if(existsSync(binary)&&existsSync(stamp)&&readFileSync(stamp,"utf8")===identity)return binary;
+  if(existsSync(binary)&&existsSync(stamp)&&readFileSync(stamp,"utf8")===identity){detail(`Frontend: caché reutilizada (${binary})`);return binary;}
+  detail("Frontend: caché no válida; reconstruyendo");
   const {buildLoader}=await import("../modules/build.ts");
-  const built=await buildLoader(directory,"bootstrap/ir/demo.ets",true);writeFileSync(stamp,identity);return built;
+  const built=await buildLoader(directory,"bootstrap/ir/demo.ets",true,"-O0",detail);writeFileSync(stamp,identity);return built;
 }
-export function nativeIr(binary:string, entry:string,loaderArgs:string[]=[]):IrProject {
+export function nativeIr(binary:string, entry:string,loaderArgs:string[]=[],detail:(text:string)=>void=()=>{}):IrProject {
+  detail(`Comando frontend: ${JSON.stringify([binary,resolve(entry),...loaderArgs])}`);
   const p=spawnSync(binary,[resolve(entry),...loaderArgs],{encoding:"utf8",maxBuffer:64*1024*1024,timeout:120000});
+  return decodeNativeIr(p,entry);
+}
+function decodeNativeIr(p:{error?:Error;status:number|null;stdout:string;stderr:string},entry:string):IrProject {
   if(p.error)throw p.error;
   if(p.status!==0){
     let details=p.stderr;
@@ -34,7 +41,35 @@ export function nativeIr(binary:string, entry:string,loaderArgs:string[]=[]):IrP
   }
   return JSON.parse(p.stdout);
 }
-export function buildIrCpp(result:IrCppResult,cpp:string,binary:string,cxx=process.env.CXX??"g++",flags:string[]=[],linkFlags:string[]=[]):void {
+// Read progress while the frontend runs; stdout remains the JSON protocol.
+export function nativeIrWithProgress(binary:string,entry:string,loaderArgs:string[],detail:(text:string)=>void):Promise<IrProject> {
+  const args=[resolve(entry),...loaderArgs,"--verbose"];
+  detail(`Comando frontend: ${JSON.stringify([binary,...args])}`);
+  return new Promise((resolve,reject)=>{
+    const child=spawn(binary,args,{stdio:["ignore","pipe","pipe"]});
+    let stdout="",stderr="",pending="",size=0;
+    child.stdout.setEncoding("utf8");child.stderr.setEncoding("utf8");
+    const timer=setTimeout(()=>{child.kill("SIGKILL");reject(new Error("Native IR timed out (120000 ms)"));},120000);
+    child.stdout.on("data",(chunk:string)=>{
+      size+=Buffer.byteLength(chunk);
+      if(size>64*1024*1024){child.kill("SIGKILL");reject(new Error("Native IR output exceeded 64 MiB"));return;}
+      stdout+=chunk;
+    });
+    child.stderr.on("data",(chunk:string)=>{
+      stderr=(stderr+chunk).slice(-65536);pending+=chunk;
+      let end:number;
+      while((end=pending.indexOf("\n"))>=0){detail(pending.slice(0,end).replace(/\r$/,""));pending=pending.slice(end+1);}
+    });
+    child.on("error",error=>{clearTimeout(timer);reject(error);});
+    child.on("close",status=>{
+      clearTimeout(timer);
+      if(pending)detail(pending);
+      try{resolve(decodeNativeIr({status,stdout,stderr},entry));}catch(error){reject(error);}
+    });
+  });
+}
+
+export function buildIrCpp(result:IrCppResult,cpp:string,binary:string,cxx=process.env.CXX??"g++",flags:string[]=[],linkFlags:string[]=[],detail:(text:string)=>void=()=>{}):void {
   const args=["-std=c++20","-O0","-pthread","-fno-exceptions",`-I${root}`,...flags];
   const local=join(root,"build/libs/libuv"), libs:string[]=[],units:("libuv"|"httplib")[]=[];
   if(result.runtimeBackends.libuv) {
@@ -55,8 +90,10 @@ export function buildIrCpp(result:IrCppResult,cpp:string,binary:string,cxx=proce
   if(result.runtimeBackends.tls)libs.push("-lssl","-lcrypto");
   if(result.runtimeBackends.curl)libs.push("-lcurl");
   mkdirSync(dirname(binary),{recursive:true});
-  const archives=units.map(unit=>runtimeArchive(unit,cxx,args));
-  const p=spawnSync(cxx,[...args,cpp,...archives,...libs,...linkFlags,"-o",binary],{encoding:"utf8",maxBuffer:8*1024*1024,timeout:180000});
+  const archives=units.map(unit=>runtimeArchive(unit,cxx,args,detail));
+  const command=[...args,cpp,...archives,...libs,...linkFlags,"-o",binary];
+  detail(`Compilando y enlazando C++: ${JSON.stringify([cxx,...command])}`);
+  const p=spawnSync(cxx,command,{encoding:"utf8",maxBuffer:8*1024*1024,timeout:180000});
   if(p.error)throw p.error;if(p.status!==0)throw new Error(`C++ compile/link failed:\n${p.stdout}${p.stderr}`);
 }
 export async function main(argv:string[]):Promise<void> {

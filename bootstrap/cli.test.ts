@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { CliProgress, phase, presentation } from "./cli-progress.ts";
-import { buildIrFrontend } from "./ir/cpp.ts";
+import { buildIrFrontend, nativeIrWithProgress } from "./ir/cpp.ts";
 import { root } from "./root.ts";
 
 function capture(tty: boolean, env: NodeJS.ProcessEnv={}, verbose=true, enabled=true) {
@@ -34,6 +34,18 @@ test("bootstrap progress: animation advances and is cleared after a failed phase
   assert.match(c.output(),/⠋/);assert.match(c.output(),/⠙/);assert.match(c.output(),/✗/);
   const done=c.output();await new Promise(resolve=>setTimeout(resolve,100));assert.equal(c.output(),done);
 });
+test("bootstrap progress: details clear and redraw the active animation",()=>{
+  const c=capture(true);
+  c.progress.handle({type:"start",label:"Runtime"});
+  c.progress.handle({type:"detail",text:"Compilando unidad 1/2"});
+  const output=c.output();
+  assert.match(output,/\r\x1b\[2K  Compilando unidad 1\/2\n\r\x1b\[2K/);
+  assert(output.endsWith("Runtime"));
+  c.progress.clear();
+  const done=c.output();
+  c.progress.handle({type:"detail",text:"Finalizado"});
+  assert.equal(c.output(),done+"  Finalizado\n");
+});
 test("bootstrap presentation flags preserve compiler values and program arguments",()=>{
   assert.deepEqual(presentation(["--verbose","--no-progress","run","--cxx-flag","--verbose","--","--verbose","--no-progress"]),{
     args:["run","--cxx-flag","--verbose","--","--verbose","--no-progress"],verbose:true,progress:false
@@ -47,11 +59,30 @@ after(()=>rmSync(dir,{recursive:true,force:true}));
 const command=(args:string[])=>spawnSync(process.execPath,["--experimental-strip-types",cli,...args],{cwd:dir,encoding:"utf8",timeout:180000});
 function source(name:string,text:string){const path=join(dir,name+".ets");writeFileSync(path,text);return path;}
 
+test("bootstrap frontend delivers progress before the child exits",async()=>{
+  const script=join(dir,"progress-frontend");
+  writeFileSync(script,`#!/bin/sh
+echo "checking first module" >&2
+sleep 0.4
+echo '{"success":true}'
+`);
+  chmodSync(script,0o755);
+  let completed=false;
+  const messages:string[]=[];
+  const result=nativeIrWithProgress(script,"entry.ets",[],text=>messages.push(text)).then(value=>{completed=true;return value;});
+  await new Promise<void>((resolve,reject)=>{
+    const started=Date.now();
+    const check=()=>{if(messages.includes("checking first module"))resolve();else if(Date.now()-started>3000)reject(new Error("Missing live progress"));else setTimeout(check,10);};
+    check();
+  });
+  assert.equal(completed,false);
+  assert.equal((await result).success,true);
+});
 test("bootstrap CLI verbose reports real phases and preserves stdout and exit status",()=>{
   const input=source("arguments",'print(argument(1));exitProcess(7);');
   const p=command(["run",input,"--frontend",frontend,"--verbose","--no-progress","--","--verbose"]);
   assert.equal(p.status,7,p.stderr);assert.equal(p.stdout,"--verbose\n");
-  for(const label of ["Analizando fuentes y verificando IR","Validando frontera","Generando C++","Preparando runtime, compilando y enlazando C++","Compilación completada","Ejecutable:"])assert(p.stderr.includes(label),p.stderr);
+  for(const label of ["Analizando fuentes y verificando IR","Validando frontera","Generando C++","Preparando runtime, compilando y enlazando C++","Compilación completada","Ejecutable:","Comando frontend:","Compilando y enlazando C++:","frontend: reading/parsing","frontend: checking [","frontend: lowering IR"])assert(p.stderr.includes(label),p.stderr);
   assert.match(p.stderr,/\(\d+ ms\)/);assert.doesNotMatch(p.stderr,/[\r\x1b]/);
 });
 test("bootstrap CLI check stays quiet by default and does not generate C++",()=>{
