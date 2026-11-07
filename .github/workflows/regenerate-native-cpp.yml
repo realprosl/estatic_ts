@@ -8,7 +8,8 @@ on:
       - scripts/generate-native-cpp-snapshot.mjs
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 concurrency:
   group: regenerate-native-cpp-${{ github.ref }}
