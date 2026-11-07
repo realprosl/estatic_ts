@@ -214,3 +214,21 @@ node --experimental-strip-types /workspace/audit/audit-object-passing.ts bootstr
 El script no modifica nada: parsea `bootstrap/**.ets` con el lexer/parser de stage 0, clasifica
 cada parámetro por su modo de paso, y cruza las firmas con los cuerpos para detectar copias
 y mutaciones perdidas. Informe completo en `report-bootstrap.txt`.
+
+---
+
+## 8. Estado de la suite de tests (baseline para CI)
+
+`npm test` en `main` (21 min, 3858 tests): **3735 pass / 123 fail**. Ningún fallo procede de este
+informe; la rama de auditoría solo toca `docs/`.
+
+Los fallos se reparten así:
+
+| Causa | Nº | Comentario |
+|---|---:|---|
+| Entorno: falta `libuv1-dev` (`uv.h: No such file or directory`), drogon y red | la mayoría | Pasan en CI con `libuv1-dev libcurl4-openssl-dev libssl-dev` |
+| Decisión de diseño: `Promise` no se declara en `types/estatic.d.ts` | 3 | `binder: builtin declarations stay synchronized with canonical d.ts` y dos de `init-project`. El `d.ts` omite `Promise` **a propósito** (choca con el `Promise` estándar del servidor de TS), así que el test es quien está desactualizado. |
+| Decisión de diseño: `includes` con offset opcional | 1 | `checker: string includes keeps the required offset parameter` espera un error `/Aridad/` para `includes("b")`, pero el offset es opcional como en JS y TS. El test está desactualizado. |
+
+Esto es relevante para CI: **la suite está roja en `main` hoy**, y un workflow que la ejecute
+tal cual fallará hasta que se actualicen esos tests o se acepte el estado.
