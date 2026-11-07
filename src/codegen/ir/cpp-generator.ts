@@ -28,7 +28,10 @@ export class IrCppGenerator {
       case "array": return `std::vector<${this.elementType(a[0])}>`;
       case "fixedArray": return `std::array<${t(a[0])},${s.length}>`;
       case "tuple": case "pack": return `std::tuple<${a.map(t).join(",")}>`;
-      case "function": return `std::function<${t(a.at(-1)!)}(${a.slice(0,-1).map(t).join(",")})>`;
+      // El `std::function` de un callback es parte del contrato observable: un
+      // callback `(x: constRef<T>) => void` se declara `std::function<void(const T&)>`,
+      // igual que stage 0 y que los overloads del runtime.
+      case "function": return `std::function<${t(a.at(-1)!)}(${a.slice(0,-1).map(x=>this.parameterType(x)).join(",")})>`;
       case "Optional": return `ets::Optional<${t(a[0])}>`;
       case "Result": {
         if (this.project.types[a[1]] !== "string") this.fail("El runtime C++ requiere Result<T,string>");
@@ -145,7 +148,7 @@ export class IrCppGenerator {
     if(a.kind==="function"&&b.kind==="function") {
       const args=b.arguments.slice(0,-1), ret=b.arguments.at(-1)!;
       const call=`fn(${a.arguments.slice(0,-1).map((x,k)=>this.convert(`x${k}`,args[k],x)).join(",")})`;
-      return `([fn=${value}](${args.map((x,k)=>`${this.type(x)} x${k}`).join(",")})mutable->${this.type(ret)}{${this.project.types[ret]==="void"?`${call};`:`return ${this.convert(call,a.arguments.at(-1)!,ret)};`}})`;
+      return `([fn=${value}](${args.map((x,k)=>`${this.parameterType(x)} x${k}`).join(",")})mutable->${this.type(ret)}{${this.project.types[ret]==="void"?`${call};`:`return ${this.convert(call,a.arguments.at(-1)!,ret)};`}})`;
     }
     // Structural container conversions remain explicit, never C++ reinterpret casts.
     if(["array","fixedArray"].includes(a.kind)&&["array","fixedArray"].includes(b.kind))return `([&](){auto input=${value};${T} out;${b.kind==="array"?"out.reserve(input.size());":"std::size_t k=0;"}for(auto&& x:input){${b.kind==="array"?"out.push_back(":"out[k++]=("}${this.convert(this.shape(a.arguments[0]).resource?"std::move(x)":"x",a.arguments[0],b.arguments[0])});}return out;}())`;
@@ -192,7 +195,7 @@ export class IrCppGenerator {
   }
   callback(f:IrFunction,i:IrInstruction,k:number):string {
     const id=f.values[i.operands[k]], s=this.shape(id), args=s.arguments.slice(0,-1);
-    return `[&](${args.map((_,n)=>`auto&& x${n}`).join(",")})->${this.type(s.arguments.at(-1)!)}{${this.project.types[s.arguments.at(-1)!]==="void"?"":"return "}${this.operand(f,i,k,false)}(${args.map((t,n)=>["ref","constRef"].includes(this.shape(t).kind)?`std::addressof(ets::ir::read(x${n}))`:`x${n}`).join(",")});}`;
+    return `[&](${args.map((_,n)=>`auto&& x${n}`).join(",")})->${this.type(s.arguments.at(-1)!)}{${this.project.types[s.arguments.at(-1)!]==="void"?"":"return "}${this.operand(f,i,k,false)}(${args.map((t,n)=>["ref","constRef"].includes(this.shape(t).kind)?`ets::ir::read(x${n})`:`x${n}`).join(",")});}`;
   }
   instruction(f:IrFunction,i:IrInstruction,block:number):string {
     const a=(k:number,consume=true)=>this.operand(f,i,k,consume), s=this.shape.bind(this), T=i.typeId>=0?this.type(i.typeId):"void";

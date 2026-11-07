@@ -210,6 +210,12 @@ punteros para el interior del IR. El slot del parámetro guarda el puntero al re
 Los parámetros `out` también se alinean: el checker nativo reescribe `out T` a `ref<T>`
 (`bootstrap/checker/checker.ets:437`), así que antes emitían `T*` cuando stage 0 emite `T&`.
 
+El contrato llega también a los **callbacks**: el shape `function` del IR construye el
+`std::function` de una lambda, y ese tipo es observable. Un callback `(x: constRef<T>) => void`
+se declara `std::function<void(const T&)>` — igual que stage 0 (`src/codegen/cpp-types.ts:130`) y
+que los overloads del runtime (`runtime/ets_collections.hpp:66`). Por eso el shape `function` usa
+también la forma observable, y no la punteada que usaba antes.
+
 Se aplicó el mismo cambio en los dos backends nativos — el de TypeScript
 (`src/codegen/ir/cpp-generator.ts`) y el C++ standalone (`src/codegen/ir/native/generator.cpp`) —
 y se añadió `scripts/check-ref-parity.ts`, que comprueba el contrato de los seis modificadores

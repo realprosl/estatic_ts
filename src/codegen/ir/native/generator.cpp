@@ -29,7 +29,10 @@ public:
   if(k=="array")return "std::vector<"+elementType(a.at(0))+">";
   if(k=="fixedArray")return "std::array<"+type(a.at(0))+","+n(s.length)+">";
   if(k=="tuple"||k=="pack")return "std::tuple<"+types(a)+">";
-  if(k=="function")return "std::function<"+type(a.back())+"("+types(V<int>(a.begin(),a.end()-1))+")>";
+  // El `std::function` de un callback es parte del contrato observable: un
+  // callback `(x: constRef<T>) => void` se declara `std::function<void(const T&)>`,
+  // igual que stage 0 y que los overloads del runtime.
+  if(k=="function"){V<S> params;for(int id:V<int>(a.begin(),a.end()-1))params.push_back(parameterType(id));return "std::function<"+type(a.back())+"("+join(params)+")>";}
   if(k=="Optional")return "ets::Optional<"+type(a.at(0))+">";
   if(k=="Result"){if(p.types.at(a.at(1))!="string")return fail("El runtime C++ requiere Result<T,string>");result.headers.insert("runtime/ets_async.hpp");result.libuv=true;return "ets::Result<"+type(a.at(0))+">";}
   if(k=="Promise"){result.headers.insert("runtime/ets_async.hpp");result.libuv=true;return "ets::Task<"+type(a.at(0))+">";}
@@ -84,7 +87,7 @@ public:
    return T+"{"+interfaceVariant(to)+"{std::in_place_type<ets::ir::Box<"+type(from)+">>,"+value+"}}";
   }
   if(record(from)&&record(to)){S fields;for(int k=0;k<int(b.names.size());k++){int at=index(a.names,b.names[k]);if(at<0)return fail("Campo ausente en conversión: "+b.names[k]);fields+="out.f"+n(k)+".set("+convert(field("input",from,at)+"."+(shape(a.fields.at(at)).resource?"take":"get")+"()",a.fields.at(at),b.fields.at(k))+");";}return "([&](){auto input="+value+";"+T+" out;"+fields+"return out;}())";}
-  if(a.kind=="function"&&b.kind=="function"){V<S> decl,args;for(int k=0;k<int(b.arguments.size())-1;k++)decl.push_back(type(b.arguments[k])+" x"+n(k));for(int k=0;k<int(a.arguments.size())-1;k++)args.push_back(convert("x"+n(k),b.arguments.at(k),a.arguments[k]));S call="fn("+join(args)+")";return "([fn="+value+"]("+join(decl)+")mutable->"+type(b.arguments.back())+"{"+(p.types.at(b.arguments.back())=="void"?call+";":"return "+convert(call,a.arguments.back(),b.arguments.back())+";")+"})";}
+  if(a.kind=="function"&&b.kind=="function"){V<S> decl,args;for(int k=0;k<int(b.arguments.size())-1;k++)decl.push_back(parameterType(b.arguments[k])+" x"+n(k));for(int k=0;k<int(a.arguments.size())-1;k++)args.push_back(convert("x"+n(k),b.arguments.at(k),a.arguments[k]));S call="fn("+join(args)+")";return "([fn="+value+"]("+join(decl)+")mutable->"+type(b.arguments.back())+"{"+(p.types.at(b.arguments.back())=="void"?call+";":"return "+convert(call,a.arguments.back(),b.arguments.back())+";")+"})";}
   if(in(a.kind,{"array","fixedArray"})&&in(b.kind,{"array","fixedArray"}))return "([&](){auto input="+value+";"+T+" out;"+(b.kind=="array"?"out.reserve(input.size());":"std::size_t k=0;")+"for(auto&& x:input){"+(b.kind=="array"?"out.push_back(":"out[k++]=(")+convert(shape(a.arguments.at(0)).resource?"std::move(x)":"x",a.arguments.at(0),b.arguments.at(0))+");}return out;}())";
   if(a.kind=="ref"&&b.kind=="constRef"&&a.arguments.at(0)==b.arguments.at(0))return value;
   return fail("Conversión C++ no soportada: "+p.types.at(from)+" -> "+p.types.at(to));
@@ -114,7 +117,7 @@ public:
  S parameterType(int id){const auto& s=shape(id);if(s.kind=="ref")return type(s.arguments.at(0))+"&";if(s.kind=="constRef")return "const "+type(s.arguments.at(0))+"&";return type(id);}
  S dereferenceIfBorrowed(const S& text,int formal){if(formal<0)return text;return in(shape(formal).kind,{"ref","constRef"})?"(*("+text+"))":text;}
  S borrowArgument(const Function& f,const Instruction& i,int k,int formal){if(formal<0)return operand(f,i,k);if(!in(shape(formal).kind,{"ref","constRef"}))return operand(f,i,k);int value=i.operands.at(k);if(!in(shape(f.values.at(value)).kind,{"ref","constRef"}))return fail("Un parámetro prestado exige un argumento prestado",i.source);return dereferenceIfBorrowed(operand(f,i,k,false),formal);}
- S callback(const Function& f,const Instruction& i,int k){int id=f.values.at(i.operands.at(k));const auto& s=shape(id);V<S> decl,args;for(int at=0;at<int(s.arguments.size())-1;at++){decl.push_back("auto&& x"+n(at));args.push_back(in(shape(s.arguments[at]).kind,{"ref","constRef"})?"std::addressof(ets::ir::read(x"+n(at)+"))":"x"+n(at));}return "[&]("+join(decl)+")->"+type(s.arguments.back())+"{"+(p.types.at(s.arguments.back())=="void"?S{}:S("return "))+operand(f,i,k,false)+"("+join(args)+");}";}
+ S callback(const Function& f,const Instruction& i,int k){int id=f.values.at(i.operands.at(k));const auto& s=shape(id);V<S> decl,args;for(int at=0;at<int(s.arguments.size())-1;at++){decl.push_back("auto&& x"+n(at));args.push_back(in(shape(s.arguments[at]).kind,{"ref","constRef"})?"ets::ir::read(x"+n(at)+")":"x"+n(at));}return "[&]("+join(decl)+")->"+type(s.arguments.back())+"{"+(p.types.at(s.arguments.back())=="void"?S{}:S("return "))+operand(f,i,k,false)+"("+join(args)+");}";}
  S runtimeCall(const Function&,const Instruction&);
  S instruction(const Function&,const Instruction&,int);
  S signature(const Function&,int);
