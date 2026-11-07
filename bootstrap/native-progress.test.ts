@@ -67,6 +67,18 @@ test("native etsc animates during real compiler work in a PTY",()=>{
  assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"animated\n");
  const compilation=p.stderr.slice(p.stderr.indexOf("Compilando y enlazando C++"));assert.match(compilation,/⠙/);assert.match(compilation,/⠹/);assert.match(compilation,/Compilación completada/);
 });
+test("native verbose frontend traces update one line even across split writes",()=>{
+ const fake=join(dir,"trace-frontend");
+ writeFileSync(fake,'#!/bin/sh\nprintf "frontend: read" >&2\nsleep 0.1\nprintf "ing one\nfrontend: checking [1/1] module.ets\n" >&2\nsleep 0.2\nexec '+JSON.stringify(frontend)+' "$@"\n');
+ chmodSync(fake,0o755);
+ const p=terminal([source("live-traces",'print("checked");'),"--frontend",fake,"--check","--verbose"]);
+ assert.equal(p.status,0,p.stderr);
+ assert.match(p.stderr,/frontend: reading one/);
+ assert.match(p.stderr,/frontend: checking/);
+ const lines=p.stderr.replace(/\r\n/g,"\n").split("\n").filter(Boolean);
+ assert.equal(lines.length,1,p.stderr);
+ assert.match(lines[0],/Compilación completada/);
+});
 test("native etsc disables terminal animation with flags and environment",()=>{
  const input=source("plain",'print("plain");');
  for(const [flags,env] of [ [["--no-progress"],{}],[[],{NO_COLOR:""}],[[],{TERM:"dumb"}],[[],{CI:"1"}] ] as [string[],Record<string,string>][]){

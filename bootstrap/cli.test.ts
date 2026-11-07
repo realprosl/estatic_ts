@@ -34,17 +34,35 @@ test("bootstrap progress: animation advances and is cleared after a failed phase
   assert.match(c.output(),/⠋/);assert.match(c.output(),/⠙/);assert.match(c.output(),/✗/);
   const done=c.output();await new Promise(resolve=>setTimeout(resolve,100));assert.equal(c.output(),done);
 });
-test("bootstrap progress: details clear and redraw the active animation",()=>{
+test("bootstrap progress: terminal updates one line and keeps only the final summary",()=>{
   const c=capture(true);
   c.progress.handle({type:"start",label:"Runtime"});
   c.progress.handle({type:"detail",text:"Compilando unidad 1/2"});
-  const output=c.output();
-  assert.match(output,/\r\x1b\[2K  Compilando unidad 1\/2\n\r\x1b\[2K/);
-  assert(output.endsWith("Runtime"));
+  c.progress.handle({type:"detail",text:"Compilando unidad 2/2"});
+  assert.match(c.output(),/Compilando unidad 2\/2/);
+  assert.doesNotMatch(c.output(),/\n/);
+  c.progress.handle({type:"finish",label:"Runtime",elapsed:12,failed:false});
+  assert.doesNotMatch(c.output(),/\n/);
+  c.progress.handle({type:"summary",elapsed:15});
+  assert.equal(c.output().split("\n").length,2);
+  assert.match(c.output(),/Compilación completada/);
+});
+test("bootstrap progress: long tasks fit the terminal width",()=>{
+  let output="";
+  const progress=new CliProgress(true,true,{isTTY:true,columns:40,write:(text:string)=>{output+=text;return true;}} as NodeJS.WriteStream,{});
+  progress.handle({type:"start",label:"Analizando "+"/long/path".repeat(20)});
+  progress.clear();
+  const line=output.split("\r").find(line=>line.includes("Analizando"))!.replace(/\x1b\[[0-9;]*[A-Za-z]/g,"");
+  assert(Array.from(line).length<40,line);
+  assert.match(line,/…/);
+});
+test("bootstrap progress: diagnostics remain visible while the task continues",()=>{
+  const c=capture(true);
+  c.progress.handle({type:"start",label:"Analizando"});
+  c.progress.handle({type:"diagnostic",text:"warning: example"});
+  assert.match(c.output(),/warning: example\n/);
+  c.progress.handle({type:"detail",text:"Siguiente módulo"});
   c.progress.clear();
-  const done=c.output();
-  c.progress.handle({type:"detail",text:"Finalizado"});
-  assert.equal(c.output(),done+"  Finalizado\n");
 });
 test("bootstrap presentation flags preserve compiler values and program arguments",()=>{
   assert.deepEqual(presentation(["--verbose","--no-progress","run","--cxx-flag","--verbose","--","--verbose","--no-progress"]),{

@@ -86,7 +86,7 @@ async function compile(argv:string[], report:(event:ProgressEvent)=>void):Promis
   detail(`Entrada: ${JSON.stringify(entry)}`);
   if(!fromIr&&!frontend)frontend=await step("Preparando frontend nativo",()=>buildIrFrontend(undefined,detail));
   if(!fromIr)detail(`Frontend: ${JSON.stringify(frontend)}; módulos: ${JSON.stringify(loaderArgs)}`);
-  const project:IrProject=await step(fromIr?"Leyendo IR":"Analizando fuentes y verificando IR",()=>fromIr?JSON.parse(readFileSync(entry,"utf8")):verbose?nativeIrWithProgress(frontend,entry,loaderArgs,detail):nativeIr(frontend,entry,loaderArgs));
+  const project:IrProject=await step(fromIr?"Leyendo IR":"Analizando fuentes y verificando IR",()=>fromIr?JSON.parse(readFileSync(entry,"utf8")):verbose?nativeIrWithProgress(frontend,entry,loaderArgs,detail,text=>report({type:"diagnostic",text})):nativeIr(frontend,entry,loaderArgs));
   // Check the producer boundary even when --check/--from-ir bypasses emission.
   await step("Validando frontera del backend",()=>{
   if(project.format!=="ets-ir-2"||!project.success||!Array.isArray(project.diagnostics)||project.diagnostics.length)throw new Error("Se requiere ets-ir-2 verificado con success:true");

@@ -4,7 +4,8 @@ export type ProgressEvent =
   | { type: "start"; label: string }
   | { type: "finish"; label: string; elapsed: number; failed: boolean }
   | { type: "detail"; text: string }
-  | { type: "summary"; elapsed: number };
+  | { type: "summary"; elapsed: number }
+  | { type: "diagnostic"; text: string };
 
 // Rendering stays on the host thread: native compilation uses blocking tools.
 // Never put progress on stdout, which belongs to JSON and the user's program.
@@ -12,6 +13,8 @@ export class CliProgress {
   private timer?: ReturnType<typeof setInterval>;
   private draw?: () => void;
   private animated: boolean;
+  private current = "";
+  private started = performance.now();
   private color: boolean;
   private verbose: boolean;
   private stream: Pick<NodeJS.WriteStream, "write" | "isTTY">;
@@ -29,25 +32,40 @@ export class CliProgress {
   handle(event: ProgressEvent): void {
     if (event.type === "start") {
       this.clear();
+      this.current = event.label;
+      this.started = performance.now();
       if (this.animated) {
         const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
         let frame = 0;
-        const draw = () => this.stream.write(`\r\x1b[2K${this.paint(frames[frame++ % frames.length], 36)} ${event.label}`);
+        const draw = () => {
+          const columns = (this.stream as Partial<NodeJS.WriteStream>).columns || 80;
+          const elapsed = ` · ${((performance.now() - this.started) / 1000).toFixed(1)} s`;
+          const available = Math.max(1, columns - elapsed.length - 4);
+          const clean = this.current.replace(/[\x00-\x1f\x7f]/g, " ");
+          const text = Array.from(clean);
+          const left = Math.floor((available - 1) / 2), right = available - 1 - left;
+          const label = text.length > available ? text.slice(0, left).join("") + "…" + (right ? text.slice(-right).join("") : "") : clean;
+          this.stream.write(`\r\x1b[2K${this.paint(frames[frame++ % frames.length], 36)} ${label}${elapsed}`);
+        };
         this.draw = draw; draw(); this.timer = setInterval(draw, 80);
       } else if (this.verbose) this.stream.write(`> ${event.label}\n`);
     } else if (event.type === "finish") {
       this.clear();
-      if (this.animated || this.verbose) {
+      if ((this.animated && event.failed) || (!this.animated && this.verbose)) {
         const marker = event.failed ? "✗" : "✓";
         this.stream.write(`${this.paint(marker, event.failed ? 31 : 32)} ${event.label} (${Math.round(event.elapsed)} ms)\n`);
       }
     } else if (event.type === "detail") {
-      // Keep details on their own line while preserving the active spinner.
       if (this.verbose) {
-        if (this.draw) this.stream.write("\r\x1b[2K");
-        this.stream.write(`  ${event.text}\n`);
-        this.draw?.();
+        if (this.animated) {
+          this.current = event.text;
+          this.draw?.();
+        } else this.stream.write(`  ${event.text}\n`);
       }
+    } else if (event.type === "diagnostic") {
+      if (this.draw) this.stream.write("\r\x1b[2K");
+      this.stream.write(event.text + "\n");
+      this.draw?.();
     } else {
       this.clear();
       if (this.animated || this.verbose) this.stream.write(`${this.paint("✓", 32)} Compilación completada (${Math.round(event.elapsed)} ms)\n`);

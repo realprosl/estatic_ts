@@ -42,12 +42,13 @@ function decodeNativeIr(p:{error?:Error;status:number|null;stdout:string;stderr:
   return JSON.parse(p.stdout);
 }
 // Read progress while the frontend runs; stdout remains the JSON protocol.
-export function nativeIrWithProgress(binary:string,entry:string,loaderArgs:string[],detail:(text:string)=>void):Promise<IrProject> {
+export function nativeIrWithProgress(binary:string,entry:string,loaderArgs:string[],detail:(text:string)=>void,diagnostic:(text:string)=>void=detail):Promise<IrProject> {
   const args=[resolve(entry),...loaderArgs,"--verbose"];
   detail(`Comando frontend: ${JSON.stringify([binary,...args])}`);
   return new Promise((resolve,reject)=>{
     const child=spawn(binary,args,{stdio:["ignore","pipe","pipe"]});
     let stdout="",stderr="",pending="",size=0;
+    const line=(text:string)=>text.startsWith("frontend: ")?detail(text):diagnostic(text);
     child.stdout.setEncoding("utf8");child.stderr.setEncoding("utf8");
     const timer=setTimeout(()=>{child.kill("SIGKILL");reject(new Error("Native IR timed out (120000 ms)"));},120000);
     child.stdout.on("data",(chunk:string)=>{
@@ -58,12 +59,12 @@ export function nativeIrWithProgress(binary:string,entry:string,loaderArgs:strin
     child.stderr.on("data",(chunk:string)=>{
       stderr=(stderr+chunk).slice(-65536);pending+=chunk;
       let end:number;
-      while((end=pending.indexOf("\n"))>=0){detail(pending.slice(0,end).replace(/\r$/,""));pending=pending.slice(end+1);}
+      while((end=pending.indexOf("\n"))>=0){line(pending.slice(0,end).replace(/\r$/,""));pending=pending.slice(end+1);}
     });
     child.on("error",error=>{clearTimeout(timer);reject(error);});
     child.on("close",status=>{
       clearTimeout(timer);
-      if(pending)detail(pending);
+      if(pending)line(pending);
       try{resolve(decodeNativeIr({status,stdout,stderr},entry));}catch(error){reject(error);}
     });
   });

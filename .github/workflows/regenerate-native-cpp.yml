@@ -125,6 +125,23 @@ jobs:
           printf 'Hola, mundo\n120\n' > "$RUNNER_TEMP/native-smoke/expected"
           diff -u "$RUNNER_TEMP/native-smoke/expected" "$RUNNER_TEMP/native-smoke/output"
 
+      - name: Verify snapshot frontend can analyze bootstrap itself
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          # Exercise the downloaded frontend against the full current compiler,
+          # including the nested one-argument includes calls in checker.ets.
+          verify/native-cpp/native/frontend bootstrap/ir/demo.ets --verbose \
+            > "$RUNNER_TEMP/bootstrap-self-ir.json"
+          node --input-type=module - "$RUNNER_TEMP/bootstrap-self-ir.json" <<'JS'
+          import assert from "node:assert/strict";
+          import { readFileSync } from "node:fs";
+          const ir = JSON.parse(readFileSync(process.argv[2], "utf8"));
+          assert.equal(ir.format, "ets-ir-2");
+          assert.equal(ir.success, true, JSON.stringify(ir.diagnostics));
+          assert.deepEqual(ir.diagnostics, []);
+          JS
+
       - name: Publish only tested sources
         if: github.event_name == 'workflow_dispatch'
         env:
