@@ -1,10 +1,10 @@
 # Driver nativo etsc
 
-[`install.sh`](../INSTALL.md) construye e instala `etsc`. El frontend ETS se
-compila usando `src/` durante el bootstrap. El driver y el emisor C++ se compilan
-a código máquina; el recorrido instalado funciona sin Node ni TypeScript de
-stage 0. Node sólo participa en el bootstrap, en la instalación y en las
-herramientas de desarrollo/pruebas.
+[`install.sh`](../INSTALL.md) construye e instala `etsc`. Compila la semilla C++
+de `native-cpp/` —el frontend ETS ya traducido a C++— junto al driver y al emisor
+IR. El recorrido instalado funciona sin Node ni TypeScript de stage 0. Node sólo
+participa en regenerar la semilla (`scripts/generate-native-cpp-snapshot.mjs`) y
+en las herramientas de desarrollo/pruebas.
 
 ```sh
 etsc init proyecto

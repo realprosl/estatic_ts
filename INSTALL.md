@@ -21,12 +21,22 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ## Bootstrap y ejecución nativa
 
-Durante la instalación se usa Node >=22.6 y el compilador de stage 0 en `src/`
-para construir el frontend ETS. El driver y el emisor C++ se compilan también
-a código máquina. Después, `etsc` ejecuta el frontend nativo y emite, compila y
-enlaza C++ sin Node, npm, intérprete JavaScript ni los fuentes TypeScript de
-stage 0. El frontend es ETS compilado; el driver y el backend son C++20. Esto
-no afirma que todo el compilador esté escrito en ETS o sea autoalojado.
+La instalación **no usa Node.js**: compila la semilla C++ de `native-cpp/` —el
+C++ ya generado desde `bootstrap/`— con el compilador C++20 del sistema. De ahí
+salen el frontend nativo (`native/frontend`) y el driver (`etsc`). Después,
+`etsc` ejecuta el frontend nativo y emite, compila y enlaza C++ sin Node, npm,
+intérprete JavaScript ni las fuentes TypeScript de stage 0. El frontend es ETS
+compilado; el driver y el backend son C++20. Esto no afirma que todo el
+compilador esté escrito en ETS o sea autoalojado.
+
+Node sólo hace falta para **regenerar la semilla** cuando cambian las fuentes de
+`bootstrap/*.ets`:
+
+```sh
+node --experimental-strip-types scripts/generate-native-cpp-snapshot.mjs
+```
+
+Ese paso es de desarrollo, no de despliegue: `install.sh` nunca lo invoca.
 
 El ejecutable instalado es `etsc`. La distribución contiene el frontend nativo,
 plantillas, tipos del editor, cabeceras y runtime precompilado; no instala el
@@ -40,11 +50,11 @@ Requisitos de construcción: C++20 (GCC/Clang), `ar`, OpenSSL/libcrypto y las
 cabeceras/bibliotecas de los servicios usados (libuv, libcurl, TLS). Se prefieren
 las dependencias locales bajo `build/libs/`; Drogon necesita además sus
 bibliotecas cuando se selecciona `@cpp_drogon`. No se descargan dependencias
-ni se modifican paquetes del sistema implícitamente. Node sólo hace falta
-para el bootstrap/instalación y las herramientas de desarrollo.
+ni se modifican paquetes del sistema implícitamente. Node sólo hace falta para
+regenerar la semilla y para las herramientas de desarrollo.
 
-`--cxx clang++`, `CXX` y `AR` seleccionan herramientas. `NODE` selecciona Node
-para el instalador. `--frontend ruta` permite reutilizar un frontend ya construido.
+`--cxx clang++`, `CXX` y `AR` seleccionan herramientas. `--frontend ruta`
+permite reutilizar un frontend ya construido en vez de compilar la semilla.
 Una actualización prepara una distribución nueva antes de publicar el comando.
 
 ## Proyectos y configuración
@@ -100,9 +110,15 @@ las cabeceras modificadas invalidan los objetos correspondientes.
 
 ## Runtime preparado
 
-La instalación precompila libuv/red y cpp-httplib. Los builds enlazan esos
-archivos estáticos, validando compilador, arquitectura, flags de ABI, fuentes,
-dependencias e integridad. La optimización del runtime es `-O2`; los perfiles
+La instalación precompila libuv/red y cpp-httplib con el propio compilador
+recién instalado, y deja los archivos estáticos en la distribución para que el
+primer build no tenga que compilarlos. Los builds enlazan esos archivos
+estáticos, validando compilador, arquitectura, flags de ABI, fuentes,
+dependencias e integridad.
+
+Si el entorno no tiene las cabeceras de libuv, el instalador avisa y deja que
+el compilador construya el runtime en el primer uso: la instalación nunca
+falla por esto. La optimización del runtime es `-O2`; los perfiles
 normales reutilizan los mismos archivos aunque el programa use `-O0`.
 
 Los perfiles distintos se construyen bajo `$XDG_CACHE_HOME/estc/runtime` o
