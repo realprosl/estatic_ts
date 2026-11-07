@@ -9,7 +9,7 @@ import { Worker, isMainThread, parentPort, workerData } from "node:worker_thread
 import { performance } from "node:perf_hooks";
 import { CliProgress, phase, presentation, type ProgressEvent } from "./cli-progress.ts";
 import { root } from "./root.ts";
-import { buildIrFrontend, nativeIr, buildIrCpp } from "./ir/cpp.ts";
+import { buildIrFrontend, nativeIr, nativeIrWithProgress, buildIrCpp } from "./ir/cpp.ts";
 import { generateCppFromIr, IrCppGenerator } from "../src/codegen/ir/cpp-generator.ts";
 import type { IrProject } from "../src/codegen/ir/model.ts";
 import { loadConfig } from "../src/config/project-config.ts";
@@ -47,6 +47,7 @@ async function compile(argv:string[], report:(event:ProgressEvent)=>void):Promis
   const detail=(text:string)=>report({type:"detail",text});
   const summary=()=>report({type:"summary",elapsed:performance.now()-started});
   // Consume presentation flags only before --; program arguments are untouched.
+  const verbose=presentation(argv).verbose;
   argv=presentation(argv).args;
   if(argv[0]==="build"||argv[0]==="run")argv=[argv[0]==="run"?"--run":"--build",...argv.slice(1)];
   if(argv.length===1&&["--version","-v"].includes(argv[0])){console.log(`${getTs2cppVersionLabel()} (bootstrap IR → C++20)`);return;}
@@ -83,9 +84,9 @@ async function compile(argv:string[], report:(event:ProgressEvent)=>void):Promis
   if(cache)loaderArgs.push("--cache",resolve(cache));
   if(fromIr&&loaderArgs.length)throw new UsageError("Las opciones de módulos requieren un fuente");
   detail(`Entrada: ${JSON.stringify(entry)}`);
-  if(!fromIr&&!frontend)frontend=await step("Preparando frontend nativo",()=>buildIrFrontend());
+  if(!fromIr&&!frontend)frontend=await step("Preparando frontend nativo",()=>buildIrFrontend(undefined,detail));
   if(!fromIr)detail(`Frontend: ${JSON.stringify(frontend)}; módulos: ${JSON.stringify(loaderArgs)}`);
-  const project:IrProject=await step(fromIr?"Leyendo IR":"Analizando fuentes y verificando IR",()=>fromIr?JSON.parse(readFileSync(entry,"utf8")):nativeIr(frontend,entry,loaderArgs));
+  const project:IrProject=await step(fromIr?"Leyendo IR":"Analizando fuentes y verificando IR",()=>fromIr?JSON.parse(readFileSync(entry,"utf8")):verbose?nativeIrWithProgress(frontend,entry,loaderArgs,detail):nativeIr(frontend,entry,loaderArgs));
   // Check the producer boundary even when --check/--from-ir bypasses emission.
   await step("Validando frontera del backend",()=>{
   if(project.format!=="ets-ir-2"||!project.success||!Array.isArray(project.diagnostics)||project.diagnostics.length)throw new Error("Se requiere ets-ir-2 verificado con success:true");
@@ -99,7 +100,7 @@ async function compile(argv:string[], report:(event:ProgressEvent)=>void):Promis
   if(build||config?.compiler.enabled){binary=resolve(binary||config?.output.binary||output.replace(/\.cpp$/,"")+".bin");const compiler=cxx||config?.compiler.command||defaultCompiler;
     const compileFlags=[...config?.compiler.flags??[],...flags],links=[...config?.compiler.linkFlags??[],...config?.linkLibraries.map(lib=>`-l${lib}`)??[],...linkFlags];
     detail(`Compilador: ${JSON.stringify(compiler)}; flags: ${JSON.stringify(compileFlags)}; enlace: ${JSON.stringify(links)}`);
-    await step("Preparando runtime, compilando y enlazando C++",()=>buildIrCpp(result!,output,binary,compiler,compileFlags,links));
+    await step("Preparando runtime, compilando y enlazando C++",()=>buildIrCpp(result!,output,binary,compiler,compileFlags,links,detail));
     detail(`Ejecutable: ${JSON.stringify(binary)}`);}
   summary();
   if(run){detail(`Ejecutando: ${JSON.stringify([binary,...programArgs])}`);const child=spawnSync(binary,programArgs,{stdio:"inherit"});if(child.error)throw child.error;process.exitCode=child.status??1;}

@@ -66,22 +66,26 @@ function valid(directory:string,name:string):boolean {
   }catch{return false;}
 }
 
-export function runtimeArchive(unit:RuntimeUnit,cxx=process.env.CXX??"g++",flags:string[]=[]):string {
+export function runtimeArchive(unit:RuntimeUnit,cxx=process.env.CXX??"g++",flags:string[]=[],detail:(text:string)=>void=()=>{}):string {
+  detail(`Comprobando caché del runtime: ${unit}`);
   const options=runtimeFlags(unit,flags),ar=process.env.AR??"ar";
   const key=hash(JSON.stringify(["ets-runtime-cache-1",unit,identity(cxx),identity(ar,false),options.map(flag=>flag.replaceAll(root,"$ROOT")),["CPATH","CPLUS_INCLUDE_PATH","C_INCLUDE_PATH","GCC_EXEC_PREFIX","COMPILER_PATH","SDKROOT"].map(name=>process.env[name]??""),flags.some(flag=>!flag.startsWith("-")||/^-(?:I|iquote|isystem|include|imacros)/.test(flag)&&!isAbsolute(flag.replace(/^-(?:I|iquote|isystem|include|imacros)/,"")))?process.cwd():"",sources[unit].map(p=>hash(readFileSync(join(root,p))))]));
   const name=`libets_${unit}.a`,installed=existsSync(join(root,"installation.json"));
   const prebuilt=join(root,"build/runtime-cache",key);
   const userCache=resolve(process.env.ESTC_RUNTIME_CACHE??process.env.ESTATIC_RUNTIME_CACHE??join(process.env.XDG_CACHE_HOME??join(homedir(),".cache"),"estc/runtime"));
   const writable=join(installed?userCache:resolve(process.env.ESTC_RUNTIME_CACHE??process.env.ESTATIC_RUNTIME_CACHE??join(root,"build/runtime-cache")),key);
-  for(const directory of [...new Set([prebuilt,writable])])if(valid(directory,name))return join(directory,name);
+  for(const directory of [...new Set([prebuilt,writable])])if(valid(directory,name)){detail(`Runtime ${unit}: caché reutilizada (${directory})`);return join(directory,name);}
+  detail(`Runtime ${unit}: caché no válida; recompilando`);
   const temporary=writable+".tmp-"+randomUUID();mkdirSync(temporary,{recursive:true});
   try{
     const dependencies=new Set<string>(),objects:string[]=[];
     for(let at=0;at<sources[unit].length;at++){
       const object=join(temporary,`${at}.o`),deps=join(temporary,`${at}.d`);
+      detail(`Compilando runtime ${unit} [${at+1}/${sources[unit].length}]: ${sources[unit][at]}`);
       command(cxx,[...options,"-MD","-MF",deps,"-c",join(root,sources[unit][at]),"-o",object]);objects.push(object);
       for(const path of dependencyPaths(readFileSync(deps,"utf8")))dependencies.add(path);
     }
+    detail(`Archivando runtime ${unit}: ${name}`);
     command(ar,["rcs",join(temporary,name),...objects]);
     const manifest:Manifest={dependencies:[...dependencies].sort().map(path=>({path:portable(path),hash:hash(readFileSync(path))})),archiveHash:hash(readFileSync(join(temporary,name)))};
     writeFileSync(join(temporary,"manifest.json"),JSON.stringify(manifest,null,2)+"\n");
