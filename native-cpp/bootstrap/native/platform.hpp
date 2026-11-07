@@ -48,14 +48,14 @@ inline Process execute(const V<S>& arguments,bool capture=false){
    if(poll(fds,2,exited?0:40)<0&&errno!=EINTR)throw std::runtime_error("No se puede leer la salida del proceso");
    for(int at=0;at<2;at++)if(fds[at].fd>=0&&(fds[at].revents&(POLLIN|POLLHUP|POLLERR))){
     char buffer[8192];auto count=::read(fds[at].fd,buffer,sizeof(buffer));
-    if(count>0){auto& text=at==0?result.output:errorText;text.append(buffer,count);if(text.size()>128*1024*1024)throw std::runtime_error("Salida de herramienta demasiado grande");}
+    if(count>0){if(at==1){activeProgress->clear();std::cerr.write(buffer,count);std::cerr.flush();}auto& text=at==0?result.output:errorText;text.append(buffer,count);if(text.size()>128*1024*1024)throw std::runtime_error("Salida de herramienta demasiado grande");}
     else if(count==0)closeFd(at==0?output[0]:errors[0]);
     else if(errno!=EINTR)throw std::runtime_error("No se puede leer la salida del proceso");
    }
    activeProgress->tick();
   }
  }catch(...){if(!exited){kill(pid,SIGKILL);while(waitpid(pid,nullptr,0)<0&&errno==EINTR){}}cleanup();throw;}
- cleanup();if(!errorText.empty()){activeProgress->clear();std::cerr<<errorText;}
+ cleanup();
  result.status=WIFEXITED(status)?WEXITSTATUS(status):128+WTERMSIG(status);return result;
 }
 inline void checked(const V<S>& args){J::Array command;for(auto& arg:args)command.emplace_back(arg);progressDetail("Comando: "+json(J(command)));auto p=execute(args);if(p.status)throw std::runtime_error(args[0]+" terminó con "+n(p.status));}
