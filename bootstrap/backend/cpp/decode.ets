@@ -287,5 +287,7 @@ const field_name:JsonValue=jsonObjectGet(value,"name");
 const field_arguments:JsonValue=jsonObjectGet(value,"arguments");
 let decoded=new IrAnnotation(decodeIrSource(field_source),decodeIrSource(field_target),jsonAsString(field_name),decodestringArray(field_arguments));
 return decoded;}
-export function parseIrProject(text:string):IrProject {const value:JsonValue=JSON.parseValue(text);
+function verifiedProject(value:constRef<JsonValue>):IrProject {
 if(jsonAsString(jsonObjectGet(value,"format"))!="ets-ir-2"||!jsonAsBool(jsonObjectGet(value,"success"))||!jsonIsArray(jsonObjectGet(value,"diagnostics"))||jsonArrayLength(jsonObjectGet(value,"diagnostics"))!=0){printError("Se requiere ets-ir-2 verificado con success:true");exitProcess(1);}return decodeIrProject(value); }
+
+export function parseIrProject(text:string):IrProject {const value:JsonValue=JSON.parseValue(text);return verifiedProject(value);}

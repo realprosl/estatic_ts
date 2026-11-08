@@ -14,19 +14,13 @@ fi
 if [[ ! -x native-cpp/native/frontend || ! -x native-cpp/native/etsc || native-cpp/src/codegen/ir/native/generator.cpp -nt native-cpp/native/etsc ]]; then
   bash native-cpp/build-all.sh
 fi
-# Bootstrap the ETS backend first. Compiler generations then use ETS emission,
-# including its conservative single-use length-load optimization.
-native-cpp/native/frontend bootstrap/backend/cpp/demo.ets > "$output/backend.ir.json"
-native-cpp/native/etsc --from-ir "$output/backend.ir.json" --build \
-  -o "$output/backend-seed.cpp" --binary "$output/backend-seed" --no-progress
-"$output/backend-seed" "$output/backend.ir.json" > "$output/backend.cpp"
-"${CXX:-g++}" -std=c++20 -O0 -pthread -fno-exceptions -I"$root" \
-  "$output/backend.cpp" -o "$output/backend"
+# The seed assembles the first complete ETS compiler. Its conservative length
+# fusion prevents the parser from copying entire token/AST arrays for .length.
 native-cpp/native/frontend bootstrap/driver/main.ets --verbose > "$output/stage1.ir.json"
-"$output/backend" "$output/stage1.ir.json" > "$output/stage1.cpp"
-"${CXX:-g++}" -std=c++20 -O0 -pthread -fno-exceptions -I"$root" \
-  "$output/stage1.cpp" -o "$output/etsc"
+native-cpp/native/etsc --from-ir "$output/stage1.ir.json" --build \
+  -o "$output/stage1.cpp" --binary "$output/etsc" --verbose
 if [[ "$stage" == stage2 ]]; then
+  # This generation performs analysis, lowering, emission and orchestration in ETS.
   "$output/etsc" build bootstrap/driver/main.ets \
     --emit-ir "$output/stage2.ir.json" \
     -o "$output/stage2.cpp" --binary "$output/etsc-stage2" --verbose
