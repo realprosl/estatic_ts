@@ -8,13 +8,17 @@ import { verifyBorrowRoutes } from "./verify-borrows";
 import { irPlacePath, irInitialPlace } from "./verify-memory";
 import { irAssignable, irElement, verifyShapeInstruction } from "./verify-shapes";
 
+class IrPredecessors {
+  blocks: number[];
+  constructor() { this.blocks = []; }
+}
 export class IrFacts {
   reachable: boolean; dominators: boolean[]; initialized: boolean[];
   constructor(blocks: number, places: number) { this.reachable = false; this.dominators = []; this.initialized = []; for (let i: number = 0; i < blocks; i = i+1) this.dominators.push(true); for (let i: number = 0; i < places; i = i+1) this.initialized.push(true); }
 }
 export class IrVerifier {
-  project: IrProject; issues: IrIssue[]; definitions: number[]; positions: number[]; facts: IrFacts[];
-  constructor(project: IrProject) { this.project = project; this.issues = []; this.definitions = []; this.positions = []; this.facts = []; }
+  project: IrProject; issues: IrIssue[]; definitions: number[]; positions: number[]; facts: IrFacts[]; placePaths: string[];
+  constructor(project: IrProject) { this.project = project; this.issues = []; this.definitions = []; this.positions = []; this.facts = []; this.placePaths = []; }
   error(source: IrSource, message: string): void { this.issues.push(new IrIssue("IR_INVALID",message,source)); }
   nativeBinding(f: constRef<IrFunction>): boolean {
     for (const annotation of this.project.annotations) {
@@ -128,17 +132,17 @@ export class IrVerifier {
   }
   updateInitialization(f: constRef<IrFunction>, i: constRef<IrInstruction>, initialized: boolean[]): boolean[] {
     if ((i.place) < 0 || i.place >= f.places.length) return initialized;
-    const projectionKey: string = irPlacePath(f,i.place,0);
+    const projectionKey: string = this.placePaths[i.place];
     if (i.op == "store") {
-      for (let p: number = 0; p < f.places.length; p = p+1) { const key: string = irPlacePath(f,p,0); if (key == projectionKey || key.startsWith(projectionKey+".")) initialized[p] = true; }
+      for (let p: number = 0; p < f.places.length; p = p+1) { const key: string = this.placePaths[p]; if (key == projectionKey || key.startsWith(projectionKey+".")) initialized[p] = true; }
       let parent: number = f.places[i.place].base;
       while (parent >= 0) { let all: boolean = true; for (let p: number = 0; p < f.places.length; p = p+1) if (f.places[p].base == parent && !initialized[p]) all = false; if (all) initialized[parent] = true; parent = f.places[parent].base; }
     }
-    if (i.op == "dropRemaining" || (i.op == "move" && this.project.typeDefinitions[f.places[i.place].typeId].resource)) for (let p: number = 0; p < f.places.length; p = p+1) { const key: string = irPlacePath(f,p,0); if (key == projectionKey || key.startsWith(projectionKey+".") || projectionKey.startsWith(key+".")) initialized[p] = false; }
+    if (i.op == "dropRemaining" || (i.op == "move" && this.project.typeDefinitions[f.places[i.place].typeId].resource)) for (let p: number = 0; p < f.places.length; p = p+1) { const key: string = this.placePaths[p]; if (key == projectionKey || key.startsWith(projectionKey+".") || projectionKey.startsWith(key+".")) initialized[p] = false; }
     return initialized;
   }
   functionBody(f: constRef<IrFunction>): void {
-    this.definitions = []; this.positions = []; this.facts = [];
+    this.definitions = []; this.positions = []; this.facts = []; this.placePaths = [];
     if (!this.typeId(f.returns) || f.blocks.length == 0) { this.error(f.source,"Función sin entrada/tipo de retorno"); return; }
     for (const typeId of f.values) { if (!this.typeId(typeId) || this.project.types[typeId] == "void") this.error(f.source,"Tipo de valor inválido"); this.definitions.push(-1); this.positions.push(-1); }
     let parameter: number = 0;
@@ -172,6 +176,11 @@ export class IrVerifier {
       if (!["jump","branch","return","unreachable","suspend","cancel","trap"].includes(block.terminator) || block.targets.length != count) this.error(block.source,"Terminador inválido");
       for (const target of block.targets) if (target < 0 || target >= f.blocks.length) this.error(block.source,"Destino de bloque inexistente");
     }
+    // CFG edges and projection identities do not change during the fixed point.
+    let predecessors: IrPredecessors[] = [];
+    for (let b: number = 0; b < f.blocks.length; b = b+1) predecessors.push(new IrPredecessors());
+    for (let b: number = 0; b < f.blocks.length; b = b+1) for (const target of f.blocks[b].targets) if (target >= 0 && target < f.blocks.length) predecessors[target].blocks.push(b);
+    for (let p: number = 0; p < f.places.length; p = p+1) this.placePaths.push(irPlacePath(f,p,0));
     this.facts[0].reachable = true; let changed: boolean = true;
     while (changed) { changed = false; for (let b: number = 0; b < f.blocks.length; b = b+1) if (this.facts[b].reachable) for (const target of f.blocks[b].targets) if (target >= 0 && target < f.blocks.length && !this.facts[target].reachable) { this.facts[target].reachable = true; changed = true; } }
     // Greatest fixed point: must-dominance and must-initialization at block exit.
@@ -182,12 +191,12 @@ export class IrVerifier {
         let dom: boolean[] = []; let init: boolean[] = [];
         for (let d: number = 0; d < f.blocks.length; d = d+1) dom.push(b == 0 ? d == 0 : true);
         for (let p: number = 0; p < f.places.length; p = p+1) init.push(b == 0 ? irInitialPlace(f,p) : true);
-        if (b != 0) for (let predecessor: number = 0; predecessor < f.blocks.length; predecessor = predecessor+1) if (this.facts[predecessor].reachable && f.blocks[predecessor].targets.includes(b)) {
+        if (b != 0) for (const predecessor of predecessors[b].blocks) if (this.facts[predecessor].reachable) {
           for (let d: number = 0; d < dom.length; d = d+1) dom[d] = dom[d] && this.facts[predecessor].dominators[d];
           for (let p: number = 0; p < init.length; p = p+1) init[p] = init[p] && this.facts[predecessor].initialized[p];
         }
         dom[b] = true;
-        for (const i of f.blocks[b].instructions) init = this.updateInitialization(f,i,init);
+        for (const i of f.blocks[b].instructions) if (i.op == "store" || i.op == "move" || i.op == "dropRemaining") init = this.updateInitialization(f,i,init);
         for (let d: number = 0; d < dom.length; d = d+1) if (dom[d] != this.facts[b].dominators[d]) { this.facts[b].dominators[d] = dom[d]; changed = true; }
         for (let p: number = 0; p < init.length; p = p+1) if (init[p] != this.facts[b].initialized[p]) { this.facts[b].initialized[p] = init[p]; changed = true; }
       }
@@ -195,14 +204,14 @@ export class IrVerifier {
     for (let b: number = 0; b < f.blocks.length; b = b+1) {
       const block = f.blocks[b]; let initialized: boolean[] = [];
       for (let p: number = 0; p < f.places.length; p = p+1) initialized.push(b == 0 ? irInitialPlace(f,p) : true);
-      if (b != 0) for (let predecessor: number = 0; predecessor < f.blocks.length; predecessor = predecessor+1) if (this.facts[predecessor].reachable && f.blocks[predecessor].targets.includes(b)) for (let p: number = 0; p < initialized.length; p = p+1) initialized[p] = initialized[p] && this.facts[predecessor].initialized[p];
+      if (b != 0) for (const predecessor of predecessors[b].blocks) if (this.facts[predecessor].reachable) for (let p: number = 0; p < initialized.length; p = p+1) initialized[p] = initialized[p] && this.facts[predecessor].initialized[p];
       for (let at: number = 0; at < block.instructions.length; at = at+1) {
         const i = block.instructions[at]; this.instruction(f,i); for (const value of i.operands) this.use(f,value,b,at,i.source);
         if (i.place >= 0 && (i.place) < initialized.length) {
           let root: number = i.place; let steps: number = 0;
           while (f.places[root].base >= 0 && (f.places[root].base) < root && steps < f.places.length) { if (f.places[root].index >= 0) this.use(f,f.places[root].index,b,at,i.source); root = f.places[root].base; steps = steps+1; }
           if (i.op != "dropRemaining" && i.op != "store" && this.facts[b].reachable && !initialized[i.place]) this.error(i.source,"Load de place sin inicializar en todas las rutas");
-          initialized = this.updateInitialization(f,i,initialized);
+          if (i.op == "store" || i.op == "move" || i.op == "dropRemaining") initialized = this.updateInitialization(f,i,initialized);
         }
       }
       if (block.terminator == "suspend") {
