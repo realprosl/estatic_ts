@@ -27,9 +27,9 @@ Compilador de Estatic, con sintaxis inspirada en TypeScript, tipado estático y 
 
 ## Uso rápido
 
-Node >=22.6 se usa para el bootstrap y la instalación. El compilador instalado
-`etsc` funciona sin Node y necesita el toolchain C++20 y las bibliotecas de
-runtime utilizadas. Ver [INSTALL.md](./INSTALL.md).
+La instalación y el compilador instalado `etsc` funcionan sin Node. Necesitas
+el toolchain C++20 y las bibliotecas de runtime utilizadas. Node >=22.6 se usa
+para las herramientas y pruebas de desarrollo. Ver [INSTALL.md](./INSTALL.md).
 
 ### Instalar el compilador (una vez)
 
@@ -37,6 +37,24 @@ runtime utilizadas. Ver [INSTALL.md](./INSTALL.md).
 git clone https://github.com/realprosl/estatic_ts.git
 cd estatic_ts
 ./install.sh
+```
+
+### Instalar y borrar la copia del repositorio
+
+Si solo quieres instalar el compilador, puedes copiar este bloque completo.
+Necesitas los [requisitos de instalación](./INSTALL.md) y permisos de `sudo`.
+La copia del repositorio se borra únicamente si la instalación termina
+correctamente; el compilador y sus archivos quedan en `/usr/local/bin/etsc`
+y `/usr/local/lib/estc/`.
+
+```bash
+git clone --depth 1 https://github.com/realprosl/estatic_ts.git estatic_ts-install &&
+cd estatic_ts-install &&
+sudo bash install.sh &&
+cd .. &&
+rm -rf -- estatic_ts-install &&
+hash -r &&
+etsc --version
 ```
 
 ### Crear un proyecto nuevo
