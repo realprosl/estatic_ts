@@ -46,7 +46,7 @@ export class SafetyAnalyzer {
   graph: ModuleGraph; binding: BindingResult; result: CheckResult; effects: EffectAnalyzer; arguments: SafetyArgument[];
   offsets: number[]; nodes: number; edges: SafetyEdge[]; seeds: number[]; escapes: EscapeSite[]; owners: number[]; trace: boolean; resourceTypes: Map<string,boolean>; valueTypes: Map<string,boolean>; carrierTypes: Map<string,boolean>; plainTypes: Map<string,boolean>; defaultReads: Map<number,boolean>; valueDefaults: Map<number,boolean>;
   substitutions: string[]; substitutionTypes: string[]; memoryPath: string[]; borrowSources: number[]; leases: BorrowLease[]; breaks: SafetyState[]; continues: SafetyState[]; returns: SafetyState[]; sites: SafetyCallSite[];
-  visits: number; ownerIndices: Map<number,number>; ownerSymbols: number[][]; ownerVisits: number; denseOwnerVisits: number;
+  visits: number;
   constructor(graph: ModuleGraph, binding: BindingResult, result: CheckResult) {
     this.graph = graph; this.binding = binding; this.result = result; this.effects = new EffectAnalyzer(graph,binding,result); this.arguments = []; this.offsets = []; this.nodes = 0;
     this.substitutions = []; this.substitutionTypes = []; this.edges = []; this.seeds = []; this.escapes = []; this.memoryPath = []; this.borrowSources = []; this.leases = []; this.breaks = []; this.continues = []; this.returns = []; this.sites = []; this.arguments = [];
@@ -54,15 +54,7 @@ export class SafetyAnalyzer {
     for (const s of binding.symbols) this.borrowSources.push(-1);
     this.owners = []; for (const scope of binding.scopes) this.owners.push(-2); this.trace = false; this.resourceTypes = new Map<string,boolean>(); this.valueTypes = new Map<string,boolean>(); this.carrierTypes = new Map<string,boolean>(); this.plainTypes = new Map<string,boolean>();
     this.defaultReads = new Map<number,boolean>(); this.valueDefaults = new Map<number,boolean>();
-    this.visits = 0; this.ownerIndices = new Map<number,number>(); this.ownerSymbols = []; this.ownerVisits = 0; this.denseOwnerVisits = 0;
-    // Binding and lexical owners are immutable for this pass. Keep symbol order.
-    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid+1) {
-      const owner: number = this.owner(this.binding.symbols[sid].scope);
-      if (owner >= 0) {
-        if (!this.ownerIndices.has(owner)) { this.ownerIndices.set(owner,this.ownerSymbols.length); let symbols: number[] = []; this.ownerSymbols.push(symbols); }
-        this.ownerSymbols[(this.ownerIndices.get(owner) ?? -1)].push(sid);
-      }
-    }
+    this.visits = 0;
   }
   node(module: number, id: number): AstNode { return this.graph.modules[module].cached.result.ast.nodes[id]; }
   report(module: number, id: number, message: string): void {
@@ -862,14 +854,11 @@ export class SafetyAnalyzer {
     this.visits = this.visits+1;
     if (this.trace && this.visits % 10000 == 0) progressDetail("frontend: flow calls "+numberToString(this.visits)+" "+this.graph.modules[target.module].file+":"+this.node(target.module,target.node).get(AttributeKind.Name)+" depth "+numberToString(active.length));
     const owner: number = this.vertex(target.module,target.node);
-    const ownerIndex: number = this.ownerIndices.has(owner) ? (this.ownerIndices.get(owner) ?? -1) : -1;
-    const object: number = bindingChild(this.node(module,id),EdgeRole.Object);
-    if (this.trace) { this.ownerVisits = this.ownerVisits+(ownerIndex >= 0 ? this.ownerSymbols[ownerIndex].length*2 : 0); this.denseOwnerVisits = this.denseOwnerVisits+this.binding.symbols.length*2; }
     const substitutionStart: number = this.substitutions.length;
     let classScope: number = this.binding.files[target.module].nodeScopes[target.node];
     while (classScope >= 0 && this.binding.scopes[classScope].kind != "ClassDeclaration") classScope = this.binding.scopes[classScope].parent;
     if (classScope >= 0) {
-      const scope = this.binding.scopes[classScope]; const declaration: AstNode = this.node(scope.module,scope.node);
+      const scope = this.binding.scopes[classScope]; const declaration: AstNode = this.node(scope.module,scope.node); const object: number = bindingChild(this.node(module,id),EdgeRole.Object);
       const receiver: string = this.resolved(memoryValue(object >= 0 ? this.effects.receiver(module,id) : this.result.files[module].types[id])); const inputs: string[] = genericArguments(receiver); let at: number = 0;
       for (const edge of declaration.edges) if (edge.role == EdgeRole.TypeParameters) { if (at < inputs.length) { this.substitutions.push("@" + numberToString(this.binding.files[scope.module].declarations[edge.node])); this.substitutionTypes.push(inputs[at]); } at = at+1; }
     }
@@ -884,8 +873,9 @@ export class SafetyAnalyzer {
     const argumentStart: number = this.arguments.length; const leaseStart: number = this.leases.length;
     let saved: SafetyState = state; const returnStart: number = this.returns.length; if (phase != "resume") this.sites.push(new SafetyCallSite(module,id));
     this.initializeFields(target.module,target.node,state);
-    if (ownerIndex >= 0) for (const sid of this.ownerSymbols[ownerIndex]) {
+    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (this.owner(this.binding.symbols[sid].scope) == owner) {
       state.slots[sid] = (this.binding.symbols[sid].kind == "receiver" ? 1 : 0); this.initializePath(state,"s" + numberToString(sid));
+      const object: number = bindingChild(this.node(module,id),EdgeRole.Object);
       if (this.binding.symbols[sid].kind == "receiver" && object >= 0) { const pendingPush = new SafetyArgument(sid,module,object,this.root(module,object)); this.arguments.push(pendingPush); }
     }
     let next: number[] = active; next.push(owner);
@@ -925,7 +915,7 @@ export class SafetyAnalyzer {
     for (let at: number = returnStart; at < this.returns.length; at = at + 1) { const incoming = this.returns[at]; state = this.join(state,incoming); }
     while (this.returns.length > returnStart) this.returns.pop(); if (phase != "resume") this.sites.pop();
     state.exit = "";
-    if (ownerIndex >= 0) for (const sid of this.ownerSymbols[ownerIndex]) { state.slots[sid] = saved.slots[sid]; this.restorePaths(state,saved,sid); }
+    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (this.owner(this.binding.symbols[sid].scope) == owner) { state.slots[sid] = saved.slots[sid]; this.restorePaths(state,saved,sid); }
     for (const sid of this.constructorFields(target.module,target.node)) state.slots[sid] = saved.slots[sid];
     while (this.arguments.length > argumentStart) this.arguments.pop(); while (this.leases.length > leaseStart) this.leases.pop();
     while (this.breaks.length > breakStart) this.breaks.pop(); while (this.continues.length > continueStart) this.continues.pop();
@@ -1170,7 +1160,6 @@ export class SafetyAnalyzer {
       } else this.expression(m,body,state,[owner]);
     }
     if (this.trace) progressDetail("frontend: flow complete, "+numberToString(this.visits)+" precise calls");
-    if (this.trace) progressDetail("frontend: owner symbols "+numberToString(this.ownerVisits)+" indexed visits vs "+numberToString(this.denseOwnerVisits)+" global baseline visits");
   }
   run(): CheckResult {
     if (this.trace) progressDetail("frontend: memory and captures");
