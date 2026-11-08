@@ -11,7 +11,7 @@ import {TypeChecker} from "../../src/semantic/type-checker.ts";
 import {DiagnosticError} from "../../src/core/diagnostic.ts";
 import {buildLoader,root} from "../modules/build.ts";
 const directory=mkdtempSync(join(root,"build-checker-test-")); let binary:string;
-before(async()=>{binary=await buildLoader(join(directory,"binary"),"bootstrap/checker/demo.ets",true);});
+before(async()=>{binary=process.env.ESTATIC_CHECKER_BINARY??await buildLoader(join(directory,"binary"),"bootstrap/checker/demo.ets",true);});
 after(()=>rmSync(directory,{recursive:true,force:true}));
 function fixture(source:string,files:Record<string,string>={}){const dir=mkdtempSync(join(directory,"project-"));for(const[name,text]of Object.entries({"main.ets":source,...files})){mkdirSync(dirname(join(dir,name)),{recursive:true});writeFileSync(join(dir,name),text);}return{entry:join(dir,"main.ets"),cache:join(dir,"cache")};}
 function run(f:ReturnType<typeof fixture>,status=0){const p=spawnSync(binary,[f.entry,"--cache",f.cache],{encoding:"utf8",timeout:60000,maxBuffer:64*1024*1024});assert.ifError(p.error);assert.equal(p.status,status,p.stderr+p.stdout.slice(-3000));const g=JSON.parse(p.stdout);g.diagnostics.forEach(assertDiagnostic);g.binding.diagnostics.forEach(assertDiagnostic);assert.equal(g.success,status===0);return g;}

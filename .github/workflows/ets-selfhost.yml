@@ -6,6 +6,7 @@ on:
       - bootstrap/**
       - native-cpp/**
       - runtime/ets_compiler_host.hpp
+      - scripts/analysis-experiments/**
       - scripts/build-ets-compiler.sh
       - scripts/check-ets-compiler.sh
       - scripts/regenerate-ets-native.sh
@@ -14,6 +15,7 @@ permissions:
   contents: read
 jobs:
   selfhost:
+    if: github.head_ref != 'perf/analysis-lab' && github.ref_name != 'perf/analysis-lab'
     strategy:
       fail-fast: false
       matrix:
@@ -87,4 +89,49 @@ jobs:
             build/ets-compiler/*.json
             build/ets-compiler/timings.tsv
             build/ets-compiler/stage2-analysis.log
+          retention-days: 7
+
+  analysis-lab:
+    if: github.head_ref == 'perf/analysis-lab' || github.ref_name == 'perf/analysis-lab'
+    name: analysis-${{ matrix.variant }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        variant: [control, summary-fields, module-search, call-metadata, path-prefix, combined]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install native dependencies
+        run: sudo apt-get update && sudo apt-get install -y g++ time libssl-dev libcurl4-openssl-dev libuv1-dev
+      - name: Build and compare baseline and experiment
+        run: bash scripts/analysis-experiments/run.sh '${{ matrix.variant }}'
+      - name: Report paired measurements
+        if: always()
+        run: |
+          echo '### ${{ matrix.variant }} — paired O2 measurements' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Same runner and fixed queue-only input. Baseline runs first; control measures repeat noise. A faster time is accepted only with identical IR and passing checker/smoke tests.' >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          cat build/analysis-lab/analysis.tsv >> "$GITHUB_STEP_SUMMARY" || true
+          grep 'effect graph complete,' build/analysis-lab/*.log >> "$GITHUB_STEP_SUMMARY" || true
+          tail -n 12 build/analysis-lab/checker-tests.log >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: analysis-${{ matrix.variant }}
+          path: |
+            build/analysis-lab/*.tsv
+            build/analysis-lab/*.log
+            build/analysis-lab/*.stdout
+            build/analysis-lab/*.diff
+            build/analysis-lab/equivalence.txt
+            build/analysis-lab/baseline/timings.tsv
+            build/analysis-lab/candidate/timings.tsv
           retention-days: 7
