@@ -15,7 +15,7 @@ function runIr(): void {
   if (entry == "") { printError("Expected source entry [--root path] [--alias name path] [--cache path]"); exitProcess(2); }
   let loader = new ModuleLoader(options); const graph = loader.load(entry); const project = analyzeProject(graph,verbose);
   if (verbose) printError("frontend: lowering IR");
-  let ir = lowerProject(project.graph,project.binding,project.checked);
+  let ir = lowerProject(project.graph,project.binding,project.checked,verbose);
   let diagnostics = project.graph.diagnostics;
   for (const d of project.binding.diagnostics) diagnostics.push(d);
   for (const d of project.checked.diagnostics) diagnostics.push(d);
