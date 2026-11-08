@@ -287,7 +287,95 @@ const field_name:JsonValue=jsonObjectGet(value,"name");
 const field_arguments:JsonValue=jsonObjectGet(value,"arguments");
 let decoded=new IrAnnotation(decodeIrSource(field_source),decodeIrSource(field_target),jsonAsString(field_name),decodestringArray(field_arguments));
 return decoded;}
-function verifiedProject(value:constRef<JsonValue>):IrProject {
-if(jsonAsString(jsonObjectGet(value,"format"))!="ets-ir-2"||!jsonAsBool(jsonObjectGet(value,"success"))||!jsonIsArray(jsonObjectGet(value,"diagnostics"))||jsonArrayLength(jsonObjectGet(value,"diagnostics"))!=0){printError("Se requiere ets-ir-2 verificado con success:true");exitProcess(1);}return decodeIrProject(value); }
 
-export function parseIrProject(text:string):IrProject {const value:JsonValue=JSON.parseValue(text);return verifiedProject(value);}
+// Read project arrays one element at a time. Keeping a second full JSON DOM for
+// a compiler-sized IR would multiply memory use before typed decoding begins.
+class WireCursor {
+ at:number;end:number;
+ constructor(size:number){this.at=0;this.end=size;}
+ fail():void{printError("Se requiere ets-ir-2 verificado con success:true (JSON inválido)");exitProcess(1);}
+ skip(text:constRef<string>):void{while(this.at<this.end&&" \t\r\n".includes(text.charAt(this.at)))this.at+=1;}
+ take(text:constRef<string>,token:string):boolean{this.skip(text);if(text.charAt(this.at)!=token)return false;this.at+=1;return true;}
+ expect(text:constRef<string>,token:string):void{if(!this.take(text,token))this.fail();}
+ read(text:constRef<string>):string{
+  this.skip(text);const start:number=this.at;let depth:number=0;let quoted:boolean=false;
+  while(this.at<this.end){const c:string=text.charAt(this.at);
+   if(quoted){this.at+=1;if(c=="\\"){if(this.at>=this.end)this.fail();this.at+=1;}else if(c=="\""){quoted=false;if(depth==0)return text.slice(start,this.at);}continue;}
+   if(c=="\""){quoted=true;this.at+=1;continue;}
+   if(c=="["||c=="{"){depth+=1;this.at+=1;continue;}
+   if(c=="]"||c=="}"){if(depth==0)break;depth-=1;this.at+=1;if(depth==0)return text.slice(start,this.at);continue;}
+   if(depth==0&&(c==","||" \t\r\n".includes(c)))break;
+   this.at+=1;
+  }
+  if(quoted||depth!=0||start==this.at)this.fail();return text.slice(start,this.at);
+ }
+}
+function streamIrAnnotationArray(cursor:ref<WireCursor>,text:constRef<string>):IrAnnotation[]{
+ let decoded:IrAnnotation[]=[];cursor.expect(text,"[");if(cursor.take(text,"]"))return decoded;
+ while(true){const item:JsonValue=JSON.parseValue(cursor.read(text));decoded.push(decodeIrAnnotation(item));if(cursor.take(text,"]"))break;cursor.expect(text,",");}return decoded;
+}
+function streamIrDispatchArray(cursor:ref<WireCursor>,text:constRef<string>):IrDispatch[]{
+ let decoded:IrDispatch[]=[];cursor.expect(text,"[");if(cursor.take(text,"]"))return decoded;
+ while(true){const item:JsonValue=JSON.parseValue(cursor.read(text));decoded.push(decodeIrDispatch(item));if(cursor.take(text,"]"))break;cursor.expect(text,",");}return decoded;
+}
+function streamIrEffectContractArray(cursor:ref<WireCursor>,text:constRef<string>):IrEffectContract[]{
+ let decoded:IrEffectContract[]=[];cursor.expect(text,"[");if(cursor.take(text,"]"))return decoded;
+ while(true){const item:JsonValue=JSON.parseValue(cursor.read(text));decoded.push(decodeIrEffectContract(item));if(cursor.take(text,"]"))break;cursor.expect(text,",");}return decoded;
+}
+function streamIrFunctionArray(cursor:ref<WireCursor>,text:constRef<string>):IrFunction[]{
+ let decoded:IrFunction[]=[];cursor.expect(text,"[");if(cursor.take(text,"]"))return decoded;
+ while(true){const item:JsonValue=JSON.parseValue(cursor.read(text));decoded.push(decodeIrFunction(item));if(cursor.take(text,"]"))break;cursor.expect(text,",");}return decoded;
+}
+function streamIrIssueArray(cursor:ref<WireCursor>,text:constRef<string>):IrIssue[]{
+ let decoded:IrIssue[]=[];cursor.expect(text,"[");if(cursor.take(text,"]"))return decoded;
+ while(true){const item:JsonValue=JSON.parseValue(cursor.read(text));decoded.push(decodeIrIssue(item));if(cursor.take(text,"]"))break;cursor.expect(text,",");}return decoded;
+}
+function streamIrModuleArray(cursor:ref<WireCursor>,text:constRef<string>):IrModule[]{
+ let decoded:IrModule[]=[];cursor.expect(text,"[");if(cursor.take(text,"]"))return decoded;
+ while(true){const item:JsonValue=JSON.parseValue(cursor.read(text));decoded.push(decodeIrModule(item));if(cursor.take(text,"]"))break;cursor.expect(text,",");}return decoded;
+}
+function streamIrPlaceArray(cursor:ref<WireCursor>,text:constRef<string>):IrPlace[]{
+ let decoded:IrPlace[]=[];cursor.expect(text,"[");if(cursor.take(text,"]"))return decoded;
+ while(true){const item:JsonValue=JSON.parseValue(cursor.read(text));decoded.push(decodeIrPlace(item));if(cursor.take(text,"]"))break;cursor.expect(text,",");}return decoded;
+}
+function streamIrRuntimeContractArray(cursor:ref<WireCursor>,text:constRef<string>):IrRuntimeContract[]{
+ let decoded:IrRuntimeContract[]=[];cursor.expect(text,"[");if(cursor.take(text,"]"))return decoded;
+ while(true){const item:JsonValue=JSON.parseValue(cursor.read(text));decoded.push(decodeIrRuntimeContract(item));if(cursor.take(text,"]"))break;cursor.expect(text,",");}return decoded;
+}
+function streamIrTypeArray(cursor:ref<WireCursor>,text:constRef<string>):IrType[]{
+ let decoded:IrType[]=[];cursor.expect(text,"[");if(cursor.take(text,"]"))return decoded;
+ while(true){const item:JsonValue=JSON.parseValue(cursor.read(text));decoded.push(decodeIrType(item));if(cursor.take(text,"]"))break;cursor.expect(text,",");}return decoded;
+}
+function streamnumberArray(cursor:ref<WireCursor>,text:constRef<string>):number[]{
+ let decoded:number[]=[];cursor.expect(text,"[");if(cursor.take(text,"]"))return decoded;
+ while(true){const item:JsonValue=JSON.parseValue(cursor.read(text));decoded.push(jsonAsNumber(item));if(cursor.take(text,"]"))break;cursor.expect(text,",");}return decoded;
+}
+function streamstringArray(cursor:ref<WireCursor>,text:constRef<string>):string[]{
+ let decoded:string[]=[];cursor.expect(text,"[");if(cursor.take(text,"]"))return decoded;
+ while(true){const item:JsonValue=JSON.parseValue(cursor.read(text));decoded.push(jsonAsString(item));if(cursor.take(text,"]"))break;cursor.expect(text,",");}return decoded;
+}
+export function parseIrProject(text:string):IrProject{
+ let cursor=new WireCursor(text.length);let project=new IrProject();let format:string="";let sawDiagnostics:boolean=false;cursor.expect(text,"{");
+ while(!cursor.take(text,"}")){
+  const key:string=jsonAsString(JSON.parseValue(cursor.read(text)));cursor.expect(text,":");
+  if(key=="format")format=jsonAsString(JSON.parseValue(cursor.read(text)));
+  else if(key=="dispatches"){project.dispatches=streamIrDispatchArray(cursor,text);}
+  else if(key=="effectContracts"){project.effectContracts=streamIrEffectContractArray(cursor,text);}
+  else if(key=="annotations"){project.annotations=streamIrAnnotationArray(cursor,text);}
+  else if(key=="runtimeContracts"){project.runtimeContracts=streamIrRuntimeContractArray(cursor,text);}
+  else if(key=="typeDefinitions"){project.typeDefinitions=streamIrTypeArray(cursor,text);}
+  else if(key=="finalizationOrder"){project.finalizationOrder=streamnumberArray(cursor,text);}
+  else if(key=="types"){project.types=streamstringArray(cursor,text);}
+  else if(key=="modules"){project.modules=streamIrModuleArray(cursor,text);}
+  else if(key=="globals"){project.globals=streamIrPlaceArray(cursor,text);}
+  else if(key=="functions"){project.functions=streamIrFunctionArray(cursor,text);}
+  else if(key=="initializationOrder"){project.initializationOrder=streamnumberArray(cursor,text);}
+  else if(key=="entry"){project.entry=jsonAsNumber(JSON.parseValue(cursor.read(text)));}
+  else if(key=="diagnostics"){project.diagnostics=streamIrIssueArray(cursor,text);sawDiagnostics=true;}
+  else if(key=="success"){project.success=jsonAsBool(JSON.parseValue(cursor.read(text)));}
+  else cursor.read(text);
+  if(cursor.take(text,"}"))break;cursor.expect(text,",");
+ }
+ cursor.skip(text);
+ if(cursor.at!=length(text)||format!="ets-ir-2"||!project.success||!sawDiagnostics||project.diagnostics.length!=0)cursor.fail();return project;
+}

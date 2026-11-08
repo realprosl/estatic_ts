@@ -31,12 +31,23 @@ jobs:
           ESTATIC_NATIVE_CODEGEN: ${{ github.workspace }}/build/ets-compiler/etsc-stage2
           ESTATIC_NATIVE_BUILD: ${{ github.workspace }}/build/ets-compiler/etsc-stage2
         run: node --experimental-strip-types --test --test-name-pattern='IR C\+\+ (executes|preserves escaped|initializes imported)' bootstrap/ir/cpp.test.ts
+      - name: Verify native annotations through the ETS compiler
+        env:
+          ESTATIC_IR_BINARY: ${{ github.workspace }}/native-cpp/native/frontend
+          ESTATIC_NATIVE_COMPILER: ${{ github.workspace }}/build/ets-compiler/etsc-stage2
+        run: node --experimental-strip-types --test bootstrap/ir/native-annotations.test.ts
       - name: Verify stage 1
         run: bash scripts/check-ets-compiler.sh build/ets-compiler/etsc
       - name: Verify stage 2
         run: bash scripts/check-ets-compiler.sh build/ets-compiler/etsc-stage2
       - name: Compare compiler IR across generations
         run: cmp build/ets-compiler/stage1.ir.json build/ets-compiler/stage2.ir.json
+      - name: Round-trip compiler IR through the streaming reader
+        env:
+          ESTC_ROOT: ${{ github.workspace }}
+        run: |
+          build/ets-compiler/etsc-stage2 --from-ir build/ets-compiler/stage2.ir.json -o build/ets-compiler/from-ir.cpp --no-progress
+          cmp build/ets-compiler/stage2.cpp build/ets-compiler/from-ir.cpp
       - name: Upload compiler executables and generated sources
         if: always()
         uses: actions/upload-artifact@v4

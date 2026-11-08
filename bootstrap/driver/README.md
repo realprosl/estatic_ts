@@ -30,7 +30,8 @@ compilador ETS completo. No hace falta regenerar la semilla para probar cambios
 ETS. El workflow **ETS compiler self-hosting** ejecuta las dos generaciones.
 
 El backend consume exclusivamente IR tipado y verificado. `--from-ir` utiliza un
-decodificador explícito para ese mismo modelo; `--codegen-json` mantiene la
+decodificador explícito para ese mismo modelo, leyendo las tablas elemento a
+elemento para evitar un segundo DOM JSON completo; `--codegen-json` mantiene la
 interfaz del banco de pruebas del backend anterior. Se conservan las primitivas
 `@include` y `@cppgen`, que permiten compilar también la frontera con el sistema.
 

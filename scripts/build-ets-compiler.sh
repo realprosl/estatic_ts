@@ -18,10 +18,10 @@ fi
 # fusion prevents the parser from copying entire token/AST arrays for .length.
 native-cpp/native/frontend bootstrap/driver/main.ets --verbose > "$output/stage1.ir.json"
 native-cpp/native/etsc --from-ir "$output/stage1.ir.json" --build \
-  -o "$output/stage1.cpp" --binary "$output/etsc" --verbose
+  -o "$output/stage1.cpp" --binary "$output/etsc" --cxx-flag -O1 --verbose
 if [[ "$stage" == stage2 ]]; then
   # This generation performs analysis, lowering, emission and orchestration in ETS.
   "$output/etsc" build bootstrap/driver/main.ets \
     --emit-ir "$output/stage2.ir.json" \
-    -o "$output/stage2.cpp" --binary "$output/etsc-stage2" --verbose
+    -o "$output/stage2.cpp" --binary "$output/etsc-stage2" --cxx-flag -O1 --verbose
 fi
