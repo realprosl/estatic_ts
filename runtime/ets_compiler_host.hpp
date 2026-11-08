@@ -16,6 +16,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 namespace ets_compiler_host {
+inline std::string compilerRoot(){return std::filesystem::path(__FILE__).parent_path().parent_path().string();}
 inline thread_local std::string error;
 inline std::string lastError(){return error;}
 inline std::string environment(std::string name){auto p=std::getenv(name.c_str());return p?p:"";}

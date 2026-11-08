@@ -17,3 +17,7 @@ export function now():number{hostCode("return ets_compiler_host::now();");return
 export function pause(milliseconds:number):void{hostCode("ets_compiler_host::pause(milliseconds);return;");return;}
 export function terminal():boolean{hostCode("return ets_compiler_host::terminal();");return false;}
 export function columns():number{hostCode("return ets_compiler_host::columns();");return 80;}
+
+export function compilerRoot():string{hostCode("return ets_compiler_host::compilerRoot();");return "";}
+
+export function objectKeys(value:JsonValue):string[]{hostCode("return jsonObjectKeys(value);");let keys:string[]=[];return keys;}

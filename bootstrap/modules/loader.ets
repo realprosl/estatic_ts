@@ -1,3 +1,4 @@
+import {progressDetail} from "../progress/progress";
 import { AttributeKind, NodeKind, nodeKindName } from "../parser/ast-schema";
 import { ParserToken, AstNode, ParseResult } from "../parser/parser";
 import { SourceDiagnostic, SourceResult, quoteSource, formatSource, formatDiagnostic } from "../frontend/frontend";
@@ -115,7 +116,7 @@ export class ModuleLoader {
       graph.diagnostics.push(new SourceDiagnostic("loader", "No se puede resolver el módulo '" + entry + "' (se probaron .ts y .ets)", normalizePath(entry), originToken()));
       graph.success = false; this.cache = cache; return graph;
     }
-    if (this.options.verbose) printError("frontend: reading/parsing "+canonical);
+    if (this.options.verbose) progressDetail("frontend: reading/parsing "+canonical);
     let discovered: LoadedFile[] = [readModule(canonical, graph, cache)]; let stack: number[] = [0];
     // An explicit DFS stack handles deep graphs without recursive native calls.
     // Discovery/dedup is separate from grey-node cycle detection.
@@ -139,7 +140,7 @@ export class ModuleLoader {
           discovered[index] = module;
           let existing: number = -1;
           for (let i: number = 0; i < discovered.length; i = i + 1) { if (discovered[i].file == dependency) { existing = i; break; } }
-          if (existing < 0) { if (this.options.verbose) printError("frontend: reading/parsing "+dependency); discovered.push(readModule(dependency, graph, cache)); stack.push(discovered.length - 1); }
+          if (existing < 0) { if (this.options.verbose) progressDetail("frontend: reading/parsing "+dependency); discovered.push(readModule(dependency, graph, cache)); stack.push(discovered.length - 1); }
           else if (discovered[existing].state == 1) {
             let cycle: string[] = []; let started: boolean = false;
             for (const active of stack) {
