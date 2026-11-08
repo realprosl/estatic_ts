@@ -21,13 +21,32 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ## Bootstrap y ejecución nativa
 
-La instalación **no usa Node.js**: compila la semilla C++ de `native-cpp/` —el
-C++ ya generado desde `bootstrap/`— con el compilador C++20 del sistema. De ahí
-salen el frontend nativo (`native/frontend`) y el driver (`etsc`). Después,
-`etsc` ejecuta el frontend nativo y emite, compila y enlaza C++ sin Node, npm,
-intérprete JavaScript ni las fuentes TypeScript de stage 0. El frontend es ETS
-compilado; el driver y el backend son C++20. Esto no afirma que todo el
-compilador esté escrito en ETS o sea autoalojado.
+La instalación **no usa Node.js**. Primero compila el frontend y el emisor de
+la semilla C++ de `native-cpp/`. Con esa semilla analiza las fuentes actuales de
+`bootstrap/driver/main.ets`, genera su C++ y construye el compilador completo
+escrito en ETS (frontend, backend y coordinador). Ese resultado se publica como
+`bin/etsc`, junto con las cabeceras, tipos, plantillas y archivos estáticos del
+runtime de libuv y cpp-httplib. La semilla y el C++/IR del compilador se conservan
+como artefactos privados para recuperación e inspección.
+
+El runtime se precompila y el compilador se prueba **antes** de cambiar el comando
+instalado. Un fallo conserva la instalación anterior. El compilador instalado
+encuentra su distribución aunque se mueva el prefijo completo; no requiere el
+checkout ni `ESTC_ROOT`. Los archivos estáticos llevan un manifiesto de hashes e
+identidad de compilador; se reutilizan cuando coinciden. Flags personalizados
+que puedan cambiar el ABI fuerzan la compilación desde los fuentes del runtime.
+
+Para actualizar reconstruyendo desde las fuentes actuales:
+
+```sh
+git switch main
+git pull --ff-only
+sudo bash install.sh
+# Alternativa sin sudo:
+# bash install.sh --prefix "$HOME/.local"
+hash -r
+etsc --version
+```
 
 La distribución incluye `bootstrap/modules/platform.hpp`, necesaria para
 compilar los fuentes de bootstrap con el compilador instalado. La cabecera
@@ -83,7 +102,7 @@ El driver admite también `estatic.config.ts` cuando contiene un objeto
 **No ejecuta configuraciones JavaScript dinámicas.** Éstas se rechazan con un
 diagnóstico; deben expresarse mediante JSON u opciones del comando. También
 se admiten `--config`, `--check`, `--emit-ir`, `--from-ir`, aliases, raíces de
-módulos, flags del compilador/enlazador y un frontend alternativo. El IR JSON
+módulos, flags del compilador/enlazador. El IR JSON
 presupone un productor de confianza que lo haya verificado.
 
 ## Tipos y caché del proyecto

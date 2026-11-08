@@ -16,8 +16,26 @@
 #include <sys/wait.h>
 #include <unistd.h>
 namespace ets_compiler_host {
-inline std::string compilerRoot(){return std::filesystem::path(__FILE__).parent_path().parent_path().string();}
 inline thread_local std::string error;
+inline std::string compilerRoot(){
+ std::error_code ec;auto executable=std::filesystem::read_symlink("/proc/self/exe",ec);
+ if(!ec){auto home=executable.parent_path().parent_path()/"lib/estc/current";
+  if(std::filesystem::exists(home/"installation.json",ec))return std::filesystem::canonical(home,ec).string();}
+ return std::filesystem::path(__FILE__).parent_path().parent_path().string();
+}
+inline std::string temporaryDirectory(std::string parent){
+ error.clear();std::string pattern=(std::filesystem::path(parent)/".ets-build-XXXXXX").string();
+ std::vector<char> buffer(pattern.begin(),pattern.end());buffer.push_back(0);
+ if(auto result=mkdtemp(buffer.data()))return result;error="No se puede crear el directorio temporal";return "";
+}
+inline bool removeDirectory(std::string path){std::error_code ec;std::filesystem::remove_all(path,ec);return !ec;}
+inline bool copyFile(std::string source,std::string target){
+ error.clear();std::error_code ec;std::filesystem::create_directories(std::filesystem::path(target).parent_path(),ec);
+ auto temp=target+".tmp-"+std::to_string(getpid());
+ if(!ec)std::filesystem::copy_file(source,temp,std::filesystem::copy_options::overwrite_existing,ec);
+ if(!ec)std::filesystem::rename(temp,target,ec);
+ if(ec)error=ec.message();return !ec;
+}
 inline std::string lastError(){return error;}
 inline std::string environment(std::string name){auto p=std::getenv(name.c_str());return p?p:"";}
 inline bool environmentDefined(std::string name){return std::getenv(name.c_str())!=nullptr;}

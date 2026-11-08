@@ -23,3 +23,7 @@ export function compilerHome():string{hostCode("return ets_compiler_host::compil
 export function objectKeys(value:JsonValue):string[]{hostCode("return jsonObjectKeys(value);");let keys:string[]=[];return keys;}
 
 export function directories(fileName:string):boolean{hostCode("return ets_compiler_host::directories(fileName);");return false;}
+
+export function copyFile(source:string,target:string):boolean{hostCode("return ets_compiler_host::copyFile(source,target);");return false;}
+export function temporaryDirectory(parent:string):string{hostCode("return ets_compiler_host::temporaryDirectory(parent);");return "";}
+export function removeDirectory(path:string):boolean{hostCode("return ets_compiler_host::removeDirectory(path);");return false;}

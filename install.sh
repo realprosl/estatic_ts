@@ -1,18 +1,7 @@
 #!/usr/bin/env bash
-#
-# install.sh — instala el compilador nativo `etsc` a partir de la semilla C++.
-#
-# La semilla es `native-cpp/`: el C++ ya generado desde `bootstrap/` (el
-# frontend completo, el driver, el backend IR y el runtime). Este script la
-# compila con el compilador C++20 del sistema y publica el resultado en
-# <prefix>/bin/etsc.
-#
-# No requiere Node.js ni TypeScript: todo lo que se instala procede de la
-# semilla. Node sólo hace falta para REGENERAR la semilla cuando cambian las
-# fuentes de `bootstrap/*.ets` (scripts/generate-native-cpp-snapshot.mjs).
-#
-# Uso:  ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario]
-#
+# Compila la semilla C++, construye con ella el compilador completo ETS y
+# publica el binario, runtime precompilado, cabeceras, tipos y plantillas.
+# No requiere Node. Uso: ./install.sh [--prefix /usr/local] [--cxx g++]
 set -euo pipefail
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,7 +15,7 @@ usage() {
   cat <<'EOF'
 Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario]
 
-Compila la semilla C++ de native-cpp/ y instala el compilador nativo etsc.
+Compila la semilla C++, construye el compilador ETS y lo instala como etsc.
 
   --prefix DIR     donde instalar (por defecto /usr/local)
   --cxx COMPILADOR compilador C++20 (por defecto g++, o $CXX)
@@ -34,7 +23,7 @@ Compila la semilla C++ de native-cpp/ y instala el compilador nativo etsc.
   --help           esta ayuda
 
 No requiere Node.js. Requisitos: un compilador C++20, `ar` y las cabeceras de
-desarrollo de OpenSSL (libssl-dev). El runtime se precompila durante la
+desarrollo de OpenSSL, libuv y libcurl. El runtime se precompila durante la
 instalacion.
 EOF
 }
@@ -73,7 +62,8 @@ else
 fi
 
 work="$repo_dir/build/install-$$"
-cleanup() { rm -rf "$work"; }
+stage=""
+cleanup() { rm -rf "$work"; if [ -n "$stage" ]; then rm -rf "$stage"; fi; }
 trap cleanup EXIT
 
 # --- Proteccion: no pisar una distribucion o un comando ajeno ---------------
@@ -135,20 +125,27 @@ echo "    driver y emisor IR -> native/etsc"
   -I"$seed_dir" -I"$seed_dir/build/bootstrap/etsc" \
   "$seed_dir/bootstrap/native/driver.cpp" \
   "$seed_dir/src/codegen/ir/native/generator.cpp" \
-  -lcrypto -o "$work/native/etsc"
+  -lcrypto -o "$work/native/seed-etsc"
 
+echo "==> Construyendo el compilador completo desde bootstrap/driver/main.ets"
+# Every installation regenerates from the current ETS sources, not a stale snapshot.
+ESTC_ROOT="$repo_dir" "$work/native/frontend" "$repo_dir/bootstrap/driver/main.ets" --verbose > "$work/compiler.ir.json"
+compiler_flags=(--cxx-flag -O2)
+if [ -f "$repo_dir/build/libs/libuv/include/uv.h" ]; then compiler_flags+=(--cxx-flag "-I$repo_dir/build/libs/libuv/include"); fi
+ESTC_ROOT="$repo_dir" "$work/native/seed-etsc" --from-ir "$work/compiler.ir.json" --build \
+  -o "$work/compiler.cpp" --binary "$work/native/etsc" --cxx "$cxx" "${compiler_flags[@]}" --verbose
 command_hash="$(hash_file "$work/native/etsc")"
 
 # --- Publicacion ------------------------------------------------------------
-echo "==> Publicando en $prefix"
+echo "==> Preparando distribución en $prefix"
 stage="$library/.install-$$"
 mkdir -p "$stage/native" "$stage/templates"
 
-cp -R "$seed_dir/runtime" "$stage/runtime"
+cp -R "$repo_dir/runtime" "$stage/runtime"
 # Generated bootstrap C++ includes these native boundary headers by this path.
 # Ship only headers, without the ETS/TS compiler sources or native driver.
 mkdir -p "$stage/bootstrap/modules"
-find "$seed_dir/bootstrap/modules" -maxdepth 1 -type f \
+find "$repo_dir/bootstrap/modules" -maxdepth 1 -type f \
   \( -name '*.hpp' -o -name '*.h' \) -exec cp {} "$stage/bootstrap/modules/" \;
 cp -R "$seed_dir/types" "$stage/types"
 cp -R "$seed_dir/templates/." "$stage/templates/"
@@ -157,13 +154,18 @@ cp -R "$seed_dir/templates/." "$stage/templates/"
 [ -f "$repo_dir/types/estatic.d.ts" ] && cp "$repo_dir/types/estatic.d.ts" "$stage/templates/types/estatic.d.ts"
 [ -f "$repo_dir/types/estatic.d.ts" ] && cp "$repo_dir/types/estatic.d.ts" "$stage/types/estatic.d.ts"
 
+# Keep the seed available for recovery, while bin/etsc contains the ETS driver.
 cp "$work/native/frontend" "$stage/native/frontend"
-chmod +x "$stage/native/frontend"
+cp "$work/native/seed-etsc" "$stage/native/seed-etsc"
+cp "$work/compiler.cpp" "$stage/native/compiler.cpp"
+cp "$work/compiler.ir.json" "$stage/native/compiler.ir.json"
+chmod +x "$stage/native/frontend" "$stage/native/seed-etsc"
 cp "$repo_dir/package.json" "$stage/package.json"
 
 # El compilador instalado usa el compilador que se pidio al instalar.
 if [ -f "$stage/templates/estatic.config.json" ]; then
-  sed "s/\"command\": \"[^\"]*\"/\"command\": \"$cxx\"/" "$stage/templates/estatic.config.json" > "$stage/templates/estatic.config.json.tmp"
+  template_cxx=$(printf '%s' "$cxx" | sed 's/[\\&|]/\\&/g')
+  sed "s|\"command\": \"[^\"]*\"|\"command\": \"$template_cxx\"|" "$stage/templates/estatic.config.json" > "$stage/templates/estatic.config.json.tmp"
   mv "$stage/templates/estatic.config.json.tmp" "$stage/templates/estatic.config.json"
 fi
 
@@ -173,10 +175,19 @@ if [ -d "$repo_dir/build/libs" ]; then
   cp -R "$repo_dir/build/libs" "$stage/build/libs"
 fi
 
+echo "==> Precompilando el runtime antes de publicar"
+bash "$repo_dir/scripts/precompile-installed-runtime.sh" "$stage" "$cxx"
+# Check relocation and build/run against the distribution about to be published.
+mkdir -p "$work/probe"
+printf 'print("ETS compiler works");\n' > "$work/probe/main.ets"
+ESTC_ROOT="$stage" "$work/native/etsc" build "$work/probe/main.ets" \
+  -o "$work/probe/main.cpp" --binary "$work/probe/main" --no-progress
+[ "$("$work/probe/main")" = "ETS compiler works" ] || fail "Falló la comprobación del compilador ETS"
+
 version="$(cd "$stage" && find . -type f | LC_ALL=C sort | while IFS= read -r file; do printf '%s %s\n' "$file" "$(hash_file "$file")"; done | hash_stdin)"
 version="${version:0:24}"
 
-printf '{\n  "format": "estc-install-1",\n  "version": "%s",\n  "compiler": "%s",\n  "native": true,\n  "frontend": "native/frontend",\n  "commandHash": "%s"\n}\n' \
+printf '{\n  "format": "estc-install-1",\n  "version": "%s",\n  "compiler": "%s",\n  "native": true,\n  "implementation": "ets",\n  "frontend": "native/frontend",\n  "commandHash": "%s"\n}\n' \
   "$version" "$cxx" "$command_hash" > "$stage/installation.json"
 
 mkdir -p "$library/releases" "$(dirname "$destination")"
@@ -207,37 +218,6 @@ if [ -e "$legacy_nativo" ] && [ -f "$legacy_nativo_manifest" ]; then
   if [ "$legacy_format" = "nativo-install-1" ] && [ "$legacy_nativo_hash" = "$(hash_file "$legacy_nativo")" ]; then
     rm -f "$legacy_nativo"
   fi
-fi
-
-# --- Runtime precompilado ----------------------------------------------------
-# El driver sabe calcular la clave de cache, el manifiesto y las rutas que
-# despues reutiliza. Compilar un programa de prueba con el compilador ya
-# instalado deja el runtime listo en su cache y en la distribucion.
-echo "==> Precompilando el runtime (libuv, red y cpp-httplib)"
-probe="$work/probe"
-mkdir -p "$probe/src"
-cat > "$probe/src/main.ets" <<'EOF'
-async function main(): Promise<void> {
-  const server = http.createServer();
-  print("runtime listo");
-}
-main();
-EOF
-if ESTC_ROOT="$current" "$destination" build "$probe/src/main.ets" \
-     -o "$probe/app.cpp" --binary "$probe/app" --no-progress >"$work/warm.log" 2>&1; then
-  warm_cache="${ESTC_RUNTIME_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/estc/runtime}"
-  if [ -d "$warm_cache" ]; then
-    mkdir -p "$release/build/runtime-cache"
-    for entry in "$warm_cache"/*/; do
-      [ -d "$entry" ] || continue
-      name="$(basename "$entry")"
-      [ -e "$release/build/runtime-cache/$name" ] || cp -R "$entry" "$release/build/runtime-cache/$name"
-    done
-  fi
-  echo "    runtime compilado y cacheado"
-else
-  echo "    aviso: no se pudo precompilar el runtime; el compilador lo hara al primer uso." >&2
-  sed 's/^/    /' "$work/warm.log" >&2 || true
 fi
 
 echo "==> Instalado: $destination"
