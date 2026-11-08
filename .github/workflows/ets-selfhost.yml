@@ -40,13 +40,13 @@ jobs:
             cat build/ets-compiler/timings.tsv >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
-      - name: Report effect edge work
+      - name: Report analysis work
         if: always()
         shell: bash
         run: |
           if test -f build/ets-compiler/stage2-analysis.log; then
             echo '### Effect graph work' >> "$GITHUB_STEP_SUMMARY"
-            grep 'effect graph complete,' build/ets-compiler/stage2-analysis.log >> "$GITHUB_STEP_SUMMARY" || true
+            grep -E 'effect graph complete,|owner symbols ' build/ets-compiler/stage2-analysis.log >> "$GITHUB_STEP_SUMMARY" || true
           fi
       - uses: actions/setup-node@v4
         with:
