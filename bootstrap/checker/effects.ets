@@ -328,32 +328,33 @@ export class EffectAnalyzer {
       graphPass = graphPass+1; if (this.trace) progressDetail("frontend: effect graph pass "+numberToString(graphPass)+", "+numberToString(this.edges.length)+" edges");
       this.changed = false;
       for (let callIndex: number = 0; callIndex < this.calls.length; callIndex = callIndex+1) {
-      const call = this.calls[callIndex];
-      for (const target of this.callTargets(call.module,call.node)) {
+      const callModule: number = this.calls[callIndex].module;
+      const callNode: number = this.calls[callIndex].node;
+      for (const target of this.callTargets(callModule,callNode)) {
         if (this.calls[callIndex].linked.has(target)) continue; this.calls[callIndex].linked.set(target,true);
         const summary = this.summaries[target];
         let at: number = 0;
-        if (this.synchronousCallbacks(call.module,call.node).length > 0) {
-          for (const input of this.callbackInputs(call.module,call.node)) {
-            if (at < summary.parameters.length) this.addEdge(this.vertex(call.module,input),this.symbol(summary.parameters[at]),true); at = at + 1;
+        if (this.synchronousCallbacks(callModule,callNode).length > 0) {
+          for (const input of this.callbackInputs(callModule,callNode)) {
+            if (at < summary.parameters.length) this.addEdge(this.vertex(callModule,input),this.symbol(summary.parameters[at]),true); at = at + 1;
           }
-          if (this.node(call.module,call.node).get(AttributeKind.Method) == "reduce" && summary.parameters.length > 0) this.addEdge(this.returnVertex(target),this.symbol(summary.parameters[0]),true);
-        } else if (!this.suspensionNode(call.module,call.node)) for (const e of this.node(call.module,call.node).edges) if (e.role == EdgeRole.Args) {
-          const position: number = argumentParameter(this.checked.files[call.module],e.node,at);
-          if (position < summary.parameters.length) this.addEdge(this.vertex(call.module,e.node),this.symbol(summary.parameters[position]),true); at = at + 1;
+          if (this.node(callModule,callNode).get(AttributeKind.Method) == "reduce" && summary.parameters.length > 0) this.addEdge(this.returnVertex(target),this.symbol(summary.parameters[0]),true);
+        } else if (!this.suspensionNode(callModule,callNode)) for (const e of this.node(callModule,callNode).edges) if (e.role == EdgeRole.Args) {
+          const position: number = argumentParameter(this.checked.files[callModule],e.node,at);
+          if (position < summary.parameters.length) this.addEdge(this.vertex(callModule,e.node),this.symbol(summary.parameters[position]),true); at = at + 1;
         }
-        const suspended: boolean = this.suspensionNode(call.module,call.node);
+        const suspended: boolean = this.suspensionNode(callModule,callNode);
         if (this.asynchronous(target) && !suspended) {
-          this.addTask(this.vertex(call.module,call.node),this.vertex(call.module,call.node));
+          this.addTask(this.vertex(callModule,callNode),this.vertex(callModule,callNode));
           // A Task carries its frame origins, not the callable targets/results
           // returned by the suspended body.
-          for (const edge of this.node(call.module,call.node).edges) if (edge.role == EdgeRole.Args || edge.role == EdgeRole.Object) this.addEdge(this.vertex(call.module,edge.node),this.vertex(call.module,call.node),false);
-          const callee: number = this.reference(call.module,call.node); if (callee >= 0) this.addEdge(this.symbol(callee),this.vertex(call.module,call.node),false);
-          for (const parameter of summary.parameters) { const symbol = this.binding.symbols[parameter]; const fallback: number = bindingChild(this.node(symbol.module,symbol.node),EdgeRole.DefaultValue); if (fallback >= 0) this.addEdge(this.vertex(symbol.module,fallback),this.vertex(call.module,call.node),false); }
+          for (const edge of this.node(callModule,callNode).edges) if (edge.role == EdgeRole.Args || edge.role == EdgeRole.Object) this.addEdge(this.vertex(callModule,edge.node),this.vertex(callModule,callNode),false);
+          const callee: number = this.reference(callModule,callNode); if (callee >= 0) this.addEdge(this.symbol(callee),this.vertex(callModule,callNode),false);
+          for (const parameter of summary.parameters) { const symbol = this.binding.symbols[parameter]; const fallback: number = bindingChild(this.node(symbol.module,symbol.node),EdgeRole.DefaultValue); if (fallback >= 0) this.addEdge(this.vertex(symbol.module,fallback),this.vertex(callModule,callNode),false); }
         }
-        else this.addEdge(this.returnVertex(target),this.vertex(call.module,call.node),true);
-        if (suspended && this.node(call.module,call.node).kind == NodeKind.ForOfStatement) {
-          const sid: number = this.binding.files[call.module].declarations[bindingChild(this.node(call.module,call.node),EdgeRole.Binding)];
+        else this.addEdge(this.returnVertex(target),this.vertex(callModule,callNode),true);
+        if (suspended && this.node(callModule,callNode).kind == NodeKind.ForOfStatement) {
+          const sid: number = this.binding.files[callModule].declarations[bindingChild(this.node(callModule,callNode),EdgeRole.Binding)];
           if (sid >= 0) this.addEdge(this.returnVertex(target),this.symbol(sid),true);
         }
       }
