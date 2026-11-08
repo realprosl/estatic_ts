@@ -86,7 +86,8 @@ jobs:
           export ESTC_ROOT="$RUNNER_TEMP/prefix/lib/estc/current"
           test -x "$RUNNER_TEMP/prefix/bin/etsc"
           test ! -e "$ESTC_ROOT/src"
-          test ! -e "$ESTC_ROOT/bootstrap"
+          test -f "$ESTC_ROOT/bootstrap/modules/platform.hpp"
+          test -z "$(find "$ESTC_ROOT/bootstrap" -type f -name '*.ets' -print -quit)"
           "$RUNNER_TEMP/prefix/bin/etsc" --version
           "$RUNNER_TEMP/prefix/bin/etsc" init "$RUNNER_TEMP/proyecto"
           cd "$RUNNER_TEMP/proyecto"
