@@ -1106,7 +1106,7 @@ export class IrLowering {
     if (trace) progressDetail("IR: finalizando préstamos ("+(Date.now()-started)+" ms)");
     if (this.result.diagnostics.length == 0) this.result = finishBorrows(this.result);
     if (trace) progressDetail("IR: verificando IR ("+(Date.now()-started)+" ms)");
-    if (this.result.diagnostics.length == 0) this.result.diagnostics = verifyIr(this.result);
+    if (this.result.diagnostics.length == 0) this.result.diagnostics = verifyIr(this.result,trace);
     if (trace) progressDetail("IR: completado ("+(Date.now()-started)+" ms)");
     this.result.success = this.result.diagnostics.length == 0; return this.result;
   }

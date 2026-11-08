@@ -13,8 +13,10 @@ export class IrFacts {
   constructor(blocks: number, places: number) { this.reachable = false; this.dominators = []; this.initialized = []; for (let i: number = 0; i < blocks; i = i+1) this.dominators.push(true); for (let i: number = 0; i < places; i = i+1) this.initialized.push(true); }
 }
 export class IrVerifier {
+  trace: boolean;
   project: IrProject; issues: IrIssue[]; definitions: number[]; positions: number[]; facts: IrFacts[];
-  constructor(project: IrProject) { this.project = project; this.issues = []; this.definitions = []; this.positions = []; this.facts = []; }
+  constructor(project: IrProject, trace: boolean = false) { this.trace = trace; this.project = project; this.issues = []; this.definitions = []; this.positions = []; this.facts = []; }
+  profile(phase: string, started: number, name: string = ""): void { if (this.trace) printError("IR_PROFILE\t"+phase+"\t"+(Date.now()-started)+"\t"+name); }
   error(source: IrSource, message: string): void { this.issues.push(new IrIssue("IR_INVALID",message,source)); }
   nativeBinding(f: constRef<IrFunction>): boolean {
     for (const annotation of this.project.annotations) {
@@ -138,6 +140,7 @@ export class IrVerifier {
     return initialized;
   }
   functionBody(f: constRef<IrFunction>): void {
+    let tick: number = Date.now();
     this.definitions = []; this.positions = []; this.facts = [];
     if (!this.typeId(f.returns) || f.blocks.length == 0) { this.error(f.source,"Función sin entrada/tipo de retorno"); return; }
     for (const typeId of f.values) { if (!this.typeId(typeId) || this.project.types[typeId] == "void") this.error(f.source,"Tipo de valor inválido"); this.definitions.push(-1); this.positions.push(-1); }
@@ -172,8 +175,10 @@ export class IrVerifier {
       if (!["jump","branch","return","unreachable","suspend","cancel","trap"].includes(block.terminator) || block.targets.length != count) this.error(block.source,"Terminador inválido");
       for (const target of block.targets) if (target < 0 || target >= f.blocks.length) this.error(block.source,"Destino de bloque inexistente");
     }
+    this.profile("body.structure",tick,f.source.file+":"+f.name); tick = Date.now();
     this.facts[0].reachable = true; let changed: boolean = true;
     while (changed) { changed = false; for (let b: number = 0; b < f.blocks.length; b = b+1) if (this.facts[b].reachable) for (const target of f.blocks[b].targets) if (target >= 0 && target < f.blocks.length && !this.facts[target].reachable) { this.facts[target].reachable = true; changed = true; } }
+    this.profile("body.reachability",tick,f.source.file+":"+f.name); tick = Date.now();
     // Greatest fixed point: must-dominance and must-initialization at block exit.
     changed = true;
     while (changed) {
@@ -192,6 +197,7 @@ export class IrVerifier {
         for (let p: number = 0; p < init.length; p = p+1) if (init[p] != this.facts[b].initialized[p]) { this.facts[b].initialized[p] = init[p]; changed = true; }
       }
     }
+    this.profile("body.dataflow",tick,f.source.file+":"+f.name); tick = Date.now();
     for (let b: number = 0; b < f.blocks.length; b = b+1) {
       const block = f.blocks[b]; let initialized: boolean[] = [];
       for (let p: number = 0; p < f.places.length; p = p+1) initialized.push(b == 0 ? irInitialPlace(f,p) : true);
@@ -216,13 +222,17 @@ export class IrVerifier {
         else { this.use(f,block.value,b,block.instructions.length,block.source); if (!this.value(f,block.value) || f.values[block.value] != f.bodyReturns) this.error(block.source,"Tipo de retorno incompatible"); }
       } else if (block.value != -1) this.error(block.source,"Valor inesperado en terminador");
     }
+    this.profile("body.instructions",tick,f.source.file+":"+f.name);
     for (const definition of this.definitions) if (definition < 0) this.error(f.source,"Temporal sin definición");
   }
   run(): IrIssue[] {
-    this.issues = verifyIrTables(this.project); if (this.issues.length > 0) return this.issues;
-    for (const f of this.project.functions) for (const issue of verifyFunctionContracts(this.project,f)) this.issues.push(issue);
+    let tick: number = Date.now();
+    this.issues = verifyIrTables(this.project); this.profile("tables",tick); tick = Date.now(); if (this.issues.length > 0) return this.issues;
+    for (const f of this.project.functions) { const began: number = Date.now(); for (const issue of verifyFunctionContracts(this.project,f)) this.issues.push(issue); this.profile("contracts.function",began,f.source.file+":"+f.name); }
+    this.profile("contracts.functions.total",tick); tick = Date.now();
     for (const issue of verifyModuleContracts(this.project)) this.issues.push(issue);
     if (this.issues.length > 0) return this.issues;
+    this.profile("contracts.modules",tick); tick = Date.now();
     if (this.project.typeDefinitions.length != this.project.types.length) { this.error(new IrSource("","","",-1,0,0),"Tabla de tipos incompleta"); return this.issues; }
     for (let at: number = 0; at < this.project.typeDefinitions.length; at = at+1) {
       const shape = this.project.typeDefinitions[at];
@@ -252,8 +262,11 @@ export class IrVerifier {
       for (const target of contract.callees) if (target < 0 || target >= this.project.effectContracts.length) this.error(contract.source,"Arista de efectos inexistente");
       for (const lease of contract.borrows) if (lease.callback == "" || lease.root == "" || !["ref","constRef"].includes(lease.mode)) this.error(lease.source,"Obligación callback incompatible");
     }
+    this.profile("types.dispatch.effects",tick); tick = Date.now();
     for (const f of this.project.functions) { for (const contract of f.effectContracts) if (contract < 0 || contract >= this.project.effectContracts.length || this.project.effectContracts[contract].source.moduleId != f.source.moduleId || this.project.effectContracts[contract].source.node != f.source.node) this.error(f.source,"Contrato de función inexistente"); if (!this.nativeBinding(f)) this.functionBody(f); }
-    if (this.issues.length == 0) for (const f of this.project.functions) { if (this.nativeBinding(f)) continue; for (const issue of verifyBorrowRoutes(this.project,f)) this.issues.push(issue); for (const issue of verifyOwnershipRoutes(this.project,f)) this.issues.push(issue); }
+    this.profile("bodies.total",tick); tick = Date.now();
+    if (this.issues.length == 0) for (const f of this.project.functions) { if (this.nativeBinding(f)) continue; let began: number = Date.now(); for (const issue of verifyBorrowRoutes(this.project,f)) this.issues.push(issue); this.profile("borrows.function",began,f.source.file+":"+f.name); began = Date.now(); for (const issue of verifyOwnershipRoutes(this.project,f)) this.issues.push(issue); this.profile("ownership.function",began,f.source.file+":"+f.name); }
+    this.profile("memory.total",tick); tick = Date.now();
     const source = new IrSource("","","",-1,0,0);
     let initializers: number[] = [];
     for (const module of this.project.modules) {
@@ -270,4 +283,4 @@ export class IrVerifier {
     return this.issues;
   }
 }
-export function verifyIr(project: IrProject): IrIssue[] { let verifier = new IrVerifier(project); return verifier.run(); }
+export function verifyIr(project: IrProject, trace: boolean = false): IrIssue[] { let verifier = new IrVerifier(project,trace); return verifier.run(); }
