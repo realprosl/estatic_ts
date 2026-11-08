@@ -11,14 +11,17 @@ if [[ "$stage" != stage1 && "$stage" != stage2 ]]; then
   echo 'Usage: scripts/build-ets-compiler.sh [stage1|stage2]' >&2
   exit 2
 fi
-if [[ ! -x native-cpp/native/frontend || ! -x native-cpp/native/etsc ]]; then
+if [[ ! -x native-cpp/native/frontend || ! -x native-cpp/native/etsc || native-cpp/src/codegen/ir/native/generator.cpp -nt native-cpp/native/etsc ]]; then
   bash native-cpp/build-all.sh
 fi
 # Bootstrap the ETS backend first. Compiler generations then use ETS emission,
 # including its conservative single-use length-load optimization.
 native-cpp/native/frontend bootstrap/backend/cpp/demo.ets > "$output/backend.ir.json"
 native-cpp/native/etsc --from-ir "$output/backend.ir.json" --build \
-  -o "$output/backend.cpp" --binary "$output/backend" --no-progress
+  -o "$output/backend-seed.cpp" --binary "$output/backend-seed" --no-progress
+"$output/backend-seed" "$output/backend.ir.json" > "$output/backend.cpp"
+"${CXX:-g++}" -std=c++20 -O0 -pthread -fno-exceptions -I"$root" \
+  "$output/backend.cpp" -o "$output/backend"
 native-cpp/native/frontend bootstrap/driver/main.ets --verbose > "$output/stage1.ir.json"
 "$output/backend" "$output/stage1.ir.json" > "$output/stage1.cpp"
 "${CXX:-g++}" -std=c++20 -O0 -pthread -fno-exceptions -I"$root" \
