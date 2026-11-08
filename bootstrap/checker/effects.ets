@@ -11,6 +11,24 @@ export class EffectEdge {
   source: number; target: number; callable: boolean; origins: number; targets: number; tasks: number;
   constructor(source: number, target: number, callable: boolean) { this.source = source; this.target = target; this.callable = callable; this.origins = 0; this.targets = 0; this.tasks = 0; }
 }
+// Preserve the original ascending edge order while visiting only dirty edges.
+// Edges already passed in the current round are deferred to the next round.
+export class EffectAgenda {
+  values: number[];
+  constructor() { this.values = []; }
+  push(value: number): void {
+    let at: number = this.values.length; this.values.push(value);
+    while (at > 0) { const parent: number = Math.floor((at-1)/2); if (this.values[parent] <= value) break; this.values[at] = this.values[parent]; at = parent; }
+    this.values[at] = value;
+  }
+  pop(): number {
+    const first: number = this.values[0]; const last: number = this.values[this.values.length-1]; this.values.pop();
+    if (this.values.length == 0) return first;
+    let at: number = 0;
+    while (at*2+1 < this.values.length) { let child: number = at*2+1; if (child+1 < this.values.length && this.values[child+1] < this.values[child]) child = child+1; if (this.values[child] >= last) break; this.values[at] = this.values[child]; at = child; }
+    this.values[at] = last; return first;
+  }
+}
 export class EffectCall {
   module: number; node: number; owner: number; linked: Map<number,boolean>;
   constructor(module: number, node: number, owner: number) { this.module = module; this.node = node; this.owner = owner; this.linked = new Map<number,boolean>(); }
@@ -21,9 +39,11 @@ export class EffectAnalyzer {
   graph: ModuleGraph; binding: BindingResult; checked: CheckResult;
   offsets: number[]; nodes: number; points: EffectPoint[]; summaries: EffectSummary[]; functionIndices: number[][];
   edges: EffectEdge[]; calls: EffectCall[]; changed: boolean; owners: number[]; edgeKeys: Map<string,boolean>; trace: boolean;
+  outgoingHeads: number[]; outgoingNext: number[]; edgeQueued: boolean[]; agenda: EffectAgenda; deferredAgenda: EffectAgenda; propagating: boolean; edgeCursor: number; edgeVisits: number;
   constructor(graph: ModuleGraph, binding: BindingResult, checked: CheckResult) {
     this.graph = graph; this.binding = binding; this.checked = checked; this.offsets = []; this.nodes = 0;
     this.points = []; this.summaries = []; this.edges = []; this.calls = []; this.changed = false; this.owners = []; this.edgeKeys = new Map<string,boolean>(); this.trace = false; this.functionIndices = [];
+    this.outgoingHeads = []; this.outgoingNext = []; this.edgeQueued = []; this.agenda = new EffectAgenda(); this.deferredAgenda = new EffectAgenda(); this.propagating = false; this.edgeCursor = -1; this.edgeVisits = 0;
     for (const scope of binding.scopes) this.owners.push(-2);
     for (const m of graph.modules) { this.offsets.push(this.nodes); this.nodes = this.nodes + m.cached.result.ast.nodes.length; let indices: number[] = []; for (let node: number = 0; node < m.cached.result.ast.nodes.length; node = node+1) indices.push(-1); this.functionIndices.push(indices); }
   }
@@ -85,7 +105,7 @@ export class EffectAnalyzer {
     } return targets;
   }
   addTask(vertex: number, source: number): void {
-    if (!this.points[vertex].taskSet.has(source)) { this.points[vertex].taskSet.set(source,true); this.points[vertex].tasks.push(source); this.changed = true; }
+    if (!this.points[vertex].taskSet.has(source)) { this.points[vertex].taskSet.set(source,true); this.points[vertex].tasks.push(source); this.changed = true; this.scheduleVertex(vertex); }
   }
   root(module: number, id: number): number {
     let at: number = id;
@@ -101,17 +121,28 @@ export class EffectAnalyzer {
       else if (["ref","constRef","move"].includes(this.helper(module,at))) at = bindingChild(n,EdgeRole.Args); else return -1;
     } return -1;
   }
+  scheduleEdge(edge: number): void {
+    if (this.edgeQueued[edge]) return;
+    this.edgeQueued[edge] = true;
+    if (this.propagating && edge <= this.edgeCursor) this.deferredAgenda.push(edge); else this.agenda.push(edge);
+  }
+  scheduleVertex(vertex: number): void {
+    for (let edge: number = this.outgoingHeads[vertex]; edge >= 0; edge = this.outgoingNext[edge]) this.scheduleEdge(edge);
+  }
   addEdge(source: number, target: number, callable: boolean): void {
     if (source < 0 || target < 0) return;
     const key: string = numberToString(source)+":"+numberToString(target)+":"+(callable ? "1" : "0");
     if (this.edgeKeys.has(key)) return; this.edgeKeys.set(key,true);
-    this.edges.push(new EffectEdge(source,target,callable)); this.changed = true;
+    const edge: number = this.edges.length;
+    this.edges.push(new EffectEdge(source,target,callable));
+    this.outgoingNext.push(this.outgoingHeads[source]); this.outgoingHeads[source] = edge;
+    this.edgeQueued.push(false); this.scheduleEdge(edge); this.changed = true;
   }
   addTarget(vertex: number, target: number): void {
-    if (vertex >= 0 && target >= 0 && !this.points[vertex].targetSet.has(target)) { this.points[vertex].targetSet.set(target,true); this.points[vertex].targets.push(target); this.changed = true; }
+    if (vertex >= 0 && target >= 0 && !this.points[vertex].targetSet.has(target)) { this.points[vertex].targetSet.set(target,true); this.points[vertex].targets.push(target); this.changed = true; this.scheduleVertex(vertex); }
   }
   addOrigin(vertex: number, symbol: number): void {
-    if (vertex >= 0 && symbol >= 0 && !this.points[vertex].originSet.has(symbol)) { this.points[vertex].originSet.set(symbol,true); this.points[vertex].origins.push(symbol); this.changed = true; }
+    if (vertex >= 0 && symbol >= 0 && !this.points[vertex].originSet.has(symbol)) { this.points[vertex].originSet.set(symbol,true); this.points[vertex].origins.push(symbol); this.changed = true; this.scheduleVertex(vertex); }
   }
   returnVertex(summaryId: number): number { return this.nodes + this.binding.symbols.length + summaryId; }
   member(module: number, id: number): number {
@@ -234,6 +265,7 @@ export class EffectAnalyzer {
     } return -1;
   }
   build(): void {
+    const graphStarted: number = Date.now(); let denseVisits: number = 0;
     if (this.trace) progressDetail("frontend: effect functions");
     // Discover all functions before resolving owners or allocating return vertices.
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.checked.files[m].types.length; id = id + 1) {
@@ -249,7 +281,7 @@ export class EffectAnalyzer {
       creation.phase = "creation"; creation.parameters = body.parameters; creation.unknown = body.unknown; this.summaries[target].creation = this.summaries.length; this.summaries.push(creation);
     }
     if (this.trace) progressDetail("frontend: effect points "+numberToString(this.nodes+this.binding.symbols.length+this.summaries.length));
-    for (let i: number = 0; i < this.nodes + this.binding.symbols.length + this.summaries.length; i = i + 1) this.points.push(new EffectPoint());
+    for (let i: number = 0; i < this.nodes + this.binding.symbols.length + this.summaries.length; i = i + 1) { this.points.push(new EffectPoint()); this.outgoingHeads.push(-1); }
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid+1) if (this.binding.symbols[sid].kind == "Parameter" && this.checked.symbolTypes[sid].indexOf("Promise<",0) >= 0 && this.checked.symbolTypes[sid].indexOf("=>",0) < 0) this.addTask(this.symbol(sid),-sid-1);
     for (let summaryId: number = 0; summaryId < this.summaries.length; summaryId = summaryId + 1) {
       const s = this.summaries[summaryId]; if (s.phase == "creation") continue; if (!s.unknown) this.addTarget(this.vertex(s.module,s.node),summaryId);
@@ -328,32 +360,33 @@ export class EffectAnalyzer {
       graphPass = graphPass+1; if (this.trace) progressDetail("frontend: effect graph pass "+numberToString(graphPass)+", "+numberToString(this.edges.length)+" edges");
       this.changed = false;
       for (let callIndex: number = 0; callIndex < this.calls.length; callIndex = callIndex+1) {
-      const call = this.calls[callIndex];
-      for (const target of this.callTargets(call.module,call.node)) {
+      const callModule: number = this.calls[callIndex].module;
+      const callNode: number = this.calls[callIndex].node;
+      for (const target of this.callTargets(callModule,callNode)) {
         if (this.calls[callIndex].linked.has(target)) continue; this.calls[callIndex].linked.set(target,true);
         const summary = this.summaries[target];
         let at: number = 0;
-        if (this.synchronousCallbacks(call.module,call.node).length > 0) {
-          for (const input of this.callbackInputs(call.module,call.node)) {
-            if (at < summary.parameters.length) this.addEdge(this.vertex(call.module,input),this.symbol(summary.parameters[at]),true); at = at + 1;
+        if (this.synchronousCallbacks(callModule,callNode).length > 0) {
+          for (const input of this.callbackInputs(callModule,callNode)) {
+            if (at < summary.parameters.length) this.addEdge(this.vertex(callModule,input),this.symbol(summary.parameters[at]),true); at = at + 1;
           }
-          if (this.node(call.module,call.node).get(AttributeKind.Method) == "reduce" && summary.parameters.length > 0) this.addEdge(this.returnVertex(target),this.symbol(summary.parameters[0]),true);
-        } else if (!this.suspensionNode(call.module,call.node)) for (const e of this.node(call.module,call.node).edges) if (e.role == EdgeRole.Args) {
-          const position: number = argumentParameter(this.checked.files[call.module],e.node,at);
-          if (position < summary.parameters.length) this.addEdge(this.vertex(call.module,e.node),this.symbol(summary.parameters[position]),true); at = at + 1;
+          if (this.node(callModule,callNode).get(AttributeKind.Method) == "reduce" && summary.parameters.length > 0) this.addEdge(this.returnVertex(target),this.symbol(summary.parameters[0]),true);
+        } else if (!this.suspensionNode(callModule,callNode)) for (const e of this.node(callModule,callNode).edges) if (e.role == EdgeRole.Args) {
+          const position: number = argumentParameter(this.checked.files[callModule],e.node,at);
+          if (position < summary.parameters.length) this.addEdge(this.vertex(callModule,e.node),this.symbol(summary.parameters[position]),true); at = at + 1;
         }
-        const suspended: boolean = this.suspensionNode(call.module,call.node);
+        const suspended: boolean = this.suspensionNode(callModule,callNode);
         if (this.asynchronous(target) && !suspended) {
-          this.addTask(this.vertex(call.module,call.node),this.vertex(call.module,call.node));
+          this.addTask(this.vertex(callModule,callNode),this.vertex(callModule,callNode));
           // A Task carries its frame origins, not the callable targets/results
           // returned by the suspended body.
-          for (const edge of this.node(call.module,call.node).edges) if (edge.role == EdgeRole.Args || edge.role == EdgeRole.Object) this.addEdge(this.vertex(call.module,edge.node),this.vertex(call.module,call.node),false);
-          const callee: number = this.reference(call.module,call.node); if (callee >= 0) this.addEdge(this.symbol(callee),this.vertex(call.module,call.node),false);
-          for (const parameter of summary.parameters) { const symbol = this.binding.symbols[parameter]; const fallback: number = bindingChild(this.node(symbol.module,symbol.node),EdgeRole.DefaultValue); if (fallback >= 0) this.addEdge(this.vertex(symbol.module,fallback),this.vertex(call.module,call.node),false); }
+          for (const edge of this.node(callModule,callNode).edges) if (edge.role == EdgeRole.Args || edge.role == EdgeRole.Object) this.addEdge(this.vertex(callModule,edge.node),this.vertex(callModule,callNode),false);
+          const callee: number = this.reference(callModule,callNode); if (callee >= 0) this.addEdge(this.symbol(callee),this.vertex(callModule,callNode),false);
+          for (const parameter of summary.parameters) { const symbol = this.binding.symbols[parameter]; const fallback: number = bindingChild(this.node(symbol.module,symbol.node),EdgeRole.DefaultValue); if (fallback >= 0) this.addEdge(this.vertex(symbol.module,fallback),this.vertex(callModule,callNode),false); }
         }
-        else this.addEdge(this.returnVertex(target),this.vertex(call.module,call.node),true);
-        if (suspended && this.node(call.module,call.node).kind == NodeKind.ForOfStatement) {
-          const sid: number = this.binding.files[call.module].declarations[bindingChild(this.node(call.module,call.node),EdgeRole.Binding)];
+        else this.addEdge(this.returnVertex(target),this.vertex(callModule,callNode),true);
+        if (suspended && this.node(callModule,callNode).kind == NodeKind.ForOfStatement) {
+          const sid: number = this.binding.files[callModule].declarations[bindingChild(this.node(callModule,callNode),EdgeRole.Binding)];
           if (sid >= 0) this.addEdge(this.returnVertex(target),this.symbol(sid),true);
         }
       }
@@ -369,7 +402,10 @@ export class EffectAnalyzer {
       }
       // Point sets only grow. Each edge forwards each source entry once;
       // newly discovered call edges start at zero and receive the full set.
-      for (let at: number = 0; at < this.edges.length; at = at+1) {
+      denseVisits = denseVisits+this.edges.length;
+      this.propagating = true; this.edgeCursor = -1;
+      while (this.agenda.values.length > 0) {
+        const at: number = this.agenda.pop(); this.edgeCursor = at; this.edgeQueued[at] = false; this.edgeVisits = this.edgeVisits+1;
         let e = this.edges[at];
         if (e.callable) {
           while ((e.tasks) < this.points[e.source].tasks.length) { this.addTask(e.target,this.points[e.source].tasks[e.tasks]); e.tasks = e.tasks+1; }
@@ -378,7 +414,9 @@ export class EffectAnalyzer {
         while ((e.origins) < this.points[e.source].origins.length) { this.addOrigin(e.target,this.points[e.source].origins[e.origins]); e.origins = e.origins+1; }
         this.edges[at] = e;
       }
+      this.propagating = false; this.agenda = this.deferredAgenda; this.deferredAgenda = new EffectAgenda();
     }
+    if (this.trace) progressDetail("frontend: effect graph complete, "+numberToString(this.edgeVisits)+" edge visits, "+numberToString(this.edges.length)+" edges, "+numberToString(graphPass)+" rounds, "+numberToString(denseVisits)+" dense baseline visits, "+numberToString(Date.now()-graphStarted)+" ms");
   }
   addEffect(summaryId: number, sid: number, mode: string): void {
     if (summaryId < 0 || sid < 0 || (this.binding.symbols[sid].module) < 0) return;

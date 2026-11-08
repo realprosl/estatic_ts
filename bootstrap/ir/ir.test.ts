@@ -162,6 +162,16 @@ for(const mode of ["entry","order","target","terminator","result","use","duplica
 test("native verifier checks dominance across arms",()=>{const ir=run('function f(b:boolean):number{if(b)return 1;else return 2;} print(f(true));',{},"dominance",1);assert.ok(ir.diagnostics.some((d:any)=>/domina/.test(d.message)));});
 test("native verifier checks initialization at joins",()=>{const ir=run('function f(b:boolean):number{return b?1:2;} print(f(true));',{},"uninitialized",1);assert.ok(ir.diagnostics.some((d:any)=>/inicializar/.test(d.message)));});
 
+test("native verifier preserves joins and loop backedges in a large CFG",()=>{
+  const arms = Array.from({length:80},(_,i)=>`if(n>${i}){sum=sum+1;}else{sum=sum+2;}`).join("");
+  const ir=run(`function f(n:number):number{let sum:number=0;let i:number=0;while(i<2){${arms}i=i+1;}return sum;}print(f(100));`);
+  assert.ok(ir.functions.some((f:any)=>f.blocks.length>160));
+  assert.deepEqual(execute(ir),["160"]);
+});
+test("native verifier caches aliased constant-index projections across joins",()=>{
+  assert.deepEqual(execute(run('function f(b:boolean):number{let a:number[]=[1,2];if(b){a[0]=3;}else{a[0]=4;}return a[0];}print(f(true),f(false));')),["3 4"]);
+});
+
 test("native IR preserves exact i64/u64 literal text",()=>{
   const ir=run('const a:i64=-9223372036854775808;const b:u64=18446744073709551615;print(a,b);');
   const constants=instructions(ir).filter((i:any)=>i.op==="constant");

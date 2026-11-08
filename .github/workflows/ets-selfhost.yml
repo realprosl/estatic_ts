@@ -14,14 +14,40 @@ permissions:
   contents: read
 jobs:
   selfhost:
+    strategy:
+      fail-fast: false
+      matrix:
+        optimization: [O2]
+    name: selfhost-${{ matrix.optimization }}
+    env:
+      ESTATIC_ETS_OPTIMIZATION: -${{ matrix.optimization }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - name: Install native dependencies
-        run: sudo apt-get update && sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
+        run: sudo apt-get update && sudo apt-get install -y g++ time libssl-dev libcurl4-openssl-dev libuv1-dev
       - name: Build C++ seed and two ETS generations
         run: bash scripts/build-ets-compiler.sh stage2
+      - name: Report build and execution timings
+        if: always()
+        shell: bash
+        run: |
+          if test -f build/ets-compiler/timings.tsv; then
+            echo '### Self-hosting ${{ matrix.optimization }}' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Wall time, CPU time and peak RSS in KiB. Separate runner per profile.' >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            cat build/ets-compiler/timings.tsv >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Report effect edge work
+        if: always()
+        shell: bash
+        run: |
+          if test -f build/ets-compiler/stage2-analysis.log; then
+            echo '### Effect graph work' >> "$GITHUB_STEP_SUMMARY"
+            grep 'effect graph complete,' build/ets-compiler/stage2-analysis.log >> "$GITHUB_STEP_SUMMARY" || true
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -53,10 +79,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ets-selfhost
+          name: ets-selfhost-${{ matrix.optimization }}
           path: |
             build/ets-compiler/etsc
             build/ets-compiler/etsc-stage2
             build/ets-compiler/*.cpp
             build/ets-compiler/*.json
+            build/ets-compiler/timings.tsv
+            build/ets-compiler/stage2-analysis.log
           retention-days: 7
