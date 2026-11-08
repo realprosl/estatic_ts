@@ -1988,3 +1988,17 @@ test('diagnostic contract separates comptime codes',()=>{
  const d=g.diagnostics.find((d:any)=>d.code.startsWith('COMPTIME_'));assert.ok(d);assertDiagnostic(d);
  assert.ok(!d.message.startsWith(d.code));
 });
+
+// Dynamic call edges must receive facts discovered before the edge exists.
+test('native effects incremental edges propagate through late callable chains',()=>{
+ let source='let changed:number=0;function leaf():void{changed=1;}function step0():()=>void{return leaf;}';
+ for(let at=1;at<=12;at++)source+=`function step${at}():()=>void{return step${at-1}();}`;
+ source+='function invoke():void{const callback=step12();callback();}invoke();';
+ const g=check(source);
+ assert.ok(names(g,effect(g,'invoke').writes).includes('changed'));
+ const root=g.effects.find((s:any)=>s===effect(g,'invoke'));
+ assert.ok(root.callees.length>0);
+});
+test('native effects incremental edges retain hidden-alias errors through returned callables',()=>{
+ error('class B{x:number=0;}let b=new B();function leaf():void{b.x=2;}function make():()=>void{return leaf;}function run():void{const loan=constRef(b);const callback=make();callback();print(loan.x);}run();',/E4207/);
+});

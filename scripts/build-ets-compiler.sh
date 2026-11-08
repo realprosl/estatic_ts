@@ -31,7 +31,7 @@ if [[ "$stage" == stage2 ]]; then
   # This generation performs analysis, lowering, emission and orchestration in ETS.
   measure stage2-analysis "$output/etsc" bootstrap/driver/main.ets --check \
     --emit-ir "$output/stage2.ir.json" \
-    --verbose
+    --verbose 2> >(tee "$output/stage2-analysis.log" >&2)
   measure stage2-build "$output/etsc" --from-ir "$output/stage2.ir.json" --build \
     -o "$output/stage2.cpp" --binary "$output/etsc-stage2" --cxx-flag "$optimization" --verbose
 fi
