@@ -24,8 +24,8 @@ export class IrCppGenerator {
   headers:HeaderSet;
   backends:RuntimeBackends;
   project:IrProject;
-  cppGenerators:number[];layoutDone:number[];layoutActive:number[];layoutOutput:string[];
-  constructor(project: IrProject) { this.project=project;this.headers=new HeaderSet();this.backends=new RuntimeBackends();this.cppGenerators=[];this.layoutDone=[];this.layoutActive=[];this.layoutOutput=[]; }
+  consuming:number[];cppGenerators:number[];layoutDone:number[];layoutActive:number[];layoutOutput:string[];
+  constructor(project: IrProject) { this.project=project;this.headers=new HeaderSet();this.backends=new RuntimeBackends();this.consuming=[];this.cppGenerators=[];this.layoutDone=[];this.layoutActive=[];this.layoutOutput=[]; }
   fail(message:string,source:IrSource=new IrSource("","","",-1,0,0)):string{printError("IR_CPP_UNSUPPORTED: "+source.file+":"+numberToString(source.start)+": "+message);exitProcess(1);return "";}
   shape(id:number):IrType{if(id<0||id>=this.project.typeDefinitions.length)this.fail("Tipo IR inexistente: "+numberToString(id));return this.project.typeDefinitions[id];}
   cppTypeId(id: number): string {
@@ -295,7 +295,7 @@ const branches=_cppLoop5Result.join("");
   constantIndex(f:constRef<IrFunction>,value:number):number { for(const b of f.blocks)for(const i of b.instructions)if(i.result==value&&i.op=="constant")return parseNumber(i.text);this.fail("Índice de tupla no constante",f.source);return -1; }
   operand(f:constRef<IrFunction>,i:constRef<IrInstruction>,k:number,consume:boolean=true):string {
     const value=i.operands[k];const  typeId=f.values[value];if(typeId<0)this.fail("Operando IR inexistente",i.source);
-    return `v${value}.${consume&&this.shape(typeId).resource?"take":"get"}()`;
+    return `v${value}.${consume&&(this.shape(typeId).resource||this.consuming.includes(value))?"take":"get"}()`;
   }
   callback(f:constRef<IrFunction>,i:constRef<IrInstruction>,k:number):string {
     const id=f.values[i.operands[k]];const  s=this.shape(id);let  args=s.arguments.slice(0,-1);
@@ -691,8 +691,9 @@ const initialize=_cppLoop4Result;
     // Only fuse an immediately consumed, single-use load. No call or mutation
     // can occur between the snapshot and its size query; other loads retain
     // value semantics, including snapshots that survive a later mutation.
-    let uses:number[]=[];
-    for(let value:number=0;value<f.values.length;value=value+1)uses.push(0);
+    let uses:number[]=[];let definitionBlocks:number[]=[];let definitionPositions:number[]=[];
+    for(let value:number=0;value<f.values.length;value=value+1){uses.push(0);definitionBlocks.push(-1);definitionPositions.push(-1);}
+    for(let blockId:number=0;blockId<f.blocks.length;blockId=blockId+1)for(let position:number=0;position<f.blocks[blockId].instructions.length;position=position+1){const result:number=f.blocks[blockId].instructions[position].result;if(result>=0){definitionBlocks[result]=blockId;definitionPositions[result]=position;}}
     for(const block of f.blocks){
       if(block.value>=0)uses[block.value]+=1;
       for(const operation of block.instructions)for(const operand of operation.operands)uses[operand]+=1;
@@ -709,6 +710,15 @@ let _cppLoop58Result:string[]=[];
 const _cppLoop58Input:IrInstruction[]=b.instructions;
 for(let _cppLoop58Index:number=0;_cppLoop58Index<_cppLoop58Input.length;_cppLoop58Index=_cppLoop58Index+1){
 const i:IrInstruction=_cppLoop58Input[_cppLoop58Index];
+this.consuming=[];
+// A temporary defined earlier in this straight-line block and used only here
+// can transfer its owned storage into a by-value call argument. Borrowed
+// formals still use get(), so references keep their original referents.
+if(i.op=="call"||i.op=="taskCreate")for(const value of i.operands)if(uses[value]==1&&definitionBlocks[value]==k&&definitionPositions[value]<_cppLoop58Index)this.consuming.push(value);
+// Adjacent initialization has no opportunity to expose the temporary itself.
+if(i.op=="store"&&i.operands.length==1&&uses[i.operands[0]]==1&&_cppLoop58Index>0&&_cppLoop58Input[_cppLoop58Index-1].result==i.operands[0]){
+ _cppLoop58Result.push(this.place(f,i.place)+".set(v"+numberToString(i.operands[0])+".take());");continue;
+}
 if(i.op=="load"&&i.result>=0&&uses[i.result]==1&&i.place>=0&&f.places[i.place].kind!="index"&&_cppLoop58Index+1<_cppLoop58Input.length){
  const next:IrInstruction=_cppLoop58Input[_cppLoop58Index+1];
  const kind:string=this.shape(i.typeId).kind;

@@ -47,6 +47,8 @@ for(const [name,source,expected] of [
  ["interface optional conversion",'interface I{f():number;}class C{f():number{return 8;}}const c:I=new C();const x=optionalSome(c);if(x.isPresent())print(x.value().f());',"8\n"],
  ["interface generic method",'interface I{id<T>(x:T):T;}class C{id<T>(x:T):T{return x;}}function f(i:I):void{print(i.id<number>(3));print(i.id<string>("s"));}f(new C());',"3\ns\n"],
  ["interface field projection",'interface A{n:number;}interface B{n:number;f():number;}class C{n:number=4;f():number{return this.n;}}const b:B=new C();const a:A=b;print(a.n);',"4\n"],
+ ["temporary argument value semantics",'function size(xs:number[]):number{xs.pop();return xs.length;}let xs=[1,2];for(let n=0;n<3;n=n+1)print(size(xs));print(xs.length);',"1\n1\n1\n2\n"],
+ ["temporary constructor value semantics",'class Box{items:number[];}function make(xs:number[]):Box{return new Box(xs);}let xs=[1,2];const box=make(xs);xs.push(3);print(box.items.length);print(xs.length);',"2\n3\n"],
  ["length snapshot semantics",'let xs=[1,2];const saved=xs;xs.push(3);print(saved.length);print(xs.length);',"2\n3\n"],
  ["length mutation ordering",'let xs=[1];function grow():number{xs.push(2);return xs.length;}print(xs.length);print(grow());print(xs.length);',"1\n2\n2\n"],
  ["scalars",'let n:i32=2;n+=3;print(n*2);',"10\n"],
