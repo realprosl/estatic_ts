@@ -554,28 +554,8 @@ export class SafetyAnalyzer {
       const a: number = left.slots[sid]; const b: number = right.slots[sid];
       if (a == b) result.slots[sid] = a; else if (this.binding.symbols[sid].kind == "ClassField") result.slots[sid] = 3; else if (a == 0 || b == 0) result.slots[sid] = 0; else result.slots[sid] = 3;
     }
-    // Missing paths have state 1. Preserve left order, then append right-only
-    // paths in their original order, including explicit state-1 entries.
-    if (right.paths.length == 0) {
-      for (let at: number = 0; at < left.paths.length; at = at+1) if (left.resources[at] != 1) result.resources[at] = 3;
-      return result;
-    }
-    if (left.paths.length == 0) {
-      for (let at: number = 0; at < right.paths.length; at = at+1) { result.paths.push(right.paths[at]); result.resources.push(right.resources[at] == 1 ? 1 : 3); }
-      return result;
-    }
-    let leftIndices = new Map<string,number>();
-    for (let at: number = 0; at < left.paths.length; at = at+1) {
-      leftIndices.set(left.paths[at],at);
-      if (left.resources[at] != 1) result.resources[at] = 3;
-    }
-    for (let at: number = 0; at < right.paths.length; at = at+1) {
-      const position: number = leftIndices.get(right.paths[at]) ?? -1;
-      const a: number = position >= 0 ? left.resources[position] : 1;
-      const b: number = right.resources[at]; const merged: number = a == b ? a : 3;
-      if (position >= 0) result.resources[position] = merged;
-      else { result.paths.push(right.paths[at]); result.resources.push(merged); }
-    }
+    for (let at: number = 0; at < left.paths.length; at = at+1) { const a: number = left.resources[at]; const b: number = this.pathState(right,left.paths[at]); this.setPath(result,left.paths[at],a == b ? a : 3); }
+    for (let at: number = 0; at < right.paths.length; at = at+1) { const a: number = this.pathState(left,right.paths[at]); const b: number = right.resources[at]; this.setPath(result,right.paths[at],a == b ? a : 3); }
     return result;
   }
   constructorClass(module: number, id: number): number {

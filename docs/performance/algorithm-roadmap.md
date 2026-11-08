@@ -15,7 +15,7 @@ measurement was 1,245.997 seconds. Both generations, all 67 execution fixtures,
 | P | Count symbol visits and profile invokeTarget/join/path operations separately | Attribute cost without double-counting nested calls | Owner counters withdrawn with rejected experiment; detailed join/path profiling pending |
 | 1 | Index local symbols by lexical owner and hoist call receiver lookup | Ownership, captures, recursion, field initialization and diagnostic regressions | Withdrawn after slower end-to-end measurement |
 | 2 | Schedule only dirty effect edges | Checker suite, late callable edges, hidden aliases, selfhost and exact IR equality | Passed Actions 42492813189 |
-| 3 | Replace nested join path lookups with a temporary index, preserving path order; defer interning | Differential comparison against original path join, implicit state 1, wildcard keys, exits, full checker suite and selfhost | Implemented; validation in progress |
+| 3 | Replace nested join path lookups with a temporary index, preserving path order; defer interning | Differential comparison against original path join, implicit state 1, wildcard keys, exits, full checker suite and selfhost | Withdrawn for queue-only baseline repeat |
 | 4 | Schedule dependent call sites only when their inputs change | Callbacks, returned callables, async/resume, unknown targets and differential comparison | Pending |
 | 5 | Compact local slot states; compare sparse/bitset representations | Scope isolation, joins, loops, captures and memory consumption | Pending |
 | 6 | Reuse transfer summaries for explicitly modeled contexts | Generics, aliases, globals, callbacks, creation/resume and caller diagnostics | Pending design and differential tests |
@@ -86,3 +86,28 @@ short-circuits. Performance remains unconfirmed until Actions completes.
 
 Local validation: all 1,384 checker tests passed, including the differential test
 over 129 path-state pairs. Actions performance and selfhosting checks are pending.
+
+## Queue-only repeat and review (2026-11-08)
+
+At the user's request, restore all source, test and workflow files exactly to
+queue commit 82c98eb806ebbc7d81787b1175ba772c7e63d4ed; retain this experiment
+record as the only difference from that tree. Preserve branch history through
+a forward restoration commit. The owner index is absent, the original path join
+is restored, and the join-specific demo transport and test are removed together.
+The two queue regression tests remain as in the accepted reference.
+
+Join experiment Actions 42501515452 passed correctness, but source analysis took
+1,238.208 seconds. Its unchanged effect graph alone took 402.408 seconds versus
+266.270 seconds in the queue reference, with slightly different graph sizes.
+This does not establish that join caused the overall slowdown. Runner variability,
+generated-code differences and analysis costs remain unresolved; no speedup is
+claimed for either withdrawn experiment.
+
+Review of the queue confirms that insertion methods schedule dependents only
+for new facts, new edges are scheduled with zero cursors, queued flags are cleared
+before propagation, and already-visited edges are deferred to preserve round
+order. Call resolution still scans all call sites. The repeat keeps the original
+Ubuntu 24.04/O2 workflow, phase timings, CPU time, peak RSS, native fixtures,
+annotation tests, generation IR equality and round-trip checks unchanged.
+Compare the repeat's phase timings and work counters before further algorithm
+changes; the historical 727.151 seconds is a single observation, not a guarantee.

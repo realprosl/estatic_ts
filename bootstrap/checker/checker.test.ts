@@ -2002,37 +2002,3 @@ test('native effects incremental edges propagate through late callable chains',(
 test('native effects incremental edges retain hidden-alias errors through returned callables',()=>{
  error('class B{x:number=0;}let b=new B();function leaf():void{b.x=2;}function make():()=>void{return leaf;}function run():void{const loan=constRef(b);const callback=make();callback();print(loan.x);}run();',/E4207/);
 });
-
-test('native safety path join matches the previous algorithm and preserves path order',()=>{
- type State={paths:string[],resources:number[],exit:string};
- const make=(paths:string[]=[],resources:number[]=[],exit=''):State=>({paths,resources,exit});
- const cases:[State,State][]=[
-  [make(),make()],
-  [make(['s1/f0'],[2]),make()],
-  [make(),make(['s1/f0'],[1])],
-  [make(['s3','s1','s2'],[1,2,3]),make(['s2','s4','s1'],[2,1,2])],
-  [make(['s1/f2/i*','s1'],[2,1]),make(['s1','s1/f2','s1/f2/i*'],[3,0,2])],
-  [make(['s1'],[2],'return'),make(['s2'],[3])],
-  [make(['s1'],[2]),make(['s2'],[3],'unreachable')],
-  [make(['s1'],[1],'return'),make(['s2'],[2],'break')],
- ];
- let seed=12345;const next=()=>{seed=(seed*1664525+1013904223)>>>0;return seed;};
- const randomState=(n:number):State=>{const out=make();for(let at=0;at<n;at++){const key=`s${next()%31}/f${next()%7}/i${next()%5}`;if(!out.paths.includes(key)){out.paths.push(key);out.resources.push(1+next()%3);}}return out;};
- for(let at=0;at<120;at++)cases.push([randomState(next()%45),randomState(next()%45)]);
- cases.push([randomState(400),randomState(400)]);
- const oracle=(left:State,right:State):State=>{
-  if(left.exit!=='')return right;if(right.exit!=='')return left;
-  const result=structuredClone(left);
-  const get=(state:State,key:string)=>{const i=state.paths.indexOf(key);return i<0?1:state.resources[i];};
-  const set=(key:string,value:number)=>{const i=result.paths.indexOf(key);if(i>=0)result.resources[i]=value;else{result.paths.push(key);result.resources.push(value);}};
-  left.paths.forEach((key,i)=>{const a=left.resources[i],b=get(right,key);set(key,a===b?a:3);});
-  right.paths.forEach((key,i)=>{const a=get(left,key),b=right.resources[i];set(key,a===b?a:3);});return result;
- };
- const encode=(state:State)=>[state.exit,...state.paths.map((key,i)=>`${key}=${state.resources[i]}`)].join('|');
- for(const [left,right] of cases){
-  const p=spawnSync(binary,['--join-paths',encode(left),encode(right)],{encoding:'utf8',timeout:10000,maxBuffer:1024*1024});
-  assert.ifError(p.error);assert.equal(p.status,0,p.stderr);
-  const expected=oracle(left,right);
-  assert.equal(p.stdout.trimEnd(),[`exit=${expected.exit}`,...expected.paths.map((key,i)=>`${key}=${expected.resources[i]}`)].join('\n'));
- }
-});

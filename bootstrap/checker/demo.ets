@@ -1,5 +1,4 @@
-import { SafetyAnalyzer, SafetyState } from "./safety";
-import { ModuleLoader, LoaderOptions, PathAlias, ModuleGraph } from "../modules/loader";
+import { ModuleLoader, LoaderOptions, PathAlias } from "../modules/loader";
 import { bindProject, BindingResult } from "../binder/binder";
 import { formatBinding } from "../binder/format";
 import { checkProject, CheckResult } from "./checker";
@@ -7,23 +6,7 @@ import { analyzeProject } from "./expansion";
 import { formatChecked } from "./format";
 import { formatSource } from "../frontend/frontend";
 import { contentHash } from "../modules/platform";
-// Test transport: exit|canonical-path=single-digit-state|... .
-function pathJoinInput(text: string): SafetyState {
-  const parts: string[] = text.split("|"); let state = new SafetyState(0); state.exit = parts[0];
-  for (let at: number = 1; at < parts.length; at = at+1) {
-    const last: number = parts[at].length-1;
-    state.paths.push(parts[at].slice(0,last-1)); state.resources.push(parts[at].charCodeAt(last)-48);
-  }
-  return state;
-}
 function runCheckingDemo(): void {
-  if (argument(1) == "--join-paths") {
-    const left = pathJoinInput(argument(2)); const right = pathJoinInput(argument(3));
-    let analyzer = new SafetyAnalyzer(new ModuleGraph(""),new BindingResult(),new CheckResult());
-    const joined = analyzer.join(left,right); print("exit="+joined.exit);
-    for (let at: number = 0; at < joined.paths.length; at = at+1) print(joined.paths[at]+"="+numberToString(joined.resources[at]));
-    return;
-  }
   let options: LoaderOptions = new LoaderOptions(); let entry: string = "";
   for (let i: number = 1; i < argumentCount(); i = i + 1) {
     const arg: string = argument(i);
