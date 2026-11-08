@@ -21,3 +21,5 @@ export function columns():number{hostCode("return ets_compiler_host::columns();"
 export function compilerRoot():string{hostCode("return ets_compiler_host::compilerRoot();");return "";}
 
 export function objectKeys(value:JsonValue):string[]{hostCode("return jsonObjectKeys(value);");let keys:string[]=[];return keys;}
+
+export function directories(path:string):boolean{hostCode("return ets_compiler_host::directories(path);");return false;}

@@ -339,7 +339,7 @@ let _cppLoop59Result:number[]=[];
 const _cppLoop59Input:number[]=f.framePlaces;
 for(let _cppLoop59Index:number=0;_cppLoop59Index<_cppLoop59Input.length;_cppLoop59Index=_cppLoop59Index+1){
 const p:number=_cppLoop59Input[_cppLoop59Index];
-if(f.places[p].kind=="local")_cppLoop59Result.push(p);continue;
+if(f.places[p].kind=="local"){_cppLoop59Result.push(p);continue;}
 }
 const _cppLoop28Input:number[]=_cppLoop59Result;
 for(let _cppLoop28Index:number=0;_cppLoop28Index<_cppLoop28Input.length;_cppLoop28Index=_cppLoop28Index+1){
@@ -399,7 +399,7 @@ const _cppLoop8Input:number[]=i.operands;
 for(let k:number=0;k<_cppLoop8Input.length;k=k+1){
 const _:number=_cppLoop8Input[k];
 
-            if(i.names[k]=="spread")_cppLoop8Result.push(`auto part${k}=${this.operand(f,i,k)};for(auto& x:part${k}){${shape.kind=="array"?"out.push_back(std::move(x));":"out.at(k++)=std::move(x);"}}`);continue;
+            if(i.names[k]=="spread"){_cppLoop8Result.push(`auto part${k}=${this.operand(f,i,k)};for(auto& x:part${k}){${shape.kind=="array"?"out.push_back(std::move(x));":"out.at(k++)=std::move(x);"}}`);continue;}
             _cppLoop8Result.push(shape.kind=="array"?`out.push_back(${this.operand(f,i,k)});`:`out.at(k++)=${this.operand(f,i,k)};`);continue;
           
 }
@@ -622,7 +622,7 @@ let _cppLoop15Result:IrAnnotation[]=[];
 const _cppLoop15Input:IrAnnotation[]=this.project.annotations;
 for(let _cppLoop15Index:number=0;_cppLoop15Index<_cppLoop15Input.length;_cppLoop15Index=_cppLoop15Index+1){
 const a:IrAnnotation=_cppLoop15Input[_cppLoop15Index];
-if(a.name=="cpp_native"&&a.target.moduleId==f.source.moduleId&&a.target.node==f.source.node)_cppLoop15Result.push(a);continue;
+if(a.name=="cpp_native"&&a.target.moduleId==f.source.moduleId&&a.target.node==f.source.node){_cppLoop15Result.push(a);continue;}
 }
 const matches=_cppLoop15Result;
     // A module may be visited through multiple imports; identical annotation records are not conflicting bindings.
@@ -762,8 +762,8 @@ const text=`struct ir_t${id}{std::variant<${_cppLoop65Result.join(",")}> data;bo
   }
   validateBoundary():void {
     const p=this.project;
-    if(p.success!=true||!true||p.diagnostics.length!=0)this.fail("Se requiere ets-ir-2 verificado con success:true");
-    if(!true||!true||p.types.length!=p.typeDefinitions.length)this.fail("Tablas de tipos incompletas");
+    if(p.success!=true||p.diagnostics.length!=0)this.fail("Se requiere ets-ir-2 verificado con success:true");
+    if(p.types.length!=p.typeDefinitions.length)this.fail("Tablas de tipos incompletas");
     
     const scalar=["number","string","boolean","void","i8","u8","i16","u16","i32","u32","i64","u64","f32","f64"];
     for(let id=0;id<p.types.length;id=id+1) {
@@ -1018,7 +1018,7 @@ return `ets_concat_vec<${E}>({${_cppLoop38Result.join(",")}})`;}
    if(["cpp_name","cpp_type","link","cpp_header","cpp_link","cpp_include"].includes(a.name))this.fail("ABI externo no implementado: @"+a.name,a.source);
    if(a.name=="include"){if(a.arguments.length!=1||!validHeader(a.arguments[0]))this.fail("@include: ruta inválida",a.source);this.headers.add(a.arguments[0]);}
    if(a.name!="cppgen")continue;
-   if(a.arguments.length!=0)this.fail("@cppgen no admite argumentos",a.source);
+   if(a.arguments.length!=0)this.fail("@cppgen: anotación no admite argumentos",a.source);
    let matched:boolean=false;
    for(let k:number=0;k<this.project.functions.length;k=k+1){
     const f:IrFunction=this.project.functions[k];
@@ -1032,7 +1032,7 @@ let _cppLoop70Result:IrPlace[]=[];
 const _cppLoop70Input:IrPlace[]=f.places;
 for(let _cppLoop70Index:number=0;_cppLoop70Index<_cppLoop70Input.length;_cppLoop70Index=_cppLoop70Index+1){
 const p:IrPlace=_cppLoop70Input[_cppLoop70Index];
-if(p.parameter)_cppLoop70Result.push(p);continue;
+if(p.parameter){_cppLoop70Result.push(p);continue;}
 }
 if(i.op!="load"||i.result!=b.value||i.result<0||i.result>=f.values.length||f.values[i.result]!=f.returns||i.typeId!=f.returns||i.place<0||i.place>=f.places.length||!f.places[i.place].parameter||f.places[i.place].typeId!=f.returns||_cppLoop70Result.length!=1)this.fail("@cppgen: cuerpo de identidad requerido",a.source);}
    }
@@ -1060,6 +1060,7 @@ if(i.op!="load"||i.result!=b.value||i.result<0||i.result>=f.values.length||f.val
   generate():IrCppResult {
     this.validateAnnotations();
     this.validateBoundary();
+    for(const f of this.project.functions)for(const b of f.blocks)for(const i of b.instructions)if((i.op=="call"||i.op=="closure")&&this.cppGenerators.includes(i.callee))this.fail("@cppgen requiere llamada directa como sentencia",i.source);
     for(const annotation of this.project.annotations)if(["cpp_name","cpp_type","link","cpp_header","cpp_link"].includes(annotation.name))this.fail(`ABI externo no implementado: @${annotation.name}`,annotation.source);
     if(!this.project.success||this.project.diagnostics.length!=0)this.fail("Se requiere ets-ir-2 verificado con success:true");
     if(this.project.types.length!=this.project.typeDefinitions.length)this.fail("Tablas de tipos incompletas");
@@ -1162,7 +1163,7 @@ let _cppLoop55Result:string[]=[];
 const _cppLoop55Input:string[]=this.headers.values;
 for(let _cppLoop55Index:number=0;_cppLoop55Index<_cppLoop55Input.length;_cppLoop55Index=_cppLoop55Index+1){
 const h:string=_cppLoop55Input[_cppLoop55Index];
-if(h!="runtime/ets_runtime.hpp")_cppLoop55Result.push(h);continue;
+if(h!="runtime/ets_runtime.hpp"){_cppLoop55Result.push(h);continue;}
 }
 const _cppLoop14Input:string[]=["runtime/ets_runtime.hpp",..._cppLoop55Result.sort()];
 for(let _cppLoop14Index:number=0;_cppLoop14Index<_cppLoop14Input.length;_cppLoop14Index=_cppLoop14Index+1){

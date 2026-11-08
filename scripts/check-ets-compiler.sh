@@ -21,4 +21,9 @@ if "$compiler" build "$work/broken.ets" --binary "$work/should-not-exist" --no-p
   echo 'Invalid source unexpectedly succeeded' >&2; exit 1
 fi
 [[ ! -e "$work/should-not-exist" ]]
+printf 'print(argument(1));\n' > "$work/args.ets"
+[[ "$("$compiler" run "$work/args.ets" --binary "$work/args" --no-progress -- 'argument with spaces')" == 'argument with spaces' ]]
+printf '{"entry":"main.ets","output":{"cpp":"configured.cpp","binary":"configured"},"compiler":{"enabled":true}}\n' > "$work/estatic.config.json"
+"$compiler" --config "$work/estatic.config.json" --no-progress
+[[ "$("$work/configured")" == 'ETS compiler works' ]]
 echo 'ETS compiler smoke checks passed'

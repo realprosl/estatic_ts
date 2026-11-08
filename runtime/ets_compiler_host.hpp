@@ -40,6 +40,7 @@ inline std::vector<std::string> files(std::string path){
  while(!ec&&it!=end){if(it->is_regular_file(ec))out.push_back(std::filesystem::relative(it->path(),path,ec).generic_string());it.increment(ec);}
  if(ec)error=ec.message();return out;
 }
+inline bool directories(std::string path){error.clear();std::error_code ec;std::filesystem::create_directories(path,ec);if(ec)error=ec.message();return !ec;}
 inline bool remove(std::string path){error.clear();std::error_code ec;std::filesystem::remove(path,ec);if(ec)error=ec.message();return !ec;}
 inline double launch(std::vector<std::string> args,std::string output,std::string errors){
  error.clear();if(args.empty()){error="Comando vacío";return -2;}

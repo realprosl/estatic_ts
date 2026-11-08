@@ -7,7 +7,7 @@ import {generateCppFromIr,IrCppResult} from "../backend/cpp/generator";
 import {parseIrProject} from "../backend/cpp/decode";
 import {formatCppResult} from "../backend/cpp/wire";
 import {parseConfig,configStrings} from "./config";
-import {environment,exists,readText,stdinText,writeText,hostError,launch,poll,pause,files,compilerRoot,objectKeys} from "./host";
+import {environment,exists,readText,stdinText,writeText,hostError,launch,poll,pause,files,compilerRoot,objectKeys,directories} from "./host";
 import {configureProgress,progressStart,progressDetail,progressTick,progressFinish,progressSummary} from "../progress/progress";
 function fail(message:string,status:number=1):void{progressFinish(false);printError(message);exitProcess(status);}
 function checkedWrite(path:string,text:string):void{if(!writeText(path,text))fail(hostError());}
@@ -28,7 +28,7 @@ function initialize(root:string,directory:string,update:boolean):void{
  let templates=root+"/templates";if(!exists(templates))templates=root+"/native-cpp/templates";if(!exists(templates))fail("Faltan las plantillas de instalación");const paths=files(templates);if(exists(target))fail("No se sobrescribe "+target);for(const path of paths)if(exists(directory+"/"+path))fail("No se sobrescribe "+directory+"/"+path);for(const path of paths)if(path!="types/estatic.d.ts")checkedWrite(directory+"/"+path,checkedRead(templates+"/"+path));checkedWrite(target,types);
 }
 function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:string,cxx:string,flags:string[],links:string[]):void{
- progressStart("Preparando runtime");let command:string[]=[cxx,"-std=c++20","-O0","-pthread","-fno-exceptions","-I"+root];for(const flag of flags)command.push(flag);command.push(cpp);let libraries:string[]=[];
+ if(!directories(parent(binary)))fail(hostError());progressStart("Preparando runtime");let command:string[]=[cxx,"-std=c++20","-O0","-pthread","-fno-exceptions","-I"+root];for(const flag of flags)command.push(flag);command.push(cpp);let libraries:string[]=[];
  if(result.runtimeBackends.libuv){const uv=root+"/build/libs/libuv";if(exists(uv+"/include/uv.h"))command.push("-I"+uv+"/include");command.push(root+"/runtime/runtime_ets_libuv.cpp");command.push(root+"/runtime/runtime_ets_net_libuv.cpp");libraries.push(exists(uv+"/lib/libuv.a")?uv+"/lib/libuv.a":"-luv");libraries.push("-ldl");libraries.push("-lrt");}
  if(result.headers.includes("runtime/ets_http_httplib.hpp")){command.push("-DCPPHTTPLIB_NO_EXCEPTIONS");command.push(root+"/runtime/external/httplib/httplib.cc");}
  if(result.headers.includes("runtime/ets_http_drogon.hpp")){command.push("-fexceptions");command.push("-I/usr/include/jsoncpp");const drogon=root+"/build/libs/drogon";if(exists(drogon+"/include/drogon/drogon.h"))command.push("-I"+drogon+"/include");if(exists(drogon+"/lib/libdrogon.a"))libraries.push("-L"+drogon+"/lib");const dependencies:string[]=["-ldrogon","-ltrantor","-ljsoncpp","-luuid","-lz","-lssl","-lcrypto","-lresolv","-ldl"];for(const dependency of dependencies)libraries.push(dependency);}
@@ -36,7 +36,7 @@ function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:s
 }
 function main():void{
  let args:string[]=[];for(let k:number=1;k<argumentCount();k=k+1)args.push(argument(k));
- if(args.length==1&&args[0]=="--codegen-json"){print(formatCppResult(generateCppFromIr(parseIrProject(stdinText()))));return;}
+ if(args.length==1&&args[0]=="--codegen-json"){const wireProject=parseIrProject(stdinText());const wireResult=generateCppFromIr(wireProject);print(formatCppResult(wireResult));return;}
  if(args.length==1&&["--help","-h","-H"].includes(args[0])){print(help());return;}
  if(args.length==1&&["--version","-version","-v","-V","/V"].includes(args[0])){print("etsc bootstrap ETS (ets-ir-2)");return;}
  let root=environment("ESTC_ROOT");if(root=="")root=compilerRoot();root=normalizePath(root);
