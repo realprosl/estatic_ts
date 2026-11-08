@@ -13,6 +13,7 @@ import { irNumericWidth, irNumericKind, irNumericSigned } from "./type-traits";
 import { finishBorrows } from "./borrows";
 import { preserveContracts } from "./contracts";
 import { verifyIr } from "./verify";
+import { progressDetail } from "../progress/progress";
 
 function irIndex(values: number[], value: number): number { for (let i: number = 0; i < values.length; i = i+1) if (values[i] == value) return i; return -1; }
 
@@ -191,7 +192,7 @@ export class IrLowering {
     for (const e of n.edges) if (e.role == EdgeRole.Properties) { const name: string = this.node(e.node).get(AttributeKind.Key); names.push(name); let value: number = this.expression(bindingChild(this.node(e.node),EdgeRole.Value)); for (let field: number = 0; field < this.result.typeDefinitions[typeId].names.length; field = field+1) if (this.result.typeDefinitions[typeId].names[field] == name) value = this.convert(value,this.result.typeDefinitions[typeId].fields[field],e.node); values.push(value); }
     const result: number = this.emit(this.result.typeDefinitions[typeId].kind == "variant" ? "variant" : "record",typeId,values,-1,-1,this.result.typeDefinitions[typeId].tag,id); this.setNames(names); return result;
   }
-  lastInstruction(): IrInstruction { const instructions = this.result.functions[this.currentFunction].blocks[this.block].instructions; return instructions[instructions.length-1]; }
+  lastInstruction(): IrInstruction { const last: number = this.result.functions[this.currentFunction].blocks[this.block].instructions.length-1; return this.result.functions[this.currentFunction].blocks[this.block].instructions[last]; }
   setNames(names: string[]): void { this.result.functions[this.currentFunction].blocks[this.block].instructions[this.result.functions[this.currentFunction].blocks[this.block].instructions.length-1].names = names; }
   variantShape(index: number, text: string, id: number): void {
     const parts: string[] = genericArguments(text); const parent: number = this.typeId(parts[0],id); const ownerId: number = canonicalSymbol(parts[0]);
@@ -547,12 +548,12 @@ export class IrLowering {
     const stored: number = this.result.functions[this.currentFunction].places[p].typeId; return this.convert(this.emit("load",stored,[],p,-1,"",id),typeId,id);
   }
   call(id: number, typeId: number, receiver: number = -1, indirect: number = -1, target: number = -1, targetModule: number = -1): number {
-    const n = this.node(id); const file = this.checked.files[this.module]; const selected: number = target >= 0 ? target : file.selected[id]; const owner: number = target >= 0 ? targetModule : file.selectedModules[id];
+    const n = this.node(id); const callingModule: number = this.module; const selected: number = target >= 0 ? target : this.checked.files[callingModule].selected[id]; const owner: number = target >= 0 ? targetModule : this.checked.files[callingModule].selectedModules[id];
     const symbol: number = this.reference(id);
     if (symbol >= 0 && (this.binding.symbols[symbol].module) < 0 && this.binding.symbols[symbol].name == "match") return this.matchExpression(id,typeId);
     if (symbol >= 0 && (this.binding.symbols[symbol].module) < 0 && ["move","ref","constRef"].includes(this.binding.symbols[symbol].name)) return this.memoryBuiltin(id,this.binding.symbols[symbol].name,typeId);
     let intrinsic: string = ""; let callable: number = -1; let callee: number = -1;
-    const signature: string = this.resolved(file.signatures[id]);
+    const signature: string = this.resolved(this.checked.files[callingModule].signatures[id]);
     let escape: boolean = false;
     if (selected >= 0) for (const e of this.graph.modules[owner].cached.result.ast.nodes[selected].edges) if (e.role == EdgeRole.Decorators && this.graph.modules[owner].cached.result.ast.nodes[e.node].get(AttributeKind.Name) == "cppgen") escape = true;
     if (indirect >= 0) callable = indirect;
@@ -574,10 +575,10 @@ export class IrLowering {
     let operands: number[] = []; let positions: number[] = []; let spread: boolean[] = [];
     const formals: string[] = functionParams(signature);
     for (const e of n.edges) if (e.role == EdgeRole.Args) {
-      const position: number = file.argumentParameters[e.node] >= 0 ? file.argumentParameters[e.node] : positions.length; positions.push(position);
+      const position: number = this.checked.files[callingModule].argumentParameters[e.node] >= 0 ? this.checked.files[callingModule].argumentParameters[e.node] : positions.length; positions.push(position);
       let value: number = -1;
       if (this.preparedCall == id) value = this.preparedArguments[operands.length];
-      else if (intrinsic != "" && this.result.typeDefinitions[this.typeId(file.types[e.node],e.node)].resource && [NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.node(e.node).kind)) value = this.emit("borrow",this.typeId("constRef<"+this.resolved(file.types[e.node])+">",e.node),[],this.rootPlace(e.node),-1,"constRef",e.node);
+      else if (intrinsic != "" && this.result.typeDefinitions[this.typeId(this.checked.files[callingModule].types[e.node],e.node)].resource && [NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.node(e.node).kind)) value = this.emit("borrow",this.typeId("constRef<"+this.resolved(this.checked.files[callingModule].types[e.node])+">",e.node),[],this.rootPlace(e.node),-1,"constRef",e.node);
       else if (position < formals.length && !formals[position].startsWith("...")) value = this.argumentValue(e.node,formals[position]);
       else value = this.expression(e.node);
       operands.push(value); spread.push(this.node(e.node).kind == NodeKind.SpreadElement);
@@ -962,7 +963,10 @@ export class IrLowering {
     }
     this.orderState[module] = 2; this.result.initializationOrder.push(this.result.modules[module].initializer);
   }
-  run(): IrProject {
+  run(trace: boolean = false): IrProject {
+    const started: number = Date.now();
+    let reported: number = started;
+    if (trace) progressDetail("IR: preparando módulos y tipos");
     // Require complete tables from a successful native analysis of this graph.
     if (!this.graph.success || !this.binding.success || !this.checked.success || this.graph.diagnostics.length > 0 || this.binding.diagnostics.length > 0 || this.checked.diagnostics.length > 0 || this.checked.files.length != this.graph.modules.length || this.binding.files.length != this.graph.modules.length || this.checked.moduleRecords.length != this.graph.modules.length || this.checked.symbolIds.length != this.binding.symbols.length || this.checked.symbolTypes.length != this.binding.symbols.length) {
       const source = new IrSource("","",this.graph.entry,-1,0,0); this.result.diagnostics.push(new IrIssue("IR_INPUT","Se requiere un proyecto comprobado sin diagnósticos de una misma carga",source)); return this.result;
@@ -1048,6 +1052,7 @@ export class IrLowering {
       { const pendingPush = new IrFunction("$fini",this.checked.moduleRecords[m].id+":fini",this.typeId("void",root),this.source(root)); this.result.functions.push(pendingPush); } this.functionModules.push(m); this.functionNodes.push(root);
     }
     for (let f: number = 0; f < this.result.functions.length; f = f+1) {
+      if (trace && (f == 0 || Date.now()-reported >= 1000)) { reported = Date.now(); progressDetail("IR: función "+(f+1)+" de "+this.result.functions.length+" descubiertas ("+(reported-started)+" ms)"); }
       this.currentFunction = f; this.module = this.functionModules[f]; this.symbols = []; this.breakTargets = []; this.continueTargets = []; this.breakDepths = []; this.continueDepths = []; this.cleanupScopes = [new IrCleanupScope()];
       const id: number = this.functionNodes[f]; this.block = this.newBlock(id);
       if (this.result.functions[f].name == "$fini") {
@@ -1092,13 +1097,18 @@ export class IrLowering {
       let changed: boolean = true;
       while (changed) { let before: number = this.result.dispatches.length; for (const shape of this.result.typeDefinitions) before = before+shape.variants.length; for (let at: number = 0; at < this.interfaceFrom.length; at = at+1) this.implementation(this.interfaceFrom[at],this.interfaceTo[at],id); let after: number = this.result.dispatches.length; for (const shape of this.result.typeDefinitions) after = after+shape.variants.length; changed = after != before; }
     }
+    if (trace) progressDetail("IR: ordenando módulos ("+(Date.now()-started)+" ms)");
     for (let m: number = 0; m < this.graph.modules.length; m = m+1) this.order(m);
     for (let at: number = this.result.initializationOrder.length-1; at >= 0; at = at-1) for (const module of this.result.modules) if (module.initializer == this.result.initializationOrder[at]) this.result.finalizationOrder.push(module.finalizer);
     for (let f: number = 0; f < this.result.functions.length; f = f+1) if (this.result.functions[f].asynchronous) { for (let value: number = 0; value < this.result.functions[f].values.length; value = value+1) this.result.functions[f].frameValues.push(value); for (let place: number = 0; place < this.result.functions[f].places.length; place = place+1) if ((this.result.functions[f].places[place].base) < 0 && (this.result.functions[f].places[place].global) < 0) this.result.functions[f].framePlaces.push(place); }
+    if (trace) progressDetail("IR: preservando contratos ("+(Date.now()-started)+" ms)");
     if (this.result.diagnostics.length == 0) this.result = preserveContracts(this.graph,this.checked,this.result);
+    if (trace) progressDetail("IR: finalizando préstamos ("+(Date.now()-started)+" ms)");
     if (this.result.diagnostics.length == 0) this.result = finishBorrows(this.result);
+    if (trace) progressDetail("IR: verificando IR ("+(Date.now()-started)+" ms)");
     if (this.result.diagnostics.length == 0) this.result.diagnostics = verifyIr(this.result);
+    if (trace) progressDetail("IR: completado ("+(Date.now()-started)+" ms)");
     this.result.success = this.result.diagnostics.length == 0; return this.result;
   }
 }
-export function lowerProject(graph: ModuleGraph, binding: BindingResult, checked: CheckResult): IrProject { let lowering = new IrLowering(graph,binding,checked); return lowering.run(); }
+export function lowerProject(graph: ModuleGraph, binding: BindingResult, checked: CheckResult, trace: boolean = false): IrProject { let lowering = new IrLowering(graph,binding,checked); return lowering.run(trace); }
