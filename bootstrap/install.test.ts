@@ -6,7 +6,16 @@ import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { root } from "./root.ts";
-import { buildIrFrontend } from "./ir/cpp.ts";
+// Installation bootstraps a large compiler: use the optimized shipping seed.
+let seed:string|undefined;
+async function installFrontend():Promise<string>{
+ if(process.env.ESTATIC_IR_BINARY)return process.env.ESTATIC_IR_BINARY;
+ if(seed)return seed;
+ const output=join(root,"build/install-test-seed");mkdirSync(output,{recursive:true});
+ const binary=join(output,"frontend"),base=join(root,"native-cpp");
+ const p=spawnSync(process.env.CXX??"g++",["-std=c++20","-O1","-pthread","-fno-exceptions",`-I${base}`,`-I${join(base,"frontend")}`,'-DESTATIC_FRONTEND_ID="portable"',join(base,"frontend/unity.cpp"),"-o",binary],{encoding:"utf8",timeout:180000});
+ assert.equal(p.status,0,p.stderr);seed=binary;return binary;
+}
 
 const temporary=()=>{mkdirSync(join(root,"build/test-tmp"),{recursive:true});return mkdtempSync(join(root,"build/test-tmp/install-"));};
 // El instalador es un script de shell: no usa Node. Se invoca con bash y con
@@ -38,7 +47,7 @@ test("install protects an unrelated command before modifying its prefix",()=>{
 test("installed etsc compiles bootstrap native headers outside the checkout",async()=>{
  const dir=temporary(),prefix=join(dir,"prefix");
  try{
-  const frontend=process.env.ESTATIC_IR_BINARY??await buildIrFrontend();
+  const frontend=process.env.ESTATIC_IR_BINARY??await installFrontend();
   const installed=install(prefix,["--frontend",frontend]);
   assert.equal(installed.status,0,installed.stderr+installed.stdout);
   const moved=join(dir,"moved-prefix");renameSync(prefix,moved);
@@ -55,7 +64,7 @@ test("installed etsc compiles bootstrap native headers outside the checkout",asy
 test("installed etsc initializes, builds and runs independently of the clone with precompiled runtime",async()=>{
  const dir=temporary(),prefix=join(dir,"prefix"),project=join(dir,"project with spaces"),cache=join(dir,"user-cache");
  try{
-  const frontend=process.env.ESTATIC_IR_BINARY??await buildIrFrontend();
+  const frontend=process.env.ESTATIC_IR_BINARY??await installFrontend();
   // An npm-linked stage-0 launcher from this checkout is safe to replace.
   mkdirSync(join(prefix,"bin"),{recursive:true});symlinkSync(join(root,"src/cli.ts"),join(prefix,"bin/etsc"));
   const sourceBefore=readFileSync(join(root,"src/cli.ts"),"utf8");
@@ -64,6 +73,10 @@ test("installed etsc initializes, builds and runs independently of the clone wit
   const bin=join(prefix,"bin/etsc"),home=realpathSync(join(prefix,"lib/estc/current"));if(process.platform==="linux")assert.equal(readFileSync(bin).subarray(0,4).toString(),"\x7fELF");
   // Installed use must not import the stage-0 compiler or build its frontend.
   assert(!existsSync(join(home,"src")));
+  assert.equal(JSON.parse(readFileSync(join(home,"installation.json"),"utf8")).implementation,"ets");
+  for(const unit of ["libuv","httplib"])assert(existsSync(join(home,"build/runtime-cache",`libets_${unit}.a`)));
+  assert(existsSync(join(home,"native/compiler.cpp")));
+  assert(existsSync(join(home,"native/compiler.ir.json")));
   assert.equal(readFileSync(join(home,"bootstrap/modules/platform.hpp"),"utf8"),readFileSync(join(root,"native-cpp/bootstrap/modules/platform.hpp"),"utf8"));
   assert(readdirSync(join(home,"bootstrap"),{recursive:true}).filter(path=>statSync(join(home,"bootstrap",path)).isFile()).every(path=>/\.(hpp|h)$/.test(path)));
   const poison=join(dir,"without-node"),sentinel=join(dir,"node-was-used");mkdirSync(poison);
@@ -148,6 +161,10 @@ test("install compiles the C++ seed without Node",async()=>{
   assert(existsSync(join(home,"templates/estatic.config.json")));
   // La instalacion no arrastra el compilador de stage 0.
   assert(!existsSync(join(home,"src")));
+  assert.equal(JSON.parse(readFileSync(join(home,"installation.json"),"utf8")).implementation,"ets");
+  for(const unit of ["libuv","httplib"])assert(existsSync(join(home,"build/runtime-cache",`libets_${unit}.a`)));
+  assert(existsSync(join(home,"native/compiler.cpp")));
+  assert(existsSync(join(home,"native/compiler.ir.json")));
   assert.equal(readFileSync(join(home,"bootstrap/modules/platform.hpp"),"utf8"),readFileSync(join(root,"native-cpp/bootstrap/modules/platform.hpp"),"utf8"));
   assert(readdirSync(join(home,"bootstrap"),{recursive:true}).filter(path=>statSync(join(home,"bootstrap",path)).isFile()).every(path=>/\.(hpp|h)$/.test(path)));
   const version=spawnSync(bin,["--version"],{encoding:"utf8",env:{...env,ESTC_ROOT:home}});assert.equal(version.status,0,version.stderr);assert.match(version.stdout,/^etsc /);
@@ -158,7 +175,7 @@ test("install migrates an owned nativo command to etsc",async()=>{
  const dir=temporary();try{
   mkdirSync(join(dir,"bin"));mkdirSync(join(dir,"lib/nativo/current"),{recursive:true});const old=join(dir,"bin/nativo");writeFileSync(old,"old driver");
   writeFileSync(join(dir,"lib/nativo/current/installation.json"),JSON.stringify({format:"nativo-install-1",commandHash:createHash("sha256").update(readFileSync(old)).digest("hex")}));
-  const frontend=process.env.ESTATIC_IR_BINARY??await buildIrFrontend();const p=install(dir,["--frontend",frontend]);assert.equal(p.status,0,p.stderr);assert(!existsSync(old));assert(existsSync(join(dir,"bin/etsc")));
+  const frontend=process.env.ESTATIC_IR_BINARY??await installFrontend();const p=install(dir,["--frontend",frontend]);assert.equal(p.status,0,p.stderr);assert(!existsSync(old));assert(existsSync(join(dir,"bin/etsc")));
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
@@ -168,7 +185,7 @@ for(const owned of [true,false])test(`install migrates estc and preserves unrela
   symlinkSync("releases/old",join(dir,"lib/estc/current"));
   const legacy=join(dir,"bin/estc");writeFileSync(legacy,"old native driver");
   writeFileSync(join(release,"installation.json"),JSON.stringify({format:"estc-install-1",commandHash:createHash("sha256").update(owned?"old native driver":"another driver").digest("hex")}));
-  const frontend=process.env.ESTATIC_IR_BINARY??await buildIrFrontend();
+  const frontend=process.env.ESTATIC_IR_BINARY??await installFrontend();
   const p=install(dir,["--frontend",frontend]);assert.equal(p.status,0,p.stderr+p.stdout);
   assert(existsSync(join(dir,"bin/etsc")));assert.equal(existsSync(legacy),!owned);
   if(!owned)assert.equal(readFileSync(legacy,"utf8"),"old native driver");

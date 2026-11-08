@@ -5,7 +5,7 @@ El flujo instalado se prepara con `./install.sh`; después se trabaja con
 para requisitos, prefijos y el recorrido instalado sin Node.
 
 
-Compilador de Estatic, con sintaxis inspirada en TypeScript, tipado estático y salida C++20. El frontend ETS y el driver/backend C++20 se instalan como `etsc`. `src/` conserva el bootstrap y la referencia TypeScript para herramientas y pruebas.
+Compilador de Estatic, con sintaxis inspirada en TypeScript, tipado estático y salida C++20. El frontend, backend y coordinador escritos en ETS se construyen con la semilla nativa y se instalan como `etsc`, con el runtime precompilado. `src/` conserva el bootstrap y la referencia TypeScript para herramientas y pruebas.
 
 > **¿Qué se soporta exactamente?** Lee [`LIMITATIONS.md`](./LIMITATIONS.md) para ver la lista completa de features rechazadas o pospuestas. Este README documenta cómo usar el dialecto y qué features están implementadas.
 
