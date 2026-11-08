@@ -5,7 +5,7 @@
 namespace estc {
 class Generator {
 public:
- Project p;Result result;std::set<int> cppGenerators;
+ Project p;Result result;std::set<int> cppGenerators,consuming;
  void annotations();
  S cppEscape(const Function&,const Instruction&);
  explicit Generator(const J& j):p(j){result.headers={"runtime/ets_runtime.hpp","runtime/ets_ir.hpp"};}
@@ -107,7 +107,7 @@ public:
   if(p.kind=="index"){const auto& s=shape(parent.typeId);if(in(s.kind,{"tuple","pack"}))return "ets::ir::view(std::get<"+n(constantIndex(f,p.index))+">("+raw+"))";if(this->p.types.at(parent.typeId)=="string")return fail("Los índices de string requieren lectura",p.source);return "ets::ir::view(("+raw+").at(static_cast<std::size_t>(v"+n(p.index)+".get()))"+(s.kind=="array"&&this->p.types.at(s.arguments.at(0))=="boolean"?".value":"")+")"; }
   return fail("Place C++ desconocido: "+p.kind,p.source);
  }
- S operand(const Function& f,const Instruction& i,int k,bool consume=true){int value=i.operands.at(k);return "v"+n(value)+"."+(consume&&shape(f.values.at(value)).resource?"take":"get")+"()";}
+ S operand(const Function& f,const Instruction& i,int k,bool consume=true){int value=i.operands.at(k);return "v"+n(value)+"."+(consume&&(shape(f.values.at(value)).resource||consuming.contains(value))?"take":"get")+"()";}
  // Contrato de paso observable del dialecto (V22): un `ref<T>` declarado es
  // una referencia C++ `T&` y un `constRef<T>` es `const T&`, igual que emite
  // stage 0 en `cppMemoryType`. `type()` sigue devolviendo `T*`/`const T*`
@@ -198,7 +198,26 @@ S Generator::body(const Function& f,int id){V<S> out;int parameter=0;
  for(int k=0;k<int(f.values.size());k++)out.push_back("ets::ir::Slot<"+type(f.values[k])+"> v"+n(k)+";");
  for(int k=0;k<int(f.blocks.size());k++){auto& b=f.blocks[k];if(b.terminator=="suspend"){int t=shape(f.values.at(b.value)).arguments.at(0);if(p.types.at(t)!="void")out.push_back("ets::ir::Slot<"+type(t)+"> await"+n(k)+";");}}
  for(int k=0;k<int(f.places.size());k++)if(f.places[k].parameter){const bool borrowed=in(shape(f.places[k].typeId).kind,{"ref","constRef"});out.push_back("p"+n(k)+".set("+(borrowed?"std::addressof(a":"std::move(a")+n(parameter++)+"));");}out.push_back("goto b0;");
- for(int k=0;k<int(f.blocks.size());k++){const auto& b=f.blocks[k];out.push_back("b"+n(k)+":");for(auto& i:b.instructions)out.push_back(instruction(f,i,k));S ret=f.asynchronous?"co_return":"return";
+ // Seed compatibility: keep the same conservative size fusion as the ETS backend.
+ V<int> uses(f.values.size(),0),definitionBlocks(f.values.size(),-1),definitionPositions(f.values.size(),-1);
+ for(int block=0;block<int(f.blocks.size());block++)for(int position=0;position<int(f.blocks[block].instructions.size());position++){int result=f.blocks[block].instructions[position].result;if(result>=0){definitionBlocks.at(result)=block;definitionPositions.at(result)=position;}}
+ for(const auto& block:f.blocks){if(block.value>=0)uses.at(block.value)++;for(const auto& op:block.instructions)for(int value:op.operands)uses.at(value)++;}
+ for(const auto& place:f.places)if(place.index>=0)uses.at(place.index)++;
+ for(int value:f.frameValues)uses.at(value)++;
+ for(int k=0;k<int(f.blocks.size());k++){const auto& b=f.blocks[k];out.push_back("b"+n(k)+":");
+  for(size_t at=0;at<b.instructions.size();at++){
+   const auto& i=b.instructions[at];consuming.clear();
+   if(i.op=="call"||i.op=="taskCreate")for(int value:i.operands)if(uses.at(value)==1&&definitionBlocks.at(value)==k&&definitionPositions.at(value)<int(at))consuming.insert(value);
+   if(i.op=="store"&&i.operands.size()==1&&uses.at(i.operands[0])==1&&at>0&&b.instructions[at-1].result==i.operands[0]){out.push_back(place(f,i.place)+".set(v"+n(i.operands[0])+".take());");continue;}
+   if(i.op=="load"&&i.result>=0&&uses.at(i.result)==1&&i.place>=0&&f.places.at(i.place).kind!="index"&&at+1<b.instructions.size()){
+    const auto& next=b.instructions[at+1];const auto& kind=shape(i.typeId).kind;
+    if(next.op=="property"&&in(next.text,{"length","size"})&&next.operands.size()==1&&next.operands[0]==i.result&&(in(kind,{"array","fixedArray"})||p.types.at(i.typeId)=="string")){
+     out.push_back("v"+n(next.result)+".set(static_cast<double>(("+place(f,i.place)+".get()).size()));");at++;continue;
+    }
+   }
+   out.push_back(instruction(f,i,k));
+  }
+  S ret=f.asynchronous?"co_return":"return";
   if(b.terminator=="jump")out.push_back("goto b"+n(b.targets.at(0))+";");
   else if(b.terminator=="branch")out.push_back("if(v"+n(b.value)+".get())goto b"+n(b.targets.at(0))+";else goto b"+n(b.targets.at(1))+";");
   else if(b.terminator=="return")out.push_back(ret+(b.value<0?S{}:" v"+n(b.value)+"."+(shape(f.values.at(b.value)).resource?"take":"get")+"()")+";");

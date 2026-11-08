@@ -1,3 +1,4 @@
+import {progressDetail} from "../progress/progress";
 import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind } from "../parser/ast-schema";
 import { nativeBuiltinSignatures } from "../frontend/builtins";
 import { ModuleGraph } from "../modules/loader";
@@ -233,7 +234,7 @@ export class EffectAnalyzer {
     } return -1;
   }
   build(): void {
-    if (this.trace) printError("frontend: effect functions");
+    if (this.trace) progressDetail("frontend: effect functions");
     // Discover all functions before resolving owners or allocating return vertices.
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.checked.files[m].types.length; id = id + 1) {
       if (this.binding.files[m].nodeScopes[id] >= 0 && isCallableNodeKind(this.node(m,id).kind)) {
@@ -247,7 +248,7 @@ export class EffectAnalyzer {
       const body = this.summaries[target]; let creation: EffectSummary = new EffectSummary(body.module,body.node);
       creation.phase = "creation"; creation.parameters = body.parameters; creation.unknown = body.unknown; this.summaries[target].creation = this.summaries.length; this.summaries.push(creation);
     }
-    if (this.trace) printError("frontend: effect points "+numberToString(this.nodes+this.binding.symbols.length+this.summaries.length));
+    if (this.trace) progressDetail("frontend: effect points "+numberToString(this.nodes+this.binding.symbols.length+this.summaries.length));
     for (let i: number = 0; i < this.nodes + this.binding.symbols.length + this.summaries.length; i = i + 1) this.points.push(new EffectPoint());
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid+1) if (this.binding.symbols[sid].kind == "Parameter" && this.checked.symbolTypes[sid].indexOf("Promise<",0) >= 0 && this.checked.symbolTypes[sid].indexOf("=>",0) < 0) this.addTask(this.symbol(sid),-sid-1);
     for (let summaryId: number = 0; summaryId < this.summaries.length; summaryId = summaryId + 1) {
@@ -260,7 +261,7 @@ export class EffectAnalyzer {
       }
     }
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.checked.files[m].types.length; id = id + 1) {
-      if (id == 0 && this.trace) printError("frontend: effect module "+numberToString(m));
+      if (id == 0 && this.trace) progressDetail("frontend: effect module "+numberToString(m));
       const scope: number = this.binding.files[m].nodeScopes[id]; if (scope < 0) continue;
       const n: AstNode = this.node(m,id); const vertex: number = this.vertex(m,id); const owner: number = this.executionOwner(m,id);
       if (n.kind == NodeKind.ForOfStatement && n.get(AttributeKind.Await) != "true") {
@@ -324,7 +325,7 @@ export class EffectAnalyzer {
     // New call edges and target sets may expose one another. Both are finite.
     this.changed = true; let graphPass: number = 0;
     while (this.changed) {
-      graphPass = graphPass+1; if (this.trace) printError("frontend: effect graph pass "+numberToString(graphPass)+", "+numberToString(this.edges.length)+" edges");
+      graphPass = graphPass+1; if (this.trace) progressDetail("frontend: effect graph pass "+numberToString(graphPass)+", "+numberToString(this.edges.length)+" edges");
       this.changed = false;
       for (let callIndex: number = 0; callIndex < this.calls.length; callIndex = callIndex+1) {
       const call = this.calls[callIndex];
@@ -432,9 +433,9 @@ export class EffectAnalyzer {
     } return false;
   }
   analyze(): void {
-    if (this.trace) printError("frontend: effects graph");
+    if (this.trace) progressDetail("frontend: effects graph");
     this.build();
-    if (this.trace) printError("frontend: effects summaries");
+    if (this.trace) progressDetail("frontend: effects summaries");
     for (let m: number = 0; m < this.checked.files.length; m = m+1) for (let id: number = 0; id < this.checked.files[m].types.length; id = id+1) this.checked.files[m].taskSources[id] = this.taskSources(m,id);
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.checked.files[m].types.length; id = id + 1) {
       const scope: number = this.binding.files[m].nodeScopes[id]; if (scope < 0) continue; const owner: number = this.executionOwner(m,id); if (owner < 0) continue;

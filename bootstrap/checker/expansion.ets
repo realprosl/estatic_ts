@@ -1,3 +1,4 @@
+import {progressDetail} from "../progress/progress";
 import { AttributeKind, EdgeRole, NodeKind } from "../parser/ast-schema";
 import { ModuleGraph, LoadedFile, GeneratedSource } from "../modules/loader";
 import { CachedSource, FileRecord } from "../modules/syntax-cache";
@@ -189,7 +190,7 @@ export class NativeExpansion {
   }
 }
 export function analyzeProject(graph: ModuleGraph, trace: boolean = false): FrontendProject {
-  if (trace) printError("frontend: expansion and binding");
+  if (trace) progressDetail("frontend: expansion and binding");
   let expansion = new NativeExpansion(graph); const expanded: ModuleGraph = expansion.run(); const binding: BindingResult = bindProject(expanded);
   return new FrontendProject(expanded,binding,checkProject(expanded,binding,trace));
 }

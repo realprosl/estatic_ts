@@ -1,3 +1,4 @@
+import {progressDetail} from "../progress/progress";
 import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind, nodeKindName } from "../parser/ast-schema";
 import { nativeBuiltinSignatures } from "../frontend/builtins";
 import { ModuleGraph } from "../modules/loader";
@@ -1990,13 +1991,13 @@ export class NativeChecker {
     if (valid) this.result.decorators.push(item);
   }
   check(): CheckResult {
-    if (this.trace) printError("frontend: types");
+    if (this.trace) progressDetail("frontend: types");
     for (const diagnostic of this.binding.diagnostics) this.result.diagnostics.push(diagnostic);
     if (!this.binding.success) return this.result;
     for (const s of this.binding.symbols) { this.result.symbolTypes.push(""); this.symbolStates.push(0); }
     for (const m of this.graph.modules) this.result.files.push(new TypedFile(m.cached.result.ast.nodes.length));
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) {
-      if (this.trace) printError("frontend: checking ["+numberToString(m+1)+"/"+numberToString(this.graph.modules.length)+"] "+this.graph.modules[m].file);
+      if (this.trace) progressDetail("frontend: checking ["+numberToString(m+1)+"/"+numberToString(this.graph.modules.length)+"] "+this.graph.modules[m].file);
       this.statement(m,this.graph.modules[m].cached.result.ast.root,"",0);
     }
     // Arrows may be reached only as values, not statements. Validate their bodies too.
@@ -2015,8 +2016,8 @@ export class NativeChecker {
       if (symbol.module >= 0 && (symbol.namespaceModule) < 0) this.symbolType(sid,symbol.module,symbol.node);
     }
     if (this.result.diagnostics.length == 0) { let checked: CheckResult = this.result; validateSafety(this.graph,this.binding,checked,this.trace); this.result = checked; }
-    if (this.result.diagnostics.length == 0) { if (this.trace) printError("frontend: comptime"); this.result = evaluateNativeComptime(this.graph,this.binding,this.result); }
+    if (this.result.diagnostics.length == 0) { if (this.trace) progressDetail("frontend: comptime"); this.result = evaluateNativeComptime(this.graph,this.binding,this.result); }
     this.result.success = this.result.diagnostics.length == 0; return this.result;
   }
 }
-export function checkProject(graph: ModuleGraph, binding: BindingResult, trace: boolean = false): CheckResult { let checker: NativeChecker = new NativeChecker(graph,binding); checker.trace = trace; const checked: CheckResult = checker.check(); if (trace) printError("frontend: module records"); return attachModuleRecords(graph,binding,checked); }
+export function checkProject(graph: ModuleGraph, binding: BindingResult, trace: boolean = false): CheckResult { let checker: NativeChecker = new NativeChecker(graph,binding); checker.trace = trace; const checked: CheckResult = checker.check(); if (trace) progressDetail("frontend: module records"); return attachModuleRecords(graph,binding,checked); }
