@@ -12,10 +12,10 @@ measurement was 1,245.997 seconds. Both generations, all 67 execution fixtures,
 
 | Priority | Change | Required verification | Status |
 |---|---|---|---|
-| P | Count symbol visits and profile invokeTarget/join/path operations separately | Attribute cost without double-counting nested calls | Owner-visit counters added; join/path timings pending |
-| 1 | Index local symbols by lexical owner and hoist call receiver lookup | Ownership, captures, recursion, field initialization and diagnostic regressions | Implemented; validation in progress |
+| P | Count symbol visits and profile invokeTarget/join/path operations separately | Attribute cost without double-counting nested calls | Owner counters withdrawn with rejected experiment; detailed join/path profiling pending |
+| 1 | Index local symbols by lexical owner and hoist call receiver lookup | Ownership, captures, recursion, field initialization and diagnostic regressions | Withdrawn after slower end-to-end measurement |
 | 2 | Schedule only dirty effect edges | Checker suite, late callable edges, hidden aliases, selfhost and exact IR equality | Passed Actions 42492813189 |
-| 3 | Intern paths and merge ordered path states | Identical path/value sets, wildcard overlap, branch joins and partial moves | Pending |
+| 3 | Replace nested join path lookups with a temporary index, preserving path order; defer interning | Differential comparison against original path join, implicit state 1, wildcard keys, exits, full checker suite and selfhost | Implemented; validation in progress |
 | 4 | Schedule dependent call sites only when their inputs change | Callbacks, returned callables, async/resume, unknown targets and differential comparison | Pending |
 | 5 | Compact local slot states; compare sparse/bitset representations | Scope isolation, joins, loops, captures and memory consumption | Pending |
 | 6 | Reuse transfer summaries for explicitly modeled contexts | Generics, aliases, globals, callbacks, creation/resume and caller diagnostics | Pending design and differential tests |
@@ -59,3 +59,30 @@ corresponding dense rounds, edge count, round count and graph elapsed millisecon
 Fewer edge visits alone do not prove lower elapsed time: agenda overhead must also
 be measured. Keep all validations and compare diagnostics as well as accepted IR.
 The native seed and ETS-generated compiler must emit byte-identical compiler IR.
+
+## Owner index withdrawn
+
+Actions [42495467552](https://github.com/realprosl/estatic_ts/actions/runs/42495467552)
+passed all correctness checks, but O2 source analysis measured 1,414.410 seconds,
+versus 727.151 seconds for the accepted queue reference. Other phases also became
+slower, so this does not isolate the cause of the slowdown. At the user's request,
+restore the pre-index implementation and keep its full state/path restoration.
+
+## Path-join experiment
+
+Keep the slot join and the state representation unchanged. Replace repeated
+pathState/setPath scans with one temporary hash index of left-path positions.
+Unmatched paths join against implicit state 1, including explicit initialized
+entries. Output remains left paths in their original order followed by right-only
+paths in their original order. Empty-side fast paths avoid allocating an index.
+Expected work is linear in path count plus key hashing; memory is proportional
+to the number of left paths. Global path interning, sorted states, slot compaction
+and summary caching are deliberately deferred.
+
+The checker demo includes a test-only path-join mode. A differential test compares
+its output against the previous two-loop algorithm over fixed cases and a seeded
+random corpus, checking exact path order and values as well as return/unreachable
+short-circuits. Performance remains unconfirmed until Actions completes.
+
+Local validation: all 1,384 checker tests passed, including the differential test
+over 129 path-state pairs. Actions performance and selfhosting checks are pending.
