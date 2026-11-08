@@ -93,3 +93,56 @@ jobs:
           cd "$RUNNER_TEMP/proyecto"
           "$RUNNER_TEMP/prefix/bin/etsc" build
           "$RUNNER_TEMP/prefix/bin/etsc" run
+
+  includes:
+    name: Regresión de includes (semilla C++)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build current C++ snapshot
+        run: bash native-cpp/build-all.sh
+      - name: Compile short includes programs (positive and negative)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ESTC_ROOT="$GITHUB_WORKSPACE/native-cpp"
+          mkdir -p /tmp/estatic-includes
+          compile_case() {
+            local name="$1" expected="$2" source="$3"
+            printf '%s\n' "$source" > "/tmp/estatic-includes/$name.ets"
+            echo "::group::$name ($expected)"
+            if native-cpp/native/etsc build "/tmp/estatic-includes/$name.ets" --binary "/tmp/estatic-includes/$name" --no-progress > "/tmp/estatic-includes/$name.log" 2>&1; then
+              if [[ "$expected" != pass ]]; then
+                cat "/tmp/estatic-includes/$name.log"
+                echo "::error::Invalid case $name was accepted"
+                exit 1
+              fi
+              test -x "/tmp/estatic-includes/$name"
+            else
+              if [[ "$expected" == pass ]]; then
+                cat "/tmp/estatic-includes/$name.log"
+                echo "::error::Valid case $name was rejected"
+                exit 1
+              fi
+              if ! grep -Eq 'Aridad|argument|firma|compatible|tipo|type|error|ERROR' "/tmp/estatic-includes/$name.log"; then
+                cat "/tmp/estatic-includes/$name.log"
+                echo "::error::Invalid case $name failed without a diagnostic"
+                exit 1
+              fi
+            fi
+            echo "OK: $name ($expected)" >> "$GITHUB_STEP_SUMMARY"
+            echo "::endgroup::"
+          }
+          compile_case one pass 'const s: string = "alpha"; print(s.includes("ph"));'
+          compile_case two pass 'const s: string = "alpha"; print(s.includes("a", 1));'
+          compile_case zero fail 'const s: string = "alpha"; print(s.includes());'
+          compile_case three fail 'const s: string = "alpha"; print(s.includes("a", 0, 1));'
+          compile_case wrong_type fail 'const s: string = "alpha"; print(s.includes(3));'
+          compile_case wrong_offset fail 'const s: string = "alpha"; print(s.includes("a", "0"));'
+          compile_case chained pass 'const s: string = "alpha"; print(s.substring(1, 4).includes("ph"));'
+          compile_case nested pass 'const s: string = "alpha"; print(s.includes(s.charAt(0)));'
+          compile_case loop pass 'const allowed: string = "abc"; const word: string = "cab"; for (let k: number = 0; k < 3; k = k + 1) { if (!allowed.includes(word.charAt(k))) print("bad"); }'
+          compile_case conditional pass 'const s: string = "abc"; if (s.includes("a") && !s.includes("z", 1)) print("ok");'
+          compile_case function_arg pass 'function check(s: string): boolean { return s.includes("x"); } print(check("xyz"));'
+          compile_case checker_identifier pass 'function validSymbol(part:string):boolean { let valid:boolean=true; const allowedFirst:string="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_"; const allowedRest:string=allowedFirst+"0123456789"; if(!allowedFirst.includes(part.charAt(0))) valid=false; for(let k:number=1;k<part.length;k=k+1){if(!allowedRest.includes(part.charAt(k))) valid=false;} return valid; } print(validSymbol("abc_12"));'
