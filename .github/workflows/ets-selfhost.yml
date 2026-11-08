@@ -3,12 +3,12 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - bootstrap/backend/**
-      - bootstrap/driver/**
-      - bootstrap/progress/**
+      - bootstrap/**
+      - native-cpp/**
       - runtime/ets_compiler_host.hpp
       - scripts/build-ets-compiler.sh
       - scripts/check-ets-compiler.sh
+      - scripts/regenerate-ets-native.sh
       - .github/workflows/ets-selfhost.yml
 permissions:
   contents: read

@@ -688,7 +688,17 @@ const p:IrPlace=_cppLoop4Input[k];
     
 }
 const initialize=_cppLoop4Result;
-    
+    // Only fuse an immediately consumed, single-use load. No call or mutation
+    // can occur between the snapshot and its size query; other loads retain
+    // value semantics, including snapshots that survive a later mutation.
+    let uses:number[]=[];
+    for(let value:number=0;value<f.values.length;value=value+1)uses.push(0);
+    for(const block of f.blocks){
+      if(block.value>=0)uses[block.value]+=1;
+      for(const operation of block.instructions)for(const operand of operation.operands)uses[operand]+=1;
+    }
+    for(const place of f.places)if(place.index>=0)uses[place.index]+=1;
+    for(const value of f.frameValues)uses[value]+=1;
 let _cppLoop1Result:string[]=[];
 const _cppLoop1Input:IrBlock[]=f.blocks;
 for(let k:number=0;k<_cppLoop1Input.length;k=k+1){
@@ -699,6 +709,14 @@ let _cppLoop58Result:string[]=[];
 const _cppLoop58Input:IrInstruction[]=b.instructions;
 for(let _cppLoop58Index:number=0;_cppLoop58Index<_cppLoop58Input.length;_cppLoop58Index=_cppLoop58Index+1){
 const i:IrInstruction=_cppLoop58Input[_cppLoop58Index];
+if(i.op=="load"&&i.result>=0&&uses[i.result]==1&&i.place>=0&&f.places[i.place].kind!="index"&&_cppLoop58Index+1<_cppLoop58Input.length){
+ const next:IrInstruction=_cppLoop58Input[_cppLoop58Index+1];
+ const kind:string=this.shape(i.typeId).kind;
+ if(next.op=="property"&&["length","size"].includes(next.text)&&next.operands.length==1&&next.operands[0]==i.result&&(kind=="array"||kind=="fixedArray"||this.project.types[i.typeId]=="string")){
+  _cppLoop58Result.push("v"+numberToString(next.result)+".set(static_cast<double>(("+this.place(f,i.place)+".get()).size()));");
+  _cppLoop58Index+=1;continue;
+ }
+}
 _cppLoop58Result.push(this.instruction(f,i,k));continue;
 }
 let lines=_cppLoop58Result;const ret=f.asynchronous?"co_return":"return";

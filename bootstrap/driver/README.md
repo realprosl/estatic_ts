@@ -52,3 +52,17 @@ La caché de sintaxis se puede activar con `--cache` o `incremental.cacheDirecto
 El coordinador ETS compila/enlaza directamente y todavía no reutiliza los objetos
 o archivos de runtime del coordinador C++ anterior. Tampoco incluye su opción
 `--frontend`: el frontend está integrado en el mismo ejecutable.
+
+Para exportar una nueva semilla C++ del compilador entero, después de verificar
+ambas generaciones:
+
+```sh
+bash scripts/regenerate-ets-native.sh
+bash native-cpp/build-ets.sh
+```
+
+El snapshot generado queda en `native-cpp/compiler/unity.cpp`. La segunda orden
+construye `native-cpp/native/etsc-ets` usando únicamente C++ y el soporte de
+`native-cpp/`. No copia fuentes ETS a ese directorio ni sobrescribe la semilla
+anterior. El snapshot se genera de forma explícita; no se incluye como un segundo
+árbol de fuentes manuales.
