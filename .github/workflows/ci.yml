@@ -100,6 +100,15 @@ jobs:
           cd "$RUNNER_TEMP/proyecto"
           "$compiler" build
           "$compiler" run
+          printf 'const server=http.createServer();print("HTTP ready");\n' > "$RUNNER_TEMP/http.ets"
+          "$compiler" run "$RUNNER_TEMP/http.ets" --binary "$RUNNER_TEMP/http" --verbose > "$RUNNER_TEMP/http.out" 2> "$RUNNER_TEMP/http.log"
+          grep -q 'HTTP ready' "$RUNNER_TEMP/http.out"
+          grep -q 'libets_httplib.a' "$RUNNER_TEMP/http.log"
+          printf 'const n:number="bad";\n' > "$RUNNER_TEMP/bad.ets"
+          if "$compiler" --check "$RUNNER_TEMP/bad.ets"; then
+            echo 'Invalid types were accepted'
+            exit 1
+          fi
 
   includes:
     name: Regresión de includes (semilla C++)

@@ -102,7 +102,7 @@ El driver admite también `estatic.config.ts` cuando contiene un objeto
 **No ejecuta configuraciones JavaScript dinámicas.** Éstas se rechazan con un
 diagnóstico; deben expresarse mediante JSON u opciones del comando. También
 se admiten `--config`, `--check`, `--emit-ir`, `--from-ir`, aliases, raíces de
-módulos, flags del compilador/enlazador y un frontend alternativo. El IR JSON
+módulos, flags del compilador/enlazador. El IR JSON
 presupone un productor de confianza que lo haya verificado.
 
 ## Tipos y caché del proyecto

@@ -164,7 +164,8 @@ cp "$repo_dir/package.json" "$stage/package.json"
 
 # El compilador instalado usa el compilador que se pidio al instalar.
 if [ -f "$stage/templates/estatic.config.json" ]; then
-  sed "s/\"command\": \"[^\"]*\"/\"command\": \"$cxx\"/" "$stage/templates/estatic.config.json" > "$stage/templates/estatic.config.json.tmp"
+  template_cxx=$(printf '%s' "$cxx" | sed 's/[\\&|]/\\&/g')
+  sed "s|\"command\": \"[^\"]*\"|\"command\": \"$template_cxx\"|" "$stage/templates/estatic.config.json" > "$stage/templates/estatic.config.json.tmp"
   mv "$stage/templates/estatic.config.json.tmp" "$stage/templates/estatic.config.json"
 fi
 

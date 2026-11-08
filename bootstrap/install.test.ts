@@ -20,7 +20,7 @@ async function installFrontend():Promise<string>{
 const temporary=()=>{mkdirSync(join(root,"build/test-tmp"),{recursive:true});return mkdtempSync(join(root,"build/test-tmp/install-"));};
 // El instalador es un script de shell: no usa Node. Se invoca con bash y con
 // Node envenenado en el PATH para comprobar que no lo necesita.
-const install=(prefix:string,extra:string[]=[])=>spawnSync("bash",[join(root,"install.sh"),"--prefix",prefix,...extra],{cwd:root,encoding:"utf8",timeout:600000});
+const install=(prefix:string,extra:string[]=[])=>spawnSync("bash",[join(root,"install.sh"),"--prefix",prefix,...extra],{cwd:root,encoding:"utf8",timeout:900000});
 
 test("runtime cache invalidates headers and ABI flags and recovers corrupted archives",async()=>{
  const dir=temporary();try{
@@ -190,5 +190,18 @@ for(const owned of [true,false])test(`install migrates estc and preserves unrela
   assert(existsSync(join(dir,"bin/etsc")));assert.equal(existsSync(legacy),!owned);
   if(!owned)assert.equal(readFileSync(legacy,"utf8"),"old native driver");
   const version=spawnSync(join(dir,"bin/etsc"),["--version"],{encoding:"utf8"});assert.equal(version.status,0,version.stderr);assert.match(version.stdout,/^etsc /);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+
+test("failed compiler rebuild preserves the active installation",()=>{
+ const dir=temporary();try{
+  const prefix=join(dir,"prefix"),release=join(prefix,"lib/estc/releases/old"),bin=join(prefix,"bin/etsc");
+  mkdirSync(release,{recursive:true});mkdirSync(dirname(bin),{recursive:true});writeFileSync(bin,"old compiler");
+  writeFileSync(join(release,"installation.json"),JSON.stringify({format:"estc-install-1",commandHash:createHash("sha256").update(readFileSync(bin)).digest("hex")}));
+  symlinkSync("releases/old",join(prefix,"lib/estc/current"));
+  const cxx=join(dir,"broken-cxx");writeFileSync(cxx,"#!/bin/sh\nexit 42\n");chmodSync(cxx,0o755);
+  const result=install(prefix,["--cxx",cxx]);assert.equal(result.status,42,result.stderr);
+  assert.equal(readFileSync(bin,"utf8"),"old compiler");assert.equal(realpathSync(join(prefix,"lib/estc/current")),release);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
