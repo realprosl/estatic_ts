@@ -16,6 +16,7 @@
 set -euo pipefail
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ETSC_CLI_SCOPE=install
 seed_dir="$repo_dir/native-cpp"
 prefix="/usr/local"
 cxx="${CXX:-g++}"
@@ -61,6 +62,7 @@ case "$prefix" in /*) ;; *) prefix="$PWD/$prefix" ;; esac
 command -v "$cxx" >/dev/null 2>&1 || fail "No se encuentra el compilador '$cxx'. Instala g++ o usa --cxx."
 command -v "$ar_tool" >/dev/null 2>&1 || fail "No se encuentra '$ar_tool'. Forma parte de binutils."
 [ -d "$seed_dir" ] || fail "Falta la semilla C++ en $seed_dir. Clona el repositorio completo."
+source "$repo_dir/native-cpp/bootstrap/native/progress.sh"
 
 if command -v sha256sum >/dev/null 2>&1; then
   hash_file() { sha256sum "$1" | cut -d" " -f1; }
@@ -115,7 +117,7 @@ if [ -e "$destination" ]; then
   [ "$owned" -eq 1 ] || fail "No se sobrescribe un comando ajeno: $destination; usa otro --prefix"
 fi
 
-echo "==> Compilando la semilla C++ de native-cpp/"
+etsc_info "Construyendo la semilla C++20"
 mkdir -p "$work/native"
 
 if [ -n "$frontend" ]; then
@@ -124,14 +126,14 @@ if [ -n "$frontend" ]; then
   echo "    usando el frontend proporcionado: $frontend"
 else
   echo "    frontend (analizador) -> native/frontend"
-  "$cxx" -std=c++20 -O1 -pthread -fno-exceptions \
+  etsc_spin "Semilla · frontend" "$cxx" -std=c++20 -O1 -pthread -fno-exceptions \
     -I"$seed_dir" -I"$seed_dir/frontend" \
     '-DESTATIC_FRONTEND_ID="portable"' \
     "$seed_dir/frontend/unity.cpp" -o "$work/native/frontend"
 fi
 
 echo "    driver y emisor IR -> native/etsc"
-"$cxx" -std=c++20 -O2 \
+etsc_spin "Semilla · coordinador y emisor" "$cxx" -std=c++20 -O2 \
   -I"$seed_dir" -I"$seed_dir/build/bootstrap/etsc" \
   "$seed_dir/bootstrap/native/driver.cpp" \
   "$seed_dir/src/codegen/ir/native/generator.cpp" \
@@ -140,7 +142,7 @@ echo "    driver y emisor IR -> native/etsc"
 command_hash="$(hash_file "$work/native/etsc")"
 
 # --- Publicacion ------------------------------------------------------------
-echo "==> Publicando en $prefix"
+etsc_info "Publicando en $prefix"
 stage="$library/.install-$$"
 mkdir -p "$stage/native" "$stage/templates"
 
@@ -213,7 +215,7 @@ fi
 # El driver sabe calcular la clave de cache, el manifiesto y las rutas que
 # despues reutiliza. Compilar un programa de prueba con el compilador ya
 # instalado deja el runtime listo en su cache y en la distribucion.
-echo "==> Precompilando el runtime (libuv, red y cpp-httplib)"
+etsc_info "Preparando runtime · libuv, red y HTTP"
 probe="$work/probe"
 mkdir -p "$probe/src"
 cat > "$probe/src/main.ets" <<'EOF'
@@ -240,7 +242,7 @@ else
   sed 's/^/    /' "$work/warm.log" >&2 || true
 fi
 
-echo "==> Instalado: $destination"
+etsc_info "✓ Instalado: $destination"
 echo "    etsc init proyecto"
 echo "    cd proyecto"
 echo "    etsc build"

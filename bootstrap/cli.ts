@@ -2,7 +2,7 @@
 // Host driver only. Parsing, binding, checking, expansion and lowering execute
 // in the native ETS frontend; C++ emission consumes only its verified IR.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, extname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
@@ -47,7 +47,7 @@ async function compile(argv:string[], report:(event:ProgressEvent)=>void):Promis
   const started=performance.now();
   const step=<T>(label:string,action:()=>T|Promise<T>)=>phase(label,action,report);
   const detail=(text:string)=>report({type:"detail",text});
-  const summary=()=>report({type:"summary",elapsed:performance.now()-started});
+  const summary=(outputs?:string[])=>report({type:"summary",elapsed:performance.now()-started,outputs});
   // Consume presentation flags only before --; program arguments are untouched.
   const verbose=presentation(argv).verbose;
   argv=presentation(argv).args;
@@ -92,7 +92,7 @@ async function compile(argv:string[], report:(event:ProgressEvent)=>void):Promis
   if(!fromIr)detail(`Frontend: ${JSON.stringify(frontend)}; módulos: ${JSON.stringify(loaderArgs)}`);
   const profile=analysisArgs.includes("--profile-analysis")||process.env.ESTATIC_PROFILE_ANALYSIS==="1";
   const frontendDetail=(text:string)=>text.startsWith("frontend: profile ")?report({type:"diagnostic",text}):detail(text);
-  const project:IrProject=await step(fromIr?"Leyendo IR":"Analizando fuentes y verificando IR",()=>fromIr?JSON.parse(readFileSync(entry,"utf8")):verbose||profile?nativeIrWithProgress(frontend,entry,loaderArgs,frontendDetail,text=>report({type:"diagnostic",text})):nativeIr(frontend,entry,loaderArgs));
+  const project:IrProject=await step(fromIr?"Leyendo IR":"Analizando fuentes y verificando IR",()=>fromIr?JSON.parse(readFileSync(entry,"utf8")):verbose||profile||workerData?.interactive?nativeIrWithProgress(frontend,entry,loaderArgs,frontendDetail,text=>report({type:"diagnostic",text})):nativeIr(frontend,entry,loaderArgs));
   // Check the producer boundary even when --check/--from-ir bypasses emission.
   await step("Validando frontera del backend",()=>{
   if(project.format!=="ets-ir-2"||!project.success||!Array.isArray(project.diagnostics)||project.diagnostics.length)throw new Error("Se requiere ets-ir-2 verificado con success:true");
@@ -108,7 +108,8 @@ async function compile(argv:string[], report:(event:ProgressEvent)=>void):Promis
     detail(`Compilador: ${JSON.stringify(compiler)}; flags: ${JSON.stringify(compileFlags)}; enlace: ${JSON.stringify(links)}`);
     await step("Preparando runtime, compilando y enlazando C++",()=>buildIrCpp(result!,output,binary,compiler,compileFlags,links,detail));
     detail(`Ejecutable: ${JSON.stringify(binary)}`);}
-  summary();
+  const displayPath=(path:string)=>{const local=relative(process.cwd(),path);return local&&!local.startsWith("..")?local:path;};
+  summary(["C++  "+displayPath(output),...(build||config?.compiler.enabled?["bin  "+displayPath(binary)]:[])]);
   if(run){detail(`Ejecutando: ${JSON.stringify([binary,...programArgs])}`);const child=spawnSync(binary,programArgs,{stdio:"inherit"});if(child.error)throw child.error;process.exitCode=child.status??1;}
 }
 export async function main(argv:string[]):Promise<void> {
@@ -117,7 +118,7 @@ export async function main(argv:string[]):Promise<void> {
   // Blocking frontend/C++ work runs off the host event loop so spinners really
   // animate, including the first build of the native frontend.
   await new Promise<void>((resolve,reject)=>{
-    const worker=new Worker(new URL(import.meta.url),{workerData:{bootstrapCLI:true,argv},execArgv:["--experimental-strip-types","--no-warnings"]});
+    const worker=new Worker(new URL(import.meta.url),{workerData:{bootstrapCLI:true,argv,interactive:progress.interactive},execArgv:["--experimental-strip-types","--no-warnings"]});
     let result:{exitCode?:number;error?:string;usage?:boolean}|undefined;
     worker.on("message",event=>{
       if(event.type==="done")result=event;
