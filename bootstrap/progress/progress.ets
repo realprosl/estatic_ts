@@ -1,11 +1,11 @@
-import {terminal,columns,environment,environmentDefined,now} from "../driver/host";
+import {terminal,columns,environment,environmentDefined} from "../driver/host";
 class Progress {
- enabled:boolean;verbose:boolean;animated:boolean;drawn:boolean;label:string;detail:string;started:number;total:number;frame:number;last:number;
- constructor(){this.enabled=false;this.verbose=false;this.animated=false;this.drawn=false;this.label="";this.detail="";this.started=0;this.total=0;this.frame=0;this.last=0;}
+ enabled:boolean;verbose:boolean;animated:boolean;drawn:boolean;label:string;detail:string;started:number;total:number;frame:number;last:number;width:number;
+ constructor(){this.enabled=false;this.verbose=false;this.animated=false;this.drawn=false;this.label="";this.detail="";this.started=0;this.total=0;this.frame=0;this.last=0;this.width=80;}
  configure(verbose:boolean,animate:boolean):void{
   this.enabled=true;this.verbose=verbose;
   this.animated=animate&&terminal()&&!environmentDefined("NO_COLOR")&&environment("TERM")!="dumb"&&environment("CI")=="";
-  this.total=now();
+  this.width=columns();this.total=Date.now();
  }
  scope(label:string):string{
   if(label.includes("configuración")||label.startsWith("Leyendo"))return "setup";
@@ -25,22 +25,22 @@ class Progress {
  displayPath(text:string):string{const base:string=normalizePath(".")+"/";const normalized:string=normalizePath(text);return this.clean(normalized.startsWith(base)?normalized.slice(base.length,normalized.length):text);}
  clear():void{if(this.drawn){writeError("\r\u001b[2K");this.drawn=false;}}
  render(force:boolean=false):void{
-  if(!this.animated||this.label==""||(!force&&now()-this.last<80))return;
+  if(!this.animated||this.label==""||(!force&&Date.now()-this.last<80))return;
   const symbols:string[]=["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
-  const suffix:string=" · "+this.duration(now()-this.started);const prefix:string="["+this.scope(this.label)+"] ";
-  const available:number=Math.max(1,columns()-prefix.length-suffix.length-4);
+  const suffix:string=" · "+this.duration(Date.now()-this.started);const prefix:string="["+this.scope(this.label)+"] ";
+  const available:number=Math.max(1,this.width-prefix.length-suffix.length-4);
   let text:string=this.clean(this.detail!=""?this.detail:this.label);
   if(text.length>available){const left:number=Math.floor((available-1)/2);const right:number=available-1-left;text=text.slice(0,left)+"…"+(right>0?text.slice(text.length-right,text.length):"");}
   this.clear();writeError(this.tag(this.label)+" "+this.paint(symbols[this.frame%10],"36")+" "+text+this.paint(suffix,"2"));
-  this.frame+=1;this.last=now();this.drawn=true;
+  this.frame+=1;this.last=Date.now();this.drawn=true;
  }
  finish(ok:boolean=true):void{
   if(this.label=="")return;this.clear();
-  if(this.animated||this.verbose)printError(this.tag(this.label)+" "+this.paint(ok?"✓":"✗",ok?"32":"31")+" "+this.label+" ("+this.duration(now()-this.started)+")");
+  if(this.animated||this.verbose)printError(this.tag(this.label)+" "+this.paint(ok?"✓":"✗",ok?"32":"31")+" "+this.label+" ("+this.duration(Date.now()-this.started)+")");
   this.label="";this.detail="";
  }
  start(label:string):void{
-  this.finish();this.label=label;this.started=now();this.frame=0;
+  this.finish();this.label=label;this.started=Date.now();this.frame=0;
   if(this.animated)this.render(true);else if(this.verbose)printError(this.tag(label)+" > "+label);
  }
  update(text:string):void{
@@ -49,7 +49,7 @@ class Progress {
   this.detail=text;if(!this.verbose&&text.startsWith("frontend: "))this.detail=text.slice(10,text.length);if(this.animated)this.render();else printError("  "+text);
  }
  summary(cpp:string="",binary:string=""):void{
-  this.finish();if(this.animated||this.verbose)printError(this.paint("[etsc]","35")+" "+this.paint("✓","32")+" Compilación completada ("+this.duration(now()-this.total)+")");
+  this.finish();if(this.animated||this.verbose)printError(this.paint("[etsc]","35")+" "+this.paint("✓","32")+" Compilación completada ("+this.duration(Date.now()-this.total)+")");
   if(this.animated&&!this.verbose){if(cpp!="")printError(this.paint("       ↳","2")+" C++  "+this.displayPath(cpp));if(binary!="")printError(this.paint("       ↳","2")+" bin  "+this.displayPath(binary));}
  }
 }
