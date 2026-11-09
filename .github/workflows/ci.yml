@@ -45,6 +45,9 @@ jobs:
         run: npm install
 
       - name: Unit + bootstrap test suite
+        env:
+          ESTATIC_ANALYSIS_JOBS: '2'
+          ESTATIC_TEST_COMPARE_JOBS: '1'
         run: npm test
 
       - name: End-to-end suite (compiles and runs real programs)

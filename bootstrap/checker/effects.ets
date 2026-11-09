@@ -1,3 +1,4 @@
+import {profileBegin,profileEnd} from "../analysis/options";
 import {progressDetail} from "../progress/progress";
 import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind } from "../parser/ast-schema";
 import { nativeBuiltinSignatures } from "../frontend/builtins";
@@ -265,7 +266,7 @@ export class EffectAnalyzer {
     } return -1;
   }
   build(): void {
-    const graphStarted: number = Date.now(); let denseVisits: number = 0;
+    const graphProfile=profileBegin();const graphStarted: number = Date.now(); let denseVisits: number = 0;
     if (this.trace) progressDetail("frontend: effect functions");
     // Discover all functions before resolving owners or allocating return vertices.
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.checked.files[m].types.length; id = id + 1) {
@@ -354,9 +355,11 @@ export class EffectAnalyzer {
       }
     }
     for (const c of this.checked.captures) this.addEdge(this.symbol(c.symbol),this.vertex(c.module,c.closure),false);
+    profileEnd("effect-graph-assembly",graphProfile);
     // New call edges and target sets may expose one another. Both are finite.
     this.changed = true; let graphPass: number = 0;
     while (this.changed) {
+      const linkingProfile=profileBegin();
       graphPass = graphPass+1; if (this.trace) progressDetail("frontend: effect graph pass "+numberToString(graphPass)+", "+numberToString(this.edges.length)+" edges");
       this.changed = false;
       for (let callIndex: number = 0; callIndex < this.calls.length; callIndex = callIndex+1) {
@@ -402,6 +405,8 @@ export class EffectAnalyzer {
       }
       // Point sets only grow. Each edge forwards each source entry once;
       // newly discovered call edges start at zero and receive the full set.
+      profileEnd("effect-call-linking",linkingProfile,"round="+numberToString(graphPass));
+      const propagationProfile=profileBegin();
       denseVisits = denseVisits+this.edges.length;
       this.propagating = true; this.edgeCursor = -1;
       while (this.agenda.values.length > 0) {
@@ -415,7 +420,9 @@ export class EffectAnalyzer {
         this.edges[at] = e;
       }
       this.propagating = false; this.agenda = this.deferredAgenda; this.deferredAgenda = new EffectAgenda();
+      profileEnd("effect-propagation",propagationProfile,"round="+numberToString(graphPass)+" visits="+numberToString(this.edgeVisits));
     }
+    profileEnd("effect-graph",graphProfile,"vertices="+numberToString(this.points.length)+" edges="+numberToString(this.edges.length)+" edge_visits="+numberToString(this.edgeVisits)+" rounds="+numberToString(graphPass)+" dense_visits="+numberToString(denseVisits));
     if (this.trace) progressDetail("frontend: effect graph complete, "+numberToString(this.edgeVisits)+" edge visits, "+numberToString(this.edges.length)+" edges, "+numberToString(graphPass)+" rounds, "+numberToString(denseVisits)+" dense baseline visits, "+numberToString(Date.now()-graphStarted)+" ms");
   }
   addEffect(summaryId: number, sid: number, mode: string): void {
@@ -473,6 +480,7 @@ export class EffectAnalyzer {
   analyze(): void {
     if (this.trace) progressDetail("frontend: effects graph");
     this.build();
+    const summariesProfile=profileBegin();
     if (this.trace) progressDetail("frontend: effects summaries");
     for (let m: number = 0; m < this.checked.files.length; m = m+1) for (let id: number = 0; id < this.checked.files[m].types.length; id = id+1) this.checked.files[m].taskSources[id] = this.taskSources(m,id);
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.checked.files[m].types.length; id = id + 1) {
@@ -575,5 +583,6 @@ export class EffectAnalyzer {
       for (let at: number = 0; at < pending.length; at = at + 1) { const target: number = pending[at]; if (target == start) this.summaries[start].recursive = true; if (!seen.includes(target)) { seen.push(target); for (const next of this.summaries[target].callees) pending.push(next); } }
 
     }
+    profileEnd("effect-summaries",summariesProfile,"functions="+numberToString(this.summaries.length)+" calls="+numberToString(this.calls.length));
   }
 }

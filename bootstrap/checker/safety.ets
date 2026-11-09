@@ -1,3 +1,5 @@
+import {analysisJobs,profileBegin,profileEnd} from "../analysis/options";
+import {forkWorker,finishWorker,waitWorker,temporaryDirectory,poll,pause,terminate,readText,writeText,remove,hostError} from "../driver/host";
 import {progressDetail} from "../progress/progress";
 import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind } from "../parser/ast-schema";
 import { EffectAnalyzer } from "./effects";
@@ -6,10 +8,14 @@ import { nativeNumericLiteral } from "./numeric";
 import { ModuleGraph } from "../modules/loader";
 import { BindingResult, BindingSymbol, bindingChild, callableBinding } from "../binder/binder";
 import { AstNode, nodeBegin, nodeEnd } from "../parser/parser";
-import { diagnosticAt, SourceDiagnostic } from "../frontend/frontend";
+import { diagnosticAt, SourceDiagnostic, quoteSource } from "../frontend/frontend";
 import { CheckResult, NativeCapture, BorrowLease, argumentParameter } from "./model";
 import { memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticElement, semanticTuple, splitTypes, functionClose, functionParams, functionReturn, argumentType, fixedArraySize, fixedArrayElement, localBinding, genericBase, genericArguments, replaceType, canonicalSymbol } from "./types";
 
+export class FlowFinding {
+ module:number;node:number;message:string;
+ constructor(module:number,node:number,message:string){this.module=module;this.node=node;this.message=message;}
+}
 export class SafetyState {
   slots: number[]; paths: string[]; resources: number[]; exit: string;
   constructor(count: number) { this.slots = []; this.paths = []; this.resources = []; this.exit = ""; for (let i: number = 0; i < count; i = i + 1) this.slots.push(1); }
@@ -46,7 +52,7 @@ export class SafetyAnalyzer {
   graph: ModuleGraph; binding: BindingResult; result: CheckResult; effects: EffectAnalyzer; arguments: SafetyArgument[];
   offsets: number[]; nodes: number; edges: SafetyEdge[]; seeds: number[]; escapes: EscapeSite[]; owners: number[]; trace: boolean; resourceTypes: Map<string,boolean>; valueTypes: Map<string,boolean>; carrierTypes: Map<string,boolean>; plainTypes: Map<string,boolean>; defaultReads: Map<number,boolean>; valueDefaults: Map<number,boolean>;
   substitutions: string[]; substitutionTypes: string[]; memoryPath: string[]; borrowSources: number[]; leases: BorrowLease[]; breaks: SafetyState[]; continues: SafetyState[]; returns: SafetyState[]; sites: SafetyCallSite[];
-  visits: number;
+  visits: number; collectFlow:boolean; findings:FlowFinding[];
   constructor(graph: ModuleGraph, binding: BindingResult, result: CheckResult) {
     this.graph = graph; this.binding = binding; this.result = result; this.effects = new EffectAnalyzer(graph,binding,result); this.arguments = []; this.offsets = []; this.nodes = 0;
     this.substitutions = []; this.substitutionTypes = []; this.edges = []; this.seeds = []; this.escapes = []; this.memoryPath = []; this.borrowSources = []; this.leases = []; this.breaks = []; this.continues = []; this.returns = []; this.sites = []; this.arguments = [];
@@ -54,7 +60,7 @@ export class SafetyAnalyzer {
     for (const s of binding.symbols) this.borrowSources.push(-1);
     this.owners = []; for (const scope of binding.scopes) this.owners.push(-2); this.trace = false; this.resourceTypes = new Map<string,boolean>(); this.valueTypes = new Map<string,boolean>(); this.carrierTypes = new Map<string,boolean>(); this.plainTypes = new Map<string,boolean>();
     this.defaultReads = new Map<number,boolean>(); this.valueDefaults = new Map<number,boolean>();
-    this.visits = 0;
+    this.visits = 0; this.collectFlow=false;this.findings=[];
   }
   node(module: number, id: number): AstNode { return this.graph.modules[module].cached.result.ast.nodes[id]; }
   report(module: number, id: number, message: string): void {
@@ -62,6 +68,7 @@ export class SafetyAnalyzer {
     const candidate = diagnosticAt("checker",message,this.graph.modules[module].file,this.node(module,id));
     for (const d of this.result.diagnostics) if (d.file == this.graph.modules[module].file && d.token.offset == token.offset && d.code == candidate.code && d.message == candidate.message && d.generatedId == this.node(module,id).generatedId && d.generatedToken.offset == this.node(module,id).generatedStart.offset) return;
     this.result.diagnostics.push(candidate);
+    if(this.collectFlow)this.findings.push(new FlowFinding(module,id,message));
   }
   origin(sid: number): number { let at: number = sid; while (at >= 0 && this.binding.symbols[at].target >= 0) at = this.binding.symbols[at].target; return at; }
   reference(module: number, id: number): number {
@@ -1138,12 +1145,20 @@ export class SafetyAnalyzer {
     }
   }
   flow(): void {
+    const globalProfile=profileBegin();
     let globals: SafetyState = new SafetyState(this.binding.symbols.length);
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (localBinding(this.binding.symbols[sid].kind)) globals.slots[sid] = 0;
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) { if (this.trace) progressDetail("frontend: global flow "+numberToString(m)); this.walk(m,this.graph.modules[m].cached.result.ast.root,globals,[]); }
-    for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.result.files[m].types.length; id = id + 1) {
-      if (id == 0 && this.trace) progressDetail("frontend: definitions flow "+numberToString(m));
-      const n: AstNode = this.node(m,id); if (!isCallableNodeKind(n.kind) || this.binding.files[m].nodeScopes[id] < 0) continue;
+    profileEnd("flow-globals",globalProfile);
+    let modules:number[]=[];let nodes:number[]=[];
+    for(let m:number=0;m<this.graph.modules.length;m=m+1)for(let id:number=0;id<this.result.files[m].types.length;id=id+1)if(isCallableNodeKind(this.node(m,id).kind)&&this.binding.files[m].nodeScopes[id]>=0){modules.push(m);nodes.push(id);}
+    const definitionsProfile=profileBegin();const jobs:number=analysisJobs();
+    if(jobs>1&&nodes.length>1)this.parallelDefinitions(modules,nodes,jobs);else this.definitions(modules,nodes,0,nodes.length);
+    profileEnd("flow-definitions",definitionsProfile,"functions="+numberToString(nodes.length)+" jobs="+numberToString(jobs)+" precise_calls="+numberToString(this.visits));
+    if (this.trace) progressDetail("frontend: flow complete, "+numberToString(this.visits)+" precise calls");
+  }
+  definition(m:number,id:number):void{
+    const n=this.node(m,id);
       const owner: number = this.vertex(m,id); let state: SafetyState = new SafetyState(this.binding.symbols.length);
       this.initializeFields(m,id,state);
       for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (this.owner(this.binding.symbols[sid].scope) == owner && (localBinding(this.binding.symbols[sid].kind) || this.binding.symbols[sid].kind == "Parameter")) state.slots[sid] = 0;
@@ -1151,23 +1166,105 @@ export class SafetyAnalyzer {
         this.expression(m,bindingChild(this.node(m,edge.node),EdgeRole.DefaultValue),state,[owner]);
         const sid: number = this.binding.files[m].declarations[edge.node]; if (sid >= 0) { state.slots[sid] = 1; if (this.parameterProperty(m,edge.node) && this.transferType(this.result.symbolTypes[sid])) state.slots[sid] = 2; }
       }
-      const body: number = bindingChild(n,EdgeRole.Body); if (body < 0) continue;
+      const body: number = bindingChild(n,EdgeRole.Body); if (body < 0) return;
       this.breaks = []; this.continues = []; this.returns = []; this.sites = []; this.arguments = [];
       if (this.node(m,body).kind == NodeKind.BlockStatement) {
         this.walk(m,body,state,[owner]);
         if (state.exit == "") this.fieldsInitialized(m,id,state);
         if (this.node(m,body).start.kind != ";" && (functionReturn(this.result.files[m].types[id]) != "void" && !((n.get(AttributeKind.Async) == "true" || n.get(AttributeKind.IsAsync) == "true") && functionReturn(this.result.files[m].types[id]) == "Promise<void>")) && state.exit != "return") this.report(m,id,"No todas las rutas devuelven un valor");
       } else this.expression(m,body,state,[owner]);
+  }
+  definitions(modules: number[], nodes: number[], begin: number, end: number): void {
+    for (let at: number = begin; at < end; at = at+1) this.definition(modules[at],nodes[at]);
+  }
+  flowWire(task: number, count: number): string {
+    let output: string[] = ["{\"task\":"+numberToString(task)+",\"count\":"+numberToString(count)+",\"visits\":"+numberToString(this.visits)+",\"findings\":["];
+    let separator: string = "";
+    for (const finding of this.findings) {
+      output.push(separator+"["+numberToString(finding.module)+","+numberToString(finding.node)+","+quoteSource(finding.message)+"]"); separator = ",";
     }
-    if (this.trace) progressDetail("frontend: flow complete, "+numberToString(this.visits)+" precise calls");
+    output.push("]}"); return output.join("");
+  }
+  mergeFlow(text: string, task: number, count: number): boolean {
+    if (text == "") return false;
+    const value = JSON.parseValue(text);
+    const taskValue = jsonObjectGet(value,"task"); const countValue = jsonObjectGet(value,"count");
+    const visits = jsonObjectGet(value,"visits"); const findings = jsonObjectGet(value,"findings");
+    if (!jsonIsNumber(taskValue) || !jsonIsNumber(countValue) || jsonAsNumber(taskValue) != task || jsonAsNumber(countValue) != count || !jsonIsNumber(visits) || jsonAsNumber(visits) < 0 || !jsonIsArray(findings)) return false;
+    for (let at: number = 0; at < jsonArrayLength(findings); at = at+1) {
+      const item = jsonArrayGet(findings,at);
+      if (!jsonIsArray(item) || jsonArrayLength(item) != 3) return false;
+      const m = jsonArrayGet(item,0); const n = jsonArrayGet(item,1); const message = jsonArrayGet(item,2);
+      if (!jsonIsNumber(m) || !jsonIsNumber(n) || !jsonIsString(message)) return false;
+      const module: number = jsonAsNumber(m); const node: number = jsonAsNumber(n);
+      if (module < 0 || module >= this.graph.modules.length || Math.floor(module) != module || node < 0 || node >= this.result.files[module].types.length || Math.floor(node) != node) return false;
+    }
+    this.visits = this.visits+jsonAsNumber(visits);
+    for (let at: number = 0; at < jsonArrayLength(findings); at = at+1) {
+      const item = jsonArrayGet(findings,at);
+      this.report(jsonAsNumber(jsonArrayGet(item,0)),jsonAsNumber(jsonArrayGet(item,1)),jsonAsString(jsonArrayGet(item,2)));
+    }
+    return true;
+  }
+  parallelDefinitions(modules: number[], nodes: number[], requested: number): void {
+    // Fork only after global flow and effect summaries are complete. Workers
+    // retain the entire recursive/context-sensitive analysis, but mutate only
+    // their private snapshot. Only ordered diagnostic records cross the boundary.
+    const jobs: number = Math.min(requested,nodes.length);
+    const size: number = Math.max(1,Math.ceil(nodes.length/(jobs*8)));
+    const count: number = Math.ceil(nodes.length/size);
+    const directory = temporaryDirectory();
+    if (directory == "") { this.report(0,this.graph.modules[0].cached.result.ast.root,"ANALYSIS_WORKER_FAILED: "+hostError()); return; }
+    let pids: number[] = []; let next: number = 0; let complete: number = 0; let failed: boolean = false;
+    if (this.trace) progressDetail("frontend: flow workers jobs="+numberToString(jobs)+" batches="+numberToString(count));
+    const workersProfile = profileBegin();
+    while (complete < count && !failed) {
+      while (next < count && pids.length < jobs) {
+        const task: number = next; const pid: number = forkWorker();
+        if (pid < 0) { failed = true; break; }
+        if (pid == 0) {
+          this.trace = false; this.collectFlow = true; this.findings = []; this.visits = 0;
+          this.definitions(modules,nodes,task*size,Math.min(nodes.length,(task+1)*size));
+          const ok: boolean = writeText(directory+"/"+numberToString(task)+".json",this.flowWire(task,Math.min(size,nodes.length-task*size)));
+          finishWorker(ok ? 0 : 125); return;
+        }
+        pids.push(pid); next = next+1;
+      }
+      let advanced: boolean = false;
+      for (let at: number = pids.length-1; at >= 0; at = at-1) {
+        const status: number = poll(pids[at]); if (status < 0) continue;
+        advanced = true; if (status != 0) failed = true;
+        pids[at] = pids[pids.length-1]; pids.pop(); complete = complete+1;
+      }
+      if (!advanced && !failed) pause(2);
+    }
+    if (failed) { for (const pid of pids) terminate(pid); for (const pid of pids) waitWorker(pid); }
+    profileEnd("flow-workers",workersProfile,"batches="+numberToString(count)+" jobs="+numberToString(jobs));
+    const mergeProfile = profileBegin(); let bytes: number = 0;
+    // Merge only after every fork: all workers must inherit the same snapshot.
+    // Source order, rather than completion order, preserves diagnostic ordering.
+    if (!failed) for (let task: number = 0; task < count; task = task+1) {
+      const text = readText(directory+"/"+numberToString(task)+".json"); bytes = bytes+text.length;
+      if (hostError() != "" || !this.mergeFlow(text,task,Math.min(size,nodes.length-task*size))) { failed = true; break; }
+    }
+    profileEnd("flow-merge",mergeProfile,"payload_chars="+numberToString(bytes));
+    for (let task: number = 0; task < count; task = task+1) remove(directory+"/"+numberToString(task)+".json");
+    remove(directory);
+    if (failed) this.report(0,this.graph.modules[0].cached.result.ast.root,"ANALYSIS_WORKER_FAILED: el análisis paralelo no se completó; no se puede aceptar el proyecto");
   }
   run(): CheckResult {
+    if(analysisJobs()<1){this.report(0,this.graph.modules[0].cached.result.ast.root,"ANALYSIS_JOBS: ESTATIC_ANALYSIS_JOBS debe ser un entero entre 1 y 32");return this.result;}
+    const memoryProfile=profileBegin();
     if (this.trace) progressDetail("frontend: memory and captures");
     this.memoryContracts(); this.captures(); this.result.borrows = this.leases;
+    profileEnd("memory-captures",memoryProfile);
+    const effectsProfile=profileBegin();
     if (this.trace) progressDetail("frontend: effects");
     this.effects = new EffectAnalyzer(this.graph,this.binding,this.result); this.effects.trace = this.trace; this.effects.analyze(); this.result.files = this.effects.checked.files; this.result.effects = this.effects.summaries;
+    profileEnd("effects",effectsProfile);
+    const provenanceProfile=profileBegin();
     if (this.trace) progressDetail("frontend: provenance and visibility");
-    this.provenance(); this.visibility(); if (this.trace) progressDetail("frontend: flow"); this.flow(); this.result.borrows = this.leases; return this.result;
+    this.provenance(); this.visibility(); profileEnd("provenance-visibility",provenanceProfile); if (this.trace) progressDetail("frontend: flow"); this.flow(); this.result.borrows = this.leases; return this.result;
   }
 }
 export function validateSafety(graph: ModuleGraph, binding: BindingResult, out result: CheckResult, trace: boolean = false): void {

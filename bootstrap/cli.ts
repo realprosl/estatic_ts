@@ -24,6 +24,8 @@ const help=`Uso: etsc init [directorio]
   --build              Compilar y enlazar el C++ con el runtime existente
   --run                Compilar y ejecutar; propagar su código de salida
   --binary archivo     Ruta del ejecutable
+  --jobs N             Procesos de análisis (1..32; por defecto 1)
+  --profile-analysis   Tiempos, CPU y RSS por fase
   --verbose            Mostrar fases, rutas, opciones y tiempos en stderr
   --no-progress        Desactivar animaciones
   --check              Comprobar frontend e IR sin generar C++
@@ -60,10 +62,12 @@ async function compile(argv:string[], report:(event:ProgressEvent)=>void):Promis
     console.log(JSON.stringify(result,null,2));return;
   }
   let entry="",output="",binary="",configPath="",emitIr="",fromIr="",frontend="",cache="",cxx="";
-  let build=false,run=false,check=false;const roots:string[]=[],aliases:[string,string][]=[],flags:string[]=[],linkFlags:string[]=[],programArgs:string[]=[];
+  let build=false,run=false,check=false;const analysisArgs:string[]=[];const roots:string[]=[],aliases:[string,string][]=[],flags:string[]=[],linkFlags:string[]=[],programArgs:string[]=[];
   const value=(at:number):string=>{if(!argv[at])throw new UsageError(`Falta un valor para ${argv[at-1]}`);return argv[at];};
   for(let at=0;at<argv.length;at++) {
     const a=argv[at];if(a==="--"){programArgs.push(...argv.slice(at+1));break;}
+    if(a==="--profile-analysis"){analysisArgs.push(a);continue;}
+    if(a==="--jobs"){const jobs=value(++at);if(!/^[0-9]+$/.test(jobs)||Number(jobs)<1||Number(jobs)>32)throw new UsageError("--jobs requiere un entero entre 1 y 32");analysisArgs.push(a,jobs);continue;}
     if(a==="--build"){build=true;continue;}if(a==="--run"){run=build=true;continue;}if(a==="--check"){check=true;continue;}
     if(["-o","--binary","--config","--emit-ir","--from-ir","--frontend","--cache","--cxx","--root","--alias","--cxx-flag","--link-flag"].includes(a)) {
       const v=value(++at);if(v.startsWith("-")&&!["--cxx-flag","--link-flag"].includes(a))throw new UsageError(`Falta un valor para ${a}`);
@@ -78,7 +82,7 @@ async function compile(argv:string[], report:(event:ProgressEvent)=>void):Promis
   const config=await step("Cargando configuración",()=>configPath?loadConfig(configPath):!entry&&!fromIr?loadConfig():undefined);
   if(!entry&&!fromIr&&!config)throw new UsageError(help);
   entry=resolve(entry||fromIr||config!.entry);
-  const loaderArgs:string[]=[];
+  const loaderArgs:string[]=[...analysisArgs];
   for(const root of [...config?.moduleRoots??[],...roots])loaderArgs.push("--root",root);
   for(const [name,path]of [...Object.entries(config?.aliases??{}),...aliases])loaderArgs.push("--alias",name,path);
   if(cache)loaderArgs.push("--cache",resolve(cache));

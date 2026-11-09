@@ -14,7 +14,10 @@ const directory=mkdtempSync(join(root,"build-checker-test-")); let binary:string
 before(async()=>{binary=await buildLoader(join(directory,"binary"),"bootstrap/checker/demo.ets",true);});
 after(()=>rmSync(directory,{recursive:true,force:true}));
 function fixture(source:string,files:Record<string,string>={}){const dir=mkdtempSync(join(directory,"project-"));for(const[name,text]of Object.entries({"main.ets":source,...files})){mkdirSync(dirname(join(dir,name)),{recursive:true});writeFileSync(join(dir,name),text);}return{entry:join(dir,"main.ets"),cache:join(dir,"cache")};}
-function run(f:ReturnType<typeof fixture>,status=0){const p=spawnSync(binary,[f.entry,"--cache",f.cache],{encoding:"utf8",timeout:60000,maxBuffer:64*1024*1024});assert.ifError(p.error);assert.equal(p.status,status,p.stderr+p.stdout.slice(-3000));const g=JSON.parse(p.stdout);g.diagnostics.forEach(assertDiagnostic);g.binding.diagnostics.forEach(assertDiagnostic);assert.equal(g.success,status===0);return g;}
+function run(f:ReturnType<typeof fixture>,status=0){const p=spawnSync(binary,[f.entry,"--cache",f.cache],{encoding:"utf8",timeout:60000,maxBuffer:64*1024*1024});assert.ifError(p.error);assert.equal(p.status,status,p.stderr+p.stdout.slice(-3000));if(process.env.ESTATIC_TEST_COMPARE_JOBS==="1") {
+ const reference=spawnSync(binary,[f.entry,"--cache",f.cache,"--jobs","1"],{encoding:"utf8",timeout:60000,maxBuffer:64*1024*1024});
+ assert.ifError(reference.error);assert.equal(reference.status,p.status,reference.stderr);assert.equal(p.stdout,reference.stdout,"parallel checker changed checked tables or diagnostic order");
+}const g=JSON.parse(p.stdout);g.diagnostics.forEach(assertDiagnostic);g.binding.diagnostics.forEach(assertDiagnostic);assert.equal(g.success,status===0);return g;}
 function check(source:string,files:Record<string,string>={}){return run(fixture(source,files));}
 function error(source:string,pattern:RegExp,files:Record<string,string>={}){const g=run(fixture(source,files),1);assert.ok(g.diagnostics.some((d:any)=>d.phase==="checker"&&pattern.test(`${d.code}: ${d.message}`)),JSON.stringify(g.diagnostics));return g;}
 function types(g:any,kind:string){return g.files.flatMap((f:any)=>f.ast.nodes.map((n:any,i:number)=>n.kind===kind?f.types[i]:null).filter((x:any)=>x!==null));}
@@ -2016,4 +2019,28 @@ test('native effects incremental edges propagate through late callable chains',(
 });
 test('native effects incremental edges retain hidden-alias errors through returned callables',()=>{
  error('class B{x:number=0;}let b=new B();function leaf():void{b.x=2;}function make():()=>void{return leaf;}function run():void{const loan=constRef(b);const callback=make();callback();print(loan.x);}run();',/E4207/);
+});
+
+// Compare complete checked projects, including effect/capture/borrow tables and
+// source/generated diagnostic ranges. A new process per mode also tests cache hits.
+for(const jobs of [2,4])test(`parallel analysis preserves all checked results with ${jobs} workers`,()=>{
+ const sources=[...Object.values(valid),...invalid.map(([,source])=>source),
+  'function left(n:number):number{if(n==0)return 0;return right(n-1);}function right(n:number):number{return left(n);}print(left(3));',
+  'let n=1;function read():number{return n;}function one():number{const loan=ref(n);return read()+loan;}function two():number{const loan=ref(n);return read()+loan;}one();two();',
+  'let n=1;function write():void{n=2;}function f():number{const loan=constRef(n);write();return loan;}function g():number{return f();}g();',
+ ];
+ for(const source of sources){const f=fixture(source);const invoke=(count:number)=>spawnSync(binary,[f.entry,"--cache",f.cache,"--jobs",String(count)],{encoding:"utf8",timeout:60000,maxBuffer:64*1024*1024});const sequential=invoke(1);const parallel=invoke(jobs);assert.ifError(sequential.error);assert.ifError(parallel.error);assert.equal(parallel.status,sequential.status,parallel.stderr);assert.equal(parallel.stdout,sequential.stdout,source);}
+});
+test('parallel analysis profiles to stderr and removes worker files',()=>{
+ const f=fixture('function a():number{return 1;}function b():number{return a()+1;}print(b());');const temp=join(directory,'workers');mkdirSync(temp);
+ const p=spawnSync(binary,[f.entry,'--jobs','2','--profile-analysis'],{encoding:'utf8',env:{...process.env,TMPDIR:temp}});assert.equal(p.status,0,p.stderr);assert.equal(JSON.parse(p.stdout).success,true);assert.match(p.stderr,/profile flow-definitions wall_ms=.*cpu_ms=.*self_peak_rss_kib=.*worker_peak_rss_kib=.*functions=2 jobs=2/);assert.deepEqual(readdirSync(temp),[]);
+});
+test('parallel analysis fails closed when a worker directory cannot be created',()=>{
+ const f=fixture('function a():number{return 1;}function b():number{return a();}print(b());');const args=[f.entry,'--cache',f.cache];const env={...process.env,TMPDIR:join(directory,'missing','directory')};
+ const sequential=spawnSync(binary,[...args,'--jobs','1'],{encoding:'utf8',env});assert.equal(sequential.status,0,sequential.stderr);
+ const parallel=spawnSync(binary,[...args,'--jobs','2'],{encoding:'utf8',env});assert.equal(parallel.status,1,parallel.stderr);assert.equal(JSON.parse(parallel.stdout).success,false);assert.ok(JSON.parse(parallel.stdout).diagnostics.some((d:any)=>d.code==='ANALYSIS_WORKER_FAILED'));
+});
+test('analysis rejects invalid job counts instead of silently disabling checks',()=>{
+ const f=fixture('function a():void{}function b():void{}');for(const count of ['0','33','1.5','abc']){const p=spawnSync(binary,[f.entry,'--jobs',count],{encoding:'utf8'});assert.equal(p.status,2,p.stderr);assert.match(p.stderr,/--jobs/);}
+ const p=spawnSync(binary,[f.entry],{encoding:'utf8',env:{...process.env,ESTATIC_ANALYSIS_JOBS:'invalid'}});assert.equal(p.status,1,p.stderr);assert.equal(JSON.parse(p.stdout).success,false);
 });
