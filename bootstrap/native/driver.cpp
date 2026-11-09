@@ -55,7 +55,7 @@ int main(V<S> args,const S& argv0){
  V<S> loaderArgs=analysisArgs;for(auto& item:array(get(config,"moduleRoots")))loaderArgs.insert(loaderArgs.end(),{"--root",(base/str(item)).lexically_normal().string()});for(auto& path:roots)loaderArgs.insert(loaderArgs.end(),{"--root",path});const auto& aliasMap=get(config,"aliases");if(aliasMap.isObject())for(auto& [name,path]:std::get<J::Object>(aliasMap.storage))loaderArgs.insert(loaderArgs.end(),{"--alias",name,(base/str(path)).lexically_normal().string()});for(auto& [name,path]:aliases)loaderArgs.insert(loaderArgs.end(),{"--alias",name,path});if(!cache.empty())loaderArgs.insert(loaderArgs.end(),{"--cache",fs::absolute(cache).string()});if(!fromIr.empty()&&!loaderArgs.empty())throw Usage("Las opciones de módulos requieren una fuente");
  progress.detail("Entrada: "+json(js(entry)));progress.detail("Caché de sintaxis: "+json(js(cache)));
  progress.start(fromIr.empty()?"Analizando fuentes y verificando IR":"Leyendo IR");
- J project;if(!fromIr.empty())project=parseJson(read(entry));else{if(frontend.empty())frontend=(root/"native/frontend").string();V<S> command{frontend,entry};command.insert(command.end(),loaderArgs.begin(),loaderArgs.end());if(verbose)command.push_back("--verbose");progress.detail("Frontend: "+json(ja(command)));auto child=execute(command,true);try{project=parseJson(child.output);}catch(...){throw std::runtime_error("El frontend no produjo JSON válido ("+n(child.status)+")");}if(child.status||!boolean(get(project,"success")))diagnostics(project);}
+ J project;if(!fromIr.empty())project=parseJson(read(entry));else{if(frontend.empty())frontend=(root/"native/frontend").string();V<S> command{frontend,entry};command.insert(command.end(),loaderArgs.begin(),loaderArgs.end());if(verbose||progress.animated())command.push_back("--verbose");progress.detail("Frontend: "+json(ja(command)));auto child=execute(command,true);try{project=parseJson(child.output);}catch(...){throw std::runtime_error("El frontend no produjo JSON válido ("+n(child.status)+")");}if(child.status||!boolean(get(project,"success")))diagnostics(project);}
  progress.start("Generando C++ desde IR verificado");
  auto generated=generateNativeCpp(project);if(!emitIr.empty())write(fs::absolute(emitIr),json(project)+"\n");if(check){progress.summary();std::cout<<"Comprobado: "<<entry<<'\n';return 0;}
  progress.start("Guardando resultados");
@@ -66,7 +66,7 @@ int main(V<S> args,const S& argv0){
   if(config.isObject()){compileFlags=get(compiler,"flags").isArray()?strings(get(compiler,"flags")):V<S>{"-std=c++20","-O2","-pthread","-fno-exceptions","-ffunction-sections","-fdata-sections"};links=get(compiler,"linkFlags").isArray()?strings(get(compiler,"linkFlags")):V<S>{"-Wl,--gc-sections","-Wl,--as-needed","-s"};}
   compileFlags.insert(compileFlags.end(),flags.begin(),flags.end());for(auto& lib:strings(get(config,"linkLibraries")))links.push_back("-l"+lib);links.insert(links.end(),linkFlags.begin(),linkFlags.end());buildCpp(generated,cpp,binary,root,cxx,compileFlags,links,reuse?projectCache:fs::path{},reuse?base/".build/runtime":fs::path{});progress.detail("Ejecutable: "+json(js(binary)));
  }
- progress.summary();
+ progress.summary(cpp.string(),(build||boolean(get(compiler,"enabled")))?binary:"");
  if(run){V<S> command{binary};command.insert(command.end(),programArgs.begin(),programArgs.end());progress.detail("Ejecutando: "+json(ja(command)));return execute(command).status;}return 0;
 }
 }

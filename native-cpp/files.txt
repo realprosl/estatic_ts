@@ -3,6 +3,7 @@
 ./bootstrap/native/driver.cpp
 ./bootstrap/native/platform.hpp
 ./bootstrap/native/progress.hpp
+./bootstrap/native/progress.sh
 ./build-all.sh
 ./build/bootstrap/etsc/install_config.hpp
 ./build/bootstrap/etsc/native-tables.hpp
