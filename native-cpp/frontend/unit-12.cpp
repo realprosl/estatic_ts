@@ -1,375 +1,383 @@
 // Generated module. Do not edit.
 #include "estatic_common.hpp"
 
-ConstantValue constantError(std::string code, std::string message) {
-    auto v = ConstantValue{}.constructor(std::string("error"), code);
-    (v.text = message);
-    return v;
-}
-
-ConstantValue constantNumber(double value, std::string name) {
-    auto v = ConstantValue{}.constructor(std::string("number"), name);
-    (v.scalar = value);
-    return v;
-}
-
-ConstantValue constantBoolean(bool value) {
-    auto v = ConstantValue{}.constructor(std::string("boolean"), std::string("boolean"));
-    (v.scalar = (value ? 1.0 : 0.0));
-    return v;
-}
-
-ConstantValue constantString(std::string value) {
-    auto v = ConstantValue{}.constructor(std::string("string"), std::string("string"));
-    (v.text = value);
-    return v;
-}
-
-ConstantValue constantInteger(std::string text, std::string name) {
-    uint64_t bits = static_cast<uint64_t>(0ULL);
-    const uint64_t ten = static_cast<uint64_t>(10ULL);
-    const uint64_t zero = static_cast<uint64_t>(0ULL);
-    for (double at = ((::ets::string_charAt(text, 0.0) == std::string("-")) ? 1.0 : 0.0); (at < ::ets::string_length(text)); (at = (at + 1.0))) {
-        (bits = ((bits * ten) + static_cast<uint64_t>((::ets::string_charCodeAt(text, at) - 48.0))));
+std::vector<std::string> splitTypes(std::string text, std::string separator) {
+    if ((((separator == std::string("|")) || (separator == std::string("&"))) && (functionClose(text) >= 0.0))) {
+        std::vector<std::string> callable = std::vector<std::string>{text};
+        return callable;
     }
-    if ((::ets::string_charAt(text, 0.0) == std::string("-"))) {
-        (bits = (zero - bits));
-    }
-    auto v = ConstantValue{}.constructor(std::string("integer"), name);
-    (v.bits = bits);
-    return v;
-}
-
-double constantUnsignedDouble(uint64_t value) {
-    return value;
-}
-
-double constantSignedDouble(int64_t value) {
-    return value;
-}
-
-std::string constantIntegerText(ConstantValue v) {
-    const uint64_t zero = static_cast<uint64_t>(0ULL);
-    const uint64_t ten = static_cast<uint64_t>(10ULL);
-    const uint64_t sign = static_cast<uint64_t>(9223372036854775808ULL);
-    const bool negative = (::ets::string_startsWith(v.typeName, std::string("i")) && ((v.bits & sign) != zero));
-    uint64_t bits = (negative ? (zero - v.bits) : v.bits);
-    std::string text = std::string("");
-    while ((bits != zero)) {
-        (text = ets::concat(::ets::string_charAt(std::string("0123456789"), constantUnsignedDouble((bits % ten))), text));
-        (bits = (bits / ten));
-    }
-    if ((text == std::string(""))) {
-        (text = std::string("0"));
-    }
-    return (negative ? ets::concat(std::string("-"), text) : text);
-}
-
-ConstantValue constantFloat(ConstantValue v, bool explicitCast) {
-    if ((v.kind != std::string("integer"))) {
-        return v;
-    }
-    const uint64_t max = static_cast<uint64_t>(9007199254740991ULL);
-    const uint64_t zero = static_cast<uint64_t>(0ULL);
-    const uint64_t sign = static_cast<uint64_t>(9223372036854775808ULL);
-    const bool negative = (::ets::string_startsWith(v.typeName, std::string("i")) && ((v.bits & sign) != zero));
-    const uint64_t magnitude = (negative ? (zero - v.bits) : v.bits);
-    if (((!explicitCast) && (magnitude > max))) {
-        return constantError(std::string("COMPTIME_INTEGER_PRECISION"), std::string("conversión implícita pierde precisión"));
-    }
-    return constantNumber((negative ? (-constantUnsignedDouble(magnitude)) : constantUnsignedDouble(magnitude)));
-}
-
-ConstantValue constantCast(ConstantValue v, std::string name) {
-    if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("number"), std::string("f32"), std::string("f64")}, name)) {
-        if (((name == std::string("f32")) && (v.kind == std::string("integer")))) {
-            auto f = constantNumber(0.0, std::string("f32"));
-            if (::ets::string_startsWith(v.typeName, std::string("i"))) {
-                const int64_t input = static_cast<int64_t>(v.bits);
-                const float rounded = static_cast<float>(input);
-                (f.scalar = rounded);
-            } else {
-                const float rounded = static_cast<float>(v.bits);
-                (f.scalar = rounded);
-            }
-            return f;
-        }
-        auto f = constantFloat(v, true);
-        if ((f.kind != std::string("number"))) {
-            return f;
-        }
-        if ((name == std::string("f32"))) {
-            const float rounded = static_cast<float>(f.scalar);
-            (f.scalar = rounded);
-        }
-        (f.typeName = name);
-        return f;
-    }
-    if ((!ets_includes_vec<std::string>(std::vector<std::string>{std::string("i8"), std::string("u8"), std::string("i16"), std::string("u16"), std::string("i32"), std::string("u32"), std::string("i64"), std::string("u64")}, name))) {
-        return v;
-    }
-    auto result = ConstantValue{}.constructor(std::string("integer"), name);
-    const uint64_t zero = static_cast<uint64_t>(0ULL);
-    const uint64_t one = static_cast<uint64_t>(1ULL);
-    const uint64_t high = static_cast<uint64_t>(9223372036854775808ULL);
-    double width = (::ets::string_endsWith(name, std::string("8")) ? 8.0 : (::ets::string_endsWith(name, std::string("16")) ? 16.0 : (::ets::string_endsWith(name, std::string("32")) ? 32.0 : 64.0)));
-    const uint64_t mask = ((width == 64.0) ? (~zero) : ((one << static_cast<uint64_t>(width)) - one));
-    if ((v.kind == std::string("integer"))) {
-        (result.bits = (v.bits & mask));
-    } else {
-        if ((v.kind == std::string("number"))) {
-            if (((v.scalar - v.scalar) != 0.0)) {
-                return constantError(std::string("COMPTIME_INTEGER_CAST"), std::string("entero desde un valor no finito"));
-            }
-            const double truncated = ((v.scalar < 0.0) ? Math.ceil(v.scalar) : Math.floor(v.scalar));
-            const double limit = Math.pow(2.0, (::ets::string_startsWith(name, std::string("i")) ? (width - 1.0) : width));
-            if (((::ets::string_startsWith(name, std::string("i")) && ((truncated < (-limit)) || (truncated >= limit))) || (::ets::string_startsWith(name, std::string("u")) && ((truncated < 0.0) || (truncated >= limit))))) {
-                return constantError(std::string("COMPTIME_INTEGER_CAST_RANGE"), std::string("conversión fuera de rango"));
-            }
-            (result.bits = ((truncated < 0.0) ? (zero - static_cast<uint64_t>((-truncated))) : static_cast<uint64_t>(truncated)));
-            (result.bits = (result.bits & mask));
+    std::vector<std::string> result = std::vector<std::string>();
+    double round = 0.0;
+    double square = 0.0;
+    double angle = 0.0;
+    double start = 0.0;
+    for (double i = 0.0; (i < ::ets::string_length(text)); (i = (i + 1.0))) {
+        const std::string c = ::ets::string_charAt(text, i);
+        if ((c == std::string("("))) {
+            (round = (round + 1.0));
         } else {
-            return constantError(std::string("COMPTIME_INTEGER_CAST"), std::string("valor no numérico"));
+            if ((c == std::string(")"))) {
+                (round = (round - 1.0));
+            } else {
+                if ((c == std::string("["))) {
+                    (square = (square + 1.0));
+                } else {
+                    if ((c == std::string("]"))) {
+                        (square = (square - 1.0));
+                    } else {
+                        if ((c == std::string("<"))) {
+                            (angle = (angle + 1.0));
+                        } else {
+                            if (((c == std::string(">")) && (::ets::string_charAt(text, (i - 1.0)) != std::string("=")))) {
+                                (angle = (angle - 1.0));
+                            } else {
+                                if (((((c == separator) && (round == 0.0)) && (square == 0.0)) && (angle == 0.0))) {
+                                    ets_push_vec<std::string>(result, (((separator == std::string("|")) || (separator == std::string("&"))) ? ungroupElement(::ets::string_trim(::ets::string_slice(text, start, i))) : ::ets::string_trim(::ets::string_slice(text, start, i))));
+                                    (start = (i + 1.0));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
-    const uint64_t sign = ((width == 64.0) ? high : (one << static_cast<uint64_t>((width - 1.0))));
-    if ((::ets::string_startsWith(name, std::string("i")) && ((result.bits & sign) != zero))) {
-        (result.bits = (result.bits | (~mask)));
+    if ((start < ::ets::string_length(text))) {
+        ets_push_vec<std::string>(result, (((separator == std::string("|")) || (separator == std::string("&"))) ? ungroupElement(::ets::string_trim(::ets::string_slice(text, start, ::ets::string_length(text)))) : ::ets::string_trim(::ets::string_slice(text, start, ::ets::string_length(text)))));
     }
     return result;
 }
 
-int32_t constantWord(double value) {
-    if (((value - value) != 0.0)) {
-        return static_cast<int32_t>(0);
+std::string joinTypes(std::vector<std::string> parts, std::string separator) {
+    if ((parts.size() == 1.0)) {
+        return parts[static_cast<std::size_t>(0.0)];
     }
-    double truncated = ((value < 0.0) ? Math.ceil(value) : Math.floor(value));
-    (truncated = std::fmod(truncated, 4294967296.0));
-    if ((truncated < 0.0)) {
-        (truncated = (truncated + 4294967296.0));
+    std::vector<std::string> values = std::vector<std::string>();
+    for (const auto& part : parts) {
+        ets_push_vec<std::string>(values, ((functionClose(part) >= 0.0) ? ets::concat(std::string("("), part, std::string(")")) : part));
     }
-    if ((truncated >= 2147483648.0)) {
-        (truncated = (truncated - 4294967296.0));
-    }
-    return static_cast<int32_t>(truncated);
+    return ets_join_vec(values, separator);
 }
 
-ConstantValue constantNumeric(ConstantValue left, ConstantValue right, std::string op, std::string name) {
-    const bool compare = ets_includes_vec<std::string>(std::vector<std::string>{std::string("=="), std::string("!="), std::string("<"), std::string("<="), std::string(">"), std::string(">=")}, op);
-    if (((left.kind == std::string("integer")) && (right.kind == std::string("integer")))) {
-        uint64_t a = left.bits;
-        uint64_t b = right.bits;
-        const uint64_t zero = static_cast<uint64_t>(0ULL);
-        const uint64_t one = static_cast<uint64_t>(1ULL);
-        const uint64_t high = static_cast<uint64_t>(9223372036854775808ULL);
-        const bool isUnsigned = ::ets::string_startsWith(name, std::string("u"));
-        if (compare) {
-            bool yes = false;
-            if ((op == std::string("=="))) {
-                (yes = (a == b));
-            } else {
-                if ((op == std::string("!="))) {
-                    (yes = (a != b));
-                } else {
-                    if (isUnsigned) {
-                        if ((op == std::string("<"))) {
-                            (yes = (a < b));
-                        } else {
-                            if ((op == std::string("<="))) {
-                                (yes = (a <= b));
-                            } else {
-                                if ((op == std::string(">"))) {
-                                    (yes = (a > b));
-                                } else {
-                                    (yes = (a >= b));
-                                }
-                            }
-                        }
-                    } else {
-                        const int64_t x = static_cast<int64_t>(a);
-                        const int64_t y = static_cast<int64_t>(b);
-                        if ((op == std::string("<"))) {
-                            (yes = (x < y));
-                        } else {
-                            if ((op == std::string("<="))) {
-                                (yes = (x <= y));
-                            } else {
-                                if ((op == std::string(">"))) {
-                                    (yes = (x > y));
-                                } else {
-                                    (yes = (x >= y));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            return constantBoolean(yes);
-        }
-        uint64_t bits = zero;
-        const bool aSign = ((a & high) != zero);
-        const bool bSign = ((b & high) != zero);
-        if (((op == std::string("+")) || (op == std::string("-")))) {
-            (bits = ((op == std::string("+")) ? (a + b) : (a - b)));
-            if ((((!isUnsigned) && ((op == std::string("+")) ? (aSign == bSign) : (aSign != bSign))) && (((bits & high) != zero) != aSign))) {
-                return constantError(std::string("COMPTIME_INTEGER_OVERFLOW"), std::string("desbordamiento firmado"));
-            }
-        } else {
-            if ((op == std::string("*"))) {
-                const uint64_t x = ((aSign && (!isUnsigned)) ? (zero - a) : a);
-                const uint64_t y = ((bSign && (!isUnsigned)) ? (zero - b) : b);
-                const uint64_t limit = ((aSign != bSign) ? high : (high - one));
-                if ((((!isUnsigned) && (y != zero)) && (x > (limit / y)))) {
-                    return constantError(std::string("COMPTIME_INTEGER_OVERFLOW"), std::string("multiplicación fuera de rango"));
-                }
-                (bits = (a * b));
-            } else {
-                if (((op == std::string("/")) || (op == std::string("%")))) {
-                    if ((b == zero)) {
-                        return constantError(std::string("COMPTIME_INTEGER_DIVISION_ZERO"), std::string("división por cero"));
-                    }
-                    if ((((!isUnsigned) && (a == high)) && (b == (~zero)))) {
-                        return constantError(std::string("COMPTIME_INTEGER_OVERFLOW"), std::string("división o resto fuera de rango"));
-                    } else {
-                        if (isUnsigned) {
-                            (bits = ((op == std::string("/")) ? (a / b) : (a % b)));
-                        } else {
-                            const int64_t x = static_cast<int64_t>(a);
-                            const int64_t y = static_cast<int64_t>(b);
-                            const int64_t quotient = ((op == std::string("/")) ? (x / y) : (x % y));
-                            (bits = static_cast<uint64_t>(quotient));
-                        }
-                    }
-                } else {
-                    if ((op == std::string("&"))) {
-                        (bits = (a & b));
-                    } else {
-                        if ((op == std::string("|"))) {
-                            (bits = (a | b));
-                        } else {
-                            if ((op == std::string("^"))) {
-                                (bits = (a ^ b));
-                            } else {
-                                if (((op == std::string("<<")) || (op == std::string(">>")))) {
-                                    const uint64_t maxShift = static_cast<uint64_t>((((name == std::string("i64")) || (name == std::string("u64"))) ? 64.0 : 32.0));
-                                    if ((b >= maxShift)) {
-                                        return constantError(std::string("COMPTIME_INTEGER_SHIFT"), std::string("desplazamiento fuera de rango"));
-                                    }
-                                    if ((op == std::string("<<"))) {
-                                        (bits = (a << b));
-                                    } else {
-                                        if (isUnsigned) {
-                                            (bits = (a >> b));
-                                        } else {
-                                            const int64_t signedValue = static_cast<int64_t>(a);
-                                            (bits = (signedValue >> static_cast<int64_t>(b)));
-                                        }
-                                    }
-                                } else {
-                                    return constantError(std::string("COMPTIME_UNSUPPORTED"), ets::concat(std::string("operador entero "), op));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if (((name == std::string("i32")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("+"), std::string("-"), std::string("*"), std::string("/"), std::string("%")}, op))) {
-            const int64_t signedResult = static_cast<int64_t>(bits);
-            const int64_t minimum = static_cast<int64_t>(-2147483648LL);
-            const int64_t maximum = static_cast<int64_t>(2147483647LL);
-            if (((signedResult < minimum) || (signedResult > maximum))) {
-                return constantError(std::string("COMPTIME_INTEGER_OVERFLOW"), std::string("Aritmética i32 fuera de rango"));
-            }
-        }
-        auto result = ConstantValue{}.constructor(std::string("integer"), name);
-        (result.bits = bits);
-        return constantCast(result, name);
+double functionClose(std::string text) {
+    if ((!::ets::string_startsWith(text, std::string("(")))) {
+        return (-1.0);
     }
-    const auto x = constantFloat(left, false);
-    const auto y = constantFloat(right, false);
-    if ((x.kind == std::string("error"))) {
-        return x;
-    }
-    if ((y.kind == std::string("error"))) {
-        return y;
-    }
-    const double a = x.scalar;
-    const double b = y.scalar;
-    if (compare) {
-        if ((op == std::string("=="))) {
-            return constantBoolean((a == b));
+    double depth = 0.0;
+    for (double i = 0.0; (i < ::ets::string_length(text)); (i = (i + 1.0))) {
+        if ((::ets::string_charAt(text, i) == std::string("("))) {
+            (depth = (depth + 1.0));
         }
-        if ((op == std::string("!="))) {
-            return constantBoolean((a != b));
-        }
-        if ((op == std::string("<"))) {
-            return constantBoolean((a < b));
-        }
-        if ((op == std::string("<="))) {
-            return constantBoolean((a <= b));
-        }
-        if ((op == std::string(">"))) {
-            return constantBoolean((a > b));
-        }
-        return constantBoolean((a >= b));
-    }
-    if ((((op == std::string("/")) || (op == std::string("%"))) && (b == 0.0))) {
-        return constantError(std::string("COMPTIME_FLOAT_DIVISION_ZERO"), std::string("división por cero"));
-    }
-    double value = 0.0;
-    if ((op == std::string("+"))) {
-        (value = (a + b));
-    } else {
-        if ((op == std::string("-"))) {
-            (value = (a - b));
-        } else {
-            if ((op == std::string("*"))) {
-                (value = (a * b));
-            } else {
-                if ((op == std::string("/"))) {
-                    (value = (a / b));
-                } else {
-                    if ((op == std::string("%"))) {
-                        (value = std::fmod(a, b));
-                    } else {
-                        if ((op == std::string("**"))) {
-                            (value = Math.pow(a, b));
-                        } else {
-                            if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("&"), std::string("|"), std::string("^"), std::string("<<"), std::string(">>")}, op)) {
-                                const int32_t l = constantWord(a);
-                                const int32_t r = constantWord(b);
-                                int32_t result = static_cast<int32_t>(0);
-                                const int32_t shift = static_cast<int32_t>((static_cast<std::int64_t>(r) & static_cast<std::int64_t>(31.0)));
-                                if ((op == std::string("&"))) {
-                                    (result = (l & r));
-                                } else {
-                                    if ((op == std::string("|"))) {
-                                        (result = (l | r));
-                                    } else {
-                                        if ((op == std::string("^"))) {
-                                            (result = (l ^ r));
-                                        } else {
-                                            if ((op == std::string("<<"))) {
-                                                (result = (l << shift));
-                                            } else {
-                                                (result = (l >> shift));
-                                            }
-                                        }
-                                    }
-                                }
-                                (value = constantSignedDouble(static_cast<int64_t>(result)));
-                            } else {
-                                return constantError(std::string("COMPTIME_UNSUPPORTED"), ets::concat(std::string("operador numérico "), op));
-                            }
-                        }
-                    }
-                }
+        if ((::ets::string_charAt(text, i) == std::string(")"))) {
+            (depth = (depth - 1.0));
+            if (((depth == 0.0) && (::ets::string_slice(text, (i + 1.0), (i + 3.0)) == std::string("=>")))) {
+                return i;
             }
         }
     }
-    return constantCast(constantNumber(value), name);
+    return (-1.0);
 }
 
-void ets_init_bootstrap_checker_constant_4f712795() {
+std::vector<std::string> functionParams(std::string text) {
+    const double close = functionClose(text);
+    if ((close < 0.0)) {
+        std::vector<std::string> empty = std::vector<std::string>();
+        return empty;
+    }
+    return splitTypes(::ets::string_slice(text, 1.0, close), std::string(","));
+}
+
+std::string functionReturn(std::string text) {
+    const double close = functionClose(text);
+    return ((close < 0.0) ? std::string("!error") : ::ets::string_slice(text, (close + 3.0), ::ets::string_length(text)));
+}
+
+double restPosition(std::string text) {
+    const std::vector<std::string> params = functionParams(text);
+    for (double at = 0.0; (at < params.size()); (at = (at + 1.0))) {
+        if (::ets::string_startsWith(params[static_cast<std::size_t>(at)], std::string("..."))) {
+            return at;
+        }
+    }
+    return (-1.0);
+}
+
+std::string argumentType(std::string text, bool spread) {
+    if ((!::ets::string_startsWith(text, std::string("...")))) {
+        return text;
+    }
+    const std::string array = ::ets::string_slice(text, 3.0, ::ets::string_length(text));
+    if ((!::ets::string_endsWith(array, std::string("[]")))) {
+        return std::string("");
+    }
+    return (spread ? array : semanticElement(array));
+}
+
+bool numericType(std::string text) {
+    return ets_includes_vec<std::string>(std::vector<std::string>{std::string("number"), std::string("i8"), std::string("u8"), std::string("i16"), std::string("u16"), std::string("i32"), std::string("u32"), std::string("i64"), std::string("u64"), std::string("f32"), std::string("f64")}, text);
+}
+
+bool primitiveType(std::string text) {
+    return (numericType(text) || ets_includes_vec<std::string>(std::vector<std::string>{std::string("string"), std::string("boolean"), std::string("void")}, text));
+}
+
+double canonicalSymbol(std::string text) {
+    const double open = ::ets::string_indexOf(text, std::string("<"), 0.0);
+    const double end = ((open >= 0.0) ? open : ::ets::string_length(text));
+    if (((end < 2.0) || (::ets::string_charAt(text, 0.0) != std::string("#")))) {
+        return (-1.0);
+    }
+    double result = 0.0;
+    for (double at = 1.0; (at < end); (at = (at + 1.0))) {
+        const double digit = (::ets::string_charCodeAt(text, at) - 48.0);
+        if (((digit < 0.0) || (digit > 9.0))) {
+            return (-1.0);
+        }
+        (result = ((result * 10.0) + digit));
+        if ((result > 2147483647.0)) {
+            return (-1.0);
+        }
+    }
+    return result;
+}
+
+bool typeCompatible(std::string actual, std::string expected) {
+    if (((actual == std::string("!error")) || (expected == std::string("!error")))) {
+        return true;
+    }
+    if (((actual == expected) || (numericType(actual) && numericType(expected)))) {
+        return true;
+    }
+    const std::string a = ets_import_0_memoryMode(actual);
+    const std::string e = ets_import_0_memoryMode(expected);
+    if ((e == std::string("readonly"))) {
+        return typeCompatible(ets_import_2_memoryInner(actual), ets_import_2_memoryInner(expected));
+    }
+    if (((e == std::string("ref")) || (e == std::string("constRef")))) {
+        if (((e == std::string("ref")) && readonlyType(actual))) {
+            return false;
+        }
+        return ((actual == ets_import_2_memoryInner(expected)) || (ets_import_4_memoryValue(actual) == ets_import_2_memoryInner(expected)));
+    }
+    if (((a == std::string("ref")) || (a == std::string("constRef")))) {
+        return typeCompatible(ets_import_2_memoryInner(actual), expected);
+    }
+    const std::vector<std::string> unions = splitTypes(expected, std::string("|"));
+    if ((unions.size() > 1.0)) {
+        for (const auto& a : splitTypes(actual, std::string("|"))) {
+            bool found = false;
+            for (const auto& b : unions) {
+                if (typeCompatible(a, b)) {
+                    (found = true);
+                }
+            }
+            if ((!found)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
+std::string replaceType(std::string text, std::string from, std::string to) {
+    std::string result = std::string("");
+    double at = 0.0;
+    while ((at < ::ets::string_length(text))) {
+        if ((::ets::string_slice(text, at, (at + ::ets::string_length(from))) == from)) {
+            const double next = ::ets::string_charCodeAt(text, (at + ::ets::string_length(from)));
+            if ((!((next >= 48.0) && (next <= 57.0)))) {
+                const std::string before = ((at > 0.0) ? ::ets::string_charAt(text, (at - 1.0)) : std::string(""));
+                const std::string after = ::ets::string_charAt(text, (at + ::ets::string_length(from)));
+                std::string replacement = to;
+                if ((after == std::string("["))) {
+                    (replacement = aggregateElement(to));
+                } else {
+                    if (((functionClose(to) >= 0.0) && ((((before == std::string("|")) || (before == std::string("&"))) || (after == std::string("|"))) || (after == std::string("&"))))) {
+                        (replacement = ets::concat(std::string("("), to, std::string(")")));
+                    }
+                }
+                (result = ets::concat(result, replacement));
+                (at = (at + ::ets::string_length(from)));
+                continue;
+            }
+        }
+        (result = ets::concat(result, ::ets::string_charAt(text, at)));
+        (at = (at + 1.0));
+    }
+    return result;
+}
+
+std::string ets_import_0_memoryMode(std::string text) {
+    for (const auto& name : std::vector<std::string>{std::string("ptr"), std::string("constPtr"), std::string("ref"), std::string("constRef"), std::string("readonly")}) {
+        if ((::ets::string_startsWith(text, ets::concat(name, std::string("<"))) && ::ets::string_endsWith(text, std::string(">")))) {
+            double depth = 0.0;
+            for (double at = ::ets::string_length(name); (at < ::ets::string_length(text)); (at = (at + 1.0))) {
+                if ((::ets::string_charAt(text, at) == std::string("<"))) {
+                    (depth = (depth + 1.0));
+                }
+                if ((::ets::string_charAt(text, at) == std::string(">"))) {
+                    (depth = (depth - 1.0));
+                    if ((depth == 0.0)) {
+                        return ((at == (::ets::string_length(text) - 1.0)) ? name : std::string(""));
+                    }
+                }
+            }
+        }
+    }
+    return std::string("");
+}
+
+std::string ets_import_2_memoryInner(std::string text) {
+    const std::string mode = ets_import_0_memoryMode(text);
+    return ((mode == std::string("")) ? text : ::ets::string_slice(text, (::ets::string_length(mode) + 1.0), (::ets::string_length(text) - 1.0)));
+}
+
+std::string ets_import_4_memoryValue(std::string text) {
+    std::string result = text;
+    while ((ets_import_0_memoryMode(result) != std::string(""))) {
+        (result = ets_import_2_memoryInner(result));
+    }
+    return result;
+}
+
+bool ownedType(std::string text) {
+    return ((ets_import_0_memoryMode(text) == std::string("ptr")) || (ets_import_0_memoryMode(text) == std::string("constPtr")));
+}
+
+bool borrowedType(std::string text) {
+    return ((ets_import_0_memoryMode(text) == std::string("ref")) || (ets_import_0_memoryMode(text) == std::string("constRef")));
+}
+
+bool readonlyType(std::string text) {
+    return ets_includes_vec<std::string>(std::vector<std::string>{std::string("readonly"), std::string("constRef"), std::string("constPtr")}, ets_import_0_memoryMode(text));
+}
+
+std::string aggregateElement(std::string element) {
+    return ((((functionClose(element) >= 0.0) || (splitTypes(element, std::string("|")).size() > 1.0)) || (splitTypes(element, std::string("&")).size() > 1.0)) ? ets::concat(std::string("("), element, std::string(")")) : element);
+}
+
+std::string ungroupElement(std::string element) {
+    if ((::ets::string_startsWith(element, std::string("(")) && ::ets::string_endsWith(element, std::string(")")))) {
+        double depth = 0.0;
+        for (double at = 0.0; (at < ::ets::string_length(element)); (at = (at + 1.0))) {
+            if ((::ets::string_charAt(element, at) == std::string("("))) {
+                (depth = (depth + 1.0));
+            }
+            if ((::ets::string_charAt(element, at) == std::string(")"))) {
+                (depth = (depth - 1.0));
+                if ((depth == 0.0)) {
+                    return ((at == (::ets::string_length(element) - 1.0)) ? ::ets::string_slice(element, 1.0, (::ets::string_length(element) - 1.0)) : element);
+                }
+            }
+        }
+    }
+    return element;
+}
+
+std::string semanticArray(std::string element) {
+    return ets::concat(aggregateElement(element), std::string("[]"));
+}
+
+bool semanticTuple(std::string text) {
+    if ((!::ets::string_startsWith(text, std::string("[")))) {
+        return false;
+    }
+    double depth = 0.0;
+    for (double at = 0.0; (at < ::ets::string_length(text)); (at = (at + 1.0))) {
+        if ((::ets::string_charAt(text, at) == std::string("["))) {
+            (depth = (depth + 1.0));
+        }
+        if ((::ets::string_charAt(text, at) == std::string("]"))) {
+            (depth = (depth - 1.0));
+            if ((depth == 0.0)) {
+                return (at == (::ets::string_length(text) - 1.0));
+            }
+        }
+    }
+    return false;
+}
+
+std::string semanticElement(std::string text) {
+    const std::string element = ::ets::string_slice(text, 0.0, (::ets::string_length(text) - 2.0));
+    return ungroupElement(element);
+}
+
+double fixedArraySize(std::string text) {
+    if (((!::ets::string_endsWith(text, std::string("]"))) || (functionClose(text) >= 0.0))) {
+        return (-1.0);
+    }
+    const double open = ::ets::string_lastIndexOf(text, std::string("["));
+    if ((open <= 0.0)) {
+        return (-1.0);
+    }
+    double size = 0.0;
+    if (((open + 1.0) == (::ets::string_length(text) - 1.0))) {
+        return (-1.0);
+    }
+    for (double at = (open + 1.0); (at < (::ets::string_length(text) - 1.0)); (at = (at + 1.0))) {
+        const double digit = (::ets::string_charCodeAt(text, at) - 48.0);
+        if (((digit < 0.0) || (digit > 9.0))) {
+            return (-1.0);
+        }
+        (size = ((size * 10.0) + digit));
+    }
+    return size;
+}
+
+std::string fixedArrayElement(std::string text) {
+    const std::string element = ::ets::string_slice(text, 0.0, ::ets::string_lastIndexOf(text, std::string("[")));
+    return ungroupElement(element);
+}
+
+std::string semanticFixedArray(std::string element, double size) {
+    return ets::concat(aggregateElement(element), std::string("["), numberToString(size), std::string("]"));
+}
+
+bool containsMemory(std::string text) {
+    for (const auto& name : std::vector<std::string>{std::string("ptr"), std::string("constPtr"), std::string("ref"), std::string("constRef"), std::string("readonly")}) {
+        if ((::ets::string_indexOf(text, ets::concat(name, std::string("<")), 0.0) >= 0.0)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool localBinding(std::string kind) {
+    return ets_includes_vec<std::string>(std::vector<std::string>{std::string("VariableDeclaration"), std::string("UsingDeclaration"), std::string("ArrayBinding"), std::string("ObjectBinding")}, kind);
+}
+
+std::string genericBase(std::string text) {
+    if ((functionClose(text) >= 0.0)) {
+        return std::string("");
+    }
+    const double open = ::ets::string_indexOf(text, std::string("<"), 0.0);
+    if (((open <= 0.0) || (!::ets::string_endsWith(text, std::string(">"))))) {
+        return std::string("");
+    }
+    double depth = 0.0;
+    for (double at = open; (at < ::ets::string_length(text)); (at = (at + 1.0))) {
+        if ((::ets::string_charAt(text, at) == std::string("<"))) {
+            (depth = (depth + 1.0));
+        }
+        if (((::ets::string_charAt(text, at) == std::string(">")) && (::ets::string_charAt(text, (at - 1.0)) != std::string("=")))) {
+            (depth = (depth - 1.0));
+            if (((depth == 0.0) && (at != (::ets::string_length(text) - 1.0)))) {
+                return std::string("");
+            }
+        }
+    }
+    return ((depth == 0.0) ? ::ets::string_slice(text, 0.0, open) : std::string(""));
+}
+
+std::vector<std::string> genericArguments(std::string text) {
+    const std::string base = genericBase(text);
+    if ((base == std::string(""))) {
+        std::vector<std::string> empty = std::vector<std::string>();
+        return empty;
+    }
+    return splitTypes(::ets::string_slice(text, (::ets::string_length(base) + 1.0), (::ets::string_length(text) - 1.0)), std::string(","));
+}
+
+void ets_init_bootstrap_checker_types_f1a5f64a() {
 }

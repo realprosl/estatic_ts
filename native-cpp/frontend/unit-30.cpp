@@ -1,48 +1,37 @@
 // Generated module. Do not edit.
 #include "estatic_common.hpp"
 
-static inline double irIndex(std::vector<double> values, double value) {
-    for (double i = 0.0; (i < values.size()); (i = (i + 1.0))) {
-        if ((values[static_cast<std::size_t>(i)] == value)) {
-            return i;
-        }
+std::string irPlacePath(const IrFunction& f, double place, double depth) {
+    if ((((place < 0.0) || (place >= f.places.size())) || (depth > f.places.size()))) {
+        return std::string("invalid");
     }
-    return (-1.0);
-}
-
-static inline std::string ets_import_1_memoryMode(std::string text) {
-    const std::string base = genericBase(text);
-    return (ets_includes_vec<std::string>(std::vector<std::string>{std::string("ptr"), std::string("constPtr"), std::string("ref"), std::string("constRef"), std::string("readonly")}, base) ? base : std::string(""));
-}
-
-static inline std::string ets_import_3_memoryInner(std::string text) {
-    return ((ets_import_1_memoryMode(text) == std::string("")) ? text : genericArguments(text)[static_cast<std::size_t>(0.0)]);
-}
-
-static inline std::string ets_import_5_memoryValue(std::string text) {
-    std::string value = text;
-    while ((ets_import_1_memoryMode(value) != std::string(""))) {
-        (value = ets_import_3_memoryInner(value));
+    const auto p = f.places[static_cast<std::size_t>(place)];
+    if ((p.base < 0.0)) {
+        return ets::concat(std::string("p"), numberToString(place));
     }
-    return value;
-}
-
-static inline bool irSameNumbers(std::vector<double> left, std::vector<double> right) {
-    if ((left.size() != right.size())) {
-        return false;
+    const std::string base = irPlacePath(f, p.base, (depth + 1.0));
+    if ((p.kind == std::string("field"))) {
+        return ets::concat(base, std::string(".f"), numberToString(p.field));
     }
-    for (double i = 0.0; (i < left.size()); (i = (i + 1.0))) {
-        if ((left[static_cast<std::size_t>(i)] != right[static_cast<std::size_t>(i)])) {
-            return false;
-        }
+    if ((p.kind == std::string("deref"))) {
+        return ets::concat(base, std::string(".d"));
     }
-    return true;
+    if ((p.kind == std::string("index"))) {
+        const double constant = irConstantIndex(f, p.index);
+        return ets::concat(base, std::string(".i"), ((constant >= 0.0) ? numberToString(constant) : ets::concat(std::string("v"), numberToString(p.index))));
+    }
+    return base;
 }
 
-IrProject lowerProject(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult checked) {
-    auto lowering = IrLowering{}.constructor(graph, binding, checked);
-    return lowering.run();
+bool irInitialPlace(const IrFunction& f, double place) {
+    double root = place;
+    double steps = 0.0;
+    while ((((f.places[static_cast<std::size_t>(root)].base >= 0.0) && (f.places[static_cast<std::size_t>(root)].base < root)) && (steps < f.places.size()))) {
+        (root = f.places[static_cast<std::size_t>(root)].base);
+        (steps = (steps + 1.0));
+    }
+    return ((f.places[static_cast<std::size_t>(root)].parameter || (f.places[static_cast<std::size_t>(root)].global >= 0.0)) || (f.places[static_cast<std::size_t>(root)].kind == std::string("capture")));
 }
 
-void ets_init_bootstrap_ir_lower_d645e93b() {
+void ets_init_bootstrap_ir_verify_memory_9a5f20b0() {
 }

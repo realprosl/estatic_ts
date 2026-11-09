@@ -1,3 +1,3 @@
 #define ESTC_PLATFORM "linux"
 #define ESTC_ARCH "portable"
-#define ESTC_VERSION "etsc 1.29.0 (v67)"
+#define ESTC_VERSION "etsc 1.44.0 (v82)"

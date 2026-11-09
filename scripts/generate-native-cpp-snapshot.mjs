@@ -6,7 +6,7 @@
 // unity amalgamation), the hand-written driver and IR backend, the runtime,
 // the canonical type declarations and the project templates that `etsc init`
 // writes. `install.sh` consumes this tree without Node.js.
-import { mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, rmSync, cpSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { compileFile } from "../src/modules/module-loader.ts";
@@ -31,6 +31,23 @@ nativeTables(join(nativeHeaders, "native-tables.hpp"));
 writeFileSync(join(nativeHeaders, "install_config.hpp"),
   `#define ESTC_PLATFORM "linux"\n#define ESTC_ARCH "portable"\n#define ESTC_VERSION ${JSON.stringify(getTs2cppVersionLabel().replace(/^estatic/, "etsc"))}\n`);
 
+// Runtime snapshot. `runtime/` is the canonical C++ runtime: `src/` and
+// `bootstrap/` compile against it, and the generated programs `#include` its
+// headers directly. The seed ships its own copy under `native-cpp/runtime/`
+// because `install.sh` publishes a self-contained tree that must build
+// without Node.js, and because `native-cpp/build-all.sh` compiles the frontend
+// with `-I.` from `native-cpp/`, so `<runtime/...>` resolves to the local copy.
+//
+// The two trees must not drift. A stale copy makes the regenerated frontend
+// fail to compile (the seed's `ets_compiler_host.hpp` misses the host API
+// that `bootstrap/driver/host.ets` calls), which in turn blocks every
+// snapshot refresh. Copy the canonical runtime on every regeneration so the
+// seed always matches what the compiler sources actually use.
+const runtimeSource = "runtime";
+const runtimeTarget = join(directory, "runtime");
+rmSync(runtimeTarget, { recursive: true, force: true });
+cpSync(runtimeSource, runtimeTarget, { recursive: true });
+
 // Project templates. `etsc init` writes these; without them an installed
 // compiler could not create a project, so they travel with the snapshot.
 // They are generated in the same shape the installer publishes: the config is
@@ -54,4 +71,5 @@ writeFileSync(join(templates, "README.md"), readme);
 const ignore = readFileSync(join(templates, ".gitignore"), "utf8");
 writeFileSync(join(templates, ".gitignore"), ignore.endsWith("\n") ? `${ignore}.build/\n` : `${ignore}\n.build/\n`);
 console.log(`Generated ${result.modules.length} C++ frontend units in ${frontend}`);
+console.log(`Synced runtime snapshot in ${runtimeTarget}`);
 console.log(`Generated project templates in ${templates}`);

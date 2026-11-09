@@ -1,15 +1,5 @@
 // Generated module. Do not edit.
 #include "estatic_common.hpp"
 
-ets_import_7_CheckResult checkProject(ModuleGraph graph, BindingResult binding, bool trace) {
-    NativeChecker checker = NativeChecker{}.constructor(graph, binding);
-    (checker.trace = trace);
-    const ets_import_7_CheckResult checked = checker.check();
-    if (trace) {
-        printError(std::string("frontend: module records"));
-    }
-    return attachModuleRecords(graph, binding, checked);
-}
-
-void ets_init_bootstrap_checker_checker_80aa1e2f() {
+void ets_init_bootstrap_checker_effects_26f81858() {
 }

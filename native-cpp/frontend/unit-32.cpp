@@ -1,9 +1,12 @@
 // Generated module. Do not edit.
 #include "estatic_common.hpp"
 
-std::string formatIrSource(IrSource source) {
-    return ets::concat(std::string("{\"moduleId\":"), quoteSource(source.moduleId), std::string(",\"generatedId\":"), quoteSource(source.generatedId), std::string(",\"generatedStart\":"), numberToString(source.generatedStart), std::string(",\"generatedEnd\":"), numberToString(source.generatedEnd), std::string(",\"sourceHash\":"), quoteSource(source.sourceHash), std::string(",\"file\":"), quoteSource(source.file), std::string(",\"node\":"), numberToString(source.node), std::string(",\"start\":"), numberToString(source.start), std::string(",\"end\":"), numberToString(source.end), std::string("}"));
+struct IrPredecessors;
+
+std::vector<IrIssue> verifyIr(IrProject project) {
+    auto verifier = IrVerifier{}.constructor(project);
+    return verifier.run();
 }
 
-void ets_init_bootstrap_ir_format_source_2b0cfb6e() {
+void ets_init_bootstrap_ir_verify_093cf4d0() {
 }

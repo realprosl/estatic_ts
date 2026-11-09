@@ -1,3 +1,4 @@
+#include <runtime/ets_compiler_host.hpp>
 #include <bootstrap/modules/platform.hpp>
 // Generated declarations. Do not edit.
 // V17: includes granularizados por statement (AST-aware).
@@ -80,7 +81,8 @@ enum class NodeKind : int {
     UnionVariant = 66,
     UsingDeclaration = 67,
     VariableDeclaration = 68,
-    WhileStatement = 69
+    WhileStatement = 69,
+    UpdateExpression = 70
 };
 
 enum class EdgeRole : int {
@@ -180,9 +182,11 @@ enum class AttributeKind : int {
     Underlying = 50,
     Value = 51,
     Variadic = 52,
-    VariadicTypeParameter = 53
+    VariadicTypeParameter = 53,
+    Prefix = 54
 };
 
+struct Progress;
 struct ParserToken;
 struct AstAttribute;
 struct AstEdge;
@@ -233,8 +237,10 @@ struct ConstantEnvironment;
 struct ConstantLocation;
 struct NativeComptime;
 struct EffectEdge;
+struct EffectAgenda;
 struct EffectCall;
 struct EffectAnalyzer;
+struct FlowFinding;
 struct SafetyState;
 struct SafetyEdge;
 struct EscapeSite;
@@ -265,10 +271,49 @@ struct IrProject;
 struct IrLeaseSet;
 struct IrBorrowAnalysis;
 struct IrOwnershipFacts;
+struct IrPredecessors;
 struct IrFacts;
 struct IrVerifier;
 struct IrLowering;
 
+std::string environment(std::string name);
+bool environmentDefined(std::string name);
+bool setEnvironment(std::string name, std::string value);
+double forkWorker();
+void finishWorker(double status);
+double waitWorker(double pid);
+std::string temporaryDirectory();
+std::vector<double> analysisUsage();
+std::string hostError();
+bool exists(std::string fileName);
+std::string readText(std::string fileName);
+std::string stdinText();
+bool writeText(std::string fileName, std::string text);
+std::vector<std::string> files(std::string directory);
+bool remove(std::string fileName);
+double launch(std::vector<std::string> args, std::string output = std::string(""), std::string errors = std::string(""));
+double poll(double processId);
+void terminate(double processId);
+double now();
+void pause(double milliseconds);
+bool terminal();
+double columns();
+std::string compilerHome();
+std::vector<std::string> objectKeys(ets_json::Value value);
+bool directories(std::string fileName);
+double parseAnalysisJobs(std::string value);
+double analysisJobs();
+bool configureAnalysisJobs(std::string value);
+bool configureAnalysisProfile();
+std::vector<double> profileBegin();
+void profileEnd(std::string name, std::vector<double> before, std::string counts = std::string(""));
+void configureProgress(bool verbose, bool animate);
+bool progressInteractive();
+void progressStart(std::string label);
+void progressDetail(std::string text);
+void progressTick();
+void progressFinish(bool ok = true);
+void progressSummary(std::string cpp = std::string(""), std::string binary = std::string(""));
 std::string nodeKindName(NodeKind value);
 NodeKind parseNodeKind(std::string text);
 std::string edgeRoleName(EdgeRole value);
@@ -419,7 +464,7 @@ static inline std::string ets_import_1_memoryMode(std::string text);
 static inline std::string ets_import_3_memoryInner(std::string text);
 static inline std::string ets_import_5_memoryValue(std::string text);
 static inline bool irSameNumbers(std::vector<double> left, std::vector<double> right);
-IrProject lowerProject(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult checked);
+IrProject lowerProject(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult checked, bool trace = false);
 std::string bindingBoolean(bool value);
 std::string bindingNumbers(std::vector<double> values);
 std::string formatBinding(BindingResult result, ModuleGraph graph);
@@ -428,6 +473,185 @@ static inline std::string strings(std::vector<std::string> values);
 std::string formatContracts(const IrProject& project);
 std::string formatIr(IrProject project);
 static inline void runIr();
+
+struct Progress {
+    bool enabled;
+    bool verbose;
+    bool animated;
+    bool drawn;
+    std::string label;
+    std::string detail;
+    double started;
+    double total;
+    double frame;
+    double last;
+    double width;
+
+    Progress& constructor() {
+        ((*this).enabled = false);
+        ((*this).verbose = false);
+        ((*this).animated = false);
+        ((*this).drawn = false);
+        ((*this).label = std::string(""));
+        ((*this).detail = std::string(""));
+        ((*this).started = 0.0);
+        ((*this).total = 0.0);
+        ((*this).frame = 0.0);
+        ((*this).last = 0.0);
+        ((*this).width = 80.0);
+        return *this;
+}
+
+    void configure(bool verbose, bool animate) {
+        ((*this).enabled = true);
+        ((*this).verbose = verbose);
+        ((*this).animated = ((((animate && terminal()) && (!environmentDefined(std::string("NO_COLOR")))) && (environment(std::string("TERM")) != std::string("dumb"))) && (environment(std::string("CI")) == std::string(""))));
+        ((*this).width = columns());
+        ((*this).total = Date.now());
+    }
+
+    std::string scope(std::string label) const {
+        if ((::ets::string_includes(label, std::string("configuración")) || ::ets::string_startsWith(label, std::string("Leyendo")))) {
+            return std::string("setup");
+        }
+        if ((::ets::string_startsWith(label, std::string("Analizando")) || ::ets::string_startsWith(label, std::string("Verificando")))) {
+            return std::string("check");
+        }
+        if (::ets::string_startsWith(label, std::string("Guardando"))) {
+            return std::string("emit");
+        }
+        if ((::ets::string_startsWith(label, std::string("Creando")) || ::ets::string_startsWith(label, std::string("Actualizando")))) {
+            return std::string("init");
+        }
+        return std::string("build");
+    }
+
+    std::string paint(std::string text, std::string code) const {
+        return ((*this).animated ? ets::concat(std::string("\u001b["), code, std::string("m"), text, std::string("\u001b[0m")) : text);
+    }
+
+    std::string tag(std::string label) const {
+        return (*this).paint(ets::concat(std::string("["), (*this).scope(label), std::string("]")), std::string("35"));
+    }
+
+    std::string duration(double ms) const {
+        if ((ms < 1000.0)) {
+            return ets::concat(numberToString(Math.floor(ms)), std::string(" ms"));
+        }
+        if ((ms < 60000.0)) {
+            const double fraction = Math.floor((std::fmod(ms, 1000.0) / 10.0));
+            return ets::concat(numberToString(Math.floor((ms / 1000.0))), std::string("."), ((fraction < 10.0) ? std::string("0") : std::string("")), numberToString(fraction), std::string(" s"));
+        }
+        return ets::concat(numberToString(Math.floor((ms / 60000.0))), std::string(" min "), numberToString(Math.floor((std::fmod(ms, 60000.0) / 1000.0))), std::string(" s"));
+    }
+
+    std::string clean(std::string text) const {
+        std::string result = std::string("");
+        for (double at = 0.0; (at < ::ets::string_length(text)); (at += 1.0)) {
+            const double code = ::ets::string_charCodeAt(text, at);
+            if (((code < 32.0) || (code == 127.0))) {
+                (result += std::string(" "));
+            } else {
+                (result += ::ets::string_charAt(text, at));
+            }
+        }
+        return result;
+    }
+
+    std::string displayPath(std::string text) const {
+        const std::string base = ets::concat(normalizePath(std::string(".")), std::string("/"));
+        const std::string normalized = normalizePath(text);
+        return (*this).clean((::ets::string_startsWith(normalized, base) ? ::ets::string_slice(normalized, ::ets::string_length(base), ::ets::string_length(normalized)) : text));
+    }
+
+    void clear() {
+        if ((*this).drawn) {
+            writeError(std::string("\r\u001b[2K"));
+            ((*this).drawn = false);
+        }
+    }
+
+    void render(bool force = false) {
+        if ((((!(*this).animated) || ((*this).label == std::string(""))) || ((!force) && ((Date.now() - (*this).last) < 80.0)))) {
+            return;
+        }
+        const std::vector<std::string> symbols = std::vector<std::string>{std::string("⠋"), std::string("⠙"), std::string("⠹"), std::string("⠸"), std::string("⠼"), std::string("⠴"), std::string("⠦"), std::string("⠧"), std::string("⠇"), std::string("⠏")};
+        const std::string suffix = ets::concat(std::string(" · "), (*this).duration((Date.now() - (*this).started)));
+        const std::string prefix = ets::concat(std::string("["), (*this).scope((*this).label), std::string("] "));
+        const double available = Math.max(1.0, ((((*this).width - ::ets::string_length(prefix)) - ::ets::string_length(suffix)) - 4.0));
+        std::string text = (*this).clean((((*this).detail != std::string("")) ? (*this).detail : (*this).label));
+        if ((::ets::string_length(text) > available)) {
+            const double left = Math.floor(((available - 1.0) / 2.0));
+            const double right = ((available - 1.0) - left);
+            (text = ets::concat(::ets::string_slice(text, 0.0, left), std::string("…"), ((right > 0.0) ? ::ets::string_slice(text, (::ets::string_length(text) - right), ::ets::string_length(text)) : std::string(""))));
+        }
+        (*this).clear();
+        writeError(ets::concat((*this).tag((*this).label), std::string(" "), (*this).paint(symbols[static_cast<std::size_t>(std::fmod((*this).frame, 10.0))], std::string("36")), std::string(" "), text, (*this).paint(suffix, std::string("2"))));
+        ((*this).frame += 1.0);
+        ((*this).last = Date.now());
+        ((*this).drawn = true);
+    }
+
+    void finish(bool ok = true) {
+        if (((*this).label == std::string(""))) {
+            return;
+        }
+        (*this).clear();
+        if (((*this).animated || (*this).verbose)) {
+            printError(ets::concat((*this).tag((*this).label), std::string(" "), (*this).paint((ok ? std::string("✓") : std::string("✗")), (ok ? std::string("32") : std::string("31"))), std::string(" "), (*this).label, std::string(" ("), (*this).duration((Date.now() - (*this).started)), std::string(")")));
+        }
+        ((*this).label = std::string(""));
+        ((*this).detail = std::string(""));
+    }
+
+    void start(std::string label) {
+        (*this).finish();
+        ((*this).label = label);
+        ((*this).started = Date.now());
+        ((*this).frame = 0.0);
+        if ((*this).animated) {
+            (*this).render(true);
+        } else {
+            if ((*this).verbose) {
+                printError(ets::concat((*this).tag(label), std::string(" > "), label));
+            }
+        }
+    }
+
+    void update(std::string text) {
+        if ((!(*this).enabled)) {
+            printError(text);
+            return;
+        }
+        if (((!(*this).verbose) && ((!(*this).animated) || (!::ets::string_startsWith(text, std::string("frontend: ")))))) {
+            return;
+        }
+        ((*this).detail = text);
+        if (((!(*this).verbose) && ::ets::string_startsWith(text, std::string("frontend: ")))) {
+            ((*this).detail = ::ets::string_slice(text, 10.0, ::ets::string_length(text)));
+        }
+        if ((*this).animated) {
+            (*this).render();
+        } else {
+            printError(ets::concat(std::string("  "), text));
+        }
+    }
+
+    void summary(std::string cpp = std::string(""), std::string binary = std::string("")) {
+        (*this).finish();
+        if (((*this).animated || (*this).verbose)) {
+            printError(ets::concat((*this).paint(std::string("[etsc]"), std::string("35")), std::string(" "), (*this).paint(std::string("✓"), std::string("32")), std::string(" Compilación completada ("), (*this).duration((Date.now() - (*this).total)), std::string(")")));
+        }
+        if (((*this).animated && (!(*this).verbose))) {
+            if ((cpp != std::string(""))) {
+                printError(ets::concat((*this).paint(std::string("       ↳"), std::string("2")), std::string(" C++  "), (*this).displayPath(cpp)));
+            }
+            if ((binary != std::string(""))) {
+                printError(ets::concat((*this).paint(std::string("       ↳"), std::string("2")), std::string(" bin  "), (*this).displayPath(binary)));
+            }
+        }
+    }
+};
 
 struct ParserToken {
     std::string kind;
@@ -2451,14 +2675,23 @@ struct Parser {
         if ((((((kind == std::string("<")) || (kind == std::string("<="))) || (kind == std::string(">"))) || (kind == std::string(">="))) || (kind == std::string("instanceof")))) {
             return 5.0;
         }
-        if ((((((kind == std::string("|")) || (kind == std::string("&"))) || (kind == std::string("^"))) || (kind == std::string("<<"))) || (kind == std::string(">>")))) {
+        if ((kind == std::string("|"))) {
             return 6.0;
         }
-        if (((kind == std::string("+")) || (kind == std::string("-")))) {
+        if ((kind == std::string("^"))) {
             return 7.0;
         }
-        if ((((kind == std::string("*")) || (kind == std::string("/"))) || (kind == std::string("%")))) {
+        if ((kind == std::string("&"))) {
             return 8.0;
+        }
+        if (((kind == std::string("<<")) || (kind == std::string(">>")))) {
+            return 9.0;
+        }
+        if (((kind == std::string("+")) || (kind == std::string("-")))) {
+            return 10.0;
+        }
+        if ((((kind == std::string("*")) || (kind == std::string("/"))) || (kind == std::string("%")))) {
+            return 11.0;
         }
         return 0.0;
     }
@@ -2494,6 +2727,16 @@ struct Parser {
 
     double unary() {
         const ParserToken op = (*this).peek(0.0);
+        if (((op.kind == std::string("++")) || (op.kind == std::string("--")))) {
+            (*this).take();
+            (*this).skipNewlines();
+            if ((!(*this).enter())) {
+                return (*this).add(NodeKind::ErrorNode, op, op);
+            }
+            const double target = (*this).unary();
+            (*this).leave();
+            return (*this).update(target, op, true);
+        }
         if (((((((op.kind == std::string("!")) || (op.kind == std::string("-"))) || (op.kind == std::string("+"))) || (op.kind == std::string("~"))) || (op.kind == std::string("typeof"))) || (op.kind == std::string("await")))) {
             (*this).take();
             if ((!(*this).enter())) {
@@ -2508,7 +2751,10 @@ struct Parser {
             (*this).edge(result, EdgeRole::Operand, operand);
             return result;
         }
-        const double operand = (*this).postfix();
+        double operand = (*this).postfix();
+        if ((((*this).check(std::string("++")) || (*this).check(std::string("--"))) && ((*this).peek(0.0).line == (*this).node(operand).end.endLine))) {
+            (operand = (*this).update(operand, (*this).take(), false));
+        }
         if (((*this).check(std::string("as")) || (*this).check(std::string("satisfies")))) {
             const ParserToken op = (*this).take();
             const std::string annotation = (*this).typeName();
@@ -2520,6 +2766,18 @@ struct Parser {
             return result;
         }
         return operand;
+    }
+
+    double update(double target, ParserToken op, bool prefix) {
+        const NodeKind kind = (*this).node(target).kind;
+        if ((!ets_includes_vec<NodeKind>(std::vector<NodeKind>{NodeKind::IdentifierExpression, NodeKind::MemberExpression, NodeKind::IndexExpression}, kind))) {
+            (*this).reportAt(op, ets::concat(std::string("El operando de '"), op.lexeme, std::string("' debe ser una variable, campo o índice")));
+        }
+        const double result = (*this).add(NodeKind::UpdateExpression, (prefix ? op : (*this).node(target).start), (prefix ? (*this).node(target).end : op));
+        (*this).attr(result, AttributeKind::Operator, op.lexeme);
+        (*this).attr(result, AttributeKind::Prefix, (prefix ? std::string("true") : std::string("false")));
+        (*this).edge(result, EdgeRole::Target, target);
+        return result;
     }
 
     std::string genericMethodFollower() const {
@@ -2755,10 +3013,13 @@ struct Parser {
         }
         if ((token.kind == std::string("{"))) {
             const double result = (*this).add(NodeKind::ObjectLiteralExpression, token, token);
+            (*this).skipNewlines();
             while (((!(*this).check(std::string("}"))) && (!(*this).check(std::string("eof"))))) {
                 const ParserToken key = (*this).expect(std::string("identifier"));
                 double value = (-1.0);
+                (*this).skipNewlines();
                 if ((*this).accept(std::string(":"))) {
+                    (*this).skipNewlines();
                     (value = (*this).expression());
                 } else {
                     (value = (*this).add(NodeKind::IdentifierExpression, key, key));
@@ -2768,9 +3029,11 @@ struct Parser {
                 (*this).attr(property, AttributeKind::Key, key.lexeme);
                 (*this).edge(property, EdgeRole::Value, value);
                 (*this).edge(result, EdgeRole::Properties, property);
+                (*this).skipNewlines();
                 if ((!(*this).accept(std::string(",")))) {
                     break;
                 }
+                (*this).skipNewlines();
             }
             (*this).setEnd(result, (*this).expect(std::string("}")));
             return result;
@@ -3055,7 +3318,7 @@ struct Lexer {
             }
         }
         const std::string next = (*this).peek(0.0);
-        if ((((newlines > 0.0) && ((*this).depth == 0.0)) && (!((next != std::string("")) && ::ets::string_includes(std::string(".([+-*/%=?:<>!&|^~"), next, 0.0))))) {
+        if ((((newlines > 0.0) && ((*this).depth == 0.0)) && (((!((next != std::string("")) && ::ets::string_includes(std::string(".([+-*/%=?:<>!&|^~"), next, 0.0))) || (ets::concat(next, (*this).peek(1.0)) == std::string("++"))) || (ets::concat(next, (*this).peek(1.0)) == std::string("--"))))) {
             (*this).emit(std::string("newline"), std::string("\n"), (*this).offset, (*this).line, (*this).column);
         }
     }
@@ -3320,7 +3583,7 @@ struct Lexer {
             return;
         }
         const std::string two = ets::concat((*this).peek(0.0), (*this).peek(1.0));
-        const std::vector<std::string> doubles = std::vector<std::string>{std::string("=="), std::string("!="), std::string("<="), std::string(">="), std::string("&&"), std::string("||"), std::string("=>"), std::string("??"), std::string("?."), std::string("+="), std::string("-="), std::string("*="), std::string("/="), std::string("%="), std::string("&="), std::string("|="), std::string("^=")};
+        const std::vector<std::string> doubles = std::vector<std::string>{std::string("++"), std::string("--"), std::string("=="), std::string("!="), std::string("<="), std::string(">="), std::string("&&"), std::string("||"), std::string("=>"), std::string("??"), std::string("?."), std::string("+="), std::string("-="), std::string("*="), std::string("/="), std::string("%="), std::string("&="), std::string("|="), std::string("^=")};
         if (ets_includes_vec<std::string>(doubles, two)) {
             (*this).advance();
             (*this).advance();
@@ -3904,7 +4167,7 @@ struct ModuleLoader {
             return graph;
         }
         if ((*this).options.verbose) {
-            printError(ets::concat(std::string("frontend: reading/parsing "), canonical));
+            progressDetail(ets::concat(std::string("frontend: reading/parsing "), canonical));
         }
         std::vector<LoadedFile> discovered = std::vector<LoadedFile>{readModule(canonical, graph, cache)};
         std::vector<double> stack = std::vector<double>{0.0};
@@ -3942,7 +4205,7 @@ struct ModuleLoader {
                     }
                     if ((existing < 0.0)) {
                         if ((*this).options.verbose) {
-                            printError(ets::concat(std::string("frontend: reading/parsing "), dependency));
+                            progressDetail(ets::concat(std::string("frontend: reading/parsing "), dependency));
                         }
                         ets_push_vec<LoadedFile>(discovered, readModule(dependency, graph, cache));
                         ets_push_vec<double>(stack, (discovered.size() - 1.0));
@@ -5857,7 +6120,7 @@ struct NativeComptime {
             if (((nodeBegin(n) >= nodeBegin((*this).node((*this).rootModule, (*this).rootNode))) || ((*this).functionOwner((*this).binding.files[static_cast<std::size_t>((*this).rootModule)].nodeScopes[static_cast<std::size_t>(id)]) != rootOwner))) {
                 continue;
             }
-            if (((((n.kind == NodeKind::AssignmentExpression) || (n.kind == NodeKind::CompoundAssignmentExpression)) || (n.kind == NodeKind::DeleteStatement)) && ((*this).directRoot((*this).rootModule, bindingChild(n, EdgeRole::Target)) == sid))) {
+            if ((((((n.kind == NodeKind::AssignmentExpression) || (n.kind == NodeKind::CompoundAssignmentExpression)) || (n.kind == NodeKind::UpdateExpression)) || (n.kind == NodeKind::DeleteStatement)) && ((*this).directRoot((*this).rootModule, bindingChild(n, EdgeRole::Target)) == sid))) {
                 return true;
             }
             if ((((n.kind == NodeKind::MemberCallExpression) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("push"), std::string("pop"), std::string("sort"), std::string("set"), std::string("add"), std::string("delete"), std::string("clear")}, n.get(AttributeKind::Method))) && ((*this).directRoot((*this).rootModule, bindingChild(n, EdgeRole::Object)) == sid))) {
@@ -6406,6 +6669,16 @@ struct NativeComptime {
                 const int32_t bits = constantWord(v.scalar);
                 return (*this).put(constantNumber(constantSignedDouble(static_cast<int64_t>((~bits)))), module, id);
             }
+        }
+        if ((n.kind == NodeKind::UpdateExpression)) {
+            const double target = bindingChild(n, EdgeRole::Target);
+            const ConstantLocation location = (*this).location(module, target, environment, mode);
+            const double previous = (*this).load(location, module, target);
+            const std::string name = (*this).checked.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(id)];
+            const double one = (*this).put(constantCast(constantNumber(1.0), name), module, id);
+            const double value = (*this).convert((*this).binary(module, id, previous, one, ((n.get(AttributeKind::Operator) == std::string("++")) ? std::string("+") : std::string("-"))), name, module, id);
+            (*this).store(location, value, module, target);
+            return ((n.get(AttributeKind::Prefix) == std::string("true")) ? value : previous);
         }
         if (((n.kind == NodeKind::AssignmentExpression) || (n.kind == NodeKind::CompoundAssignmentExpression))) {
             const double target = bindingChild(n, EdgeRole::Target);
@@ -7608,6 +7881,52 @@ struct EffectEdge {
     }
 };
 
+struct EffectAgenda {
+    std::vector<double> values;
+
+    EffectAgenda& constructor() {
+        ((*this).values = std::vector<double>());
+        return *this;
+}
+
+    void push(double value) {
+        double at = (*this).values.size();
+        ets_push_vec<double>((*this).values, value);
+        while ((at > 0.0)) {
+            const double parent = Math.floor(((at - 1.0) / 2.0));
+            if (((*this).values[static_cast<std::size_t>(parent)] <= value)) {
+                break;
+            }
+            ets_set_vec<double>((*this).values, at, (*this).values[static_cast<std::size_t>(parent)]);
+            (at = parent);
+        }
+        ets_set_vec<double>((*this).values, at, value);
+    }
+
+    double pop() {
+        const double first = (*this).values[static_cast<std::size_t>(0.0)];
+        const double last = (*this).values[static_cast<std::size_t>(((*this).values.size() - 1.0))];
+        ets_pop_vec<double>((*this).values);
+        if (((*this).values.size() == 0.0)) {
+            return first;
+        }
+        double at = 0.0;
+        while ((((at * 2.0) + 1.0) < (*this).values.size())) {
+            double child = ((at * 2.0) + 1.0);
+            if ((((child + 1.0) < (*this).values.size()) && ((*this).values[static_cast<std::size_t>((child + 1.0))] < (*this).values[static_cast<std::size_t>(child)]))) {
+                (child = (child + 1.0));
+            }
+            if (((*this).values[static_cast<std::size_t>(child)] >= last)) {
+                break;
+            }
+            ets_set_vec<double>((*this).values, at, (*this).values[static_cast<std::size_t>(child)]);
+            (at = child);
+        }
+        ets_set_vec<double>((*this).values, at, last);
+        return first;
+    }
+};
+
 struct EffectCall {
     double module;
     double node;
@@ -7645,6 +7964,14 @@ struct EffectAnalyzer {
     std::vector<double> owners;
     ets::Map<std::string, bool> edgeKeys;
     bool trace;
+    std::vector<double> outgoingHeads;
+    std::vector<double> outgoingNext;
+    std::vector<bool> edgeQueued;
+    EffectAgenda agenda;
+    EffectAgenda deferredAgenda;
+    bool propagating;
+    double edgeCursor;
+    double edgeVisits;
 
     EffectAnalyzer& constructor(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult checked) {
         ((*this).graph = graph);
@@ -7661,6 +7988,14 @@ struct EffectAnalyzer {
         ((*this).edgeKeys = ets::Map<std::string, bool>{});
         ((*this).trace = false);
         ((*this).functionIndices = std::vector<std::vector<double>>());
+        ((*this).outgoingHeads = std::vector<double>());
+        ((*this).outgoingNext = std::vector<double>());
+        ((*this).edgeQueued = std::vector<bool>());
+        ((*this).agenda = EffectAgenda{}.constructor());
+        ((*this).deferredAgenda = EffectAgenda{}.constructor());
+        ((*this).propagating = false);
+        ((*this).edgeCursor = (-1.0));
+        ((*this).edgeVisits = 0.0);
         for (const auto& scope : binding.scopes) {
             ets_push_vec<double>((*this).owners, (-2.0));
         }
@@ -7812,6 +8147,7 @@ struct EffectAnalyzer {
             (*this).points[static_cast<std::size_t>(vertex)].taskSet.set(source, true);
             ets_push_vec<double>((*this).points[static_cast<std::size_t>(vertex)].tasks, source);
             ((*this).changed = true);
+            (*this).scheduleVertex(vertex);
         }
     }
 
@@ -7858,6 +8194,24 @@ struct EffectAnalyzer {
         return (-1.0);
     }
 
+    void scheduleEdge(double edge) {
+        if ((*this).edgeQueued[static_cast<std::size_t>(edge)]) {
+            return;
+        }
+        ets_set_vec<bool>((*this).edgeQueued, edge, true);
+        if (((*this).propagating && (edge <= (*this).edgeCursor))) {
+            (*this).deferredAgenda.push(edge);
+        } else {
+            (*this).agenda.push(edge);
+        }
+    }
+
+    void scheduleVertex(double vertex) {
+        for (double edge = (*this).outgoingHeads[static_cast<std::size_t>(vertex)]; (edge >= 0.0); (edge = (*this).outgoingNext[static_cast<std::size_t>(edge)])) {
+            (*this).scheduleEdge(edge);
+        }
+    }
+
     void addEdge(double source, double target, bool callable) {
         if (((source < 0.0) || (target < 0.0))) {
             return;
@@ -7867,7 +8221,12 @@ struct EffectAnalyzer {
             return;
         }
         (*this).edgeKeys.set(key, true);
+        const double edge = (*this).edges.size();
         ets_push_vec<EffectEdge>((*this).edges, EffectEdge{}.constructor(source, target, callable));
+        ets_push_vec<double>((*this).outgoingNext, (*this).outgoingHeads[static_cast<std::size_t>(source)]);
+        ets_set_vec<double>((*this).outgoingHeads, source, edge);
+        ets_push_vec<bool>((*this).edgeQueued, false);
+        (*this).scheduleEdge(edge);
         ((*this).changed = true);
     }
 
@@ -7876,6 +8235,7 @@ struct EffectAnalyzer {
             (*this).points[static_cast<std::size_t>(vertex)].targetSet.set(target, true);
             ets_push_vec<double>((*this).points[static_cast<std::size_t>(vertex)].targets, target);
             ((*this).changed = true);
+            (*this).scheduleVertex(vertex);
         }
     }
 
@@ -7884,6 +8244,7 @@ struct EffectAnalyzer {
             (*this).points[static_cast<std::size_t>(vertex)].originSet.set(symbol, true);
             ets_push_vec<double>((*this).points[static_cast<std::size_t>(vertex)].origins, symbol);
             ((*this).changed = true);
+            (*this).scheduleVertex(vertex);
         }
     }
 
@@ -8166,8 +8527,11 @@ struct EffectAnalyzer {
     }
 
     void build() {
+        const auto graphProfile = profileBegin();
+        const double graphStarted = Date.now();
+        double denseVisits = 0.0;
         if ((*this).trace) {
-            printError(std::string("frontend: effect functions"));
+            progressDetail(std::string("frontend: effect functions"));
         }
         for (double m = 0.0; (m < (*this).graph.modules.size()); (m = (m + 1.0))) {
             for (double id = 0.0; (id < (*this).checked.files[static_cast<std::size_t>(m)].types.size()); (id = (id + 1.0))) {
@@ -8198,10 +8562,11 @@ struct EffectAnalyzer {
             }
         }
         if ((*this).trace) {
-            printError(ets::concat(std::string("frontend: effect points "), numberToString((((*this).nodes + (*this).binding.symbols.size()) + (*this).summaries.size()))));
+            progressDetail(ets::concat(std::string("frontend: effect points "), numberToString((((*this).nodes + (*this).binding.symbols.size()) + (*this).summaries.size()))));
         }
         for (double i = 0.0; (i < (((*this).nodes + (*this).binding.symbols.size()) + (*this).summaries.size())); (i = (i + 1.0))) {
             ets_push_vec<EffectPoint>((*this).points, EffectPoint{}.constructor());
+            ets_push_vec<double>((*this).outgoingHeads, (-1.0));
         }
         for (double sid = 0.0; (sid < (*this).binding.symbols.size()); (sid = (sid + 1.0))) {
             if (((((*this).binding.symbols[static_cast<std::size_t>(sid)].kind == std::string("Parameter")) && (::ets::string_indexOf((*this).checked.symbolTypes[static_cast<std::size_t>(sid)], std::string("Promise<"), 0.0) >= 0.0)) && (::ets::string_indexOf((*this).checked.symbolTypes[static_cast<std::size_t>(sid)], std::string("=>"), 0.0) < 0.0))) {
@@ -8232,7 +8597,7 @@ struct EffectAnalyzer {
         for (double m = 0.0; (m < (*this).graph.modules.size()); (m = (m + 1.0))) {
             for (double id = 0.0; (id < (*this).checked.files[static_cast<std::size_t>(m)].types.size()); (id = (id + 1.0))) {
                 if (((id == 0.0) && (*this).trace)) {
-                    printError(ets::concat(std::string("frontend: effect module "), numberToString(m)));
+                    progressDetail(ets::concat(std::string("frontend: effect module "), numberToString(m)));
                 }
                 const double scope = (*this).binding.files[static_cast<std::size_t>(m)].nodeScopes[static_cast<std::size_t>(id)];
                 if ((scope < 0.0)) {
@@ -8407,70 +8772,73 @@ struct EffectAnalyzer {
         for (const auto& c : (*this).checked.captures) {
             (*this).addEdge((*this).symbol(c.symbol), (*this).vertex(c.module, c.closure), false);
         }
+        profileEnd(std::string("effect-graph-assembly"), graphProfile);
         ((*this).changed = true);
         double graphPass = 0.0;
         while ((*this).changed) {
+            const auto linkingProfile = profileBegin();
             (graphPass = (graphPass + 1.0));
             if ((*this).trace) {
-                printError(ets::concat(std::string("frontend: effect graph pass "), numberToString(graphPass), std::string(", "), numberToString((*this).edges.size()), std::string(" edges")));
+                progressDetail(ets::concat(std::string("frontend: effect graph pass "), numberToString(graphPass), std::string(", "), numberToString((*this).edges.size()), std::string(" edges")));
             }
             ((*this).changed = false);
             for (double callIndex = 0.0; (callIndex < (*this).calls.size()); (callIndex = (callIndex + 1.0))) {
-                const auto call = (*this).calls[static_cast<std::size_t>(callIndex)];
-                for (const auto& target : (*this).callTargets(call.module, call.node)) {
+                const double callModule = (*this).calls[static_cast<std::size_t>(callIndex)].module;
+                const double callNode = (*this).calls[static_cast<std::size_t>(callIndex)].node;
+                for (const auto& target : (*this).callTargets(callModule, callNode)) {
                     if ((*this).calls[static_cast<std::size_t>(callIndex)].linked.has(target)) {
                         continue;
                     }
                     (*this).calls[static_cast<std::size_t>(callIndex)].linked.set(target, true);
                     const auto summary = (*this).summaries[static_cast<std::size_t>(target)];
                     double at = 0.0;
-                    if (((*this).synchronousCallbacks(call.module, call.node).size() > 0.0)) {
-                        for (const auto& input : (*this).callbackInputs(call.module, call.node)) {
+                    if (((*this).synchronousCallbacks(callModule, callNode).size() > 0.0)) {
+                        for (const auto& input : (*this).callbackInputs(callModule, callNode)) {
                             if ((at < summary.parameters.size())) {
-                                (*this).addEdge((*this).vertex(call.module, input), (*this).symbol(summary.parameters[static_cast<std::size_t>(at)]), true);
+                                (*this).addEdge((*this).vertex(callModule, input), (*this).symbol(summary.parameters[static_cast<std::size_t>(at)]), true);
                             }
                             (at = (at + 1.0));
                         }
-                        if ((((*this).node(call.module, call.node).get(AttributeKind::Method) == std::string("reduce")) && (summary.parameters.size() > 0.0))) {
+                        if ((((*this).node(callModule, callNode).get(AttributeKind::Method) == std::string("reduce")) && (summary.parameters.size() > 0.0))) {
                             (*this).addEdge((*this).returnVertex(target), (*this).symbol(summary.parameters[static_cast<std::size_t>(0.0)]), true);
                         }
                     } else {
-                        if ((!(*this).suspensionNode(call.module, call.node))) {
-                            for (const auto& e : (*this).node(call.module, call.node).edges) {
+                        if ((!(*this).suspensionNode(callModule, callNode))) {
+                            for (const auto& e : (*this).node(callModule, callNode).edges) {
                                 if ((e.role == EdgeRole::Args)) {
-                                    const double position = argumentParameter((*this).checked.files[static_cast<std::size_t>(call.module)], e.node, at);
+                                    const double position = argumentParameter((*this).checked.files[static_cast<std::size_t>(callModule)], e.node, at);
                                     if ((position < summary.parameters.size())) {
-                                        (*this).addEdge((*this).vertex(call.module, e.node), (*this).symbol(summary.parameters[static_cast<std::size_t>(position)]), true);
+                                        (*this).addEdge((*this).vertex(callModule, e.node), (*this).symbol(summary.parameters[static_cast<std::size_t>(position)]), true);
                                     }
                                     (at = (at + 1.0));
                                 }
                             }
                         }
                     }
-                    const bool suspended = (*this).suspensionNode(call.module, call.node);
+                    const bool suspended = (*this).suspensionNode(callModule, callNode);
                     if (((*this).asynchronous(target) && (!suspended))) {
-                        (*this).addTask((*this).vertex(call.module, call.node), (*this).vertex(call.module, call.node));
-                        for (const auto& edge : (*this).node(call.module, call.node).edges) {
+                        (*this).addTask((*this).vertex(callModule, callNode), (*this).vertex(callModule, callNode));
+                        for (const auto& edge : (*this).node(callModule, callNode).edges) {
                             if (((edge.role == EdgeRole::Args) || (edge.role == EdgeRole::Object))) {
-                                (*this).addEdge((*this).vertex(call.module, edge.node), (*this).vertex(call.module, call.node), false);
+                                (*this).addEdge((*this).vertex(callModule, edge.node), (*this).vertex(callModule, callNode), false);
                             }
                         }
-                        const double callee = (*this).reference(call.module, call.node);
+                        const double callee = (*this).reference(callModule, callNode);
                         if ((callee >= 0.0)) {
-                            (*this).addEdge((*this).symbol(callee), (*this).vertex(call.module, call.node), false);
+                            (*this).addEdge((*this).symbol(callee), (*this).vertex(callModule, callNode), false);
                         }
                         for (const auto& parameter : summary.parameters) {
                             const auto symbol = (*this).binding.symbols[static_cast<std::size_t>(parameter)];
                             const double fallback = bindingChild((*this).node(symbol.module, symbol.node), EdgeRole::DefaultValue);
                             if ((fallback >= 0.0)) {
-                                (*this).addEdge((*this).vertex(symbol.module, fallback), (*this).vertex(call.module, call.node), false);
+                                (*this).addEdge((*this).vertex(symbol.module, fallback), (*this).vertex(callModule, callNode), false);
                             }
                         }
                     } else {
-                        (*this).addEdge((*this).returnVertex(target), (*this).vertex(call.module, call.node), true);
+                        (*this).addEdge((*this).returnVertex(target), (*this).vertex(callModule, callNode), true);
                     }
-                    if ((suspended && ((*this).node(call.module, call.node).kind == NodeKind::ForOfStatement))) {
-                        const double sid = (*this).binding.files[static_cast<std::size_t>(call.module)].declarations[static_cast<std::size_t>(bindingChild((*this).node(call.module, call.node), EdgeRole::Binding))];
+                    if ((suspended && ((*this).node(callModule, callNode).kind == NodeKind::ForOfStatement))) {
+                        const double sid = (*this).binding.files[static_cast<std::size_t>(callModule)].declarations[static_cast<std::size_t>(bindingChild((*this).node(callModule, callNode), EdgeRole::Binding))];
                         if ((sid >= 0.0)) {
                             (*this).addEdge((*this).returnVertex(target), (*this).symbol(sid), true);
                         }
@@ -8499,7 +8867,16 @@ struct EffectAnalyzer {
                     }
                 }
             }
-            for (double at = 0.0; (at < (*this).edges.size()); (at = (at + 1.0))) {
+            profileEnd(std::string("effect-call-linking"), linkingProfile, ets::concat(std::string("round="), numberToString(graphPass)));
+            const auto propagationProfile = profileBegin();
+            (denseVisits = (denseVisits + (*this).edges.size()));
+            ((*this).propagating = true);
+            ((*this).edgeCursor = (-1.0));
+            while (((*this).agenda.values.size() > 0.0)) {
+                const double at = (*this).agenda.pop();
+                ((*this).edgeCursor = at);
+                ets_set_vec<bool>((*this).edgeQueued, at, false);
+                ((*this).edgeVisits = ((*this).edgeVisits + 1.0));
                 auto e = (*this).edges[static_cast<std::size_t>(at)];
                 if (e.callable) {
                     while ((e.tasks < (*this).points[static_cast<std::size_t>(e.source)].tasks.size())) {
@@ -8517,6 +8894,14 @@ struct EffectAnalyzer {
                 }
                 ets_set_vec<EffectEdge>((*this).edges, at, e);
             }
+            ((*this).propagating = false);
+            ((*this).agenda = (*this).deferredAgenda);
+            ((*this).deferredAgenda = EffectAgenda{}.constructor());
+            profileEnd(std::string("effect-propagation"), propagationProfile, ets::concat(std::string("round="), numberToString(graphPass), std::string(" visits="), numberToString((*this).edgeVisits)));
+        }
+        profileEnd(std::string("effect-graph"), graphProfile, ets::concat(std::string("vertices="), numberToString((*this).points.size()), std::string(" edges="), numberToString((*this).edges.size()), std::string(" edge_visits="), numberToString((*this).edgeVisits), std::string(" rounds="), numberToString(graphPass), std::string(" dense_visits="), numberToString(denseVisits)));
+        if ((*this).trace) {
+            progressDetail(ets::concat(std::string("frontend: effect graph complete, "), numberToString((*this).edgeVisits), std::string(" edge visits, "), numberToString((*this).edges.size()), std::string(" edges, "), numberToString(graphPass), std::string(" rounds, "), numberToString(denseVisits), std::string(" dense baseline visits, "), numberToString((Date.now() - graphStarted)), std::string(" ms")));
         }
     }
 
@@ -8658,11 +9043,12 @@ struct EffectAnalyzer {
 
     void analyze() {
         if ((*this).trace) {
-            printError(std::string("frontend: effects graph"));
+            progressDetail(std::string("frontend: effects graph"));
         }
         (*this).build();
+        const auto summariesProfile = profileBegin();
         if ((*this).trace) {
-            printError(std::string("frontend: effects summaries"));
+            progressDetail(std::string("frontend: effects summaries"));
         }
         for (double m = 0.0; (m < (*this).checked.files.size()); (m = (m + 1.0))) {
             for (double id = 0.0; (id < (*this).checked.files[static_cast<std::size_t>(m)].types.size()); (id = (id + 1.0))) {
@@ -8734,7 +9120,7 @@ struct EffectAnalyzer {
                         }
                     }
                 }
-                if ((((n.kind == NodeKind::AssignmentExpression) || (n.kind == NodeKind::CompoundAssignmentExpression)) || (n.kind == NodeKind::DeleteStatement))) {
+                if (((((n.kind == NodeKind::AssignmentExpression) || (n.kind == NodeKind::CompoundAssignmentExpression)) || (n.kind == NodeKind::UpdateExpression)) || (n.kind == NodeKind::DeleteStatement))) {
                     (*this).addEffect(owner, (*this).root(m, bindingChild(n, EdgeRole::Target)), std::string("write"));
                 }
                 if ((*this).suspensionNode(m, id)) {
@@ -8961,6 +9347,7 @@ struct EffectAnalyzer {
                 }
             }
         }
+        profileEnd(std::string("effect-summaries"), summariesProfile, ets::concat(std::string("functions="), numberToString((*this).summaries.size()), std::string(" calls="), numberToString((*this).calls.size())));
     }
 
     void default_constructor() {
@@ -8978,6 +9365,33 @@ struct EffectAnalyzer {
         (*this).owners = std::vector<double>{};
         (*this).edgeKeys = ets::Map<std::string, bool>{};
         (*this).trace = false;
+        (*this).outgoingHeads = std::vector<double>{};
+        (*this).outgoingNext = std::vector<double>{};
+        (*this).edgeQueued = std::vector<bool>{};
+        (*this).agenda = EffectAgenda{};
+        (*this).deferredAgenda = EffectAgenda{};
+        (*this).propagating = false;
+        (*this).edgeCursor = double{};
+        (*this).edgeVisits = double{};
+    }
+};
+
+struct FlowFinding {
+    double module;
+    double node;
+    std::string message;
+
+    FlowFinding& constructor(double module, double node, std::string message) {
+        ((*this).module = module);
+        ((*this).node = node);
+        ((*this).message = message);
+        return *this;
+}
+
+    void default_constructor() {
+        (*this).module = double{};
+        (*this).node = double{};
+        (*this).message = std::string{};
     }
 };
 
@@ -9150,6 +9564,8 @@ struct SafetyAnalyzer {
     std::vector<SafetyState> returns;
     std::vector<SafetyCallSite> sites;
     double visits;
+    bool collectFlow;
+    std::vector<FlowFinding> findings;
 
     SafetyAnalyzer& constructor(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult result) {
         ((*this).graph = graph);
@@ -9191,6 +9607,8 @@ struct SafetyAnalyzer {
         ((*this).defaultReads = ets::Map<double, bool>{});
         ((*this).valueDefaults = ets::Map<double, bool>{});
         ((*this).visits = 0.0);
+        ((*this).collectFlow = false);
+        ((*this).findings = std::vector<FlowFinding>());
         return *this;
 }
 
@@ -9207,6 +9625,9 @@ struct SafetyAnalyzer {
             }
         }
         ets_push_vec<SourceDiagnostic>((*this).result.diagnostics, candidate);
+        if ((*this).collectFlow) {
+            ets_push_vec<FlowFinding>((*this).findings, FlowFinding{}.constructor(module, id, message));
+        }
     }
 
     double origin(double sid) const {
@@ -9924,7 +10345,7 @@ struct SafetyAnalyzer {
                 }
                 const AstNode n = (*this).node(capture.module, id);
                 double target = (-1.0);
-                if ((((n.kind == NodeKind::AssignmentExpression) || (n.kind == NodeKind::CompoundAssignmentExpression)) || (n.kind == NodeKind::DeleteStatement))) {
+                if (((((n.kind == NodeKind::AssignmentExpression) || (n.kind == NodeKind::CompoundAssignmentExpression)) || (n.kind == NodeKind::UpdateExpression)) || (n.kind == NodeKind::DeleteStatement))) {
                     (target = bindingChild(n, EdgeRole::Target));
                 } else {
                     if (((n.kind == NodeKind::MemberCallExpression) && (*this).mutating(capture.module, id))) {
@@ -9970,7 +10391,7 @@ struct SafetyAnalyzer {
             const AstNode item = (*this).node(targetModule, nodeId);
             ets_pop_vec<double>(work);
             double at = (-1.0);
-            if (((item.kind == NodeKind::AssignmentExpression) || (item.kind == NodeKind::CompoundAssignmentExpression))) {
+            if ((((item.kind == NodeKind::AssignmentExpression) || (item.kind == NodeKind::CompoundAssignmentExpression)) || (item.kind == NodeKind::UpdateExpression))) {
                 (at = bindingChild(item, EdgeRole::Target));
             } else {
                 if ((item.kind == NodeKind::MemberCallExpression)) {
@@ -10689,7 +11110,7 @@ struct SafetyAnalyzer {
     bool summaryReason(double summaryId, std::string reason) const {
         if (((*this).trace && ((*this).visits < 40.0))) {
             const auto summary = (*this).effects.summaries[static_cast<std::size_t>(summaryId)];
-            printError(ets::concat(std::string("frontend: precise "), (*this).graph.modules[static_cast<std::size_t>(summary.module)].file, std::string(":"), (*this).node(summary.module, summary.node).get(AttributeKind::Name), std::string(" "), reason));
+            progressDetail(ets::concat(std::string("frontend: precise "), (*this).graph.modules[static_cast<std::size_t>(summary.module)].file, std::string(":"), (*this).node(summary.module, summary.node).get(AttributeKind::Name), std::string(" "), reason));
         }
         return false;
     }
@@ -11001,7 +11422,7 @@ struct SafetyAnalyzer {
     void invokeTarget(double module, double id, SafetyTarget target, SafetyState& state, std::vector<double> active, std::string phase = std::string("body")) {
         ((*this).visits = ((*this).visits + 1.0));
         if (((*this).trace && (std::fmod((*this).visits, 10000.0) == 0.0))) {
-            printError(ets::concat(std::string("frontend: flow calls "), numberToString((*this).visits), std::string(" "), (*this).graph.modules[static_cast<std::size_t>(target.module)].file, std::string(":"), (*this).node(target.module, target.node).get(AttributeKind::Name), std::string(" depth "), numberToString(active.size())));
+            progressDetail(ets::concat(std::string("frontend: flow calls "), numberToString((*this).visits), std::string(" "), (*this).graph.modules[static_cast<std::size_t>(target.module)].file, std::string(":"), (*this).node(target.module, target.node).get(AttributeKind::Name), std::string(" depth "), numberToString(active.size())));
         }
         const double owner = (*this).vertex(target.module, target.node);
         const double substitutionStart = (*this).substitutions.size();
@@ -11203,7 +11624,7 @@ struct SafetyAnalyzer {
                     (*this).report(module, id, std::string("E4101: un cast genérico no puede borrar ni fabricar ownership"));
                 }
             }
-            if (((n.kind == NodeKind::AssignmentExpression) || (n.kind == NodeKind::CompoundAssignmentExpression))) {
+            if ((((n.kind == NodeKind::AssignmentExpression) || (n.kind == NodeKind::CompoundAssignmentExpression)) || (n.kind == NodeKind::UpdateExpression))) {
                 double target = bindingChild(n, EdgeRole::Target);
                 while ((target >= 0.0)) {
                     const AstNode current = (*this).node(module, target);
@@ -11280,10 +11701,12 @@ struct SafetyAnalyzer {
             }
             return;
         }
-        if (((n.kind == NodeKind::AssignmentExpression) || (n.kind == NodeKind::CompoundAssignmentExpression))) {
+        if ((((n.kind == NodeKind::AssignmentExpression) || (n.kind == NodeKind::CompoundAssignmentExpression)) || (n.kind == NodeKind::UpdateExpression))) {
             const double target = bindingChild(n, EdgeRole::Target);
             const double value = bindingChild(n, EdgeRole::Value);
-            (*this).expression(module, value, state, active);
+            if ((value >= 0.0)) {
+                (*this).expression(module, value, state, active);
+            }
             const double field = (*this).constructorField(module, target);
             if (((n.kind == NodeKind::AssignmentExpression) && ets_includes_vec<NodeKind>(std::vector<NodeKind>{NodeKind::MemberExpression, NodeKind::IndexExpression}, (*this).node(module, target).kind))) {
                 const double object = bindingChild((*this).node(module, target), EdgeRole::Object);
@@ -11294,7 +11717,7 @@ struct SafetyAnalyzer {
                     (*this).expression(module, ets_local_index, state, active);
                 }
             } else {
-                if ((((*this).node(module, target).kind != NodeKind::IdentifierExpression) || (n.kind == NodeKind::CompoundAssignmentExpression))) {
+                if ((((*this).node(module, target).kind != NodeKind::IdentifierExpression) || (n.kind != NodeKind::AssignmentExpression))) {
                     (*this).expression(module, target, state, active);
                 }
             }
@@ -11696,6 +12119,7 @@ struct SafetyAnalyzer {
     }
 
     void flow() {
+        const auto globalProfile = profileBegin();
         SafetyState globals = SafetyState{}.constructor((*this).binding.symbols.size());
         for (double sid = 0.0; (sid < (*this).binding.symbols.size()); (sid = (sid + 1.0))) {
             if (localBinding((*this).binding.symbols[static_cast<std::size_t>(sid)].kind)) {
@@ -11704,88 +12128,251 @@ struct SafetyAnalyzer {
         }
         for (double m = 0.0; (m < (*this).graph.modules.size()); (m = (m + 1.0))) {
             if ((*this).trace) {
-                printError(ets::concat(std::string("frontend: global flow "), numberToString(m)));
+                progressDetail(ets::concat(std::string("frontend: global flow "), numberToString(m)));
             }
             (*this).walk(m, (*this).graph.modules[static_cast<std::size_t>(m)].cached.result.ast.root, globals, std::vector<double>());
         }
+        profileEnd(std::string("flow-globals"), globalProfile);
+        std::vector<double> modules = std::vector<double>();
+        std::vector<double> nodes = std::vector<double>();
         for (double m = 0.0; (m < (*this).graph.modules.size()); (m = (m + 1.0))) {
             for (double id = 0.0; (id < (*this).result.files[static_cast<std::size_t>(m)].types.size()); (id = (id + 1.0))) {
-                if (((id == 0.0) && (*this).trace)) {
-                    printError(ets::concat(std::string("frontend: definitions flow "), numberToString(m)));
-                }
-                const AstNode n = (*this).node(m, id);
-                if (((!isCallableNodeKind(n.kind)) || ((*this).binding.files[static_cast<std::size_t>(m)].nodeScopes[static_cast<std::size_t>(id)] < 0.0))) {
-                    continue;
-                }
-                const double owner = (*this).vertex(m, id);
-                SafetyState state = SafetyState{}.constructor((*this).binding.symbols.size());
-                (*this).initializeFields(m, id, state);
-                for (double sid = 0.0; (sid < (*this).binding.symbols.size()); (sid = (sid + 1.0))) {
-                    if ((((*this).owner((*this).binding.symbols[static_cast<std::size_t>(sid)].scope) == owner) && (localBinding((*this).binding.symbols[static_cast<std::size_t>(sid)].kind) || ((*this).binding.symbols[static_cast<std::size_t>(sid)].kind == std::string("Parameter"))))) {
-                        ets_set_vec<double>(state.slots, sid, 0.0);
-                    }
-                }
-                for (const auto& edge : n.edges) {
-                    if ((edge.role == EdgeRole::Params)) {
-                        (*this).expression(m, bindingChild((*this).node(m, edge.node), EdgeRole::DefaultValue), state, std::vector<double>{owner});
-                        const double sid = (*this).binding.files[static_cast<std::size_t>(m)].declarations[static_cast<std::size_t>(edge.node)];
-                        if ((sid >= 0.0)) {
-                            ets_set_vec<double>(state.slots, sid, 1.0);
-                            if (((*this).parameterProperty(m, edge.node) && (*this).transferType((*this).result.symbolTypes[static_cast<std::size_t>(sid)]))) {
-                                ets_set_vec<double>(state.slots, sid, 2.0);
-                            }
-                        }
-                    }
-                }
-                const double body = bindingChild(n, EdgeRole::Body);
-                if ((body < 0.0)) {
-                    continue;
-                }
-                ((*this).breaks = std::vector<SafetyState>());
-                ((*this).continues = std::vector<SafetyState>());
-                ((*this).returns = std::vector<SafetyState>());
-                ((*this).sites = std::vector<SafetyCallSite>());
-                ((*this).arguments = std::vector<SafetyArgument>());
-                if (((*this).node(m, body).kind == NodeKind::BlockStatement)) {
-                    (*this).walk(m, body, state, std::vector<double>{owner});
-                    if ((state.exit == std::string(""))) {
-                        (*this).fieldsInitialized(m, id, state);
-                    }
-                    if (((((*this).node(m, body).start.kind != std::string(";")) && ((functionReturn((*this).result.files[static_cast<std::size_t>(m)].types[static_cast<std::size_t>(id)]) != std::string("void")) && (!(((n.get(AttributeKind::Async) == std::string("true")) || (n.get(AttributeKind::IsAsync) == std::string("true"))) && (functionReturn((*this).result.files[static_cast<std::size_t>(m)].types[static_cast<std::size_t>(id)]) == std::string("Promise<void>")))))) && (state.exit != std::string("return")))) {
-                        (*this).report(m, id, std::string("No todas las rutas devuelven un valor"));
-                    }
-                } else {
-                    (*this).expression(m, body, state, std::vector<double>{owner});
+                if ((isCallableNodeKind((*this).node(m, id).kind) && ((*this).binding.files[static_cast<std::size_t>(m)].nodeScopes[static_cast<std::size_t>(id)] >= 0.0))) {
+                    ets_push_vec<double>(modules, m);
+                    ets_push_vec<double>(nodes, id);
                 }
             }
         }
+        const auto definitionsProfile = profileBegin();
+        const double jobs = analysisJobs();
+        if (((jobs > 1.0) && (nodes.size() > 1.0))) {
+            (*this).parallelDefinitions(modules, nodes, jobs);
+        } else {
+            (*this).definitions(modules, nodes, 0.0, nodes.size());
+        }
+        profileEnd(std::string("flow-definitions"), definitionsProfile, ets::concat(std::string("functions="), numberToString(nodes.size()), std::string(" jobs="), numberToString(jobs), std::string(" precise_calls="), numberToString((*this).visits)));
         if ((*this).trace) {
-            printError(ets::concat(std::string("frontend: flow complete, "), numberToString((*this).visits), std::string(" precise calls")));
+            progressDetail(ets::concat(std::string("frontend: flow complete, "), numberToString((*this).visits), std::string(" precise calls")));
+        }
+    }
+
+    void definition(double m, double id) {
+        const auto n = (*this).node(m, id);
+        const double owner = (*this).vertex(m, id);
+        SafetyState state = SafetyState{}.constructor((*this).binding.symbols.size());
+        (*this).initializeFields(m, id, state);
+        for (double sid = 0.0; (sid < (*this).binding.symbols.size()); (sid = (sid + 1.0))) {
+            if ((((*this).owner((*this).binding.symbols[static_cast<std::size_t>(sid)].scope) == owner) && (localBinding((*this).binding.symbols[static_cast<std::size_t>(sid)].kind) || ((*this).binding.symbols[static_cast<std::size_t>(sid)].kind == std::string("Parameter"))))) {
+                ets_set_vec<double>(state.slots, sid, 0.0);
+            }
+        }
+        for (const auto& edge : n.edges) {
+            if ((edge.role == EdgeRole::Params)) {
+                (*this).expression(m, bindingChild((*this).node(m, edge.node), EdgeRole::DefaultValue), state, std::vector<double>{owner});
+                const double sid = (*this).binding.files[static_cast<std::size_t>(m)].declarations[static_cast<std::size_t>(edge.node)];
+                if ((sid >= 0.0)) {
+                    ets_set_vec<double>(state.slots, sid, 1.0);
+                    if (((*this).parameterProperty(m, edge.node) && (*this).transferType((*this).result.symbolTypes[static_cast<std::size_t>(sid)]))) {
+                        ets_set_vec<double>(state.slots, sid, 2.0);
+                    }
+                }
+            }
+        }
+        const double body = bindingChild(n, EdgeRole::Body);
+        if ((body < 0.0)) {
+            return;
+        }
+        ((*this).breaks = std::vector<SafetyState>());
+        ((*this).continues = std::vector<SafetyState>());
+        ((*this).returns = std::vector<SafetyState>());
+        ((*this).sites = std::vector<SafetyCallSite>());
+        ((*this).arguments = std::vector<SafetyArgument>());
+        if (((*this).node(m, body).kind == NodeKind::BlockStatement)) {
+            (*this).walk(m, body, state, std::vector<double>{owner});
+            if ((state.exit == std::string(""))) {
+                (*this).fieldsInitialized(m, id, state);
+            }
+            if (((((*this).node(m, body).start.kind != std::string(";")) && ((functionReturn((*this).result.files[static_cast<std::size_t>(m)].types[static_cast<std::size_t>(id)]) != std::string("void")) && (!(((n.get(AttributeKind::Async) == std::string("true")) || (n.get(AttributeKind::IsAsync) == std::string("true"))) && (functionReturn((*this).result.files[static_cast<std::size_t>(m)].types[static_cast<std::size_t>(id)]) == std::string("Promise<void>")))))) && (state.exit != std::string("return")))) {
+                (*this).report(m, id, std::string("No todas las rutas devuelven un valor"));
+            }
+        } else {
+            (*this).expression(m, body, state, std::vector<double>{owner});
+        }
+    }
+
+    void definitions(std::vector<double> modules, std::vector<double> nodes, double begin, double end) {
+        for (double at = begin; (at < end); (at = (at + 1.0))) {
+            (*this).definition(modules[static_cast<std::size_t>(at)], nodes[static_cast<std::size_t>(at)]);
+        }
+    }
+
+    std::string flowWire(double task, double count) const {
+        std::vector<std::string> output = std::vector<std::string>{ets::concat(std::string("{\"task\":"), numberToString(task), std::string(",\"count\":"), numberToString(count), std::string(",\"visits\":"), numberToString((*this).visits), std::string(",\"findings\":["))};
+        std::string separator = std::string("");
+        for (const auto& finding : (*this).findings) {
+            ets_push_vec<std::string>(output, ets::concat(separator, std::string("["), numberToString(finding.module), std::string(","), numberToString(finding.node), std::string(","), quoteSource(finding.message), std::string("]")));
+            (separator = std::string(","));
+        }
+        ets_push_vec<std::string>(output, std::string("]}"));
+        return ets_join_vec(output, std::string(""));
+    }
+
+    bool mergeFlow(std::string text, double task, double count) {
+        if ((text == std::string(""))) {
+            return false;
+        }
+        const auto value = JSON.parseValue(text);
+        const auto taskValue = jsonObjectGet(value, std::string("task"));
+        const auto countValue = jsonObjectGet(value, std::string("count"));
+        const auto visits = jsonObjectGet(value, std::string("visits"));
+        const auto findings = jsonObjectGet(value, std::string("findings"));
+        if ((((((((!jsonIsNumber(taskValue)) || (!jsonIsNumber(countValue))) || (jsonAsNumber(taskValue) != task)) || (jsonAsNumber(countValue) != count)) || (!jsonIsNumber(visits))) || (jsonAsNumber(visits) < 0.0)) || (!jsonIsArray(findings)))) {
+            return false;
+        }
+        for (double at = 0.0; (at < jsonArrayLength(findings)); (at = (at + 1.0))) {
+            const auto item = jsonArrayGet(findings, at);
+            if (((!jsonIsArray(item)) || (jsonArrayLength(item) != 3.0))) {
+                return false;
+            }
+            const auto m = jsonArrayGet(item, 0.0);
+            const auto n = jsonArrayGet(item, 1.0);
+            const auto message = jsonArrayGet(item, 2.0);
+            if ((((!jsonIsNumber(m)) || (!jsonIsNumber(n))) || (!jsonIsString(message)))) {
+                return false;
+            }
+            const double module = jsonAsNumber(m);
+            const double node = jsonAsNumber(n);
+            if (((((((module < 0.0) || (module >= (*this).graph.modules.size())) || (Math.floor(module) != module)) || (node < 0.0)) || (node >= (*this).result.files[static_cast<std::size_t>(module)].types.size())) || (Math.floor(node) != node))) {
+                return false;
+            }
+        }
+        ((*this).visits = ((*this).visits + jsonAsNumber(visits)));
+        for (double at = 0.0; (at < jsonArrayLength(findings)); (at = (at + 1.0))) {
+            const auto item = jsonArrayGet(findings, at);
+            (*this).report(jsonAsNumber(jsonArrayGet(item, 0.0)), jsonAsNumber(jsonArrayGet(item, 1.0)), jsonAsString(jsonArrayGet(item, 2.0)));
+        }
+        return true;
+    }
+
+    void parallelDefinitions(std::vector<double> modules, std::vector<double> nodes, double requested) {
+        const double jobs = Math.min(requested, nodes.size());
+        const double size = Math.max(1.0, Math.ceil((nodes.size() / (jobs * 8.0))));
+        const double count = Math.ceil((nodes.size() / size));
+        const auto directory = temporaryDirectory();
+        if ((directory == std::string(""))) {
+            (*this).report(0.0, (*this).graph.modules[static_cast<std::size_t>(0.0)].cached.result.ast.root, ets::concat(std::string("ANALYSIS_WORKER_FAILED: "), hostError()));
+            return;
+        }
+        std::vector<double> pids = std::vector<double>();
+        double next = 0.0;
+        double complete = 0.0;
+        bool failed = false;
+        if ((*this).trace) {
+            progressDetail(ets::concat(std::string("frontend: flow workers jobs="), numberToString(jobs), std::string(" batches="), numberToString(count)));
+        }
+        const auto workersProfile = profileBegin();
+        while (((complete < count) && (!failed))) {
+            while (((next < count) && (pids.size() < jobs))) {
+                const double task = next;
+                const double pid = forkWorker();
+                if ((pid < 0.0)) {
+                    (failed = true);
+                    break;
+                }
+                if ((pid == 0.0)) {
+                    ((*this).trace = false);
+                    ((*this).collectFlow = true);
+                    ((*this).findings = std::vector<FlowFinding>());
+                    ((*this).visits = 0.0);
+                    (*this).definitions(modules, nodes, (task * size), Math.min(nodes.size(), ((task + 1.0) * size)));
+                    const bool ok = writeText(ets::concat(directory, std::string("/"), numberToString(task), std::string(".json")), (*this).flowWire(task, Math.min(size, (nodes.size() - (task * size)))));
+                    finishWorker((ok ? 0.0 : 125.0));
+                    return;
+                }
+                ets_push_vec<double>(pids, pid);
+                (next = (next + 1.0));
+            }
+            bool advanced = false;
+            for (double at = (pids.size() - 1.0); (at >= 0.0); (at = (at - 1.0))) {
+                const double status = poll(pids[static_cast<std::size_t>(at)]);
+                if ((status < 0.0)) {
+                    continue;
+                }
+                (advanced = true);
+                if ((status != 0.0)) {
+                    (failed = true);
+                }
+                ets_set_vec<double>(pids, at, pids[static_cast<std::size_t>((pids.size() - 1.0))]);
+                ets_pop_vec<double>(pids);
+                (complete = (complete + 1.0));
+            }
+            if (((!advanced) && (!failed))) {
+                pause(2.0);
+            }
+        }
+        if (failed) {
+            for (const auto& pid : pids) {
+                terminate(pid);
+            }
+            for (const auto& pid : pids) {
+                waitWorker(pid);
+            }
+        }
+        profileEnd(std::string("flow-workers"), workersProfile, ets::concat(std::string("batches="), numberToString(count), std::string(" jobs="), numberToString(jobs)));
+        const auto mergeProfile = profileBegin();
+        double bytes = 0.0;
+        if ((!failed)) {
+            for (double task = 0.0; (task < count); (task = (task + 1.0))) {
+                const auto text = readText(ets::concat(directory, std::string("/"), numberToString(task), std::string(".json")));
+                (bytes = (bytes + ::ets::string_length(text)));
+                if (((hostError() != std::string("")) || (!(*this).mergeFlow(text, task, Math.min(size, (nodes.size() - (task * size))))))) {
+                    (failed = true);
+                    break;
+                }
+            }
+        }
+        profileEnd(std::string("flow-merge"), mergeProfile, ets::concat(std::string("payload_chars="), numberToString(bytes)));
+        for (double task = 0.0; (task < count); (task = (task + 1.0))) {
+            remove(ets::concat(directory, std::string("/"), numberToString(task), std::string(".json")));
+        }
+        remove(directory);
+        if (failed) {
+            (*this).report(0.0, (*this).graph.modules[static_cast<std::size_t>(0.0)].cached.result.ast.root, std::string("ANALYSIS_WORKER_FAILED: el análisis paralelo no se completó; no se puede aceptar el proyecto"));
         }
     }
 
     ets_import_7_CheckResult run() {
+        if ((analysisJobs() < 1.0)) {
+            (*this).report(0.0, (*this).graph.modules[static_cast<std::size_t>(0.0)].cached.result.ast.root, std::string("ANALYSIS_JOBS: ESTATIC_ANALYSIS_JOBS debe ser un entero entre 1 y 32"));
+            return (*this).result;
+        }
+        const auto memoryProfile = profileBegin();
         if ((*this).trace) {
-            printError(std::string("frontend: memory and captures"));
+            progressDetail(std::string("frontend: memory and captures"));
         }
         (*this).memoryContracts();
         (*this).captures();
         ((*this).result.borrows = (*this).leases);
+        profileEnd(std::string("memory-captures"), memoryProfile);
+        const auto effectsProfile = profileBegin();
         if ((*this).trace) {
-            printError(std::string("frontend: effects"));
+            progressDetail(std::string("frontend: effects"));
         }
         ((*this).effects = EffectAnalyzer{}.constructor((*this).graph, (*this).binding, (*this).result));
         ((*this).effects.trace = (*this).trace);
         (*this).effects.analyze();
         ((*this).result.files = (*this).effects.checked.files);
         ((*this).result.effects = (*this).effects.summaries);
+        profileEnd(std::string("effects"), effectsProfile);
+        const auto provenanceProfile = profileBegin();
         if ((*this).trace) {
-            printError(std::string("frontend: provenance and visibility"));
+            progressDetail(std::string("frontend: provenance and visibility"));
         }
         (*this).provenance();
         (*this).visibility();
+        profileEnd(std::string("provenance-visibility"), provenanceProfile);
         if ((*this).trace) {
-            printError(std::string("frontend: flow"));
+            progressDetail(std::string("frontend: flow"));
         }
         (*this).flow();
         ((*this).result.borrows = (*this).leases);
@@ -11821,6 +12408,8 @@ struct SafetyAnalyzer {
         (*this).returns = std::vector<SafetyState>{};
         (*this).sites = std::vector<SafetyCallSite>{};
         (*this).visits = double{};
+        (*this).collectFlow = false;
+        (*this).findings = std::vector<FlowFinding>{};
     }
 };
 
@@ -12292,7 +12881,7 @@ struct NativeChecker {
         if ((isCallableNodeKind(n.kind) || (n.kind == NodeKind::ClassDeclaration))) {
             return false;
         }
-        if (ets_includes_vec<NodeKind>(std::vector<NodeKind>{NodeKind::CallExpression, NodeKind::MemberCallExpression, NodeKind::NewExpression, NodeKind::AssignmentExpression, NodeKind::CompoundAssignmentExpression}, n.kind)) {
+        if (ets_includes_vec<NodeKind>(std::vector<NodeKind>{NodeKind::CallExpression, NodeKind::MemberCallExpression, NodeKind::NewExpression, NodeKind::AssignmentExpression, NodeKind::CompoundAssignmentExpression, NodeKind::UpdateExpression}, n.kind)) {
             return true;
         }
         for (const auto& edge : n.edges) {
@@ -12806,7 +13395,7 @@ struct NativeChecker {
         if ((isCallableNodeKind(n.kind) || (n.kind == NodeKind::ClassDeclaration))) {
             return;
         }
-        if (ets_includes_vec<NodeKind>(std::vector<NodeKind>{NodeKind::CallExpression, NodeKind::MemberCallExpression, NodeKind::NewExpression, NodeKind::AssignmentExpression, NodeKind::CompoundAssignmentExpression}, n.kind)) {
+        if (ets_includes_vec<NodeKind>(std::vector<NodeKind>{NodeKind::CallExpression, NodeKind::MemberCallExpression, NodeKind::NewExpression, NodeKind::AssignmentExpression, NodeKind::CompoundAssignmentExpression, NodeKind::UpdateExpression}, n.kind)) {
             ((*this).narrowedSymbols = std::vector<double>());
             ((*this).narrowedTypes = std::vector<std::string>());
             return;
@@ -13612,7 +14201,7 @@ struct NativeChecker {
             const AstNode n = (*this).node(s.module, nodeId);
             ets_pop_vec<double>(work);
             double target = (-1.0);
-            if (((n.kind == NodeKind::AssignmentExpression) || (n.kind == NodeKind::CompoundAssignmentExpression))) {
+            if ((((n.kind == NodeKind::AssignmentExpression) || (n.kind == NodeKind::CompoundAssignmentExpression)) || (n.kind == NodeKind::UpdateExpression))) {
                 (target = bindingChild(n, EdgeRole::Target));
             } else {
                 if ((n.kind == NodeKind::MemberCallExpression)) {
@@ -15505,6 +16094,16 @@ struct NativeChecker {
             }
             return nativeUnaryPromotion(operand);
         }
+        if ((kind == NodeKind::UpdateExpression)) {
+            const double target = bindingChild(n, EdgeRole::Target);
+            const std::string actual = (*this).expression(module, target, std::string(""));
+            const std::string valueType = ets_import_4_memoryValue(actual);
+            (*this).writable(module, target);
+            if (((!numericType(valueType)) && (valueType != std::string("!error")))) {
+                (*this).report(module, id, ets::concat(std::string("El operador '"), n.get(AttributeKind::Operator), std::string("' requiere un destino numérico, no '"), (*this).displayType(actual), std::string("'")));
+            }
+            return valueType;
+        }
         if (((kind == NodeKind::AssignmentExpression) || (kind == NodeKind::CompoundAssignmentExpression))) {
             const double target = bindingChild(n, EdgeRole::Target);
             std::string valueType = (*this).expression(module, target, std::string(""));
@@ -16436,7 +17035,7 @@ struct NativeChecker {
 
     ets_import_7_CheckResult check() {
         if ((*this).trace) {
-            printError(std::string("frontend: types"));
+            progressDetail(std::string("frontend: types"));
         }
         for (const auto& diagnostic : (*this).binding.diagnostics) {
             ets_push_vec<SourceDiagnostic>((*this).result.diagnostics, diagnostic);
@@ -16453,7 +17052,7 @@ struct NativeChecker {
         }
         for (double m = 0.0; (m < (*this).graph.modules.size()); (m = (m + 1.0))) {
             if ((*this).trace) {
-                printError(ets::concat(std::string("frontend: checking ["), numberToString((m + 1.0)), std::string("/"), numberToString((*this).graph.modules.size()), std::string("] "), (*this).graph.modules[static_cast<std::size_t>(m)].file));
+                progressDetail(ets::concat(std::string("frontend: checking ["), numberToString((m + 1.0)), std::string("/"), numberToString((*this).graph.modules.size()), std::string("] "), (*this).graph.modules[static_cast<std::size_t>(m)].file));
             }
             (*this).statement(m, (*this).graph.modules[static_cast<std::size_t>(m)].cached.result.ast.root, std::string(""), 0.0);
         }
@@ -16487,7 +17086,7 @@ struct NativeChecker {
         }
         if (((*this).result.diagnostics.size() == 0.0)) {
             if ((*this).trace) {
-                printError(std::string("frontend: comptime"));
+                progressDetail(std::string("frontend: comptime"));
             }
             ((*this).result = evaluateNativeComptime((*this).graph, (*this).binding, (*this).result));
         }
@@ -17701,6 +18300,15 @@ struct IrOwnershipFacts {
     }
 };
 
+struct IrPredecessors {
+    std::vector<double> blocks;
+
+    IrPredecessors& constructor() {
+        ((*this).blocks = std::vector<double>());
+        return *this;
+}
+};
+
 struct IrFacts {
     bool reachable;
     std::vector<bool> dominators;
@@ -17734,6 +18342,7 @@ struct IrVerifier {
     std::vector<double> definitions;
     std::vector<double> positions;
     std::vector<IrFacts> facts;
+    std::vector<std::string> placePaths;
 
     IrVerifier& constructor(IrProject project) {
         ((*this).project = project);
@@ -17741,6 +18350,7 @@ struct IrVerifier {
         ((*this).definitions = std::vector<double>());
         ((*this).positions = std::vector<double>());
         ((*this).facts = std::vector<IrFacts>());
+        ((*this).placePaths = std::vector<std::string>());
         return *this;
 }
 
@@ -18074,10 +18684,10 @@ struct IrVerifier {
         if (((i.place < 0.0) || (i.place >= f.places.size()))) {
             return initialized;
         }
-        const std::string projectionKey = irPlacePath(f, i.place, 0.0);
+        const std::string projectionKey = (*this).placePaths[static_cast<std::size_t>(i.place)];
         if ((i.op == std::string("store"))) {
             for (double p = 0.0; (p < f.places.size()); (p = (p + 1.0))) {
-                const std::string key = irPlacePath(f, p, 0.0);
+                const std::string key = (*this).placePaths[static_cast<std::size_t>(p)];
                 if (((key == projectionKey) || ::ets::string_startsWith(key, ets::concat(projectionKey, std::string("."))))) {
                     ets_set_vec<bool>(initialized, p, true);
                 }
@@ -18098,7 +18708,7 @@ struct IrVerifier {
         }
         if (((i.op == std::string("dropRemaining")) || ((i.op == std::string("move")) && (*this).project.typeDefinitions[static_cast<std::size_t>(f.places[static_cast<std::size_t>(i.place)].typeId)].resource))) {
             for (double p = 0.0; (p < f.places.size()); (p = (p + 1.0))) {
-                const std::string key = irPlacePath(f, p, 0.0);
+                const std::string key = (*this).placePaths[static_cast<std::size_t>(p)];
                 if ((((key == projectionKey) || ::ets::string_startsWith(key, ets::concat(projectionKey, std::string(".")))) || ::ets::string_startsWith(projectionKey, ets::concat(key, std::string("."))))) {
                     ets_set_vec<bool>(initialized, p, false);
                 }
@@ -18111,6 +18721,7 @@ struct IrVerifier {
         ((*this).definitions = std::vector<double>());
         ((*this).positions = std::vector<double>());
         ((*this).facts = std::vector<IrFacts>());
+        ((*this).placePaths = std::vector<std::string>());
         if (((!(*this).typeId(f.returns)) || (f.blocks.size() == 0.0))) {
             (*this).error(f.source, std::string("Función sin entrada/tipo de retorno"));
             return;
@@ -18197,6 +18808,20 @@ struct IrVerifier {
                 }
             }
         }
+        std::vector<IrPredecessors> predecessors = std::vector<IrPredecessors>();
+        for (double b = 0.0; (b < f.blocks.size()); (b = (b + 1.0))) {
+            ets_push_vec<IrPredecessors>(predecessors, IrPredecessors{}.constructor());
+        }
+        for (double b = 0.0; (b < f.blocks.size()); (b = (b + 1.0))) {
+            for (const auto& target : f.blocks[static_cast<std::size_t>(b)].targets) {
+                if (((target >= 0.0) && (target < f.blocks.size()))) {
+                    ets_push_vec<double>(predecessors[static_cast<std::size_t>(target)].blocks, b);
+                }
+            }
+        }
+        for (double p = 0.0; (p < f.places.size()); (p = (p + 1.0))) {
+            ets_push_vec<std::string>((*this).placePaths, irPlacePath(f, p, 0.0));
+        }
         ((*this).facts[static_cast<std::size_t>(0.0)].reachable = true);
         bool changed = true;
         while (changed) {
@@ -18226,8 +18851,8 @@ struct IrVerifier {
                         ets_push_vec<bool>(init, ((b == 0.0) ? irInitialPlace(f, p) : true));
                     }
                     if ((b != 0.0)) {
-                        for (double predecessor = 0.0; (predecessor < f.blocks.size()); (predecessor = (predecessor + 1.0))) {
-                            if (((*this).facts[static_cast<std::size_t>(predecessor)].reachable && ets_includes_vec<double>(f.blocks[static_cast<std::size_t>(predecessor)].targets, b))) {
+                        for (const auto& predecessor : predecessors[static_cast<std::size_t>(b)].blocks) {
+                            if ((*this).facts[static_cast<std::size_t>(predecessor)].reachable) {
                                 for (double d = 0.0; (d < dom.size()); (d = (d + 1.0))) {
                                     ets_set_vec<bool>(dom, d, (dom[static_cast<std::size_t>(d)] && (*this).facts[static_cast<std::size_t>(predecessor)].dominators[static_cast<std::size_t>(d)]));
                                 }
@@ -18239,7 +18864,9 @@ struct IrVerifier {
                     }
                     ets_set_vec<bool>(dom, b, true);
                     for (const auto& i : f.blocks[static_cast<std::size_t>(b)].instructions) {
-                        (init = (*this).updateInitialization(f, i, init));
+                        if ((((i.op == std::string("store")) || (i.op == std::string("move"))) || (i.op == std::string("dropRemaining")))) {
+                            (init = (*this).updateInitialization(f, i, init));
+                        }
                     }
                     for (double d = 0.0; (d < dom.size()); (d = (d + 1.0))) {
                         if ((dom[static_cast<std::size_t>(d)] != (*this).facts[static_cast<std::size_t>(b)].dominators[static_cast<std::size_t>(d)])) {
@@ -18263,8 +18890,8 @@ struct IrVerifier {
                 ets_push_vec<bool>(initialized, ((b == 0.0) ? irInitialPlace(f, p) : true));
             }
             if ((b != 0.0)) {
-                for (double predecessor = 0.0; (predecessor < f.blocks.size()); (predecessor = (predecessor + 1.0))) {
-                    if (((*this).facts[static_cast<std::size_t>(predecessor)].reachable && ets_includes_vec<double>(f.blocks[static_cast<std::size_t>(predecessor)].targets, b))) {
+                for (const auto& predecessor : predecessors[static_cast<std::size_t>(b)].blocks) {
+                    if ((*this).facts[static_cast<std::size_t>(predecessor)].reachable) {
                         for (double p = 0.0; (p < initialized.size()); (p = (p + 1.0))) {
                             ets_set_vec<bool>(initialized, p, (initialized[static_cast<std::size_t>(p)] && (*this).facts[static_cast<std::size_t>(predecessor)].initialized[static_cast<std::size_t>(p)]));
                         }
@@ -18290,7 +18917,9 @@ struct IrVerifier {
                     if (((((i.op != std::string("dropRemaining")) && (i.op != std::string("store"))) && (*this).facts[static_cast<std::size_t>(b)].reachable) && (!initialized[static_cast<std::size_t>(i.place)]))) {
                         (*this).error(i.source, std::string("Load de place sin inicializar en todas las rutas"));
                     }
-                    (initialized = (*this).updateInitialization(f, i, initialized));
+                    if ((((i.op == std::string("store")) || (i.op == std::string("move"))) || (i.op == std::string("dropRemaining")))) {
+                        (initialized = (*this).updateInitialization(f, i, initialized));
+                    }
                 }
             }
             if ((block.terminator == std::string("suspend"))) {
@@ -18477,6 +19106,7 @@ struct IrVerifier {
         (*this).definitions = std::vector<double>{};
         (*this).positions = std::vector<double>{};
         (*this).facts = std::vector<IrFacts>{};
+        (*this).placePaths = std::vector<std::string>{};
     }
 };
 
@@ -18952,8 +19582,8 @@ struct IrLowering {
     }
 
     IrInstruction lastInstruction() const {
-        const auto instructions = (*this).result.functions[static_cast<std::size_t>((*this).currentFunction)].blocks[static_cast<std::size_t>((*this).block)].instructions;
-        return instructions[static_cast<std::size_t>((instructions.size() - 1.0))];
+        const double last = ((*this).result.functions[static_cast<std::size_t>((*this).currentFunction)].blocks[static_cast<std::size_t>((*this).block)].instructions.size() - 1.0);
+        return (*this).result.functions[static_cast<std::size_t>((*this).currentFunction)].blocks[static_cast<std::size_t>((*this).block)].instructions[static_cast<std::size_t>(last)];
     }
 
     void setNames(std::vector<std::string> names) {
@@ -19594,6 +20224,9 @@ struct IrLowering {
         if ((kind == NodeKind::UnaryExpression)) {
             return (*this).emit(std::string("unary"), typeId, std::vector<double>{(*this).readValue((*this).expression(bindingChild(n, EdgeRole::Operand)), id)}, (-1.0), (-1.0), n.get(AttributeKind::Operator), id);
         }
+        if ((kind == NodeKind::UpdateExpression)) {
+            return (*this).update(id, typeId);
+        }
         if ((kind == NodeKind::TernaryExpression)) {
             return (*this).conditional(id, bindingChild(n, EdgeRole::Condition), bindingChild(n, EdgeRole::ThenBranch), bindingChild(n, EdgeRole::ElseBranch), typeId, std::string(""));
         }
@@ -19658,22 +20291,47 @@ struct IrLowering {
         return p;
     }
 
+    double update(double id, double typeId) {
+        const auto n = (*this).node(id);
+        const double target = bindingChild(n, EdgeRole::Target);
+        double p = (*this).rootPlace(target);
+        if ((p < 0.0)) {
+            return (-1.0);
+        }
+        const auto shape = (*this).result.typeDefinitions[static_cast<std::size_t>((*this).result.functions[static_cast<std::size_t>((*this).currentFunction)].places[static_cast<std::size_t>(p)].typeId)];
+        if ((shape.kind == std::string("ref"))) {
+            (p = (*this).projection(p, std::string("deref"), shape.arguments[static_cast<std::size_t>(0.0)], (-1.0), (-1.0), target));
+        }
+        const double previous = (*this).emit(std::string("load"), typeId, std::vector<double>(), p, (-1.0), std::string(""), target);
+        const double one = (*this).emit(std::string("constant"), typeId, std::vector<double>(), (-1.0), (-1.0), std::string("1"), id);
+        const double value = (*this).convert((*this).binary(((n.get(AttributeKind::Operator) == std::string("++")) ? std::string("+") : std::string("-")), previous, one, typeId, id), typeId, id);
+        (*this).emit(std::string("store"), (-1.0), std::vector<double>{value}, p, (-1.0), std::string(""), id);
+        return ((n.get(AttributeKind::Prefix) == std::string("true")) ? value : previous);
+    }
+
     double conditional(double id, double condition, double yes, double no, double typeId, std::string logical) {
         const double value = (*this).expression(condition);
-        const double p = (*this).local((-1.0), typeId, false, id);
+        const double p = (((*this).result.types[static_cast<std::size_t>(typeId)] == std::string("void")) ? (-1.0) : (*this).local((-1.0), typeId, false, id));
         const double a = (*this).newBlock(id);
         const double b = (*this).newBlock(id);
         const double join = (*this).newBlock(id);
         (*this).terminate(std::string("branch"), value, std::vector<double>{a, b}, id);
         ((*this).block = a);
         const double left = ((logical == std::string("||")) ? value : (*this).expression(yes));
-        (*this).emit(std::string("store"), (-1.0), std::vector<double>{(*this).convert(left, typeId, id)}, p, (-1.0), std::string(""), id);
+        if ((p >= 0.0)) {
+            (*this).emit(std::string("store"), (-1.0), std::vector<double>{(*this).convert(left, typeId, id)}, p, (-1.0), std::string(""), id);
+        }
         (*this).terminate(std::string("jump"), (-1.0), std::vector<double>{join}, id);
         ((*this).block = b);
         const double right = ((logical == std::string("&&")) ? value : (*this).expression(((logical == std::string("||")) ? yes : no)));
-        (*this).emit(std::string("store"), (-1.0), std::vector<double>{(*this).convert(right, typeId, id)}, p, (-1.0), std::string(""), id);
+        if ((p >= 0.0)) {
+            (*this).emit(std::string("store"), (-1.0), std::vector<double>{(*this).convert(right, typeId, id)}, p, (-1.0), std::string(""), id);
+        }
         (*this).terminate(std::string("jump"), (-1.0), std::vector<double>{join}, id);
         ((*this).block = join);
+        if ((p < 0.0)) {
+            return (-1.0);
+        }
         (*this).track(p);
         return (*this).emit(((*this).result.typeDefinitions[static_cast<std::size_t>(typeId)].resource ? std::string("move") : std::string("load")), typeId, std::vector<double>(), p, (-1.0), std::string(""), id);
     }
@@ -19855,9 +20513,9 @@ struct IrLowering {
 
     double call(double id, double typeId, double receiver = (-1.0), double indirect = (-1.0), double target = (-1.0), double targetModule = (-1.0)) {
         const auto n = (*this).node(id);
-        const auto file = (*this).checked.files[static_cast<std::size_t>((*this).module)];
-        const double selected = ((target >= 0.0) ? target : file.selected[static_cast<std::size_t>(id)]);
-        const double owner = ((target >= 0.0) ? targetModule : file.selectedModules[static_cast<std::size_t>(id)]);
+        const double callingModule = (*this).module;
+        const double selected = ((target >= 0.0) ? target : (*this).checked.files[static_cast<std::size_t>(callingModule)].selected[static_cast<std::size_t>(id)]);
+        const double owner = ((target >= 0.0) ? targetModule : (*this).checked.files[static_cast<std::size_t>(callingModule)].selectedModules[static_cast<std::size_t>(id)]);
         const double symbol = (*this).reference(id);
         if ((((symbol >= 0.0) && ((*this).binding.symbols[static_cast<std::size_t>(symbol)].module < 0.0)) && ((*this).binding.symbols[static_cast<std::size_t>(symbol)].name == std::string("match")))) {
             return (*this).matchExpression(id, typeId);
@@ -19868,7 +20526,7 @@ struct IrLowering {
         std::string intrinsic = std::string("");
         double callable = (-1.0);
         double callee = (-1.0);
-        const std::string signature = (*this).resolved(file.signatures[static_cast<std::size_t>(id)]);
+        const std::string signature = (*this).resolved((*this).checked.files[static_cast<std::size_t>(callingModule)].signatures[static_cast<std::size_t>(id)]);
         bool escape = false;
         if ((selected >= 0.0)) {
             for (const auto& e : (*this).graph.modules[static_cast<std::size_t>(owner)].cached.result.ast.nodes[static_cast<std::size_t>(selected)].edges) {
@@ -19923,14 +20581,14 @@ struct IrLowering {
         const std::vector<std::string> formals = functionParams(signature);
         for (const auto& e : n.edges) {
             if ((e.role == EdgeRole::Args)) {
-                const double position = ((file.argumentParameters[static_cast<std::size_t>(e.node)] >= 0.0) ? file.argumentParameters[static_cast<std::size_t>(e.node)] : positions.size());
+                const double position = (((*this).checked.files[static_cast<std::size_t>(callingModule)].argumentParameters[static_cast<std::size_t>(e.node)] >= 0.0) ? (*this).checked.files[static_cast<std::size_t>(callingModule)].argumentParameters[static_cast<std::size_t>(e.node)] : positions.size());
                 ets_push_vec<double>(positions, position);
                 double value = (-1.0);
                 if (((*this).preparedCall == id)) {
                     (value = (*this).preparedArguments[static_cast<std::size_t>(operands.size())]);
                 } else {
-                    if ((((intrinsic != std::string("")) && (*this).result.typeDefinitions[static_cast<std::size_t>((*this).typeId(file.types[static_cast<std::size_t>(e.node)], e.node))].resource) && ets_includes_vec<NodeKind>(std::vector<NodeKind>{NodeKind::IdentifierExpression, NodeKind::MemberExpression, NodeKind::IndexExpression}, (*this).node(e.node).kind))) {
-                        (value = (*this).emit(std::string("borrow"), (*this).typeId(ets::concat(std::string("constRef<"), (*this).resolved(file.types[static_cast<std::size_t>(e.node)]), std::string(">")), e.node), std::vector<double>(), (*this).rootPlace(e.node), (-1.0), std::string("constRef"), e.node));
+                    if ((((intrinsic != std::string("")) && (*this).result.typeDefinitions[static_cast<std::size_t>((*this).typeId((*this).checked.files[static_cast<std::size_t>(callingModule)].types[static_cast<std::size_t>(e.node)], e.node))].resource) && ets_includes_vec<NodeKind>(std::vector<NodeKind>{NodeKind::IdentifierExpression, NodeKind::MemberExpression, NodeKind::IndexExpression}, (*this).node(e.node).kind))) {
+                        (value = (*this).emit(std::string("borrow"), (*this).typeId(ets::concat(std::string("constRef<"), (*this).resolved((*this).checked.files[static_cast<std::size_t>(callingModule)].types[static_cast<std::size_t>(e.node)]), std::string(">")), e.node), std::vector<double>(), (*this).rootPlace(e.node), (-1.0), std::string("constRef"), e.node));
                     } else {
                         if (((position < formals.size()) && (!::ets::string_startsWith(formals[static_cast<std::size_t>(position)], std::string("..."))))) {
                             (value = (*this).argumentValue(e.node, formals[static_cast<std::size_t>(position)]));
@@ -20911,7 +21569,13 @@ struct IrLowering {
         ets_push_vec<double>((*this).result.initializationOrder, (*this).result.modules[static_cast<std::size_t>(module)].initializer);
     }
 
-    IrProject run() {
+    IrProject run(bool trace = false) {
+        const auto loweringProfile = profileBegin();
+        const double started = Date.now();
+        double reported = started;
+        if (trace) {
+            progressDetail(std::string("frontend: IR: preparando módulos y tipos"));
+        }
         if ((((((((((((!(*this).graph.success) || (!(*this).binding.success)) || (!(*this).checked.success)) || ((*this).graph.diagnostics.size() > 0.0)) || ((*this).binding.diagnostics.size() > 0.0)) || ((*this).checked.diagnostics.size() > 0.0)) || ((*this).checked.files.size() != (*this).graph.modules.size())) || ((*this).binding.files.size() != (*this).graph.modules.size())) || ((*this).checked.moduleRecords.size() != (*this).graph.modules.size())) || ((*this).checked.symbolIds.size() != (*this).binding.symbols.size())) || ((*this).checked.symbolTypes.size() != (*this).binding.symbols.size()))) {
             const auto source = IrSource{}.constructor(std::string(""), std::string(""), (*this).graph.entry, (-1.0), 0.0, 0.0);
             ets_push_vec<IrIssue>((*this).result.diagnostics, IrIssue{}.constructor(std::string("IR_INPUT"), std::string("Se requiere un proyecto comprobado sin diagnósticos de una misma carga"), source));
@@ -21071,6 +21735,10 @@ struct IrLowering {
             ets_push_vec<double>((*this).functionNodes, root);
         }
         for (double f = 0.0; (f < (*this).result.functions.size()); (f = (f + 1.0))) {
+            if ((trace && ((f == 0.0) || ((Date.now() - reported) >= 1000.0)))) {
+                (reported = Date.now());
+                progressDetail(ets::concat(std::string("frontend: IR: función "), ets::string_numberToString((f + 1.0)), std::string(" de "), ets::string_numberToString((*this).result.functions.size()), std::string(" descubiertas ("), ets::string_numberToString((reported - started)), std::string(" ms)")));
+            }
             ((*this).currentFunction = f);
             ((*this).module = (*this).functionModules[static_cast<std::size_t>(f)]);
             ((*this).symbols = std::vector<double>());
@@ -21192,6 +21860,9 @@ struct IrLowering {
                 (changed = (after != before));
             }
         }
+        if (trace) {
+            progressDetail(ets::concat(std::string("frontend: IR: ordenando módulos ("), ets::string_numberToString((Date.now() - started)), std::string(" ms)")));
+        }
         for (double m = 0.0; (m < (*this).graph.modules.size()); (m = (m + 1.0))) {
             (*this).order(m);
         }
@@ -21214,14 +21885,35 @@ struct IrLowering {
                 }
             }
         }
+        if (trace) {
+            progressDetail(ets::concat(std::string("frontend: IR: preservando contratos ("), ets::string_numberToString((Date.now() - started)), std::string(" ms)")));
+        }
         if (((*this).result.diagnostics.size() == 0.0)) {
             ((*this).result = preserveContracts((*this).graph, (*this).checked, (*this).result));
+        }
+        double blockCount = 0.0;
+        for (const auto& functionIr : (*this).result.functions) {
+            (blockCount = (blockCount + functionIr.blocks.size()));
+        }
+        profileEnd(std::string("ir-lowering"), loweringProfile, ets::concat(std::string("functions="), numberToString((*this).result.functions.size()), std::string(" types="), numberToString((*this).result.types.size()), std::string(" blocks="), numberToString(blockCount)));
+        const auto borrowsProfile = profileBegin();
+        if (trace) {
+            progressDetail(ets::concat(std::string("frontend: IR: finalizando préstamos ("), ets::string_numberToString((Date.now() - started)), std::string(" ms)")));
         }
         if (((*this).result.diagnostics.size() == 0.0)) {
             ((*this).result = finishBorrows((*this).result));
         }
+        profileEnd(std::string("ir-borrows"), borrowsProfile);
+        const auto verifyProfile = profileBegin();
+        if (trace) {
+            progressDetail(ets::concat(std::string("frontend: IR: verificando IR ("), ets::string_numberToString((Date.now() - started)), std::string(" ms)")));
+        }
         if (((*this).result.diagnostics.size() == 0.0)) {
             ((*this).result.diagnostics = verifyIr((*this).result));
+        }
+        profileEnd(std::string("ir-verification"), verifyProfile);
+        if (trace) {
+            progressDetail(ets::concat(std::string("frontend: IR: completado ("), ets::string_numberToString((Date.now() - started)), std::string(" ms)")));
         }
         ((*this).result.success = ((*this).result.diagnostics.size() == 0.0));
         return (*this).result;
@@ -21263,39 +21955,42 @@ struct IrLowering {
     }
 };
 
-void ets_init_bootstrap_parser_ast_schema_5289349f();
-void ets_init_bootstrap_parser_parser_ac18791a();
-void ets_init_bootstrap_lexer_lexer_df27c6e7();
-void ets_init_bootstrap_frontend_frontend_7a900e75();
-void ets_init_bootstrap_modules_platform_8fe6afba();
-void ets_init_bootstrap_modules_syntax_cache_bfc8ae19();
-void ets_init_bootstrap_modules_loader_ac8191d2();
-void ets_init_bootstrap_frontend_builtins_ab6c0609();
-void ets_init_bootstrap_binder_binder_1c5e05a6();
-void ets_init_bootstrap_checker_types_71b4ed17();
-void ets_init_bootstrap_checker_model_80275e1b();
-void ets_init_bootstrap_checker_module_records_d933f8fe();
-void ets_init_bootstrap_checker_constant_4f712795();
-void ets_init_bootstrap_checker_numeric_16be9374();
-void ets_init_bootstrap_checker_comptime_0c032780();
-void ets_init_bootstrap_checker_effects_d6dfccb9();
-void ets_init_bootstrap_checker_ownership_0086a83d();
-void ets_init_bootstrap_checker_safety_19515c74();
-void ets_init_bootstrap_checker_checker_80aa1e2f();
-void ets_init_bootstrap_checker_expansion_7e0d4139();
-void ets_init_bootstrap_ir_model_7080054c();
-void ets_init_bootstrap_ir_type_traits_ecea0c3b();
-void ets_init_bootstrap_ir_borrows_2fdc1506();
-void ets_init_bootstrap_ir_contracts_141fd47f();
-void ets_init_bootstrap_ir_verify_contracts_18b4bee9();
-void ets_init_bootstrap_ir_verify_ownership_450ec18e();
-void ets_init_bootstrap_ir_verify_shapes_14484802();
-void ets_init_bootstrap_ir_verify_memory_d2465644();
-void ets_init_bootstrap_ir_verify_borrows_978ac375();
-void ets_init_bootstrap_ir_verify_0e1063ec();
-void ets_init_bootstrap_ir_lower_d645e93b();
-void ets_init_bootstrap_binder_format_427ab3d5();
-void ets_init_bootstrap_ir_format_source_2b0cfb6e();
-void ets_init_bootstrap_ir_format_contracts_912d0d90();
-void ets_init_bootstrap_ir_format_60a49266();
-void ets_init_bootstrap_ir_demo_afe9bd11();
+void ets_init_bootstrap_driver_host_5cdd6c7b();
+void ets_init_bootstrap_analysis_options_876b7c37();
+void ets_init_bootstrap_progress_progress_0809dea3();
+void ets_init_bootstrap_parser_ast_schema_c87a5319();
+void ets_init_bootstrap_parser_parser_c7f03350();
+void ets_init_bootstrap_lexer_lexer_139a0aad();
+void ets_init_bootstrap_frontend_frontend_71598122();
+void ets_init_bootstrap_modules_platform_5ca8746a();
+void ets_init_bootstrap_modules_syntax_cache_b49b13e5();
+void ets_init_bootstrap_modules_loader_2e111b50();
+void ets_init_bootstrap_frontend_builtins_a4273184();
+void ets_init_bootstrap_binder_binder_1367c37e();
+void ets_init_bootstrap_checker_types_f1a5f64a();
+void ets_init_bootstrap_checker_model_d9eb2c5e();
+void ets_init_bootstrap_checker_module_records_e828114e();
+void ets_init_bootstrap_checker_constant_10a3e67c();
+void ets_init_bootstrap_checker_numeric_99db9de7();
+void ets_init_bootstrap_checker_comptime_14465de6();
+void ets_init_bootstrap_checker_effects_26f81858();
+void ets_init_bootstrap_checker_ownership_f6ad3ebb();
+void ets_init_bootstrap_checker_safety_88c3403a();
+void ets_init_bootstrap_checker_checker_b1f45756();
+void ets_init_bootstrap_checker_expansion_c15c8aed();
+void ets_init_bootstrap_ir_model_e1b1176c();
+void ets_init_bootstrap_ir_type_traits_55205947();
+void ets_init_bootstrap_ir_borrows_34b30c88();
+void ets_init_bootstrap_ir_contracts_946405c8();
+void ets_init_bootstrap_ir_verify_contracts_15f5a5a4();
+void ets_init_bootstrap_ir_verify_ownership_b1da2c6e();
+void ets_init_bootstrap_ir_verify_shapes_a43248b9();
+void ets_init_bootstrap_ir_verify_memory_9a5f20b0();
+void ets_init_bootstrap_ir_verify_borrows_7094b439();
+void ets_init_bootstrap_ir_verify_093cf4d0();
+void ets_init_bootstrap_ir_lower_45e87b9b();
+void ets_init_bootstrap_binder_format_2b22398f();
+void ets_init_bootstrap_ir_format_source_bf72ebe4();
+void ets_init_bootstrap_ir_format_contracts_3e2a3d6a();
+void ets_init_bootstrap_ir_format_40e08632();
+void ets_init_bootstrap_ir_demo_b3577aad();
