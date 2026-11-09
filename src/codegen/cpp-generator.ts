@@ -1092,7 +1092,7 @@ export class CppGenerator {
   }
   // V16: detecta si el programa usa APIs estilo Node que viven en
   // `ets_runtime_full.hpp` (filesystem struct, process struct, path
-  // struct, JSON, async/Task/Result, net). Activan la inclusión de
+  // struct, async/Task/Result, net). Activan la inclusión de
   // `ets_runtime_full.hpp` para arrastrar ets_async.hpp, ets_file.hpp,
   // ets_net.hpp, etc.
   private usesNodeGlobals(program: Program): boolean {
@@ -1112,7 +1112,11 @@ export class CppGenerator {
       // `object` siendo un IdentifierExpression (no string).
       if (obj.kind === "MemberCallExpression" || obj.kind === "MemberExpression") {
         const name = objName(obj.object);
-        if (name === "fs" || name === "process" || name === "path" || name === "JSON") return true;
+        // JSON is implemented in ets_runtime.hpp and does not need the async
+        // runtime or libuv. Minimal mode has JSON stubs, so retain its existing
+        // promotion to the full implementation. Keep visiting arguments: a
+        // JSON call can still contain an await or another runtime operation.
+        if (name === "fs" || name === "process" || name === "path" || (name === "JSON" && this.minimal)) return true;
       }
       // Console itself lives in ets_io.hpp, not in the full async runtime.
       // `await` implica runtime async (Task, spawn, sleep).

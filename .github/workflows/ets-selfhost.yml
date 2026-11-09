@@ -39,8 +39,12 @@ jobs:
           /usr/bin/time -o build/ets-compiler/sequential-time.tsv -f 'sequential-analysis\t%e\t%U\t%S\t%M' \
             build/ets-compiler/etsc bootstrap/driver/main.ets --check --jobs 1 --no-progress \
             --emit-ir build/ets-compiler/sequential.ir.json 2> build/ets-compiler/sequential-analysis.log
+          /usr/bin/time -o build/ets-compiler/parallel-time.tsv -f 'parallel-analysis\t%e\t%U\t%S\t%M' \
+            build/ets-compiler/etsc bootstrap/driver/main.ets --check --jobs 2 --no-progress \
+            --emit-ir build/ets-compiler/parallel.ir.json 2> build/ets-compiler/parallel-analysis.log
+          cmp build/ets-compiler/sequential.ir.json build/ets-compiler/parallel.ir.json
           cmp build/ets-compiler/sequential.ir.json build/ets-compiler/stage2.ir.json
-          cat build/ets-compiler/sequential-time.tsv >> build/ets-compiler/timings.tsv
+          cat build/ets-compiler/sequential-time.tsv build/ets-compiler/parallel-time.tsv >> build/ets-compiler/timings.tsv
       - name: Repeat paired analysis benchmark
         run: python3 scripts/benchmark-analysis.py --compiler build/ets-compiler/etsc-stage2 --output build/analysis-benchmark --repetitions 3
       - name: Report build and execution timings
