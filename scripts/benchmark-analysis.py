@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import statistics
 import subprocess
 import time
@@ -19,7 +20,7 @@ def workload():
     # Mutable parameters keep contextual callee checking active. No execution of
     # these functions is necessary: every definition must still be checked.
     source = "class Cell{value:number=1;}\n"
-    source += "function touch(out cell:Cell):number{cell.value+=1;return cell.value;}\n"
+    source += "function touch(out cell:Cell):number{" + "cell.value+=1;" * 16 + "return cell.value;}\n"
     for index in range(48):
         source += f"function work{index}(out cell:Cell):number{{\n"
         source += "touch(cell);\n" * 32
@@ -87,20 +88,30 @@ def main():
             if digest != reference_hash:
                 raise RuntimeError(f"Verified IR differs: {name}")
             if repetition >= 0:
+                phases = {}
+                for line in (output / (name + ".log")).read_text().splitlines():
+                    match = re.match(r"frontend: profile ([\w-]+) (.*)", line)
+                    if match:
+                        phases.setdefault(match[1], []).append({
+                            key: float(value) for key, value in
+                            re.findall(r"(\w+)=([-+\d.eE]+)", match[2])})
                 rows.append({"repetition": repetition + 1, "jobs": jobs,
                              "wall_seconds": wall, "user_seconds": usage.ru_utime,
                              "system_seconds": usage.ru_stime, "peak_process_rss_kib": usage.ru_maxrss,
-                             "ir_sha256": digest, "command": command})
+                             "ir_sha256": digest, "command": command, "phases": phases})
             ir.unlink()
     (output / "samples.json").write_text(json.dumps(rows, indent=2) + "\n")
     summary = []
     for jobs in [1, 2]:
         samples = [row for row in rows if row["jobs"] == jobs]
         walls = [row["wall_seconds"] for row in samples]
+        flow = [row["phases"]["flow-definitions"][0]["wall_ms"] for row in samples]
         summary.append({"jobs": jobs, "median_wall_seconds": statistics.median(walls),
                         "min_wall_seconds": min(walls), "max_wall_seconds": max(walls),
                         "stdev_wall_seconds": statistics.stdev(walls),
                         "median_cpu_seconds": statistics.median(row["user_seconds"] + row["system_seconds"] for row in samples),
+                        "median_flow_wall_ms": statistics.median(flow),
+                        "min_flow_wall_ms": min(flow), "max_flow_wall_ms": max(flow),
                         "max_process_rss_kib": max(row["peak_process_rss_kib"] for row in samples)})
     result = {"measurements": summary,
               "median_speedup": summary[0]["median_wall_seconds"] / summary[1]["median_wall_seconds"]}

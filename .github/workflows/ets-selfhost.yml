@@ -80,8 +80,16 @@ jobs:
         run: node --experimental-strip-types --test bootstrap/ir/native-annotations.test.ts
       - name: Verify stage 1
         run: bash scripts/check-ets-compiler.sh build/ets-compiler/etsc
-      - name: Verify stage 2
-        run: bash scripts/check-ets-compiler.sh build/ets-compiler/etsc-stage2
+      - name: Verify stage 2 without Node
+        run: |
+          poison="$RUNNER_TEMP/parallel-without-node"
+          mkdir -p "$poison"
+          for tool in node nodejs npm; do
+            printf '#!/bin/sh\necho forbidden > %s\nexit 99\n' "$RUNNER_TEMP/parallel-node-used" > "$poison/$tool"
+            chmod +x "$poison/$tool"
+          done
+          PATH="$poison:$PATH" bash scripts/check-ets-compiler.sh build/ets-compiler/etsc-stage2
+          test ! -e "$RUNNER_TEMP/parallel-node-used"
       - name: Compare compiler IR across generations
         run: cmp build/ets-compiler/stage1.ir.json build/ets-compiler/stage2.ir.json
       - name: Round-trip compiler IR through the streaming reader
