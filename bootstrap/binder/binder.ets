@@ -310,6 +310,17 @@ export class Binder {
   typeReferences(module: number, node: number, text: string, firstValue: boolean): void {
     let at: number = 0; let previous: string = ""; let first: boolean = true;
     while (at < text.length) {
+      // Un literal de tipo (`$lit:<tipo>=<valor>`) no es un nombre: su valor
+      // ya esta codificado en el texto y no se resuelve en el scope. Se salta
+      // entero para que el valor no se interprete como un identificador.
+      if (text.slice(at, at + 5) == "$lit:") {
+        at = at + 5;
+        while (at < text.length && text.charAt(at) != "|") {
+          if (text.charAt(at) == "\\") at = at + 1;
+          at = at + 1;
+        }
+        continue;
+      }
       const c: string = text.charAt(at); const code: number = text.charCodeAt(at);
       if (c == "\"" || c == "'") {
         const quote: string = c; at = at + 1;

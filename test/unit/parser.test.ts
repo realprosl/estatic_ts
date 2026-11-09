@@ -409,3 +409,13 @@ test("parser: `<` tras un member access es comparacion salvo generic method call
   assert.equal(call.typeArguments[0], "string");
 });
 
+
+test("parser: un alias `type` acepta tipos literales", () => {
+  const alias = parse(`type option = "Hola" | "Adios";`) as any;
+  assert.equal(alias.statements[0].kind, "TypeAliasDeclaration");
+  assert.equal(alias.statements[0].type, "$lit:string=Hola | $lit:string=Adios");
+  const numbers = parse(`type count = 1 | 2;`) as any;
+  assert.equal(numbers.statements[0].type, "$lit:number=1 | $lit:number=2");
+  const flags = parse(`type flag = true | false;`) as any;
+  assert.equal(flags.statements[0].type, "$lit:boolean=true | $lit:boolean=false");
+});

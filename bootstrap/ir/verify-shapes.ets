@@ -6,6 +6,16 @@ export function irAssignable(project: constRef<IrProject>, from: number, to: num
   const a = project.typeDefinitions[from]; const b = project.typeDefinitions[to];
   if (numericType(project.types[from]) && numericType(project.types[to])) return true;
   if (a.kind == "enum" && a.arguments.length == 1) return irAssignable(project,a.arguments[0],to,depth+1);
+  // Un literal de tipo se ensancha a su primitivo; dos literales solo son
+  // compatibles si comparten kind y valor exacto.
+  if (a.kind == "literal") {
+    if (b.kind == "literal") return a.discriminatorType == b.discriminatorType && a.discriminatorValue == b.discriminatorValue;
+    if (b.kind == "scalar") return irAssignable(project,a.discriminatorType,to,depth+1);
+  }
+  // El checker ya verifico que el valor concreto pertenece a la union de
+  // literales, asi que el IR acepta el narrowing de un primitivo a un literal
+  // del mismo kind.
+  if (b.kind == "literal" && a.kind == "scalar") return irAssignable(project,to,b.discriminatorType,depth+1);
   if (a.kind == "variant" && a.arguments.length == 1 && a.arguments[0] == to) return true;
   if (a.kind == "union" && a.variants.includes(to)) return true;
   if (a.kind == "sum" && a.arguments.includes(to)) return true;

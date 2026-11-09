@@ -5,7 +5,7 @@ import { Lexer } from "../lexer/lexer.ts";
 import { scanTemplate, templatePositions } from "../lexer/template.ts";
 import type { Position } from "../core/span.ts";
 import type { Token, TokenKind } from "../lexer/token.ts";
-import { arrayType, functionType, genericType, readonlyType, tupleType, typeofType } from "../types/type-system.ts";
+import { arrayType, functionType, genericType, literalType, readonlyType, tupleType, typeofType } from "../types/type-system.ts";
 
 // Precedencia de operadores. Los bitwise siguen el orden de TypeScript:
 // `|` es el mas bajo, luego `^`, luego `&`, y por ultimo el desplazamiento.
@@ -1277,6 +1277,16 @@ export class Parser {
     return { kind: "LiteralExpression", value: 0, literalType: "number", span: token.span };
   }
 
+  // Literal usado como tipo: `"Hola"`, `1` o `true` en posición de tipo. El
+  // texto canonico es `$lit:<tipo>=<valor>`, el mismo que usa el frontend
+  // nativo. Devuelve "" si la posición no es un literal.
+  private literalTypeName(): TypeName {
+    const token = this.peek();
+    if (token.kind === "string") { this.advance(); return literalType("string", token.lexeme); }
+    if (token.kind === "number") { this.advance(); return literalType("number", token.lexeme); }
+    if (token.kind === "true" || token.kind === "false") { this.advance(); return literalType("boolean", token.lexeme); }
+    return "";
+  }
   private typeName(): TypeName {
     // V5: prefijo `readonly` en posición de tipo (p.ej. `let x: readonly T[] = ...`).
     // Distinguimos por contexto: dentro de ClassField el `readonly` ya se consumió
@@ -1287,6 +1297,12 @@ export class Parser {
       const inner = this.typeName();
       return readonlyType(inner);
     }
+    // Un literal usado como tipo se codifica con el prefijo `$lit:` seguido
+    // del tipo y el valor separados por `=`. Es la misma forma canonica que
+    // usa el frontend nativo, para que ambos pipelines coincidan. El prefijo
+    // no puede colisionar con un identificador.
+    const literal = this.literalTypeName();
+    if (literal !== "") return this.typeSuffix(literal);
     // `typeof` en posición de tipo: identificador contextual que resuelve al
     // tipo estático del símbolo nombrado. Se trata antes del caso genérico
     // para que `typeof x` no se confunda con un nombre de tipo normal.
@@ -1362,6 +1378,11 @@ export class Parser {
     }
     // Sufijo de union: `A | B | C`. Se compone con la sintaxis existente
     // (arrays, generics, tuplas, funciones) ya parseada.
+    return this.typeSuffix(result);
+  }
+  // Sufijos de tipo compartidos por los nombres de tipo y los literales de
+  // tipo: arrays, unions e intersecciones.
+  private typeSuffix(result: TypeName): TypeName {
     while (this.match("|")) result = `${result} | ${this.typeName()}`;
     // Sufijo de intersección: `A & B` (combina capacidades, típicas interfaces).
     while (this.match("&")) result = `${result} & ${this.typeName()}`;

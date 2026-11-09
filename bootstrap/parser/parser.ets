@@ -1,6 +1,21 @@
 import { AttributeKind, EdgeRole, NodeKind, attributeKindName, edgeRoleName, nodeKindName } from "./ast-schema";
 // Bootstrap parser. Tokens are supplied by the caller; no lexer/checker imports.
 // An arena owns all nodes. Edges are indices, so recursive ASTs need no cycles.
+
+// Escapa el valor de un literal de tipo. El parser no importa del checker, asi
+// que esta copia local mantiene la misma forma canonica que `checker/types`.
+export function escapeLiteralValue(value: string): string {
+  let result: string = "";
+  for (let at: number = 0; at < value.length; at = at + 1) {
+    const c: string = value.charAt(at);
+    if (c == "\\") result = result + "\\\\";
+    else if (c == "|") result = result + "\\|";
+    else if (c == "=") result = result + "\\=";
+    else result = result + c;
+  }
+  return result;
+}
+
 export class ParserToken {
   kind: string; lexeme: string;
   offset: number; line: number; column: number;
@@ -866,6 +881,17 @@ export class Parser {
     if (!this.enter()) return "<error>";
     const result: string = this.typeInner(); this.leave(); return result;
   }
+  // Un literal usado como tipo se codifica con el prefijo `$lit:` seguido
+  // del tipo y el valor separados por `=`. El prefijo no puede colisionar con
+  // un identificador: el lexer solo admite letras, `_` y digitos. El valor se
+  // escapa para que un `|` o un `=` no rompan el texto canonico.
+  literalType(): string {
+    const token: ParserToken = this.peek(0);
+    if (token.kind == "string") { this.take(); return "$lit:string=" + escapeLiteralValue(token.lexeme); }
+    if (token.kind == "number") { this.take(); return "$lit:number=" + escapeLiteralValue(this.numericText(token)); }
+    if (token.kind == "true" || token.kind == "false") { this.take(); return "$lit:boolean=" + token.lexeme; }
+    return "";
+  }
   typeInner(): string {
     if (this.accept("readonly")) return "readonly<" + this.typeName() + ">";
     if (this.accept("typeof")) {
@@ -889,6 +915,8 @@ export class Parser {
       this.expect("]"); return this.typeSuffix("[" + parts.join(",") + "]");
     }
     let result: string = "";
+    const literal: string = this.literalType();
+    if (literal != "") return this.typeSuffix(literal);
     if (this.check("identifier") || this.check("type")) result = this.take().lexeme;
     else { this.report("Se esperaba un tipo"); if (!this.check("eof")) this.take(); return "<error>"; }
     while (this.accept(".")) { if (this.check("default")) result = result + "." + this.take().lexeme; else result = result + "." + this.expect("identifier").lexeme; }

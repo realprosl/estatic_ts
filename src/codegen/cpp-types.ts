@@ -1,5 +1,5 @@
 import type { TypeName } from "../ast/nodes.ts";
-import { arrayElement, fixedArrayElement, fixedArraySize, functionParameters, functionResult, genericArguments, genericBase, isArrayType, isFixedArrayType, isFunctionType, isGenericType, isReadonlyType, isTupleType, isUnionType, readonlyInner, tupleElements, unionMembers, type ResolvedType } from "../types/type-system.ts";
+import { arrayElement, fixedArrayElement, fixedArraySize, functionParameters, functionResult, genericArguments, genericBase, isArrayType, isFixedArrayType, isFunctionType, isGenericType, isLiteralType, isReadonlyType, isTupleType, isUnionType, literalKind, readonlyInner, tupleElements, unionMembers, type ResolvedType } from "../types/type-system.ts";
 import { cppInputType } from "./cpp-parameters.ts";
 
 // V18: alias de tipos CPP externos (decorador `@cpp_type("Vector2")`).
@@ -55,6 +55,20 @@ export function cppType(type: TypeName | ResolvedType): string {
 
 function cppTypeFromString(type: TypeName): string {
   if (PRIMITIVE_CPP[type]) return PRIMITIVE_CPP[type];
+  // Un literal de tipo se materializa como su primitivo: en C++ el valor
+  // concreto ya lo garantiza el checker, igual que hace TypeScript.
+  if (isLiteralType(type)) return cppTypeFromString(literalKind(type) as TypeName);
+  // Una union de literales colapsa a su primitivo comun: `std::variant` solo
+  // se usa para unions de tipos distintos, no para literales del mismo tipo.
+  if (isUnionType(type)) {
+    const members = unionMembers(type);
+    const kinds = members.filter(isLiteralType).map(literalKind);
+    if (kinds.length === members.length && kinds.length > 0) {
+      const distinct = new Set(kinds);
+      if (distinct.size === 1) return cppTypeFromString(kinds[0] as TypeName);
+    }
+    return `std::variant<${members.map(cppType).join(", ")}>`;
+  }
   // V18: tipo CPP externo (decorador `@cpp_type("Vector2")`). Si el
   // codegen tiene un mapa con este nombre, devolvemos el alias tal cual.
   const external = externalTypeNames.get(type);
@@ -64,7 +78,6 @@ function cppTypeFromString(type: TypeName): string {
   // parámetro. Eso evita el doble `const const T&&` que se produciría al
   // wrappear dos veces.
   if (isReadonlyType(type)) return cppType(readonlyInner(type)!);
-  if (isUnionType(type)) return `std::variant<${unionMembers(type).map(cppType).join(", ")}>`;
   if (isArrayType(type)) return `std::vector<${cppType(arrayElement(type))}>`;
   // V4: arrays de tamaño fijo → std::array<T, N> en pila. Consultamos los
   // caches tipados (no regex sobre el string del tipo).

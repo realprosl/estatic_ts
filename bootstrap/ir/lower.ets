@@ -3,7 +3,7 @@ import { IrDispatch, IrCleanupScope, IrRuntimeContract, IrType, IrSource, IrPlac
 import { ModuleGraph } from "../modules/loader";
 import { BindingResult, bindingChild } from "../binder/binder";
 import { CheckResult } from "../checker/model";
-import { functionParams, functionReturn, primitiveType, functionClose, numericType, semanticElement, semanticTuple, splitTypes, joinTypes, fixedArraySize, fixedArrayElement, canonicalSymbol, genericBase, genericArguments, replaceType } from "../checker/types";
+import { functionParams, functionReturn, primitiveType, functionClose, numericType, semanticElement, semanticTuple, splitTypes, joinTypes, fixedArraySize, fixedArrayElement, canonicalSymbol, genericBase, genericArguments, replaceType, literalType, literalKind, literalValue } from "../checker/types";
 import { AstNode } from "../parser/parser";
 import { NodeKind, EdgeRole, AttributeKind, nodeKindName } from "../parser/ast-schema";
 import { nativeNumericLiteral, nativeBinaryPromotion, nativeUnaryPromotion } from "../checker/numeric";
@@ -66,6 +66,7 @@ export class IrLowering {
     let kind: string = ""; let arguments: string[] = [];
     const mode: string = memoryMode(text); const nominal: number = canonicalSymbol(text);
     if (primitiveType(text)) kind = "scalar";
+    else if (literalType(text)) { kind = "literal"; this.result.typeDefinitions[index].discriminatorValue = literalValue(text); this.result.typeDefinitions[index].discriminatorType = this.typeId(literalKind(text),id); }
     else if (mode != "") { kind = mode; arguments.push(memoryInner(text)); }
     else if (functionClose(text) >= 0) { kind = "function"; arguments = functionParams(text); arguments.push(functionReturn(text)); }
     else if (text.endsWith("[]")) { kind = "array"; arguments.push(semanticElement(text)); }

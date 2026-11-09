@@ -40,6 +40,52 @@ export function argumentType(text: string, spread: boolean): string {
 }
 export function numericType(text: string): boolean { return ["number","i8","u8","i16","u16","i32","u32","i64","u64","f32","f64"].includes(text); }
 export function primitiveType(text: string): boolean { return numericType(text) || ["string","boolean","void"].includes(text); }
+
+// Un literal usado como tipo se codifica como `$lit:<tipo>=<valor>`. El
+// prefijo no puede colisionar con un identificador porque el lexer solo
+// admite letras, `_` y digitos.
+export function literalTypePrefix(): string { return "$lit:"; }
+export function literalType(text: string): boolean { return text.startsWith(literalTypePrefix()); }
+export function literalKind(text: string): string {
+  if (!literalType(text)) return "";
+  const rest: string = text.slice(literalTypePrefix().length, text.length);
+  const split: number = rest.indexOf("=", 0);
+  return split < 0 ? "" : rest.slice(0, split);
+}
+export function literalValue(text: string): string {
+  if (!literalType(text)) return "";
+  const rest: string = text.slice(literalTypePrefix().length, text.length);
+  const split: number = rest.indexOf("=", 0);
+  return split < 0 ? "" : unescapeLiteralValue(rest.slice(split + 1, rest.length));
+}
+export function literalTypeText(kind: string, value: string): string { return literalTypePrefix() + kind + "=" + escapeLiteralValue(value); }
+
+// El valor de un literal se escapa para que el texto canónico sobreviva a un
+// round-trip: un `|` separaría miembros de una union y un `=` separaría el
+// valor del resto del tipo.
+export function escapeLiteralValue(value: string): string {
+  let result: string = "";
+  for (let at: number = 0; at < value.length; at = at + 1) {
+    const c: string = value.charAt(at);
+    if (c == "\\") result = result + "\\\\";
+    else if (c == "|") result = result + "\\|";
+    else if (c == "=") result = result + "\\=";
+    else result = result + c;
+  }
+  return result;
+}
+export function unescapeLiteralValue(value: string): string {
+  let result: string = "";
+  for (let at: number = 0; at < value.length; at = at + 1) {
+    const c: string = value.charAt(at);
+    if (c == "\\" && at + 1 < value.length) {
+      const next: string = value.charAt(at + 1);
+      if (next == "\\" || next == "|" || next == "=") { result = result + next; at = at + 1; continue; }
+    }
+    result = result + c;
+  }
+  return result;
+}
 // Canonical nominal identities are decimal symbol indices, never source names.
 export function canonicalSymbol(text: string): number {
   const open: number = text.indexOf("<",0); const end: number = open >= 0 ? open : text.length;
