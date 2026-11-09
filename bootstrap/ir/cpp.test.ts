@@ -36,6 +36,8 @@ function execute(source:string,files:Record<string,string>={},flags:string[]=[])
  buildIrCpp(result,cpp,binary,undefined,flags);const p=spawnSync(binary,[],{encoding:"utf8",timeout:15000,env:flags.some(f=>f.includes("sanitize"))?{...process.env,ASAN_OPTIONS:"detect_leaks=0",LSAN_OPTIONS:"detect_leaks=0"}:process.env});assert.ifError(p.error);assert.equal(p.status,0,p.stderr);return p.stdout;
 }
 for(const [name,source,expected] of [
+ ["void ternary effects",'let n=0;function condition(value:boolean):boolean{n+=1;return value;}function a():void{print("a");}function b():void{print("b");}condition(true)?a():b();condition(false)?a():b();true?(false?a():b()):a();print(n);print(false?7:8);',"a\nb\nb\n2\n8\n"],
+ ["multiline object properties",'interface FetchOptions{method:string;body:string;contentType:string;}const defaults:FetchOptions={\n method:"GET",\n body:"",\n contentType:"application/json"\n};print(defaults.method);print(defaults.contentType);',"GET\napplication/json\n"],
  ["interface dispatch",'interface Named{name():string;}class A{name():string{return "A";}}class B{name():string{return "B";}}function f(x:Named):string{return x.name();}print(f(new A()));print(f(new B()));',"A\nB\n"],
  ["interface array dispatch",'interface I{f():number;}class A{f():number{return 2;}}class B{f():number{return 3;}}let xs:I[]=[new A(),new B()];print(xs[0].f());print(xs[1].f());',"2\n3\n"],
  ["interface value copy",'interface I{n:number;inc():void;}class C{n:number=1;inc():void{this.n+=1;}}let x:I=new C();let y:I=x;y.inc();print(x.n);print(y.n);',"1\n2\n"],

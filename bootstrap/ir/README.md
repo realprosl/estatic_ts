@@ -59,6 +59,8 @@ El layout, la alineación y el ABI pertenecen al backend.
   de cada captura y su modo de transporte quedan explícitos.
 - `if`, bucles, switch con fallthrough, break/continue, ternarios y cortocircuito;
   for-of/for-in mediante cursores tipados. Destructuring y sus defaults.
+  Los ternarios con ramas `void` conservan los efectos de la rama seleccionada
+  sin crear un place ni un valor de resultado; la condición se evalúa una vez.
 - Optional, coalescencia y acceso opcional con ramas que evitan evaluar argumentos
   del camino ausente; variantes de unión, discriminadores y `match` con callbacks
   evaluados únicamente en la rama seleccionada.

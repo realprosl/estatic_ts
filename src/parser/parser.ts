@@ -1226,11 +1226,14 @@ export class Parser {
     // `{x: x, y: y}`) para escribir código TS idiomático.
     if (token.kind === "{") {
       const properties: { key: string; value: Expression }[] = [];
-      if (!this.check("}")) do {
+      this.skipNewlines();
+      while (!this.check("}") && !this.check("eof")) {
         const keyTok = this.consume("identifier", "Se esperaba el nombre de la propiedad");
         let value: Expression;
+        this.skipNewlines();
         if (this.match(":")) {
           // Forma normal: `key: value`.
+          this.skipNewlines();
           value = this.expression();
         } else {
           // Shorthand: `{x}` ≡ `{x: x}`. El value es un IdentifierExpression
@@ -1238,7 +1241,10 @@ export class Parser {
           value = { kind: "IdentifierExpression", name: keyTok.lexeme, span: keyTok.span };
         }
         properties.push({ key: keyTok.lexeme, value });
-      } while (this.match(","));
+        this.skipNewlines();
+        if (!this.match(",")) break;
+        this.skipNewlines();
+      }
       const close = this.consume("}", "Se esperaba '}' para cerrar el object literal");
       return { kind: "ObjectLiteralExpression", properties, span: span(token.span.start, close.span.end) };
     }

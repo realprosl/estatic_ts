@@ -108,6 +108,11 @@ function parity(source: string): NativeResult {
 }
 
 const fixtures: [string, string][] = [
+  ["object one line trailing comma", 'const x={value:1,};'],
+  ["object multiline properties", 'const defaults={\n method:"GET",\n body:"",\n contentType:"application/json"\n};'],
+  ["object multiline shorthand and nested values", 'const method="GET";const defaults={\n method,\n nested:{\n value:1\n }\n ,body:""\n};'],
+  ["object multiline empty", 'const empty={\n\n};'],
+  ["object multiline trailing comma and comments", 'const x={\n // first\n value\n :\n 1\n ,\n // last\n};'],
   ["module include header only", '@include("<vector>")'],
   ["module link header only", '@link("pthread")'],
   ["module headers and blank lines", '\n// header\n@include("<string>")\n\n@link("m")\nconst x=1;'],
@@ -294,6 +299,12 @@ const fixtures: [string, string][] = [
   ["unicode strings positions", "const text='España 🙂';\nprint(text);"],
 ];
 for (const [name, source] of fixtures) test(`bootstrap parser native parity: ${name}`, () => { parity(source); });
+
+test("bootstrap parser: newlines do not replace object property commas", () => {
+  const source = 'const x={\n first:1\n second:2\n};';
+  assert.throws(() => new Parser(new Lexer(source).tokenize()).parseProgram(), DiagnosticError);
+  assert.ok(native(source).diagnostics.length > 0);
+});
 
 test("bootstrap parser: demo executes fixed tokens without a lexer", () => {
   const result = nativeTokens(); assert.deepEqual(result.diagnostics, []);

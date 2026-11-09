@@ -472,16 +472,19 @@ export class IrLowering {
     value = this.convert(value,pt,id); this.emit("store",-1,[value],p,-1,"",id); return p;
   }
   conditional(id: number, condition: number, yes: number, no: number, typeId: number, logical: string): number {
-    const value: number = this.expression(condition); const p: number = this.local(-1,typeId,false,id);
+    const value: number = this.expression(condition);
+    // Void branches have effects but no value to store at the join.
+    const p: number = this.result.types[typeId] == "void" ? -1 : this.local(-1,typeId,false,id);
     const a: number = this.newBlock(id); const b: number = this.newBlock(id); const join: number = this.newBlock(id);
     this.terminate("branch",value,[a,b],id);
     this.block = a;
     const left: number = logical == "||" ? value : this.expression(yes);
-    this.emit("store",-1,[this.convert(left,typeId,id)],p,-1,"",id); this.terminate("jump",-1,[join],id);
+    if (p >= 0) this.emit("store",-1,[this.convert(left,typeId,id)],p,-1,"",id); this.terminate("jump",-1,[join],id);
     this.block = b;
     const right: number = logical == "&&" ? value : this.expression(logical == "||" ? yes : no);
-    this.emit("store",-1,[this.convert(right,typeId,id)],p,-1,"",id); this.terminate("jump",-1,[join],id);
-    this.block = join; this.track(p); return this.emit(this.result.typeDefinitions[typeId].resource ? "move" : "load",typeId,[],p,-1,"",id);
+    if (p >= 0) this.emit("store",-1,[this.convert(right,typeId,id)],p,-1,"",id); this.terminate("jump",-1,[join],id);
+    this.block = join; if (p < 0) return -1;
+    this.track(p); return this.emit(this.result.typeDefinitions[typeId].resource ? "move" : "load",typeId,[],p,-1,"",id);
   }
   ensureFunction(owner: number, id: number, wanted: string, receiver: string = ""): number {
     const previousModule: number = this.module; const previousFunction: number = this.currentFunction;
