@@ -98,6 +98,8 @@ test("native verbose frontend traces update one line even across split writes",(
  assert.equal(p.status,0,p.stderr);
  assert.match(p.stderr,/frontend: reading one/);
  assert.match(p.stderr,/frontend: checking/);
+ assert.match(p.stderr,/frontend: IR: preparando módulos y tipos/);
+ assert.match(p.stderr,/frontend: IR: verificando IR/);
  const lines=p.stderr.replace(/\r\n/g,"\n").split("\n").filter(Boolean);
  assert.equal(lines.length,4,p.stderr);
  for(const [index,label] of ["Cargando configuración","Analizando fuentes y verificando IR","Generando C++ desde IR verificado","Compilación completada"].entries()){

@@ -108,6 +108,8 @@ test("bootstrap CLI verbose reports real phases and preserves stdout and exit st
   assert.equal(p.status,7,p.stderr);assert.equal(p.stdout,"--verbose\n");
   for(const label of ["Analizando fuentes y verificando IR","Validando frontera","Generando C++","Preparando runtime, compilando y enlazando C++","Compilación completada","Ejecutable:","Comando frontend:","Compilando y enlazando C++:","frontend: reading/parsing","frontend: checking [","frontend: lowering IR"])assert(p.stderr.includes(label),p.stderr);
   assert.match(p.stderr,/\(\d+ ms\)/);assert.doesNotMatch(p.stderr,/[\r\x1b]/);
+  assert.match(p.stderr,/frontend: IR: preparando módulos y tipos/);
+  assert.match(p.stderr,/frontend: IR: verificando IR/);
 });
 test("bootstrap CLI check stays quiet by default and does not generate C++",()=>{
   const input=source("check",'print("checked");');
