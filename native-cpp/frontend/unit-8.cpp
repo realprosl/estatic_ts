@@ -1,47 +1,183 @@
 // Generated module. Do not edit.
 #include "estatic_common.hpp"
 
-double bindingChild(AstNode node, EdgeRole role) {
-    for (const auto& edge : node.edges) {
-        if ((edge.role == role)) {
-            return edge.node;
+struct Reader;
+
+std::string field(std::string text) {
+    return ets::concat(numberToString(::ets::string_length(text)), std::string(":"), text);
+}
+
+std::string integer(double value) {
+    return field(numberToString(value));
+}
+
+static inline std::string encodeToken(ParserToken token) {
+    return ets::concat(field(token.kind), field(token.lexeme), integer(token.offset), integer(token.line), integer(token.column), integer(token.endOffset), integer(token.endLine), integer(token.endColumn));
+}
+
+static inline ParserToken decodeToken(Reader& reader, double length) {
+    const std::string kind = reader.take();
+    const std::string lexeme = reader.take();
+    const double offset = reader.natural();
+    const double line = reader.natural();
+    const double column = reader.natural();
+    const double endOffset = reader.natural();
+    const double endLine = reader.natural();
+    const double endColumn = reader.natural();
+    if ((((((((kind == std::string("")) || (endOffset < offset)) || (endOffset > length)) || (line < 1.0)) || (column < 1.0)) || (endLine < line)) || (endColumn < 1.0))) {
+        (reader.valid = false);
+    }
+    if (((endLine == line) && ((endColumn - column) != (endOffset - offset)))) {
+        (reader.valid = false);
+    }
+    if (((endLine > line) && ((endOffset - offset) < (endLine - line)))) {
+        (reader.valid = false);
+    }
+    return ParserToken{}.constructor(kind, lexeme, offset, line, column, endOffset, endLine, endColumn);
+}
+
+std::string encodeSyntax(SourceResult result) {
+    std::vector<std::string> parts = std::vector<std::string>{integer(result.tokens.size())};
+    for (const auto& token : result.tokens) {
+        ets_push_vec<std::string>(parts, encodeToken(token));
+    }
+    ets_push_vec<std::string>(parts, ets::concat(integer(result.ast.root), integer(result.ast.nodes.size())));
+    for (const auto& node : result.ast.nodes) {
+        ets_push_vec<std::string>(parts, ets::concat(field(nodeKindName(node.kind)), encodeToken(node.start), encodeToken(node.end), integer(node.attributes.size())));
+        for (const auto& attribute : node.attributes) {
+            ets_push_vec<std::string>(parts, ets::concat(field(attributeKindName(attribute.name)), field(attribute.value)));
+        }
+        ets_push_vec<std::string>(parts, integer(node.edges.size()));
+        for (const auto& edge : node.edges) {
+            ets_push_vec<std::string>(parts, ets::concat(field(edgeRoleName(edge.role)), integer(edge.node)));
         }
     }
-    return (-1.0);
+    return ets_join_vec(parts, std::string(""));
 }
 
-bool isBindingMember(std::string kind) {
-    return ((((((kind == std::string("ClassField")) || (kind == std::string("ClassMethod"))) || (kind == std::string("InterfaceField"))) || (kind == std::string("InterfaceMethod"))) || (kind == std::string("EnumMember"))) || (kind == std::string("UnionVariantBinding")));
+static inline SourceResult emptySyntax(std::string file) {
+    return SourceResult{}.constructor(file, std::vector<ParserToken>(), ParseResult{}.constructor((-1.0), std::vector<AstNode>(), std::vector<ParserDiagnostic>()), std::vector<SourceDiagnostic>(), false);
 }
 
-bool callableBinding(std::string kind) {
-    return ((((kind == std::string("FunctionDeclaration")) || (kind == std::string("ArrowFunctionExpression"))) || (kind == std::string("ClassMethod"))) || (kind == std::string("InterfaceMethod")));
-}
-
-BindingResult bindProject(ModuleGraph graph) {
-    Binder binder = Binder{}.constructor(graph);
-    return binder.bind();
-}
-
-std::vector<std::string> bindingBuiltinValues() {
-    std::vector<std::string> names = std::vector<std::string>{std::string("i8"), std::string("u8"), std::string("i16"), std::string("u16"), std::string("i32"), std::string("u32"), std::string("i64"), std::string("u64"), std::string("f32"), std::string("f64"), std::string("optionalIsPresent"), std::string("optionalValueOr"), std::string("optionalOrElse"), std::string("resultOk"), std::string("resultErr"), std::string("resultIsOk"), std::string("resultValueOr"), std::string("Date"), std::string("FileReader"), std::string("JSON"), std::string("Map"), std::string("Math"), std::string("Optional"), std::string("Promise"), std::string("Result"), std::string("Server"), std::string("Set"), std::string("__noExtend"), std::string("__noThrow"), std::string("acceptTcp"), std::string("acceptTcpUntil"), std::string("acceptTls"), std::string("all"), std::string("appendFile"), std::string("appendFileAsync"), std::string("appendFileUntil"), std::string("argument"), std::string("argumentCount"), std::string("asyncIoUringRead"), std::string("asyncIoUringWrite"), std::string("cancel"), std::string("cancelTimer"), std::string("cancellationToken"), std::string("charAt"), std::string("clearError"), std::string("closeTcp"), std::string("closeTls"), std::string("compileCpp"), std::string("compilerRoot"), std::string("comptime"), std::string("console"), std::string("constRef"), std::string("copyFile"), std::string("copyFileAsync"), std::string("copyFileUntil"), std::string("createCancellation"), std::string("createTlsServer"), std::string("ensureParentDirectory"), std::string("err"), std::string("estaticAstRecords"), std::string("estaticTypedAstJson"), std::string("estaticTypedAstRecords"), std::string("exitProcess"), std::string("fail"), std::string("fileAppend"), std::string("fileCopy"), std::string("fileExists"), std::string("fileExistsAsync"), std::string("fileMove"), std::string("fileRead"), std::string("fileRemove"), std::string("fileWrite"), std::string("fs"), std::string("hasError"), std::string("http"), std::string("indexOf"), std::string("ioUringAvailable"), std::string("ioUringRead"), std::string("ioUringWrite"), std::string("isCancelled"), std::string("jsonArrayGet"), std::string("jsonArrayLength"), std::string("jsonAsBool"), std::string("jsonAsNumber"), std::string("jsonAsString"), std::string("jsonEscape"), std::string("jsonIsArray"), std::string("jsonIsBool"), std::string("jsonIsNull"), std::string("jsonIsNumber"), std::string("jsonIsObject"), std::string("jsonIsString"), std::string("jsonObjectGet"), std::string("length"), std::string("lineAt"), std::string("lineCount"), std::string("listenTcp"), std::string("match"), std::string("move"), std::string("moveFile"), std::string("moveFileAsync"), std::string("moveFileUntil"), std::string("normalizePath"), std::string("numberToString"), std::string("ok"), std::string("openFileReader"), std::string("optionalNone"), std::string("optionalSome"), std::string("otherwise"), std::string("path"), std::string("pathDirectory"), std::string("print"), std::string("printError"), std::string("process"), std::string("promiseAll"), std::string("promiseRace"), std::string("race"), std::string("readFile"), std::string("readFileAsync"), std::string("readFileUntil"), std::string("readTcp"), std::string("readTcpUntil"), std::string("readTls"), std::string("ref"), std::string("removeFile"), std::string("removeFileAsync"), std::string("removeFileUntil"), std::string("resolveDns"), std::string("resolveImportPath"), std::string("resolveProjectPath"), std::string("retry"), std::string("setInterval"), std::string("setTimeout"), std::string("sleep"), std::string("spawn"), std::string("startsWith"), std::string("stopLoop"), std::string("substring"), std::string("syntaxTreeJson"), std::string("syntaxTreeRecords"), std::string("tcpAccept"), std::string("tcpClose"), std::string("tcpConnect"), std::string("tcpListen"), std::string("tcpRead"), std::string("tcpWrite"), std::string("timeout"), std::string("trim"), std::string("unwatchFs"), std::string("validateSyntax"), std::string("watchFs"), std::string("when"), std::string("whenType"), std::string("write"), std::string("writeError"), std::string("writeFile"), std::string("writeFileAsync"), std::string("writeFileUntil"), std::string("writeTcp"), std::string("writeTcpUntil"), std::string("writeTls")};
-    for (const auto& name : nativeBuiltinNames()) {
-        if ((!ets_includes_vec<std::string>(names, name))) {
-            ets_push_vec<std::string>(names, name);
+SourceResult decodeSyntax(std::string text, std::string file, double length) {
+    Reader reader = Reader{}.constructor(text);
+    std::vector<ParserToken> tokens = std::vector<ParserToken>();
+    std::vector<AstNode> nodes = std::vector<AstNode>();
+    const double tokenCount = reader.count();
+    for (double i = 0.0; ((i < tokenCount) && reader.valid); (i = (i + 1.0))) {
+        const ParserToken token = decodeToken(reader, length);
+        if (((i > 0.0) && (token.offset < tokens[static_cast<std::size_t>((i - 1.0))].endOffset))) {
+            (reader.valid = false);
+        }
+        if ((((i + 1.0) < tokenCount) && (token.kind == std::string("eof")))) {
+            (reader.valid = false);
+        }
+        ets_push_vec<ParserToken>(tokens, token);
+    }
+    if ((tokens.size() == 0.0)) {
+        (reader.valid = false);
+    } else {
+        const ParserToken last = tokens[static_cast<std::size_t>((tokens.size() - 1.0))];
+        if ((((last.kind != std::string("eof")) || (last.offset != length)) || (last.endOffset != length))) {
+            (reader.valid = false);
         }
     }
-    return names;
-}
-
-std::vector<std::string> bindingBuiltinTypes() {
-    std::vector<std::string> names = std::vector<std::string>{std::string("Array"), std::string("ArrayLike"), std::string("CancellationSource"), std::string("CancellationToken"), std::string("Console"), std::string("Error"), std::string("FileReader"), std::string("FsEvent"), std::string("FsWatcher"), std::string("HttpClientResponse"), std::string("JsonValue"), std::string("Map"), std::string("MatchCase"), std::string("MatchCaseResult"), std::string("MatchDefaultCase"), std::string("MatchResult"), std::string("MatchTypeCase"), std::string("MatchValueCase"), std::string("NonThrowable"), std::string("Optional"), std::string("Phantom"), std::string("Promise"), std::string("Request"), std::string("Response"), std::string("Result"), std::string("Sealed"), std::string("Server"), std::string("Set"), std::string("StringInstance"), std::string("TcpConnection"), std::string("TcpListener"), std::string("Timer"), std::string("TlsConnection"), std::string("TlsContext"), std::string("boolean"), std::string("constPtr"), std::string("constRef"), std::string("f32"), std::string("f64"), std::string("i16"), std::string("i32"), std::string("i64"), std::string("i8"), std::string("number"), std::string("ptr"), std::string("readonly"), std::string("ref"), std::string("string"), std::string("u16"), std::string("u32"), std::string("u64"), std::string("u8"), std::string("void")};
-    for (const auto& name : nativeBuiltinTypes()) {
-        if ((!ets_includes_vec<std::string>(names, name))) {
-            ets_push_vec<std::string>(names, name);
+    const double root = reader.natural();
+    const double count = reader.count();
+    for (double i = 0.0; ((i < count) && reader.valid); (i = (i + 1.0))) {
+        const NodeKind kind = parseNodeKind(reader.take());
+        const ParserToken start = decodeToken(reader, length);
+        const ParserToken end = decodeToken(reader, length);
+        if (((kind == NodeKind::Invalid) || (end.endOffset < start.offset))) {
+            (reader.valid = false);
+        }
+        AstNode node = AstNode{}.constructor(kind, start, end);
+        const double attributes = reader.count();
+        for (double a = 0.0; ((a < attributes) && reader.valid); (a = (a + 1.0))) {
+            const AttributeKind name = parseAttributeKind(reader.take());
+            const std::string value = reader.take();
+            if ((name == AttributeKind::Invalid)) {
+                (reader.valid = false);
+            }
+            ets_push_vec<AstAttribute>(node.attributes, AstAttribute{}.constructor(name, value));
+        }
+        const double edges = reader.count();
+        for (double e = 0.0; ((e < edges) && reader.valid); (e = (e + 1.0))) {
+            const EdgeRole role = parseEdgeRole(reader.take());
+            const double ets_local_index = reader.natural();
+            if ((((role == EdgeRole::Invalid) || (ets_local_index >= count)) || (ets_local_index == i))) {
+                (reader.valid = false);
+            }
+            ets_push_vec<AstEdge>(node.edges, AstEdge{}.constructor(role, ets_local_index));
+        }
+        ets_push_vec<AstNode>(nodes, node);
+    }
+    if (((!reader.done()) || (root >= nodes.size()))) {
+        return emptySyntax(file);
+    }
+    if ((nodes[static_cast<std::size_t>(root)].kind != NodeKind::Program)) {
+        return emptySyntax(file);
+    }
+    std::vector<double> states = std::vector<double>();
+    for (const auto& node : nodes) {
+        ets_push_vec<double>(states, 0.0);
+    }
+    for (double i = 0.0; (i < nodes.size()); (i = (i + 1.0))) {
+        if ((states[static_cast<std::size_t>(i)] != 0.0)) {
+            continue;
+        }
+        std::vector<double> stack = std::vector<double>{i};
+        std::vector<double> cursors = std::vector<double>{0.0};
+        ets_set_vec<double>(states, i, 1.0);
+        while ((stack.size() > 0.0)) {
+            const double top = (stack.size() - 1.0);
+            const double ets_local_index = stack[static_cast<std::size_t>(top)];
+            const double cursor = cursors[static_cast<std::size_t>(top)];
+            if ((cursor >= nodes[static_cast<std::size_t>(ets_local_index)].edges.size())) {
+                ets_set_vec<double>(states, ets_local_index, 2.0);
+                ets_pop_vec<double>(stack);
+                ets_pop_vec<double>(cursors);
+            } else {
+                ets_set_vec<double>(cursors, top, (cursor + 1.0));
+                const double child = nodes[static_cast<std::size_t>(ets_local_index)].edges[static_cast<std::size_t>(cursor)].node;
+                if ((states[static_cast<std::size_t>(child)] == 1.0)) {
+                    return emptySyntax(file);
+                }
+                if ((states[static_cast<std::size_t>(child)] == 0.0)) {
+                    ets_set_vec<double>(states, child, 1.0);
+                    ets_push_vec<double>(stack, child);
+                    ets_push_vec<double>(cursors, 0.0);
+                }
+            }
         }
     }
-    return names;
+    return SourceResult{}.constructor(file, tokens, ParseResult{}.constructor(root, nodes, std::vector<ParserDiagnostic>()), std::vector<SourceDiagnostic>(), true);
 }
 
-void ets_init_bootstrap_binder_binder_1c5e05a6() {
+double sourceUnits(std::string text) {
+    double at = 0.0;
+    double units = 0.0;
+    while ((at < ::ets::string_length(text))) {
+        const double byte = ::ets::string_charCodeAt(text, at);
+        double width = 1.0;
+        double count = 1.0;
+        if (((byte >= 240.0) && (byte <= 244.0))) {
+            (width = 4.0);
+            (count = 2.0);
+        } else {
+            if (((byte >= 224.0) && (byte <= 239.0))) {
+                (width = 3.0);
+            } else {
+                if (((byte >= 194.0) && (byte <= 223.0))) {
+                    (width = 2.0);
+                }
+            }
+        }
+        (at = (at + width));
+        (units = (units + count));
+    }
+    return units;
+}
+
+void ets_init_bootstrap_modules_syntax_cache_b49b13e5() {
 }

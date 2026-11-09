@@ -5,11 +5,15 @@ import { isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { root } from "../root.ts";
 
-export type RuntimeUnit = "libuv" | "httplib";
+export type RuntimeUnit = "libuv" | "httplib" | "regex";
 interface Manifest { dependencies: {path:string; hash:string}[]; archiveHash:string }
 const sources:Record<RuntimeUnit,string[]> = {
   libuv: ["runtime/runtime_ets_libuv.cpp", "runtime/runtime_ets_net_libuv.cpp"],
   httplib: ["runtime/external/httplib/httplib.cc"],
+  // `std::regex` lanza `std::regex_error` con un patron invalido. El runtime
+  // de los programas se compila con `-fno-exceptions`, asi que este TU se
+  // compila aparte con `-fexceptions` y captura el error.
+  regex: ["runtime/ets_regex_compile.cpp"],
 };
 const hash = (data:string|Buffer) => createHash("sha256").update(data).digest("hex");
 const identities = new Map<string,string>();
@@ -45,6 +49,8 @@ export function runtimeFlags(unit:RuntimeUnit,flags:string[]):string[] {
   const result=[standard,"-O2","-pthread",exceptions,"-ffunction-sections","-fdata-sections",`-I${root}`,...other];
   if(unit==="libuv"){
     if(existsSync(join(root,"build/libs/libuv/include/uv.h")))result.push(`-I${root}/build/libs/libuv/include`);
+  }else if(unit==="regex"){
+    result.push("-fexceptions");
   }else result.push("-DCPPHTTPLIB_NO_EXCEPTIONS");
   return result;
 }

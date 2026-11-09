@@ -63,3 +63,26 @@ jobs:
           compile_case conditional pass 'const s: string = "abc"; if (s.includes("a") && !s.includes("z", 1)) print("ok");'
           compile_case function_arg pass 'function check(s: string): boolean { return s.includes("x"); } print(check("xyz"));'
           compile_case checker_identifier pass 'function validSymbol(part:string):boolean { let valid:boolean=true; const allowedFirst:string="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_"; const allowedRest:string=allowedFirst+"0123456789"; if(!allowedFirst.includes(part.charAt(0))) valid=false; for(let k:number=1;k<part.length;k=k+1){if(!allowedRest.includes(part.charAt(k))) valid=false;} return valid; } print(validSymbol("abc_12"));'
+
+          # Ternarias cuyas dos ramas devuelven void. El frontend nativo
+          # soltaba el valor de la ternaria en un place de tipo void, y el
+          # verificador de contratos lo rechazaba con IR_INVALID. El caso se
+          # ejercita aqui porque la ruta nativa es la que arrastraba el
+          # defecto; la suite de IR solo cubria el frontend de TypeScript.
+          compile_case void_ternary pass 'const flag: boolean = true; function doA(): void { print("a"); } function doB(): void { print("b"); } (flag) ? doA() : doB();'
+          compile_case void_ternary_literal pass 'function doA(): void { print("a"); } function doB(): void { print("b"); } (true) ? doA() : doB();'
+          compile_case void_ternary_nested pass 'const flag: boolean = true; function doA(): void { print("a"); } function doB(): void { print("b"); } flag ? (true ? doA() : doB()) : doB();'
+          compile_case void_ternary_effects pass 'let n: number = 0; function bump(): void { n = n + 1; } function doA(): void { bump(); } function doB(): void { bump(); } (n == 0) ? doA() : doB(); print(n);'
+          compile_case ternary_number_branches pass 'const flag: boolean = true; print(flag ? 1 : 2);'
+          compile_case ternary_string_branches pass 'const flag: boolean = true; print(flag ? "x" : "y");'
+
+          # Precedencia de los operadores bitwise. `|` es mas bajo que `^`,
+          # que es mas bajo que `&`, y el desplazamiento va por encima de los
+          # tres. `a | b & c` es `a | (b & c)`, no `(a | b) & c`: agruparlos
+          # al mismo nivel devolvia un resultado numerico incorrecto sin
+          # ningun diagnostico.
+          compile_case bitwise_precedence_or_and pass 'const a: number = 6; const b: number = 3; const c: number = 1; print(a | b & c);'
+          compile_case bitwise_precedence_xor_and pass 'const a: number = 6; const b: number = 3; const c: number = 1; print(a ^ b & c);'
+          compile_case bitwise_precedence_and_or pass 'const a: number = 6; const b: number = 3; const c: number = 1; print(a & b | c);'
+          compile_case bitwise_precedence_shift pass 'const a: number = 6; const b: number = 3; const c: number = 1; print(a << b & c);'
+          compile_case arithmetic_precedence pass 'const a: number = 6; const b: number = 3; const c: number = 1; print(a + b * c);'

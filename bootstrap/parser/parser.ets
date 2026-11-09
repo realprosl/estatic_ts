@@ -974,9 +974,15 @@ export class Parser {
     if (kind == "??") return 1; if (kind == "||") return 2; if (kind == "&&") return 3;
     if (kind == "==" || kind == "!=") return 4;
     if (kind == "<" || kind == "<=" || kind == ">" || kind == ">=" || kind == "instanceof") return 5;
-    if (kind == "|" || kind == "&" || kind == "^" || kind == "<<" || kind == ">>") return 6;
-    if (kind == "+" || kind == "-") return 7;
-    if (kind == "*" || kind == "/" || kind == "%") return 8;
+    // Precedencia de los operadores bitwise: `|` es el mas bajo, luego `^`,
+    // luego `&`, y por ultimo el desplazamiento. Igual que en TypeScript:
+    // `a | b & c` es `a | (b & c)`, no `(a | b) & c`.
+    if (kind == "|") return 6;
+    if (kind == "^") return 7;
+    if (kind == "&") return 8;
+    if (kind == "<<" || kind == ">>") return 9;
+    if (kind == "+" || kind == "-") return 10;
+    if (kind == "*" || kind == "/" || kind == "%") return 11;
     return 0;
   }
   binary(minimum: number): number {

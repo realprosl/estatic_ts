@@ -1,126 +1,108 @@
 // Generated module. Do not edit.
 #include "estatic_common.hpp"
 
-ParserToken originToken() {
-    return ParserToken{}.constructor(std::string(""), std::string(""), 0.0, 1.0, 1.0, 0.0, 1.0, 1.0);
+SourceDiagnostic diagnosticAt(std::string phase, std::string message, std::string file, AstNode node) {
+    auto result = SourceDiagnostic{}.constructor(phase, message, file, node.start);
+    (result.endToken = node.end);
+    (result.generatedId = node.generatedId);
+    (result.generatedToken = node.generatedStart);
+    (result.generatedEndToken = node.generatedEnd);
+    return result;
 }
 
-static inline bool hasExtension(std::string file) {
-    double base = 0.0;
-    double dot = (-1.0);
-    for (double i = 0.0; (i < ::ets::string_length(file)); (i = (i + 1.0))) {
-        if ((::ets::string_charAt(file, i) == std::string("/"))) {
-            (base = (i + 1.0));
-            (dot = (-1.0));
+static inline ParserToken parserToken(LexerToken token) {
+    return ParserToken{}.constructor(token.kind, token.lexeme, token.offset, token.line, token.column, token.endOffset, token.endLine, token.endColumn);
+}
+
+static inline ParserToken errorToken(LexerDiagnostic diagnostic) {
+    return ParserToken{}.constructor(std::string("error"), std::string(""), diagnostic.offset, diagnostic.line, diagnostic.column, diagnostic.endOffset, diagnostic.endLine, diagnostic.endColumn);
+}
+
+SourceResult parseSource(std::string source, std::string file) {
+    const LexerResult lexical = tokenizeExpanded(source);
+    std::vector<ParserToken> tokens = std::vector<ParserToken>();
+    for (const auto& token : lexical.tokens) {
+        ets_push_vec<ParserToken>(tokens, parserToken(token));
+    }
+    std::vector<SourceDiagnostic> diagnostics = std::vector<SourceDiagnostic>();
+    for (const auto& diagnostic : lexical.diagnostics) {
+        ets_push_vec<SourceDiagnostic>(diagnostics, SourceDiagnostic{}.constructor(std::string("lexer"), diagnostic.message, file, errorToken(diagnostic)));
+    }
+    const bool parsed = (diagnostics.size() == 0.0);
+    ParseResult ast = ParseResult{}.constructor((-1.0), std::vector<AstNode>(), std::vector<ParserDiagnostic>());
+    if (parsed) {
+        (ast = parseTokens(tokens));
+        for (const auto& diagnostic : ast.diagnostics) {
+            ets_push_vec<SourceDiagnostic>(diagnostics, SourceDiagnostic{}.constructor(std::string("parser"), diagnostic.message, file, diagnostic.token));
+        }
+    }
+    return SourceResult{}.constructor(file, tokens, ast, diagnostics, parsed);
+}
+
+std::string quoteSource(std::string text) {
+    std::string result = std::string("\"");
+    const std::string hex = std::string("0123456789abcdef");
+    for (double i = 0.0; (i < ::ets::string_length(text)); (i = (i + 1.0))) {
+        const std::string c = ::ets::string_charAt(text, i);
+        const double code = ::ets::string_charCodeAt(text, i);
+        if ((c == std::string("\""))) {
+            (result = ets::concat(result, std::string("\\\"")));
         } else {
-            if ((::ets::string_charAt(file, i) == std::string("."))) {
-                (dot = i);
+            if ((c == std::string("\\"))) {
+                (result = ets::concat(result, std::string("\\\\")));
+            } else {
+                if ((code < 32.0)) {
+                    (result = ets::concat(result, std::string("\\u00"), ::ets::string_charAt(hex, Math.floor((code / 16.0))), ::ets::string_charAt(hex, std::fmod(code, 16.0))));
+                } else {
+                    (result = ets::concat(result, c));
+                }
             }
         }
     }
-    return (dot > base);
+    return ets::concat(result, std::string("\""));
 }
 
-std::string resolveSourceFile(std::string requested) {
-    if (hasExtension(requested)) {
-        return canonicalFile(requested);
-    }
-    const std::string ts = canonicalFile(ets::concat(requested, std::string(".ts")));
-    return ((ts != std::string("")) ? ts : canonicalFile(ets::concat(requested, std::string(".ets"))));
+static inline std::string positionSource(double offset, double line, double column) {
+    return ets::concat(std::string("{\"offset\":"), numberToString(offset), std::string(",\"line\":"), numberToString(line), std::string(",\"column\":"), numberToString(column), std::string("}"));
 }
 
-static inline std::string requestedPath(std::string base, std::string specifier) {
-    if ((specifier == std::string(""))) {
-        return normalizePath(base);
-    }
-    return normalizePath((::ets::string_startsWith(specifier, std::string("/")) ? specifier : ets::concat(base, std::string("/"), specifier)));
+static inline std::string spanSource(ParserToken token) {
+    return ets::concat(std::string("{\"start\":"), positionSource(token.offset, token.line, token.column), std::string(",\"end\":"), positionSource(token.endOffset, token.endLine, token.endColumn), std::string("}"));
 }
 
-std::string resolveRequest(std::string file, std::string specifier, LoaderOptions options) {
-    if ((specifier == std::string(""))) {
-        return std::string("");
-    }
-    if ((::ets::string_startsWith(specifier, std::string(".")) || ::ets::string_startsWith(specifier, std::string("/")))) {
-        return resolveSourceFile(requestedPath(pathDirectory(file), specifier));
-    }
-    double selected = (-1.0);
-    double longest = (-1.0);
-    for (double i = 0.0; (i < options.aliases.size()); (i = (i + 1.0))) {
-        const std::string name = options.aliases[static_cast<std::size_t>(i)].name;
-        if ((((specifier == name) || ::ets::string_startsWith(specifier, ets::concat(name, std::string("/")))) && (::ets::string_length(name) > longest))) {
-            (selected = i);
-            (longest = ::ets::string_length(name));
-        }
-    }
-    if ((selected >= 0.0)) {
-        const PathAlias alias = options.aliases[static_cast<std::size_t>(selected)];
-        const std::string suffix = ((specifier == alias.name) ? std::string("") : ::ets::string_slice(specifier, (::ets::string_length(alias.name) + 1.0), ::ets::string_length(specifier)));
-        return resolveSourceFile(requestedPath(alias.target, suffix));
-    }
-    for (const auto& root : options.roots) {
-        const std::string resolved = resolveSourceFile(requestedPath(root, specifier));
-        if ((resolved != std::string(""))) {
-            return resolved;
-        }
-    }
-    return std::string("");
+static inline std::string diagnosticSpan(ParserToken start, ParserToken end) {
+    return ets::concat(std::string("{\"start\":"), positionSource(start.offset, start.line, start.column), std::string(",\"end\":"), positionSource(end.endOffset, end.endLine, end.endColumn), std::string("}"));
 }
 
-LoadedFile readModule(std::string file, ModuleGraph& graph, SyntaxCache& cache) {
-    const std::vector<std::string> snapshot = readSnapshot(file);
-    const std::string source = snapshot[static_cast<std::size_t>(0.0)];
-    const std::string error = snapshot[static_cast<std::size_t>(1.0)];
-    const std::string before = snapshot[static_cast<std::size_t>(2.0)];
-    if ((error != std::string(""))) {
-        ets_push_vec<SourceDiagnostic>(graph.diagnostics, SourceDiagnostic{}.constructor(std::string("loader"), error, file, originToken()));
-        CachedSource failed = CachedSource{}.constructor(SourceResult{}.constructor(file, std::vector<ParserToken>(), ParseResult{}.constructor((-1.0), std::vector<AstNode>(), std::vector<ParserDiagnostic>()), std::vector<SourceDiagnostic>(), false), FileRecord{}.constructor(file, std::string(""), std::string(""), std::string("")), false);
-        (failed.record.syntax = std::string(""));
-        (failed.result.success = false);
-        return LoadedFile{}.constructor(file, failed);
+std::string formatDiagnostic(SourceDiagnostic diagnostic) {
+    std::string generated = std::string("null");
+    if ((diagnostic.generatedId != std::string(""))) {
+        (generated = ets::concat(std::string("{\"sourceId\":"), quoteSource(diagnostic.generatedId), std::string(",\"span\":"), diagnosticSpan(diagnostic.generatedToken, diagnostic.generatedEndToken), std::string(",\"offset\":"), numberToString(diagnostic.generatedToken.offset), std::string(",\"line\":"), numberToString(diagnostic.generatedToken.line), std::string(",\"column\":"), numberToString(diagnostic.generatedToken.column), std::string("}")));
     }
-    const std::string after = snapshot[static_cast<std::size_t>(3.0)];
-    if (((before == std::string("")) || (before != after))) {
-        ets_push_vec<SourceDiagnostic>(graph.diagnostics, SourceDiagnostic{}.constructor(std::string("loader"), std::string("El archivo cambió durante la lectura; vuelve a intentarlo"), file, originToken()));
-        CachedSource unstable = CachedSource{}.constructor(SourceResult{}.constructor(file, std::vector<ParserToken>(), ParseResult{}.constructor((-1.0), std::vector<AstNode>(), std::vector<ParserDiagnostic>()), std::vector<SourceDiagnostic>(), false), FileRecord{}.constructor(file, std::string(""), std::string(""), std::string("")), false);
-        (unstable.record.syntax = std::string(""));
-        (unstable.result.success = false);
-        return LoadedFile{}.constructor(file, unstable);
-    }
-    const CachedSource cached = cache.getOrParseModule(file, source, after);
-    for (const auto& diagnostic : cached.result.diagnostics) {
-        ets_push_vec<SourceDiagnostic>(graph.diagnostics, diagnostic);
-    }
-    return LoadedFile{}.constructor(file, cached);
+    return ets::concat(std::string("{\"schema\":\"ets-diagnostic-1\",\"file\":"), quoteSource(diagnostic.file), std::string(",\"phase\":"), quoteSource(diagnostic.phase), std::string(",\"code\":"), quoteSource(diagnostic.code), std::string(",\"severity\":"), quoteSource(diagnostic.severity), std::string(",\"message\":"), quoteSource(diagnostic.message), std::string(",\"span\":"), diagnosticSpan(diagnostic.token, diagnostic.endToken), std::string(",\"generated\":"), generated, std::string(",\"offset\":"), numberToString(diagnostic.token.offset), std::string(",\"line\":"), numberToString(diagnostic.token.line), std::string(",\"column\":"), numberToString(diagnostic.token.column), std::string("}"));
 }
 
-std::string formatGraph(ModuleGraph graph) {
-    std::vector<std::string> parts = std::vector<std::string>{ets::concat(std::string("{\"entry\":"), quoteSource(graph.entry), std::string(",\"success\":"), (graph.success ? std::string("true") : std::string("false")), std::string(",\"cache\":{\"hits\":"), numberToString(graph.hits), std::string(",\"misses\":"), numberToString(graph.misses), std::string(",\"writes\":"), numberToString(graph.writes), std::string("},\"modules\":["))};
+std::string formatSource(SourceResult result) {
+    std::vector<std::string> output = std::vector<std::string>{ets::concat(std::string("{\"file\":"), quoteSource(result.file), std::string(",\"parsed\":"), (result.parsed ? std::string("true") : std::string("false")), std::string(",\"success\":"), (result.success ? std::string("true") : std::string("false")), std::string(",\"tokens\":["))};
     std::string separator = std::string("");
-    for (const auto& module : graph.modules) {
-        ets_push_vec<std::string>(parts, ets::concat(separator, std::string("{\"file\":"), quoteSource(module.file), std::string(",\"hash\":"), quoteSource(module.cached.record.hash), std::string(",\"metadata\":"), quoteSource(module.cached.record.metadata), std::string(",\"reused\":"), (module.cached.reused ? std::string("true") : std::string("false")), std::string(",\"dependencies\":[")));
-        std::string comma = std::string("");
-        for (const auto& dependency : module.dependencies) {
-            ets_push_vec<std::string>(parts, ets::concat(comma, quoteSource(dependency)));
-            (comma = std::string(","));
-        }
-        ets_push_vec<std::string>(parts, std::string("],\"requests\":["));
-        (comma = std::string(""));
-        for (const auto& request : module.requests) {
-            ets_push_vec<std::string>(parts, ets::concat(comma, std::string("{\"specifier\":"), quoteSource(request.specifier), std::string(",\"kind\":"), quoteSource(request.kind), std::string(",\"typeOnly\":"), (request.typeOnly ? std::string("true") : std::string("false")), std::string(",\"node\":"), numberToString(request.node), std::string(",\"dependency\":"), quoteSource(request.dependency), std::string("}")));
-            (comma = std::string(","));
-        }
-        ets_push_vec<std::string>(parts, ets::concat(std::string("],\"source\":"), formatSource(module.cached.result), std::string("}")));
+    for (const auto& token : result.tokens) {
+        ets_push_vec<std::string>(output, ets::concat(separator, std::string("{\"kind\":"), quoteSource(token.kind), std::string(",\"lexeme\":"), quoteSource(token.lexeme), std::string(",\"span\":"), spanSource(token), std::string("}")));
         (separator = std::string(","));
     }
-    ets_push_vec<std::string>(parts, std::string("],\"diagnostics\":["));
+    ets_push_vec<std::string>(output, ets::concat(std::string("],\"ast\":"), formatAst(result.ast), std::string(",\"diagnostics\":[")));
     (separator = std::string(""));
-    for (const auto& diagnostic : graph.diagnostics) {
-        ets_push_vec<std::string>(parts, ets::concat(separator, formatDiagnostic(diagnostic)));
+    for (const auto& diagnostic : result.diagnostics) {
+        ets_push_vec<std::string>(output, ets::concat(separator, formatDiagnostic(diagnostic)));
         (separator = std::string(","));
     }
-    ets_push_vec<std::string>(parts, std::string("]}"));
-    return ets_join_vec(parts, std::string(""));
+    ets_push_vec<std::string>(output, std::string("]}"));
+    return ets_join_vec(output, std::string(""));
 }
 
-void ets_init_bootstrap_modules_loader_ac8191d2() {
+std::string inspectSource(std::string source, std::string file) {
+    const SourceResult result = parseSource(source, file);
+    return formatSource(result);
+}
+
+void ets_init_bootstrap_frontend_frontend_71598122() {
 }

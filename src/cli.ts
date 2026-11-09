@@ -280,6 +280,27 @@ try {
     await ensureRuntimeObj(runtimeNetLibuvObj, globalNetLibuvObj);
     await ensureRuntimeObj(runtimeNetPollObj, globalNetPollObj);
 
+    // `std::regex` lanza `std::regex_error` con un patron invalido y el
+    // runtime de los programas se compila con `-fno-exceptions`, donde
+    // libstdc++ aborta el proceso. La construccion del regex vive en un TU
+    // aparte compilado con `-fexceptions` (`runtime/ets_regex_compile.cpp`)
+    // que captura el error; hay que compilarlo y enlazarlo cuando el
+    // programa usa regex.
+    const usesRegex = /runtime\/ets_regex\.hpp/.test(generated);
+    const runtimeRegexObj = join(runtimeObjDir, "ets_regex_compile.o");
+    if (usesRegex) {
+      try {
+        execFileSync(config.compiler.command ?? "g++", [
+          "-std=c++20", "-O2", "-pthread", "-fexceptions",
+          `-I${compilerRoot}`, "-c",
+          join(compilerRoot, "runtime", "ets_regex_compile.cpp"),
+          "-o", runtimeRegexObj,
+        ], { stdio: "ignore" });
+      } catch (e) {
+        console.warn(`[runtime-cache] Aviso: no se pudo compilar el runtime de regex (${e}).`);
+      }
+    }
+
     const runtimeObjs: string[] = [];
     if (useLibuvBackend && existsSync(runtimeLibuvObj)) {
       runtimeObjs.push(runtimeLibuvObj);
@@ -292,6 +313,9 @@ try {
     }
     if (existsSync(runtimeNetPollObj)) {
       runtimeObjs.push(runtimeNetPollObj);
+    }
+    if (usesRegex && existsSync(runtimeRegexObj)) {
+      runtimeObjs.push(runtimeRegexObj);
     }
     // V25 Fase 6: si el usuario pide una libreria que tenemos
     // vendoreada (libuv hoy; libcurl/openssl en Fases 2-3), la

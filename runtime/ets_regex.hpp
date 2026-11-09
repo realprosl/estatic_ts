@@ -10,22 +10,42 @@
 //
 // El struct es move-only y lightweight (envuelve `std::regex`).
 // Comparar dos `ets_regex` con `operator==` compara los patterns y flags.
+//
+// El runtime de los programas generados se compila con `-fno-exceptions`, y
+// en ese modo libstdc++ convierte un `std::regex_error` en `abort()`. Como el
+// dialecto expone `regex(...)` al usuario, un patron invalido tumbaria el
+// programa sin diagnostico. La construccion del `std::regex` se delega en
+// `ets_regex_compile.cpp`, un TU aparte compilado con `-fexceptions` que
+// captura el error y lo devuelve como texto.
 
 #pragma once
 
+#include <optional>
 #include <regex>
 #include <string>
 #include <vector>
 
 namespace ets {
 
+// Implementado en `runtime/ets_regex_compile.cpp`, compilado con
+// `-fexceptions`. Devuelve `std::nullopt` si el patron no es valido.
+std::optional<std::regex> compile_regex(const std::string& pattern, std::regex::flag_type flags, std::string* error);
+
 struct ets_regex {
     std::regex re;
     std::string pattern;
     std::string flags;
+    // Mensaje de error cuando el patron no es valido. Vacio si es valido.
+    std::string error;
+    bool valid = true;
 
     ets_regex() = default;
-    ets_regex(std::string p, std::string f) : re(p, parse_flags(f)), pattern(std::move(p)), flags(std::move(f)) {}
+    ets_regex(std::string p, std::string f) : pattern(std::move(p)), flags(std::move(f)) {
+        std::string failure;
+        std::optional<std::regex> compiled = compile_regex(pattern, parse_flags(flags), &failure);
+        if (!compiled) { valid = false; error = failure; return; }
+        re = std::move(*compiled);
+    }
 
     static std::regex::flag_type parse_flags(const std::string& f) {
         std::regex::flag_type out = std::regex::ECMAScript;
@@ -38,8 +58,15 @@ struct ets_regex {
         return out;
     }
 
+    // El patron no es valido: las operaciones devuelven un resultado vacio
+    // en lugar de propagar un `std::regex_error`.
+    bool isValid() const { return valid; }
+    // Diagnostico del error de compilacion del patron, o cadena vacia.
+    const std::string& errorMessage() const { return error; }
+
     // V30.25: `test(s)` devuelve true si el pattern matchea en `s`.
     bool test(const std::string& s) const {
+        if (!valid) return false;
         return std::regex_search(s, re);
     }
 
@@ -48,6 +75,7 @@ struct ets_regex {
     // vector es el texto del match completo (no los grupos de captura).
     std::vector<std::string> match(const std::string& s) const {
         std::vector<std::string> out;
+        if (!valid) return out;
         auto begin = std::sregex_iterator(s.begin(), s.end(), re);
         auto end = std::sregex_iterator();
         for (auto it = begin; it != end; ++it) {
@@ -61,6 +89,7 @@ struct ets_regex {
     // `$1`..`$9` (grupo 1..9). Implementacion manual para evitar
     // diferencias entre implementaciones de `std::regex_replace`.
     std::string replace(const std::string& s, const std::string& repl) const {
+        if (!valid) return s;
         std::smatch m;
         if (!std::regex_search(s, m, re)) return s;
         std::string out;
@@ -88,6 +117,12 @@ struct ets_regex {
         out.append(s, pos, std::string::npos);
         return out;
     }
+
+    // Dos regex son iguales si comparten patron y flags.
+    bool operator==(const ets_regex& other) const {
+        return pattern == other.pattern && flags == other.flags;
+    }
+    bool operator!=(const ets_regex& other) const { return !(*this == other); }
 };
 
 // Constructor: `regex(pattern)` y `regex(pattern, flags)`.

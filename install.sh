@@ -215,7 +215,7 @@ fi
 # El driver sabe calcular la clave de cache, el manifiesto y las rutas que
 # despues reutiliza. Compilar un programa de prueba con el compilador ya
 # instalado deja el runtime listo en su cache y en la distribucion.
-etsc_info "Preparando runtime · libuv, red y HTTP"
+etsc_info "Preparando runtime · libuv, red, HTTP y regex"
 probe="$work/probe"
 mkdir -p "$probe/src"
 cat > "$probe/src/main.ets" <<'EOF'

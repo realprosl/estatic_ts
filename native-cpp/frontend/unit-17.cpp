@@ -1,11 +1,10 @@
 // Generated module. Do not edit.
 #include "estatic_common.hpp"
 
-void validateSafety(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult& result, bool trace) {
-    SafetyAnalyzer analyzer = SafetyAnalyzer{}.constructor(graph, binding, result);
-    (analyzer.trace = trace);
-    (result = analyzer.run());
+ets_import_7_CheckResult evaluateNativeComptime(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult checked) {
+    auto evaluator = NativeComptime{}.constructor(graph, binding, checked);
+    return evaluator.run();
 }
 
-void ets_init_bootstrap_checker_safety_19515c74() {
+void ets_init_bootstrap_checker_comptime_14465de6() {
 }

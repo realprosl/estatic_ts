@@ -1,163 +1,114 @@
 // Generated module. Do not edit.
 #include "estatic_common.hpp"
 
-std::vector<IrIssue> verifyOwnershipRoutes(const IrProject& project, const IrFunction& f) {
-    std::vector<IrIssue> issues = std::vector<IrIssue>();
-    const double offset = f.values.size();
-    const double count = (offset + f.places.size());
-    std::vector<IrOwnershipFacts> facts = std::vector<IrOwnershipFacts>();
-    std::vector<bool> tracked = std::vector<bool>();
-    for (const auto& typeId : f.values) {
-        ets_push_vec<bool>(tracked, project.typeDefinitions[static_cast<std::size_t>(typeId)].resource);
-    }
-    for (const auto& p : f.places) {
-        ets_push_vec<bool>(tracked, (((p.kind == std::string("local")) && (p.global < 0.0)) && project.typeDefinitions[static_cast<std::size_t>(p.typeId)].resource));
-    }
-    for (const auto& b : f.blocks) {
-        ets_push_vec<IrOwnershipFacts>(facts, IrOwnershipFacts{}.constructor(count));
-    }
-    if ((facts.size() == 0.0)) {
-        return issues;
-    }
-    (facts[static_cast<std::size_t>(0.0)].reachable = true);
-    bool changed = true;
-    while (changed) {
-        (changed = false);
-        for (double b = 0.0; (b < f.blocks.size()); (b = (b + 1.0))) {
-            std::vector<bool> must = std::vector<bool>();
-            std::vector<bool> may = std::vector<bool>();
-            for (double at = 0.0; (at < count); (at = (at + 1.0))) {
-                const bool entry = (((at >= offset) && f.places[static_cast<std::size_t>((at - offset))].parameter) && tracked[static_cast<std::size_t>(at)]);
-                ets_push_vec<bool>(must, ((b == 0.0) ? entry : true));
-                ets_push_vec<bool>(may, ((b == 0.0) ? entry : false));
-            }
-            for (double predecessor = 0.0; (predecessor < f.blocks.size()); (predecessor = (predecessor + 1.0))) {
-                if ((facts[static_cast<std::size_t>(predecessor)].reachable && ets_includes_vec<double>(f.blocks[static_cast<std::size_t>(predecessor)].targets, b))) {
-                    if ((!facts[static_cast<std::size_t>(b)].reachable)) {
-                        (facts[static_cast<std::size_t>(b)].reachable = true);
-                        (changed = true);
-                    }
-                    if ((b != 0.0)) {
-                        for (double at = 0.0; (at < count); (at = (at + 1.0))) {
-                            ets_set_vec<bool>(must, at, (must[static_cast<std::size_t>(at)] && facts[static_cast<std::size_t>(predecessor)].must[static_cast<std::size_t>(at)]));
-                            ets_set_vec<bool>(may, at, (may[static_cast<std::size_t>(at)] || facts[static_cast<std::size_t>(predecessor)].may[static_cast<std::size_t>(at)]));
-                        }
-                    }
-                }
-            }
-            if ((!facts[static_cast<std::size_t>(b)].reachable)) {
-                continue;
-            }
-            for (const auto& i : f.blocks[static_cast<std::size_t>(b)].instructions) {
-                if ((i.op == std::string("dropFrame"))) {
-                    for (double at = 0.0; (at < count); (at = (at + 1.0))) {
-                        ets_set_vec<bool>(must, at, false);
-                        ets_set_vec<bool>(may, at, false);
-                    }
-                }
-                for (const auto& operand : i.operands) {
-                    if ((((operand >= 0.0) && (operand < offset)) && tracked[static_cast<std::size_t>(operand)])) {
-                        ets_set_vec<bool>(must, operand, false);
-                        ets_set_vec<bool>(may, operand, false);
-                    }
-                }
-                if ((((i.op == std::string("store")) && (i.place >= 0.0)) && tracked[static_cast<std::size_t>((offset + i.place))])) {
-                    ets_set_vec<bool>(must, (offset + i.place), true);
-                    ets_set_vec<bool>(may, (offset + i.place), true);
-                }
-                if (((((i.op == std::string("move")) || (i.op == std::string("dropRemaining"))) && (i.place >= 0.0)) && tracked[static_cast<std::size_t>((offset + i.place))])) {
-                    ets_set_vec<bool>(must, (offset + i.place), false);
-                    ets_set_vec<bool>(may, (offset + i.place), false);
-                }
-                if (((i.result >= 0.0) && tracked[static_cast<std::size_t>(i.result)])) {
-                    ets_set_vec<bool>(must, i.result, true);
-                    ets_set_vec<bool>(may, i.result, true);
-                }
-            }
-            if (((((f.blocks[static_cast<std::size_t>(b)].terminator == std::string("return")) || (f.blocks[static_cast<std::size_t>(b)].terminator == std::string("suspend"))) && (f.blocks[static_cast<std::size_t>(b)].value >= 0.0)) && tracked[static_cast<std::size_t>(f.blocks[static_cast<std::size_t>(b)].value)])) {
-                ets_set_vec<bool>(must, f.blocks[static_cast<std::size_t>(b)].value, false);
-                ets_set_vec<bool>(may, f.blocks[static_cast<std::size_t>(b)].value, false);
-            }
-            for (double at = 0.0; (at < count); (at = (at + 1.0))) {
-                if (((facts[static_cast<std::size_t>(b)].must[static_cast<std::size_t>(at)] != must[static_cast<std::size_t>(at)]) || (facts[static_cast<std::size_t>(b)].may[static_cast<std::size_t>(at)] != may[static_cast<std::size_t>(at)]))) {
-                    ets_set_vec<bool>(facts[static_cast<std::size_t>(b)].must, at, must[static_cast<std::size_t>(at)]);
-                    ets_set_vec<bool>(facts[static_cast<std::size_t>(b)].may, at, may[static_cast<std::size_t>(at)]);
-                    (changed = true);
-                }
-            }
+std::vector<double> irLeaseUnion(std::vector<double> left, std::vector<double> right) {
+    for (const auto& value : right) {
+        if ((!ets_includes_vec<double>(left, value))) {
+            ets_push_vec<double>(left, value);
         }
     }
-    for (double b = 0.0; (b < f.blocks.size()); (b = (b + 1.0))) {
-        if (facts[static_cast<std::size_t>(b)].reachable) {
-            std::vector<bool> must = std::vector<bool>();
-            std::vector<bool> may = std::vector<bool>();
-            for (double at = 0.0; (at < count); (at = (at + 1.0))) {
-                const bool entry = (((at >= offset) && f.places[static_cast<std::size_t>((at - offset))].parameter) && tracked[static_cast<std::size_t>(at)]);
-                ets_push_vec<bool>(must, ((b == 0.0) ? entry : true));
-                ets_push_vec<bool>(may, ((b == 0.0) ? entry : false));
-            }
-            if ((b != 0.0)) {
-                for (double predecessor = 0.0; (predecessor < f.blocks.size()); (predecessor = (predecessor + 1.0))) {
-                    if ((facts[static_cast<std::size_t>(predecessor)].reachable && ets_includes_vec<double>(f.blocks[static_cast<std::size_t>(predecessor)].targets, b))) {
-                        for (double at = 0.0; (at < count); (at = (at + 1.0))) {
-                            ets_set_vec<bool>(must, at, (must[static_cast<std::size_t>(at)] && facts[static_cast<std::size_t>(predecessor)].must[static_cast<std::size_t>(at)]));
-                            ets_set_vec<bool>(may, at, (may[static_cast<std::size_t>(at)] || facts[static_cast<std::size_t>(predecessor)].may[static_cast<std::size_t>(at)]));
-                        }
-                    }
-                }
-            }
-            for (const auto& i : f.blocks[static_cast<std::size_t>(b)].instructions) {
-                if ((i.op == std::string("dropFrame"))) {
-                    for (double at = 0.0; (at < count); (at = (at + 1.0))) {
-                        ets_set_vec<bool>(must, at, false);
-                        ets_set_vec<bool>(may, at, false);
-                    }
-                }
-                for (const auto& operand : i.operands) {
-                    if ((((operand >= 0.0) && (operand < offset)) && tracked[static_cast<std::size_t>(operand)])) {
-                        if ((!must[static_cast<std::size_t>(operand)])) {
-                            ets_push_vec<IrIssue>(issues, IrIssue{}.constructor(std::string("IR_INVALID"), std::string("Temporal con ownership consumido o no disponible en todas las rutas"), i.source));
-                        }
-                        ets_set_vec<bool>(must, operand, false);
-                        ets_set_vec<bool>(may, operand, false);
-                    }
-                }
-                if ((((i.op == std::string("store")) && (i.place >= 0.0)) && tracked[static_cast<std::size_t>((offset + i.place))])) {
-                    ets_set_vec<bool>(must, (offset + i.place), true);
-                    ets_set_vec<bool>(may, (offset + i.place), true);
-                }
-                if (((((i.op == std::string("move")) || (i.op == std::string("dropRemaining"))) && (i.place >= 0.0)) && tracked[static_cast<std::size_t>((offset + i.place))])) {
-                    if (((i.op == std::string("move")) && (!must[static_cast<std::size_t>((offset + i.place))]))) {
-                        ets_push_vec<IrIssue>(issues, IrIssue{}.constructor(std::string("IR_INVALID"), std::string("Move de owner no disponible"), i.source));
-                    }
-                    ets_set_vec<bool>(must, (offset + i.place), false);
-                    ets_set_vec<bool>(may, (offset + i.place), false);
-                }
-                if (((i.result >= 0.0) && tracked[static_cast<std::size_t>(i.result)])) {
-                    if (may[static_cast<std::size_t>(i.result)]) {
-                        ets_push_vec<IrIssue>(issues, IrIssue{}.constructor(std::string("IR_INVALID"), std::string("Temporal owner sobrescrito sin consumo"), i.source));
-                    }
-                    ets_set_vec<bool>(must, i.result, true);
-                    ets_set_vec<bool>(may, i.result, true);
-                }
-            }
-            if (((((f.blocks[static_cast<std::size_t>(b)].terminator == std::string("return")) || (f.blocks[static_cast<std::size_t>(b)].terminator == std::string("suspend"))) && (f.blocks[static_cast<std::size_t>(b)].value >= 0.0)) && tracked[static_cast<std::size_t>(f.blocks[static_cast<std::size_t>(b)].value)])) {
-                if ((!must[static_cast<std::size_t>(f.blocks[static_cast<std::size_t>(b)].value)])) {
-                    ets_push_vec<IrIssue>(issues, IrIssue{}.constructor(std::string("IR_INVALID"), std::string("Retorno de owner consumido"), f.blocks[static_cast<std::size_t>(b)].source));
-                }
-                ets_set_vec<bool>(may, f.blocks[static_cast<std::size_t>(b)].value, false);
-            }
-            if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("return"), std::string("cancel")}, f.blocks[static_cast<std::size_t>(b)].terminator)) {
-                for (double at = 0.0; (at < count); (at = (at + 1.0))) {
-                    if ((tracked[static_cast<std::size_t>(at)] && may[static_cast<std::size_t>(at)])) {
-                        ets_push_vec<IrIssue>(issues, IrIssue{}.constructor(std::string("IR_INVALID"), std::string("Salida sin consumir o limpiar un recurso"), f.blocks[static_cast<std::size_t>(b)].source));
-                    }
-                }
-            }
-        }
-    }
-    return issues;
+    return left;
 }
 
-void ets_init_bootstrap_ir_verify_ownership_450ec18e() {
+bool irLeaseEqual(std::vector<double> left, std::vector<double> right) {
+    if ((left.size() != right.size())) {
+        return false;
+    }
+    for (const auto& value : left) {
+        if ((!ets_includes_vec<double>(right, value))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::vector<double> irLeaseRemove(std::vector<double> values, double value) {
+    std::vector<double> result = std::vector<double>();
+    for (const auto& item : values) {
+        if ((item != value)) {
+            ets_push_vec<double>(result, item);
+        }
+    }
+    return result;
+}
+
+IrProject finishBorrows(IrProject project) {
+    for (double f = 0.0; (f < project.functions.size()); (f = (f + 1.0))) {
+        for (double b = 0.0; (b < project.functions[static_cast<std::size_t>(f)].blocks.size()); (b = (b + 1.0))) {
+            for (double at = 0.0; (at < project.functions[static_cast<std::size_t>(f)].blocks[static_cast<std::size_t>(b)].instructions.size()); (at = (at + 1.0))) {
+                const auto i = project.functions[static_cast<std::size_t>(f)].blocks[static_cast<std::size_t>(b)].instructions[static_cast<std::size_t>(at)];
+                if (((i.op == std::string("borrow")) || (i.op == std::string("address")))) {
+                    const double lease = project.functions[static_cast<std::size_t>(f)].leases.size();
+                    ets_push_vec<IrLease>(project.functions[static_cast<std::size_t>(f)].leases, IrLease{}.constructor(i.place, i.result, (((i.op == std::string("borrow")) && (i.text == std::string("constRef"))) ? std::string("constRef") : std::string("ref"))));
+                    (project.functions[static_cast<std::size_t>(f)].blocks[static_cast<std::size_t>(b)].instructions[static_cast<std::size_t>(at)].lease = lease);
+                }
+            }
+        }
+        auto analysis = IrBorrowAnalysis{}.constructor(project.functions[static_cast<std::size_t>(f)], project.types);
+        analysis.propagate();
+        analysis.liveness();
+        const double count = project.functions[static_cast<std::size_t>(f)].blocks.size();
+        for (double b = 0.0; (b < count); (b = (b + 1.0))) {
+            const auto original = project.functions[static_cast<std::size_t>(f)].blocks[static_cast<std::size_t>(b)];
+            std::vector<IrLeaseSet> after = std::vector<IrLeaseSet>();
+            for (const auto& i : original.instructions) {
+                ets_push_vec<IrLeaseSet>(after, IrLeaseSet{}.constructor());
+            }
+            std::vector<double> live = analysis.liveOut[static_cast<std::size_t>(b)].values;
+            if ((original.value >= 0.0)) {
+                (live = irLeaseUnion(live, analysis.values[static_cast<std::size_t>(original.value)].values));
+            }
+            for (double at = (original.instructions.size() - 1.0); (at >= 0.0); (at = (at - 1.0))) {
+                (after[static_cast<std::size_t>(at)].values = live);
+                const auto i = original.instructions[static_cast<std::size_t>(at)];
+                if (((i.lease >= 0.0) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("borrow"), std::string("address")}, i.op))) {
+                    (live = irLeaseRemove(live, i.lease));
+                }
+                (live = irLeaseUnion(live, analysis.uses(i)));
+            }
+            std::vector<IrInstruction> instructions = std::vector<IrInstruction>();
+            for (double at = 0.0; (at < original.instructions.size()); (at = (at + 1.0))) {
+                const auto i = original.instructions[static_cast<std::size_t>(at)];
+                ets_push_vec<IrInstruction>(instructions, i);
+                std::vector<double> used = analysis.uses(i);
+                if ((i.lease >= 0.0)) {
+                    (used = irLeaseUnion(used, std::vector<double>{i.lease}));
+                }
+                for (const auto& lease : used) {
+                    if ((!ets_includes_vec<double>(after[static_cast<std::size_t>(at)].values, lease))) {
+                        auto end = IrInstruction{}.constructor(std::string("endBorrow"), (-1.0), (-1.0), i.source);
+                        (end.lease = lease);
+                        ets_push_vec<IrInstruction>(instructions, end);
+                    }
+                }
+            }
+            (project.functions[static_cast<std::size_t>(f)].blocks[static_cast<std::size_t>(b)].instructions = instructions);
+            for (double edge = 0.0; (edge < original.targets.size()); (edge = (edge + 1.0))) {
+                const double target = original.targets[static_cast<std::size_t>(edge)];
+                std::vector<double> ends = std::vector<double>();
+                for (const auto& lease : analysis.liveOut[static_cast<std::size_t>(b)].values) {
+                    if ((!ets_includes_vec<double>(analysis.liveIn[static_cast<std::size_t>(target)].values, lease))) {
+                        ets_push_vec<double>(ends, lease);
+                    }
+                }
+                if ((ends.size() > 0.0)) {
+                    auto block = IrBlock{}.constructor(original.source);
+                    for (const auto& lease : ends) {
+                        auto end = IrInstruction{}.constructor(std::string("endBorrow"), (-1.0), (-1.0), original.source);
+                        (end.lease = lease);
+                        ets_push_vec<IrInstruction>(block.instructions, end);
+                    }
+                    (block.terminator = std::string("jump"));
+                    (block.targets = std::vector<double>{target});
+                    const double ets_local_index = project.functions[static_cast<std::size_t>(f)].blocks.size();
+                    ets_push_vec<IrBlock>(project.functions[static_cast<std::size_t>(f)].blocks, block);
+                    ets_set_vec<double>(project.functions[static_cast<std::size_t>(f)].blocks[static_cast<std::size_t>(b)].targets, edge, ets_local_index);
+                }
+            }
+        }
+    }
+    return project;
+}
+
+void ets_init_bootstrap_ir_borrows_34b30c88() {
 }

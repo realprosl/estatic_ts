@@ -10,6 +10,8 @@
 #include <thread>
 #include <vector>
 #include <cerrno>
+#include <cstring>
+#include <sys/resource.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -21,6 +23,12 @@ inline thread_local std::string error;
 inline std::string lastError(){return error;}
 inline std::string environment(std::string name){auto p=std::getenv(name.c_str());return p?p:"";}
 inline bool environmentDefined(std::string name){return std::getenv(name.c_str())!=nullptr;}
+inline bool setEnvironment(std::string name,std::string value){error.clear();if(setenv(name.c_str(),value.c_str(),1)==0)return true;error=std::strerror(errno);return false;}
+inline double forkWorker(){error.clear();auto pid=fork();if(pid<0)error=std::strerror(errno);return static_cast<double>(pid);}
+inline void finishWorker(double code){_exit(static_cast<int>(code));}
+inline double waitWorker(double process){int status=0;pid_t result;do{result=waitpid(static_cast<pid_t>(process),&status,0);}while(result<0&&errno==EINTR);if(result<0)return 125;return WIFEXITED(status)?WEXITSTATUS(status):128+WTERMSIG(status);}
+inline std::string temporaryDirectory(){error.clear();auto base=std::getenv("TMPDIR");auto pattern=std::string(base&&*base?base:"/tmp")+"/ets-analysis-XXXXXX";std::vector<char> path(pattern.begin(),pattern.end());path.push_back(0);if(mkdtemp(path.data()))return path.data();error=std::strerror(errno);return "";}
+inline std::vector<double> analysisUsage(){rusage self{},children{};getrusage(RUSAGE_SELF,&self);getrusage(RUSAGE_CHILDREN,&children);auto cpu=[](const rusage& r){return 1000.0*(r.ru_utime.tv_sec+r.ru_stime.tv_sec)+0.001*(r.ru_utime.tv_usec+r.ru_stime.tv_usec);};return {std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(),cpu(self)+cpu(children),static_cast<double>(self.ru_maxrss),static_cast<double>(children.ru_maxrss)};}
 inline bool exists(std::string path){std::error_code ec;return std::filesystem::exists(path,ec)&&!ec;}
 inline std::string readText(std::string path){
  error.clear();std::ifstream in(path,std::ios::binary);if(!in){error="No se puede leer "+path;return "";}

@@ -39,6 +39,9 @@
 ./frontend/unit-33.cpp
 ./frontend/unit-34.cpp
 ./frontend/unit-35.cpp
+./frontend/unit-36.cpp
+./frontend/unit-37.cpp
+./frontend/unit-38.cpp
 ./frontend/unit-4.cpp
 ./frontend/unit-5.cpp
 ./frontend/unit-6.cpp
@@ -56,6 +59,7 @@
 ./runtime/ets_async.hpp
 ./runtime/ets_buffer_pool.hpp
 ./runtime/ets_collections.hpp
+./runtime/ets_compiler_host.hpp
 ./runtime/ets_core.hpp
 ./runtime/ets_dns.hpp
 ./runtime/ets_event_loop.hpp
@@ -83,6 +87,7 @@
 ./runtime/ets_process.hpp
 ./runtime/ets_rc.hpp
 ./runtime/ets_regex.hpp
+./runtime/ets_regex_compile.cpp
 ./runtime/ets_runtime.hpp
 ./runtime/ets_runtime_full.hpp
 ./runtime/ets_runtime_minimal.hpp

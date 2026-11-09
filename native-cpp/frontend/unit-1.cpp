@@ -1,83 +1,51 @@
 // Generated module. Do not edit.
 #include "estatic_common.hpp"
 
-double nodeBegin(AstNode node) {
-    return ((node.analysisStart >= 0.0) ? node.analysisStart : node.start.offset);
-}
-
-double nodeEnd(AstNode node) {
-    return ((node.analysisEnd >= 0.0) ? node.analysisEnd : node.end.endOffset);
-}
-
-static inline std::string quoteAst(std::string text) {
-    std::string result = std::string("\"");
-    const std::string hex = std::string("0123456789abcdef");
-    for (double i = 0.0; (i < ::ets::string_length(text)); (i = (i + 1.0))) {
-        const std::string c = ::ets::string_charAt(text, i);
-        const double code = ::ets::string_charCodeAt(text, i);
-        if ((c == std::string("\""))) {
-            (result = ets::concat(result, std::string("\\\"")));
-        } else {
-            if ((c == std::string("\\"))) {
-                (result = ets::concat(result, std::string("\\\\")));
-            } else {
-                if ((code < 32.0)) {
-                    (result = ets::concat(result, std::string("\\u00"), ::ets::string_charAt(hex, Math.floor((code / 16.0))), ::ets::string_charAt(hex, std::fmod(code, 16.0))));
-                } else {
-                    (result = ets::concat(result, c));
-                }
-            }
+double parseAnalysisJobs(std::string value) {
+    if ((::ets::string_length(value) == 0.0)) {
+        return 0.0;
+    }
+    double count = 0.0;
+    for (double at = 0.0; (at < ::ets::string_length(value)); (at = (at + 1.0))) {
+        const double digit = (::ets::string_charCodeAt(value, at) - 48.0);
+        if (((digit < 0.0) || (digit > 9.0))) {
+            return 0.0;
+        }
+        (count = ((count * 10.0) + digit));
+        if ((count > 32.0)) {
+            return 0.0;
         }
     }
-    return ets::concat(result, std::string("\""));
+    return ((count >= 1.0) ? count : 0.0);
 }
 
-static inline std::string positionAst(double offset, double line, double column) {
-    return ets::concat(std::string("{\"offset\":"), numberToString(offset), std::string(",\"line\":"), numberToString(line), std::string(",\"column\":"), numberToString(column), std::string("}"));
+double analysisJobs() {
+    const auto value = environment(std::string("ESTATIC_ANALYSIS_JOBS"));
+    return ((value == std::string("")) ? 1.0 : parseAnalysisJobs(value));
 }
 
-static inline std::string spanAst(ParserToken start, ParserToken end) {
-    return ets::concat(std::string("{\"start\":"), positionAst(start.offset, start.line, start.column), std::string(",\"end\":"), positionAst(end.endOffset, end.endLine, end.endColumn), std::string("}"));
+bool configureAnalysisJobs(std::string value) {
+    return ((parseAnalysisJobs(value) > 0.0) && setEnvironment(std::string("ESTATIC_ANALYSIS_JOBS"), value));
 }
 
-std::string formatAst(ParseResult result) {
-    std::vector<std::string> output = std::vector<std::string>{ets::concat(std::string("{\"root\":"), numberToString(result.root), std::string(",\"nodes\":["))};
-    std::string separator = std::string("");
-    for (const auto& item : result.nodes) {
-        ets_push_vec<std::string>(output, ets::concat(separator, std::string("{\"kind\":"), quoteAst(nodeKindName(item.kind)), std::string(",\"span\":"), spanAst(item.start, item.end), std::string(",\"attributes\":[")));
-        std::string comma = std::string("");
-        for (const auto& field : item.attributes) {
-            ets_push_vec<std::string>(output, ets::concat(comma, std::string("{\"name\":"), quoteAst(attributeKindName(field.name)), std::string(",\"value\":"), quoteAst(field.value), std::string("}")));
-            (comma = std::string(","));
-        }
-        ets_push_vec<std::string>(output, std::string("],\"edges\":["));
-        (comma = std::string(""));
-        for (const auto& edge : item.edges) {
-            ets_push_vec<std::string>(output, ets::concat(comma, std::string("{\"role\":"), quoteAst(edgeRoleName(edge.role)), std::string(",\"node\":"), numberToString(edge.node), std::string("}")));
-            (comma = std::string(","));
-        }
-        ets_push_vec<std::string>(output, std::string("]}"));
-        (separator = std::string(","));
+bool configureAnalysisProfile() {
+    return setEnvironment(std::string("ESTATIC_PROFILE_ANALYSIS"), std::string("1"));
+}
+
+std::vector<double> profileBegin() {
+    if ((environment(std::string("ESTATIC_PROFILE_ANALYSIS")) != std::string("1"))) {
+        return std::vector<double>();
     }
-    ets_push_vec<std::string>(output, std::string("],\"diagnostics\":["));
-    (separator = std::string(""));
-    for (const auto& diagnostic : result.diagnostics) {
-        ets_push_vec<std::string>(output, ets::concat(separator, std::string("{\"phase\":\"parser\",\"message\":"), quoteAst(diagnostic.message), std::string(",\"span\":"), spanAst(diagnostic.token, diagnostic.token), std::string("}")));
-        (separator = std::string(","));
+    return analysisUsage();
+}
+
+void profileEnd(std::string name, std::vector<double> before, std::string counts) {
+    if ((before.size() == 0.0)) {
+        return;
     }
-    ets_push_vec<std::string>(output, std::string("]}"));
-    return ets_join_vec(output, std::string(""));
+    const auto after = analysisUsage();
+    printError(ets::concat(std::string("frontend: profile "), name, std::string(" wall_ms="), numberToString((after[static_cast<std::size_t>(0.0)] - before[static_cast<std::size_t>(0.0)])), std::string(" cpu_ms="), numberToString((after[static_cast<std::size_t>(1.0)] - before[static_cast<std::size_t>(1.0)])), std::string(" self_peak_rss_kib="), numberToString(after[static_cast<std::size_t>(2.0)]), std::string(" worker_peak_rss_kib="), numberToString(after[static_cast<std::size_t>(3.0)]), ((counts == std::string("")) ? std::string("") : ets::concat(std::string(" "), counts))));
 }
 
-ParseResult parseTokens(std::vector<ParserToken> tokens) {
-    Parser parser = Parser{}.constructor(tokens);
-    return parser.parseProgram();
-}
-
-std::string inspectAst(std::vector<ParserToken> tokens) {
-    Parser parser = Parser{}.constructor(tokens);
-    return parser.inspect();
-}
-
-void ets_init_bootstrap_parser_parser_ac18791a() {
+void ets_init_bootstrap_analysis_options_876b7c37() {
 }

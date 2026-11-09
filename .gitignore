@@ -3,3 +3,10 @@ node_modules/
 test/scratch/
 build-*-test-*/
 build-*-audit-*/
+
+# La semilla `native-cpp/` es solo fuentes: `install.sh` la compila en la
+# maquina del usuario. `regenerate-native-cpp.yml` falla si encuentra
+# binarios precompilados en el arbol ("Prebuilt binaries in source-only
+# snapshot"), asi que los ejecutables que produce `native-cpp/build-all.sh`
+# no se versionan.
+native-cpp/native/

@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cctype>
+#include <charconv>
 #include <filesystem>
 #include <iostream>
 #include <map>
@@ -252,11 +253,36 @@ private:
         return ets_json_value(std::move(out));
     }
     ets_json_value parseNumber() {
+        // JSON number grammar: -? (0 | [1-9][0-9]*) ( . [0-9]+ )? ( [eE] [+-]? [0-9]+ )?
+        // The runtime is compiled with -fno-exceptions, so std::stod cannot be
+        // used: an out-of-range literal would throw and terminate the process.
+        // std::from_chars never throws; it reports the failure through errc.
         std::size_t start = pos;
-        if (pos < input.size() && (input[pos] == '-' || input[pos] == '+')) ++pos;
-        while (pos < input.size() && (std::isdigit(static_cast<unsigned char>(input[pos])) || input[pos] == '.' || input[pos] == 'e' || input[pos] == 'E' || input[pos] == '-' || input[pos] == '+')) ++pos;
-        if (start == pos) { error = "expected number"; return ets_json_value(); }
-        return ets_json_value(std::stod(input.substr(start, pos - start)));
+        if (pos < input.size() && input[pos] == '-') ++pos;
+        std::size_t integerStart = pos;
+        while (pos < input.size() && std::isdigit(static_cast<unsigned char>(input[pos]))) ++pos;
+        if (pos == integerStart) { error = "expected number"; return ets_json_value(); }
+        if (input[integerStart] == '0' && pos - integerStart > 1) { error = "invalid number"; return ets_json_value(); }
+        if (pos < input.size() && input[pos] == '.') {
+            ++pos;
+            std::size_t fractionStart = pos;
+            while (pos < input.size() && std::isdigit(static_cast<unsigned char>(input[pos]))) ++pos;
+            if (pos == fractionStart) { error = "invalid number"; return ets_json_value(); }
+        }
+        if (pos < input.size() && (input[pos] == 'e' || input[pos] == 'E')) {
+            ++pos;
+            if (pos < input.size() && (input[pos] == '+' || input[pos] == '-')) ++pos;
+            std::size_t exponentStart = pos;
+            while (pos < input.size() && std::isdigit(static_cast<unsigned char>(input[pos]))) ++pos;
+            if (pos == exponentStart) { error = "invalid number"; return ets_json_value(); }
+        }
+        double value = 0.0;
+        const char* first = input.data() + start;
+        const char* last = input.data() + pos;
+        const auto parsed = std::from_chars(first, last, value);
+        if (parsed.ec == std::errc::result_out_of_range) { error = "number out of range"; return ets_json_value(); }
+        if (parsed.ec != std::errc{} || parsed.ptr != last) { error = "invalid number"; return ets_json_value(); }
+        return ets_json_value(value);
     }
     ets_json_value parseBool() {
         if (input.compare(pos, 4, "true") == 0) { pos += 4; return ets_json_value(true); }
