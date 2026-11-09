@@ -47,6 +47,9 @@ El layout, la alineación y el ABI pertenecen al backend.
 - Constantes escalares y agregadas, aritmética, casts, enums, templates y `typeof`
   estático sin evaluar el operando; constantes comprobadas y `comptime` se
   materializan desde el evaluador nativo, sin interpretar JSON.
+- Actualizaciones `++` y `--`: calculan el destino una vez y emiten carga,
+  aritmética tipada, conversión y escritura. El postfijo conserva el valor
+  anterior; el prefijo devuelve el valor escrito. No añaden instrucciones IR.
 - Arrays, arrays fijos, tuplas, packs, registros, clases por valor, campos,
   constructores, parameter properties, métodos y campos estáticos inicializados.
 - Funciones y recursión; especialización genérica, sobrecargas, argumentos

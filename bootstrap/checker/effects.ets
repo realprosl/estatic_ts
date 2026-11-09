@@ -498,7 +498,7 @@ export class EffectAnalyzer {
         const params: string[] = functionParams(this.checked.files[m].signatures[id]); let at: number = 0;
         for (const edge of n.edges) if (edge.role == EdgeRole.Args) { const p: number = argumentParameter(this.checked.files[m],edge.node,at); if (p < params.length && memoryMode(params[p]) == "ref") this.addEffect(owner,this.root(m,edge.node),"write"); at = at+1; }
       }
-      if (n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression || n.kind == NodeKind.DeleteStatement) this.addEffect(owner,this.root(m,bindingChild(n,EdgeRole.Target)),"write");
+      if (n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression || n.kind == NodeKind.UpdateExpression || n.kind == NodeKind.DeleteStatement) this.addEffect(owner,this.root(m,bindingChild(n,EdgeRole.Target)),"write");
       if (this.suspensionNode(m,id)) {
         this.addEffect(owner,this.root(m,this.taskOperand(m,id)),"move");
         for (const source of this.taskSources(m,this.taskOperand(m,id))) if (source >= 0) { const sourceModule: number = this.sourceModule(source); if (this.helper(sourceModule,source-this.offsets[sourceModule]) == "sleep") this.summaries[owner].external = true; }

@@ -163,6 +163,11 @@ Lista no exhaustiva — ver `README.md`, `examples/` y los nodos AST en
 ### Operadores
 
 - Aritméticos: `+ - * / %`.
+- Incremento/decremento: `++i`, `i++`, `--i`, `i--` sobre destinos numéricos
+  mutables (variables, campos e índices). Prefijo devuelve el nuevo valor;
+  postfijo devuelve el anterior. No se permite un salto de línea antes del
+  operador postfijo. Se aplican las reglas numéricas del tipo de destino;
+  no hay coerción de strings o booleanos.
 - Relacionales: `< <= > >= == !=`.
 - Lógicos: `&& || !`.
 - Bitwise: `& | ^ ~ << >>` (TS 5.x).

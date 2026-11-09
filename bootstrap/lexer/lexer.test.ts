@@ -36,6 +36,8 @@ function native(source?: string): { tokens: unknown[]; diagnostics: any[] } {
 }
 
 const fixtures: [string, string][] = [
+  ["update operators", 'i++ + ++j; i-- - --j; + +i; - -i;'],
+  ["update newline and comment boundary", 'i\n++j; i/*\n*/--j;'],
   ["empty", ""],
   ["declaration", "let total: number = 42;"],
   ["all host keywords", Object.keys(KEYWORDS).join(" ")],

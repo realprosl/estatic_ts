@@ -89,7 +89,7 @@ export interface ForOfStatement { kind: "ForOfStatement"; binding: VariableDecla
 export interface ForInStatement { kind: "ForInStatement"; binding: VariableDeclaration; target: Expression; body: Statement; span: Span }
 export interface DeleteStatement { kind: "DeleteStatement"; target: IndexExpression; span: Span }
 
-export type Expression = (LiteralExpression | IdentifierExpression | GenericIdentifierExpression | ArrayLiteralExpression | ObjectLiteralExpression | ArrowFunctionExpression | UnaryExpression | AwaitExpression | BinaryExpression | CallExpression | MemberExpression | MemberCallExpression | IndexExpression | NewExpression | AssignmentExpression | CompoundAssignmentExpression | TemplateLiteralExpression | TernaryExpression | MatchExpression | SatisfiesExpression | NamedArgumentExpression | SpreadElement | RawCppExpression | AsExpression) & {
+export type Expression = (LiteralExpression | IdentifierExpression | GenericIdentifierExpression | ArrayLiteralExpression | ObjectLiteralExpression | ArrowFunctionExpression | UnaryExpression | UpdateExpression | AwaitExpression | BinaryExpression | CallExpression | MemberExpression | MemberCallExpression | IndexExpression | NewExpression | AssignmentExpression | CompoundAssignmentExpression | TemplateLiteralExpression | TernaryExpression | MatchExpression | SatisfiesExpression | NamedArgumentExpression | SpreadElement | RawCppExpression | AsExpression) & {
   /**
    * V0.1: tipo resuelto adjuntado al nodo por el semantic checker.
    * El codegen consume este campo directamente en lugar de parsear
@@ -132,6 +132,7 @@ export interface RawCppExpression { kind: "RawCppExpression"; value: string; spa
 // parte más que expresiones). Las partes son los trozos literales; las
 // expresiones se intercalan entre ellas y se evalúan para producir texto.
 export interface TemplateLiteralExpression { kind: "TemplateLiteralExpression"; parts: string[]; expressions: Expression[]; span: Span }
+export interface UpdateExpression { kind: "UpdateExpression"; operator: "++" | "--"; prefix: boolean; target: Expression; span: Span }
 export interface UnaryExpression { kind: "UnaryExpression"; operator: "!" | "-" | "+" | "~" | "typeof"; operand: Expression; exactInteger?: string; integerType?: "i64" | "u64"; span: Span }
 export interface AwaitExpression { kind: "AwaitExpression"; operand: Expression; span: Span }
 export interface BinaryExpression { kind: "BinaryExpression"; operator: string; left: Expression; right: Expression; span: Span }

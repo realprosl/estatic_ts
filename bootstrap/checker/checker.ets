@@ -215,7 +215,7 @@ export class NativeChecker {
   affectsFacts(module: number, id: number): boolean {
     if (id < 0) return false; const n: AstNode = this.node(module,id);
     if (isCallableNodeKind(n.kind) || n.kind == NodeKind.ClassDeclaration) return false;
-    if ([NodeKind.CallExpression,NodeKind.MemberCallExpression,NodeKind.NewExpression,NodeKind.AssignmentExpression,NodeKind.CompoundAssignmentExpression].includes(n.kind)) return true;
+    if ([NodeKind.CallExpression,NodeKind.MemberCallExpression,NodeKind.NewExpression,NodeKind.AssignmentExpression,NodeKind.CompoundAssignmentExpression,NodeKind.UpdateExpression].includes(n.kind)) return true;
     for (const edge of n.edges) if (this.affectsFacts(module,edge.node)) return true;
     return false;
   }
@@ -458,7 +458,7 @@ export class NativeChecker {
     const n: AstNode = this.node(module,id);
     // Nested callables own their returns; they cannot determine this signature.
     if (isCallableNodeKind(n.kind) || n.kind == NodeKind.ClassDeclaration) return;
-    if ([NodeKind.CallExpression,NodeKind.MemberCallExpression,NodeKind.NewExpression,NodeKind.AssignmentExpression,NodeKind.CompoundAssignmentExpression].includes(n.kind)) { this.narrowedSymbols = []; this.narrowedTypes = []; return; }
+    if ([NodeKind.CallExpression,NodeKind.MemberCallExpression,NodeKind.NewExpression,NodeKind.AssignmentExpression,NodeKind.CompoundAssignmentExpression,NodeKind.UpdateExpression].includes(n.kind)) { this.narrowedSymbols = []; this.narrowedTypes = []; return; }
     if (n.kind == NodeKind.IfStatement) {
       const condition: number = bindingChild(n,EdgeRole.Condition); this.expression(module,condition,"");
       const symbols: number[] = this.narrowedSymbols; const types: string[] = this.narrowedTypes;
@@ -792,7 +792,7 @@ export class NativeChecker {
     while (work.length > 0) {
       const nodeId: number = work[work.length-1]; const n: AstNode = this.node(s.module,nodeId); work.pop();
       let target: number = -1;
-      if (n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression) target = bindingChild(n,EdgeRole.Target);
+      if (n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression || n.kind == NodeKind.UpdateExpression) target = bindingChild(n,EdgeRole.Target);
       else if (n.kind == NodeKind.MemberCallExpression) target = bindingChild(n,EdgeRole.Object);
       else if (n.kind == NodeKind.CallExpression) { const helper: number = this.reference(s.module,nodeId); if (helper >= 0 && this.binding.symbols[helper].name == "move" && (this.binding.symbols[helper].module) < 0) target = bindingChild(n,EdgeRole.Args); }
       while (target >= 0) {
@@ -1602,6 +1602,13 @@ export class NativeChecker {
       if (!numericType(operand) && operand != "!error") this.report(module,id,"Operador numérico sobre '" + operand + "'");
       if (op == "~" && ["f32","f64"].includes(operand)) this.report(module,id,"Los operadores bitwise requieren operandos enteros");
       return nativeUnaryPromotion(operand);
+    }
+    if (kind == NodeKind.UpdateExpression) {
+      const target: number = bindingChild(n,EdgeRole.Target);
+      const actual: string = this.expression(module,target,""); const valueType: string = memoryValue(actual);
+      this.writable(module,target);
+      if (!numericType(valueType) && valueType != "!error") this.report(module,id,"El operador '"+n.get(AttributeKind.Operator)+"' requiere un destino numérico, no '"+this.displayType(actual)+"'");
+      return valueType;
     }
     if (kind == NodeKind.AssignmentExpression || kind == NodeKind.CompoundAssignmentExpression) {
       const target: number = bindingChild(n,EdgeRole.Target); let valueType: string = this.expression(module,target,"");

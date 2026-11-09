@@ -85,7 +85,7 @@ export class Lexer {
       const continuators = new Set([".", "(", "[", "+", "-", "*", "/", "%", "=", "?", ":", "<", ">", "!", "&", "|", "^", "~", "&&", "||", "??", "?."]);
       const isTwoChar = continuators.has(next + this.peek(1));
       const isOneChar = continuators.has(next);
-      if (!isOneChar && !isTwoChar) {
+      if ((!isOneChar && !isTwoChar) || ["++", "--"].includes(next + this.peek(1))) {
         const pos = this.position();
         this.tokens.push({ kind: "newline", lexeme: "\n", span: span(pos, pos) });
       }
@@ -191,7 +191,7 @@ export class Lexer {
       this.advance(); this.advance(); this.advance(); this.add(three as TokenKind, three, start); return;
     }
     const two = this.peek() + this.peek(1);
-    const doubles: TokenKind[] = ["==", "!=", "<=", ">=", "&&", "||", "=>", "??", "?.", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="];
+    const doubles: TokenKind[] = ["++", "--", "==", "!=", "<=", ">=", "&&", "||", "=>", "??", "?.", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="];
     if (doubles.includes(two as TokenKind)) {
       this.advance(); this.advance(); this.add(two as TokenKind, two, start); return;
     }

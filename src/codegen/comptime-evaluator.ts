@@ -828,6 +828,27 @@ class ComptimeInterpreter {
         }
         comptimeError(`comptime: assignment target de tipo '${a.target.kind}' no soportado`, a.span);
       }
+      case "UpdateExpression": {
+        const target = expr.target;
+        let previous: ComptimeValue;
+        let store: (value: ComptimeValue) => void;
+        if (target.kind === "IdentifierExpression") {
+          assertComptimeBindingInitialized(scope, target.name, expr.span);
+          previous = scope.get(target.name);
+          store = value => { scope.set(target.name, value); };
+        } else if (target.kind === "IndexExpression") {
+          const array = this.evalExpression(target.object, scope);
+          const index = this.toNumber(this.evalExpression(target.index, scope), target.index);
+          if (!Array.isArray(array) || !Number.isInteger(index) || index < 0 || index >= array.length) comptimeError("comptime: destino de actualización fuera de rango", expr.span);
+          previous = array[index]; store = value => { array[index] = value; };
+        } else if (target.kind === "MemberExpression") {
+          const object = this.evalExpression(target.object, scope);
+          if (!this.isObject(object) || !object.fields.has(target.member)) comptimeError("comptime: destino de actualización no disponible", expr.span);
+          previous = object.fields.get(target.member); store = value => { object.fields.set(target.member, value); };
+        } else comptimeError("comptime: destino de actualización inválido", expr.span);
+        const value = convertIntegerBinding(this.evalBinary(expr.operator === "++" ? "+" : "-", previous, 1, expr), expr.resolvedType, expr);
+        store(value); return expr.prefix ? value : previous;
+      }
       case "CompoundAssignmentExpression": {
         const a = expr as { kind: "CompoundAssignmentExpression"; target: Expression; operator: string; value: Expression; span: Span };
         if (a.target.kind !== "IdentifierExpression") {

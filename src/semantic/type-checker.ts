@@ -4036,6 +4036,26 @@ export class TypeChecker {
         this.require(value, targetType, node.value); result = targetType;
         break;
       }
+      case "UpdateExpression": {
+        const targetType = this.expression(node.target, scope);
+        const valueType = isGenericType(targetType) && ["ref", "constRef"].includes(genericBase(targetType)) ? genericArguments(targetType)[0] : targetType;
+        if (!isNumericName(valueType)) this.report(node, `El operador '${node.operator}' requiere un destino numérico, no '${targetType}'`);
+        if (!this.mutableTarget(node.target, scope) || (isGenericType(targetType) && genericBase(targetType) === "constRef")) this.report(node, "No se puede modificar una constante ni uno de sus campos");
+        else {
+          const readonlyField = this.findReadonlyFieldAccess(node.target);
+          if (readonlyField) this.report(node, `El operador '${node.operator}' no puede modificar el campo readonly '${readonlyField}'`);
+          if (node.target.kind === "MemberExpression") {
+            const target = node.target;
+            let objectType = this.types.get(target.object) ?? "";
+            while (isGenericType(objectType) && ["ref", "constRef", "ptr", "constPtr", "readonly"].includes(genericBase(objectType))) objectType = genericArguments(objectType)[0];
+            const owner = this.classes.get(isGenericType(objectType) ? genericBase(objectType) : objectType);
+            if (!readonlyField && owner?.fields.some(field => field.name === target.member && field.readonly)) this.report(node, `El operador '${node.operator}' no puede modificar el campo readonly '${target.member}'`);
+          }
+          this.markCapturedMutation(node.target, scope);
+        }
+        result = valueType;
+        break;
+      }
       case "CompoundAssignmentExpression": {
         // V30.19: `x += y`, `x -= y`, etc. Misma semantica que AssignmentExpression
         // (target debe ser mutable, no readonly, value debe ser asignable al target).
@@ -4185,7 +4205,7 @@ export class TypeChecker {
 
   private methodMutates(method: ClassMethod): boolean {
     const expressionMutates = (expression: Expression): boolean => {
-      if (expression.kind === "AssignmentExpression") {
+      if (expression.kind === "AssignmentExpression" || expression.kind === "UpdateExpression") {
         let target: Expression = expression.target;
         while (target.kind === "MemberExpression" || target.kind === "IndexExpression") target = target.object;
         return target.kind === "IdentifierExpression" && target.name === "this";
