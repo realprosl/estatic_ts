@@ -21,14 +21,32 @@ jobs:
     name: selfhost-${{ matrix.optimization }}
     env:
       ESTATIC_ETS_OPTIMIZATION: -${{ matrix.optimization }}
+      ESTATIC_ANALYSIS_JOBS: '2'
+      ESTATIC_PROFILE_ANALYSIS: '1'
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # Includes a second full source analysis for the sequential/parallel pair.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - name: Install native dependencies
         run: sudo apt-get update && sudo apt-get install -y g++ time libssl-dev libcurl4-openssl-dev libuv1-dev
       - name: Build C++ seed and two ETS generations
         run: bash scripts/build-ets-compiler.sh stage2
+      - name: Compare full compiler analysis with one and two workers
+        env:
+          ESTC_ROOT: ${{ github.workspace }}
+        run: |
+          /usr/bin/time -o build/ets-compiler/sequential-time.tsv -f 'sequential-analysis\t%e\t%U\t%S\t%M' \
+            build/ets-compiler/etsc bootstrap/driver/main.ets --check --jobs 1 --no-progress \
+            --emit-ir build/ets-compiler/sequential.ir.json 2> build/ets-compiler/sequential-analysis.log
+          /usr/bin/time -o build/ets-compiler/parallel-time.tsv -f 'parallel-analysis\t%e\t%U\t%S\t%M' \
+            build/ets-compiler/etsc bootstrap/driver/main.ets --check --jobs 2 --no-progress \
+            --emit-ir build/ets-compiler/parallel.ir.json 2> build/ets-compiler/parallel-analysis.log
+          cmp build/ets-compiler/sequential.ir.json build/ets-compiler/parallel.ir.json
+          cmp build/ets-compiler/sequential.ir.json build/ets-compiler/stage2.ir.json
+          cat build/ets-compiler/sequential-time.tsv build/ets-compiler/parallel-time.tsv >> build/ets-compiler/timings.tsv
+      - name: Repeat paired analysis benchmark
+        run: python3 scripts/benchmark-analysis.py --compiler build/ets-compiler/etsc-stage2 --output build/analysis-benchmark --repetitions 3
       - name: Report build and execution timings
         if: always()
         shell: bash
@@ -46,7 +64,7 @@ jobs:
         run: |
           if test -f build/ets-compiler/stage2-analysis.log; then
             echo '### Effect graph work' >> "$GITHUB_STEP_SUMMARY"
-            grep 'effect graph complete,' build/ets-compiler/stage2-analysis.log >> "$GITHUB_STEP_SUMMARY" || true
+            grep -E 'effect graph complete,|frontend: profile ' build/ets-compiler/stage2-analysis.log >> "$GITHUB_STEP_SUMMARY" || true
           fi
       - uses: actions/setup-node@v4
         with:
@@ -66,8 +84,16 @@ jobs:
         run: node --experimental-strip-types --test bootstrap/ir/native-annotations.test.ts
       - name: Verify stage 1
         run: bash scripts/check-ets-compiler.sh build/ets-compiler/etsc
-      - name: Verify stage 2
-        run: bash scripts/check-ets-compiler.sh build/ets-compiler/etsc-stage2
+      - name: Verify stage 2 without Node
+        run: |
+          poison="$RUNNER_TEMP/parallel-without-node"
+          mkdir -p "$poison"
+          for tool in node nodejs npm; do
+            printf '#!/bin/sh\necho forbidden > %s\nexit 99\n' "$RUNNER_TEMP/parallel-node-used" > "$poison/$tool"
+            chmod +x "$poison/$tool"
+          done
+          PATH="$poison:$PATH" bash scripts/check-ets-compiler.sh build/ets-compiler/etsc-stage2
+          test ! -e "$RUNNER_TEMP/parallel-node-used"
       - name: Compare compiler IR across generations
         run: cmp build/ets-compiler/stage1.ir.json build/ets-compiler/stage2.ir.json
       - name: Round-trip compiler IR through the streaming reader
@@ -88,5 +114,6 @@ jobs:
             build/ets-compiler/*.cpp
             build/ets-compiler/*.json
             build/ets-compiler/timings.tsv
-            build/ets-compiler/stage2-analysis.log
+            build/ets-compiler/*analysis.log
+            build/analysis-benchmark/
           retention-days: 7

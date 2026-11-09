@@ -1,3 +1,4 @@
+import {profileBegin,profileEnd} from "../analysis/options";
 import { IrDispatch, IrCleanupScope, IrRuntimeContract, IrType, IrSource, IrPlace, IrInstruction, IrBlock, IrFunction, IrModule, IrIssue, IrProject, IrAnnotation } from "./model";
 import { ModuleGraph } from "../modules/loader";
 import { BindingResult, bindingChild } from "../binder/binder";
@@ -979,6 +980,7 @@ export class IrLowering {
     this.orderState[module] = 2; this.result.initializationOrder.push(this.result.modules[module].initializer);
   }
   run(trace: boolean = false): IrProject {
+    const loweringProfile=profileBegin();
     const started: number = Date.now();
     let reported: number = started;
     if (trace) progressDetail("frontend: IR: preparando módulos y tipos");
@@ -1118,10 +1120,16 @@ export class IrLowering {
     for (let f: number = 0; f < this.result.functions.length; f = f+1) if (this.result.functions[f].asynchronous) { for (let value: number = 0; value < this.result.functions[f].values.length; value = value+1) this.result.functions[f].frameValues.push(value); for (let place: number = 0; place < this.result.functions[f].places.length; place = place+1) if ((this.result.functions[f].places[place].base) < 0 && (this.result.functions[f].places[place].global) < 0) this.result.functions[f].framePlaces.push(place); }
     if (trace) progressDetail("frontend: IR: preservando contratos ("+(Date.now()-started)+" ms)");
     if (this.result.diagnostics.length == 0) this.result = preserveContracts(this.graph,this.checked,this.result);
+    let blockCount:number=0;for(const functionIr of this.result.functions)blockCount=blockCount+functionIr.blocks.length;
+    profileEnd("ir-lowering",loweringProfile,"functions="+numberToString(this.result.functions.length)+" types="+numberToString(this.result.types.length)+" blocks="+numberToString(blockCount));
+    const borrowsProfile=profileBegin();
     if (trace) progressDetail("frontend: IR: finalizando préstamos ("+(Date.now()-started)+" ms)");
     if (this.result.diagnostics.length == 0) this.result = finishBorrows(this.result);
+    profileEnd("ir-borrows",borrowsProfile);
+    const verifyProfile=profileBegin();
     if (trace) progressDetail("frontend: IR: verificando IR ("+(Date.now()-started)+" ms)");
     if (this.result.diagnostics.length == 0) this.result.diagnostics = verifyIr(this.result);
+    profileEnd("ir-verification",verifyProfile);
     if (trace) progressDetail("frontend: IR: completado ("+(Date.now()-started)+" ms)");
     this.result.success = this.result.diagnostics.length == 0; return this.result;
   }

@@ -95,7 +95,7 @@ export async function phase<T>(label: string, action: () => T | Promise<T>, repo
 // Preserve flag values and everything after --, including program options.
 export function presentation(argv: string[]): { args: string[]; verbose: boolean; progress: boolean } {
   const args: string[]=[];let verbose=false,progress=true;
-  const values=new Set(["-o","--binary","--config","--emit-ir","--from-ir","--frontend","--cache","--cxx","--root","--cxx-flag","--link-flag"]);
+  const values=new Set(["-o","--binary","--config","--emit-ir","--from-ir","--frontend","--cache","--cxx","--root","--cxx-flag","--link-flag","--jobs"]);
   for(let at=0;at<argv.length;at++){
     const arg=argv[at];
     if(arg==="--"){args.push(...argv.slice(at));break;}

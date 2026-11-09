@@ -3,6 +3,12 @@
 @cppgen function hostCode(code:string):string{return code;}
 export function environment(name:string):string{hostCode("return ets_compiler_host::environment(name);");return "";}
 export function environmentDefined(name:string):boolean{hostCode("return ets_compiler_host::environmentDefined(name);");return false;}
+export function setEnvironment(name:string,value:string):boolean{hostCode("return ets_compiler_host::setEnvironment(name,value);");return false;}
+export function forkWorker():number{hostCode("return ets_compiler_host::forkWorker();");return -1;}
+export function finishWorker(status:number):void{hostCode("ets_compiler_host::finishWorker(status);return;");return;}
+export function waitWorker(pid:number):number{hostCode("return ets_compiler_host::waitWorker(pid);");return 125;}
+export function temporaryDirectory():string{hostCode("return ets_compiler_host::temporaryDirectory();");return "";}
+export function analysisUsage():number[]{hostCode("return ets_compiler_host::analysisUsage();");return [];}
 export function hostError():string{hostCode("return ets_compiler_host::lastError();");return "";}
 export function exists(fileName:string):boolean{hostCode("return ets_compiler_host::exists(fileName);");return false;}
 export function readText(fileName:string):string{hostCode("return ets_compiler_host::readText(fileName);");return "";}

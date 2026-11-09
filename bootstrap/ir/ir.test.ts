@@ -13,6 +13,10 @@ function run(source: string, files: Record<string,string> = {}, mode = "", statu
   for (const [name, text] of Object.entries({"main.ets": source, ...files})) { mkdirSync(dirname(join(dir,name)), {recursive:true}); writeFileSync(join(dir,name), text); }
   const p = spawnSync(binary, [join(dir,"main.ets"), ...(mode ? [mode] : [])], {encoding:"utf8", timeout:30000});
   assert.ifError(p.error); assert.equal(p.status, status, p.stderr + p.stdout.slice(-5000));
+  if(process.env.ESTATIC_TEST_COMPARE_JOBS === "1") {
+    const reference=spawnSync(binary,[join(dir,"main.ets"),...(mode?[mode]:[])],{encoding:"utf8",timeout:30000,env:{...process.env,ESTATIC_ANALYSIS_JOBS:"1"}});
+    assert.ifError(reference.error);assert.equal(reference.status,p.status,reference.stderr);assert.equal(p.stdout,reference.stdout,"parallel analysis changed verified IR");
+  }
   const ir = JSON.parse(p.stdout); assert.equal(ir.success, status === 0); return ir;
 }
 function instructions(ir: any) { return ir.functions.flatMap((f:any) => f.blocks.flatMap((b:any) => b.instructions)); }

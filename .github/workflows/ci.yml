@@ -45,7 +45,20 @@ jobs:
         run: npm install
 
       - name: Unit + bootstrap test suite
-        run: npm test
+        env:
+          ESTATIC_ANALYSIS_JOBS: '2'
+          ESTATIC_TEST_COMPARE_JOBS: '1'
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee unit-test.log
+
+      - name: Preserve complete unit test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-log
+          path: unit-test.log
+          retention-days: 7
 
       - name: End-to-end suite (compiles and runs real programs)
         # Se ejecuta siempre, incluso si la suite anterior falla: el e2e

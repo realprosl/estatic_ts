@@ -1,3 +1,4 @@
+import {configureAnalysisJobs,configureAnalysisProfile} from "../analysis/options";
 import { ModuleLoader, LoaderOptions, PathAlias } from "../modules/loader";
 import { bindProject, BindingResult } from "../binder/binder";
 import { formatBinding } from "../binder/format";
@@ -10,7 +11,9 @@ function runCheckingDemo(): void {
   let options: LoaderOptions = new LoaderOptions(); let entry: string = "";
   for (let i: number = 1; i < argumentCount(); i = i + 1) {
     const arg: string = argument(i);
-    if (arg == "--cache" || arg == "--root") {
+    if(arg=="--profile-analysis"){if(!configureAnalysisProfile())exitProcess(2);}
+    else if(arg=="--jobs"){i=i+1;if(i>=argumentCount()||!configureAnalysisJobs(argument(i))){printError("--jobs requiere un entero entre 1 y 32");exitProcess(2);}}
+    else if (arg == "--cache" || arg == "--root") {
       i = i + 1; if (i >= argumentCount()) exitProcess(2);
       if (arg == "--cache") options.cacheDirectory = argument(i); else options.roots.push(normalizePath(argument(i)));
     } else if (arg == "--alias") {
