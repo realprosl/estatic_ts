@@ -14,7 +14,7 @@ class Progress {
   if(label.startsWith("Creando")||label.startsWith("Actualizando"))return "init";
   return "build";
  }
- paint(text:string,code:string):string{return this.animated?"\u001b["+code+"m"+text+"\u001b[0m":text;}
+ paint(text:string,code:string):string{return this.animated?"["+code+"m"+text+"[0m":text;}
  tag(label:string):string{return this.paint("["+this.scope(label)+"]","35");}
  duration(ms:number):string{
   if(ms<1000)return numberToString(Math.floor(ms))+" ms";
@@ -23,7 +23,7 @@ class Progress {
  }
  clean(text:string):string{let result:string="";for(let at:number=0;at<text.length;at+=1){const code:number=text.charCodeAt(at);if(code<32||code==127)result+=" ";else result+=text.charAt(at);}return result;}
  displayPath(text:string):string{const base:string=normalizePath(".")+"/";const normalized:string=normalizePath(text);return this.clean(normalized.startsWith(base)?normalized.slice(base.length,normalized.length):text);}
- clear():void{if(this.drawn){writeError("\r\u001b[2K");this.drawn=false;}}
+ clear():void{if(this.drawn){writeError("\r[2K");this.drawn=false;}}
  render(force:boolean=false):void{
   if(!this.animated||this.label==""||(!force&&Date.now()-this.last<80))return;
   const symbols:string[]=["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
