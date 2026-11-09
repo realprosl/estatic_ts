@@ -1,7 +1,7 @@
 import { ModuleLoader, LoaderOptions, PathAlias } from "../modules/loader";
 import { analyzeProject } from "../checker/expansion";
 import { lowerProject } from "./lower";
-import { IrIssue, IrSource } from "./model";
+import { IrProject, IrIssue, IrSource } from "./model";
 import { formatIr } from "./format";
 function runIr(): void {
   let verbose: boolean = false; let entry: string = ""; let options = new LoaderOptions();
@@ -14,11 +14,14 @@ function runIr(): void {
   }
   if (entry == "") { printError("Expected source entry [--root path] [--alias name path] [--cache path]"); exitProcess(2); }
   let loader = new ModuleLoader(options); const graph = loader.load(entry); const project = analyzeProject(graph,verbose);
-  if (verbose) printError("frontend: lowering IR");
-  let ir = lowerProject(project.graph,project.binding,project.checked,verbose);
   let diagnostics = project.graph.diagnostics;
   for (const d of project.binding.diagnostics) diagnostics.push(d);
   for (const d of project.checked.diagnostics) diagnostics.push(d);
+  let ir = new IrProject();
+  if (diagnostics.length == 0) {
+    if (verbose) printError("frontend: lowering IR");
+    ir = lowerProject(project.graph,project.binding,project.checked,verbose);
+  }
   let seen: string[] = [];
   for (const d of diagnostics) {
     const key: string = d.file+":"+numberToString(d.token.offset)+":"+d.code+":"+d.message;

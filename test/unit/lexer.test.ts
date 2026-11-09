@@ -11,6 +11,10 @@ import { DiagnosticError } from "../../src/core/diagnostic.ts";
 function tokens(source: string) {
   return new Lexer(source).tokenize();
 }
+test("lexer: update operators use maximal munch and preserve newline boundaries", () => {
+  assert.deepEqual(tokens("i+++j; i---j;").map(t => t.kind), ["identifier", "++", "+", "identifier", ";", "identifier", "--", "-", "identifier", ";", "eof"]);
+  assert.deepEqual(tokens("i\n++j;").map(t => t.kind), ["identifier", "newline", "++", "identifier", ";", "eof"]);
+});
 
 for (const [name, template] of templateCases) test(`lexer templates: ${name}`, () => {
   const result = tokens(template + '; next;');

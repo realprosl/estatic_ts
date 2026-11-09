@@ -105,6 +105,9 @@ tamaño de entrada.
   comentarios dentro de las interpolaciones protegen sus delimitadores.
 - Operadores unarios, binarios y sus precedencias; shifts contiguos, asignación
   simple y compuesta, ternarios, `as`, `satisfies`, `await` e `instanceof`.
+- `UpdateExpression` representa `++` y `--` con destino y atributo `prefix`.
+  Un postfijo no cruza un salto de línea; un destino sintácticamente inválido
+  produce un diagnóstico en el operador, sin errores de cierre derivados.
 - Llamadas por nombre, argumentos con nombre y spread, genéricos, miembros,
   llamadas encadenadas, acceso opcional e índices.
 - Variables simples, `using`, aliases de tipo, funciones, firmas sin cuerpo,

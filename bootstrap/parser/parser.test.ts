@@ -49,7 +49,7 @@ function native(source: string): NativeResult { return nativeTokens(new Lexer(so
 // Compare every supported semantic field/edge, independently of arena order.
 // Spans have dedicated tests: stage 0 has historical differences for classes
 // and synthetic nodes. This projection never evaluates or parses expressions.
-const scalarKeys = new Set(["name", "mutable", "declaredType", "async", "returnType", "type", "constraint", "default", "literalType", "raw", "operator", "callee", "member", "method", "optional", "className", "targetType", "isAsync", "await", "out", "passing", "variadic", "readonly", "access", "isStatic", "exported", "key", "value", "underlying", "payload", "field", "property"]);
+const scalarKeys = new Set(["name", "mutable", "declaredType", "async", "returnType", "type", "constraint", "default", "literalType", "raw", "operator", "prefix", "callee", "member", "method", "optional", "className", "targetType", "isAsync", "await", "out", "passing", "variadic", "readonly", "access", "isStatic", "exported", "key", "value", "underlying", "payload", "field", "property"]);
 const roleKinds: Record<string, string> = { params: "Parameter", typeParameters: "TypeParameter", fields: "ClassField", methods: "ClassMethod", properties: "ObjectProperty", decorators: "Decorator", members: "EnumMember", variants: "UnionVariant", discriminator: "Discriminator" };
 const excludedRoles = new Set(["span", "typeArguments", "generatedSources"]);
 function hostShape(node: any, forcedKind?: string): any {
@@ -106,8 +106,20 @@ function parity(source: string): NativeResult {
   assert.deepEqual(result.diagnostics, [], JSON.stringify(result.diagnostics));
   assert.deepEqual(nativeShape(result), hostShape(expected)); return result;
 }
+for (const source of ['for(let i=0;i<3;1++){}', '++(1+2);', 'f()--;']) test(`bootstrap parser: invalid update points at operator: ${source}`, () => {
+  const result = native(source);
+  assert.equal(result.diagnostics.length, 1);
+  const start = source.indexOf(source.includes("++") ? "++" : "--");
+  assert.equal(result.diagnostics[0].span.start.offset, start);
+  assert.equal(result.diagnostics[0].span.end.offset, start + 2);
+  assert.match(result.diagnostics[0].message, /debe ser una variable, campo o índice/);
+  assert.throws(() => new Parser(new Lexer(source).tokenize()).parseProgram(), (error:any) => error instanceof DiagnosticError && error.diagnostics.length === 1 && error.diagnostics[0].span.start.offset === start);
+});
 
 const fixtures: [string, string][] = [
+  ["update prefix and postfix", 'let i=0; i++; ++i; i--; --i; const a=i++ + ++i; const b=-i++;'],
+  ["update loop and destinations", 'for(let i=0;i<3;i++){xs[index()]++;++object.field;}'],
+  ["update newline prefix", 'let i=0;\nlet j=1;\ni\n++j;\ni\n--j;'],
   ["object one line trailing comma", 'const x={value:1,};'],
   ["object multiline properties", 'const defaults={\n method:"GET",\n body:"",\n contentType:"application/json"\n};'],
   ["object multiline shorthand and nested values", 'const method="GET";const defaults={\n method,\n nested:{\n value:1\n }\n ,body:""\n};'],

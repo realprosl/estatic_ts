@@ -53,13 +53,15 @@ jobs:
           node-version: '22'
       - name: Exercise ETS backend against IR execution fixtures
         env:
-          ESTATIC_IR_BINARY: ${{ github.workspace }}/native-cpp/native/frontend
+          ESTATIC_IR_BINARY: ${{ github.workspace }}/scripts/selfhost-ir-frontend.sh
+          ESTATIC_SELFHOST_COMPILER: ${{ github.workspace }}/build/ets-compiler/etsc-stage2
           ESTATIC_NATIVE_CODEGEN: ${{ github.workspace }}/build/ets-compiler/etsc-stage2
           ESTATIC_NATIVE_BUILD: ${{ github.workspace }}/build/ets-compiler/etsc-stage2
         run: node --experimental-strip-types --test --test-name-pattern='IR C\+\+ (executes|preserves escaped|initializes imported)' bootstrap/ir/cpp.test.ts
       - name: Verify native annotations through the ETS compiler
         env:
-          ESTATIC_IR_BINARY: ${{ github.workspace }}/native-cpp/native/frontend
+          ESTATIC_IR_BINARY: ${{ github.workspace }}/scripts/selfhost-ir-frontend.sh
+          ESTATIC_SELFHOST_COMPILER: ${{ github.workspace }}/build/ets-compiler/etsc-stage2
           ESTATIC_NATIVE_COMPILER: ${{ github.workspace }}/build/ets-compiler/etsc-stage2
         run: node --experimental-strip-types --test bootstrap/ir/native-annotations.test.ts
       - name: Verify stage 1

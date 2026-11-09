@@ -109,7 +109,7 @@ export class NativeComptime {
     const rootOwner: number = this.functionOwner(this.binding.files[this.rootModule].nodeScopes[this.rootNode]);
     for (let id: number = 0; id < this.checked.files[this.rootModule].types.length; id = id+1) {
       const n: AstNode = this.node(this.rootModule,id); if (nodeBegin(n) >= nodeBegin(this.node(this.rootModule,this.rootNode)) || this.functionOwner(this.binding.files[this.rootModule].nodeScopes[id]) != rootOwner) continue;
-      if ((n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression || n.kind == NodeKind.DeleteStatement) && this.directRoot(this.rootModule,bindingChild(n,EdgeRole.Target)) == sid) return true;
+      if ((n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression || n.kind == NodeKind.UpdateExpression || n.kind == NodeKind.DeleteStatement) && this.directRoot(this.rootModule,bindingChild(n,EdgeRole.Target)) == sid) return true;
       if (n.kind == NodeKind.MemberCallExpression && ["push","pop","sort","set","add","delete","clear"].includes(n.get(AttributeKind.Method)) && this.directRoot(this.rootModule,bindingChild(n,EdgeRole.Object)) == sid) return true;
       if ((n.kind == NodeKind.CallExpression || n.kind == NodeKind.MemberCallExpression) && this.checked.files[this.rootModule].constantStates[id] != "evaluated") {
         const selected: number = this.checked.files[this.rootModule].selected[id]; const module: number = this.checked.files[this.rootModule].selectedModules[id];
@@ -319,6 +319,13 @@ export class NativeComptime {
       if (op == "-" && v.kind == "number") return this.put(constantCast(constantNumber(-v.scalar),name),module,id);
       if (op == "-") { const zero = v.kind == "integer" ? constantInteger("0",name) : constantNumber(0,name); return this.put(constantNumeric(zero,v,"-",name),module,id); }
       if (op == "~") { if (v.kind == "integer") { let result = v; result.bits = ~result.bits; return this.put(constantCast(result,name),module,id); } const bits: i32 = constantWord(v.scalar); return this.put(constantNumber(constantSignedDouble(~bits)),module,id); }
+    }
+    if (n.kind == NodeKind.UpdateExpression) {
+      const target: number = bindingChild(n,EdgeRole.Target); const location: ConstantLocation = this.location(module,target,environment,mode);
+      const previous: number = this.load(location,module,target); const name: string = this.checked.files[module].types[id];
+      const one: number = this.put(constantCast(constantNumber(1),name),module,id);
+      const value: number = this.convert(this.binary(module,id,previous,one,n.get(AttributeKind.Operator) == "++" ? "+" : "-"),name,module,id);
+      this.store(location,value,module,target); return n.get(AttributeKind.Prefix) == "true" ? value : previous;
     }
     if (n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression) {
       const target: number = bindingChild(n,EdgeRole.Target); const location: ConstantLocation = this.location(module,target,environment,mode);

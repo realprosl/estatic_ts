@@ -13,6 +13,15 @@ import { fileURLToPath } from "node:url";
 import { compile, analyze, parse } from "../../src/compiler.ts";
 
 const compilerRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+test("codegen native: update expressions and comptime preserve old/new values", () => {
+  const source = 'let i=0;print(i++);print(++i);for(let j=0;j<3;j++)print(j);let calls=0;let xs=[4];function index():number{calls+=1;return 0;}print(xs[index()]++);print(++xs[index()]);print(calls);const folded=comptime(():number=>{let n=0;const old=n++;const next=++n;let values=[4];const before=values[0]++;const after=++values[0];return old*1000+next*100+before*10+after;});print(folded);';
+  const output=compile(source).cpp,dir=mkdtempSync(join(tmpdir(),"ets-updates-"));
+  try {
+    const file=join(dir,"main.cpp"),binary=join(dir,"main");writeFileSync(file,output);
+    execFileSync(process.env.CXX??"g++",["-std=c++20","-O0","-pthread","-fno-exceptions",`-I${compilerRoot}`,file,"-o",binary],{encoding:"utf8",timeout:120000,env:{...process.env,TMPDIR:dir}});
+    assert.equal(execFileSync(binary,[],{encoding:"utf8",timeout:5000}),"0\n2\n0\n1\n2\n4\n6\n2\n246\n");
+  } finally {rmSync(dir,{recursive:true,force:true});}
+});
 
 test("codegen native: comptime decorators after export and function remain effective", () => {
   const source = 'export @comptime function twice(n:number):number{return n*2;} function @comptime inc(n:number):number{return n+1;} const answer:number=twice(inc(20)); print(answer);';

@@ -994,6 +994,11 @@ export class Parser {
   }
   unary(): number {
     const op: ParserToken = this.peek(0);
+    if (op.kind == "++" || op.kind == "--") {
+      this.take(); this.skipNewlines();
+      if (!this.enter()) return this.add(NodeKind.ErrorNode,op,op);
+      const target: number = this.unary(); this.leave(); return this.update(target,op,true);
+    }
     if (op.kind == "!" || op.kind == "-" || op.kind == "+" || op.kind == "~" || op.kind == "typeof" || op.kind == "await") {
       this.take(); if (!this.enter()) return this.add(NodeKind.ErrorNode, op, op);
       const operand: number = this.unary(); this.leave();
@@ -1001,7 +1006,8 @@ export class Parser {
       if (op.kind != "await") this.attr(result, AttributeKind.Operator, op.lexeme);
       this.edge(result, EdgeRole.Operand, operand); return result;
     }
-    const operand: number = this.postfix();
+    let operand: number = this.postfix();
+    if ((this.check("++") || this.check("--")) && this.peek(0).line == this.node(operand).end.endLine) operand = this.update(operand,this.take(),false);
     if (this.check("as") || this.check("satisfies")) {
       const op: ParserToken = this.take(); const annotation: string = this.typeName();
       const next: ParserToken = this.peek(0);
@@ -1011,6 +1017,13 @@ export class Parser {
       this.edge(result, op.kind == "as" ? EdgeRole.Expression : EdgeRole.Operand, operand); return result;
     }
     return operand;
+  }
+  update(target: number, op: ParserToken, prefix: boolean): number {
+    const kind: NodeKind = this.node(target).kind;
+    if (![NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(kind)) this.reportAt(op,"El operando de '"+op.lexeme+"' debe ser una variable, campo o índice");
+    const result: number = this.add(NodeKind.UpdateExpression,prefix ? op : this.node(target).start,prefix ? this.node(target).end : op);
+    this.attr(result,AttributeKind.Operator,op.lexeme); this.attr(result,AttributeKind.Prefix,prefix ? "true" : "false");
+    this.edge(result,EdgeRole.Target,target); return result;
   }
   // A `<` after a member access is a comparison unless the matching `>` is
   // followed by a call: `obj.method<T>(x)` keeps its type arguments, while

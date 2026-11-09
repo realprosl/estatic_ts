@@ -19,6 +19,9 @@ function check(source:string,files:Record<string,string>={}){return run(fixture(
 function error(source:string,pattern:RegExp,files:Record<string,string>={}){const g=run(fixture(source,files),1);assert.ok(g.diagnostics.some((d:any)=>d.phase==="checker"&&pattern.test(`${d.code}: ${d.message}`)),JSON.stringify(g.diagnostics));return g;}
 function types(g:any,kind:string){return g.files.flatMap((f:any)=>f.ast.nodes.map((n:any,i:number)=>n.kind===kind?f.types[i]:null).filter((x:any)=>x!==null));}
 const valid:Record<string,string>={
+ updates:'let i=0;i++;++i;i--;--i;for(let j=0;j<3;j++){}let xs=[1];xs[0]++;class C{x:number=0;inc():number{return ++this.x;}}let c=new C();c.inc();',
+ updateReferences:'function inc(n:ref<number>):number{return n++;}let n=0;inc(n);',
+ updateNumericTypes:'let small:i8=1;const old:i8=small++;const next:i8=++small;let exact:u64=9007199254740993;const saved:u64=exact++;let single:f32=1;single++;',
  empty:"",
  primitives:'const n=1; const s="x"; const b=true; print(n); print(s); print(b);',
  arithmetic:'let x:number=1; x=x+2*3; x-=1; print(x);',
@@ -59,6 +62,13 @@ const valid:Record<string,string>={
 };
 for(const[name,source]of Object.entries(valid))test(`checker accepts ${name}`,()=>{const g=check(source);assert.equal(g.diagnostics.length,0);});
 const invalid:[string,string,RegExp][]=[
+ ['update constant','const n=0;n++;',/inmutable/],
+ ['update prefix constant','const n=0;++n;',/inmutable/],
+ ['update string','let n="s";n++;',/destino numérico/],
+ ['update boolean','let n=true;--n;',/destino numérico/],
+ ['update readonly field','class C{readonly x:number=1;}let c=new C();c.x++;',/inmutable|readonly/],
+ ['update const reference','function f(n:constRef<number>):void{n++;}',/readonly|inmutable/],
+ ['update borrowed array','function f(xs:constRef<number[]>):void{xs[0]++;}',/readonly|inmutable/],
  ['variable','const n:number="x";',/incompatible/],
  ['assignment','let n=1; n="x";',/incompatible/],
  ['constant','const n=1; n=2;',/inmutable/],
@@ -1182,6 +1192,11 @@ function constantNumberResult(body:string, expected:number, helpers=""){
  const g=check(helpers+'const answer:number=comptime(():number=>{'+body+'});');
  assert.equal(nativeConstants(g).at(-1).value,expected);return g;
 }
+test('native comptime update expressions preserve values and indexed destinations',()=>constantNumberResult('let n=0;const old=n++;const next=++n;let values=[4];const before=values[0]++;const after=++values[0];return old*1000+next*100+before*10+after;',246));
+test('native update effects retain writes through ref parameters',()=>{
+ const g=check('function inc(n:ref<number>):number{return n++;}let n=0;inc(n);');
+ const summary=effect(g,'inc');assert.ok(summary.writes.length>0);
+});
 for(const [name,body,expected] of [
  ['arithmetic','return 1+2*3;',7],
  ['block shadow','let x=10;{let x=99;x+=1;}return x;',10],

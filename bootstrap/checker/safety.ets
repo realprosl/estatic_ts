@@ -359,7 +359,7 @@ export class SafetyAnalyzer {
         while (scope >= 0) { if (scope == closureScope) inside = true; scope = this.binding.scopes[scope].parent; }
         if (!inside) continue;
         const n: AstNode = this.node(capture.module,id); let target: number = -1;
-        if (n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression || n.kind == NodeKind.DeleteStatement) target = bindingChild(n,EdgeRole.Target);
+        if (n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression || n.kind == NodeKind.UpdateExpression || n.kind == NodeKind.DeleteStatement) target = bindingChild(n,EdgeRole.Target);
         else if (n.kind == NodeKind.MemberCallExpression && this.mutating(capture.module,id)) target = bindingChild(n,EdgeRole.Object);
         if (target >= 0 && this.root(capture.module,target) == capture.symbol) mutates = true;
       }
@@ -378,7 +378,7 @@ export class SafetyAnalyzer {
     while (work.length > 0) {
       const nodeId: number = work[work.length-1]; const item: AstNode = this.node(targetModule,nodeId); work.pop();
       let at: number = -1;
-      if (item.kind == NodeKind.AssignmentExpression || item.kind == NodeKind.CompoundAssignmentExpression) at = bindingChild(item,EdgeRole.Target);
+      if (item.kind == NodeKind.AssignmentExpression || item.kind == NodeKind.CompoundAssignmentExpression || item.kind == NodeKind.UpdateExpression) at = bindingChild(item,EdgeRole.Target);
       else if (item.kind == NodeKind.MemberCallExpression) at = bindingChild(item,EdgeRole.Object);
       else if (this.helper(targetModule,nodeId) == "move") at = bindingChild(item,EdgeRole.Args);
       while (at >= 0) {
@@ -938,7 +938,7 @@ export class SafetyAnalyzer {
         const source: string = this.result.files[module].types[bindingChild(n,EdgeRole.Expression)]; const target: string = this.result.files[module].types[id];
         if (this.transferType(source) != this.transferType(target)) this.report(module,id,"E4101: un cast genérico no puede borrar ni fabricar ownership");
       }
-      if (n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression) {
+      if (n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression || n.kind == NodeKind.UpdateExpression) {
         let target: number = bindingChild(n,EdgeRole.Target);
         while (target >= 0) {
           const current: AstNode = this.node(module,target); if (![NodeKind.MemberExpression,NodeKind.IndexExpression].includes(current.kind)) break;
@@ -973,16 +973,16 @@ export class SafetyAnalyzer {
       this.read(module,id,c.symbol,state);
       if (this.substitutions.length > 0 && (this.transferType(this.result.symbolTypes[c.symbol]) || borrowedType(this.resolved(this.result.symbolTypes[c.symbol])))) this.report(module,id,"E4209: una instancia genérica no puede ocultar captura de ownership");
     } return; }
-    if (n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression) {
+    if (n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression || n.kind == NodeKind.UpdateExpression) {
       const target: number = bindingChild(n,EdgeRole.Target); const value: number = bindingChild(n,EdgeRole.Value);
-      this.expression(module,value,state,active);
+      if (value >= 0) this.expression(module,value,state,active);
       const field: number = this.constructorField(module,target);
       if (n.kind == NodeKind.AssignmentExpression && [NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.node(module,target).kind)) {
         const object: number = bindingChild(this.node(module,target),EdgeRole.Object);
         // Read storage/projection roots without reading the moved field being replaced.
         const root: number = this.directRoot(module,object); this.read(module,object,root,state);
         const index: number = bindingChild(this.node(module,target),EdgeRole.Index); if (index >= 0) this.expression(module,index,state,active);
-      } else if (this.node(module,target).kind != NodeKind.IdentifierExpression || n.kind == NodeKind.CompoundAssignmentExpression) this.expression(module,target,state,active);
+      } else if (this.node(module,target).kind != NodeKind.IdentifierExpression || n.kind != NodeKind.AssignmentExpression) this.expression(module,target,state,active);
       if (field >= 0) {
         const f = this.binding.symbols[field];
         if (this.node(f.module,f.node).get(AttributeKind.Readonly) == "true" && state.slots[field] != 0) this.report(module,target,"Campo readonly ya inicializado en alguna ruta: '" + f.name + "'");

@@ -1076,10 +1076,18 @@ export class Parser {
     return left;
   }
   private unary(): Expression {
+    if (this.match("++", "--")) {
+      const op = this.previous(); this.skipNewlines();
+      const target = this.unary();
+      return this.update(target, op, true);
+    }
     if (this.match("await")) { const keyword = this.previous(); const operand = this.unary(); return { kind: "AwaitExpression", operand, span: span(keyword.span.start, operand.span.end) }; }
     if (this.match("typeof")) { const op = this.previous(); const operand = this.unary(); return { kind: "UnaryExpression", operator: "typeof", operand, span: span(op.span.start, operand.span.end) }; }
     if (this.match("!", "-", "+", "~")) { const op = this.previous(); const operand = this.unary(); return { kind: "UnaryExpression", operator: op.lexeme as "!" | "-" | "+" | "~", operand, span: span(op.span.start, operand.span.end) }; }
-    const operand = this.call();
+    let operand = this.call();
+    if ((this.check("++") || this.check("--")) && this.peek().span.start.line === operand.span.end.line) {
+      operand = this.update(operand, this.advance(), false);
+    }
     // `expr satisfies T` verifica que expr sea asignable a T. En el dialecto
     // el tipo de la expresión es siempre T (no preserva el inferido porque
     // no hay distinción inferido/declarado). Sintácticamente se permite
@@ -1098,6 +1106,13 @@ export class Parser {
       return { kind: "AsExpression", expression: operand, targetType, span: span(operand.span.start, this.peek().span.start) };
     }
     return operand;
+  }
+  private update(target: Expression, op: Token, prefix: boolean): Expression {
+    if (!["IdentifierExpression", "MemberExpression", "IndexExpression"].includes(target.kind)) {
+      this.error(op, `El operando de '${op.lexeme}' debe ser una variable, campo o índice`);
+    }
+    return { kind: "UpdateExpression", operator: op.lexeme as "++" | "--", prefix, target,
+      span: span(prefix ? op.span.start : target.span.start, prefix ? target.span.end : op.span.end) };
   }
   private call(): Expression {
     let expr = this.primary();

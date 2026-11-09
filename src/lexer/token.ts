@@ -5,7 +5,7 @@ export type TokenKind =
   | "if" | "else" | "while" | "for" | "break" | "continue" | "extends" | "export" | "true" | "false" | "out" | "async" | "await" | "using" | "type"
   | "enum" | "switch" | "case" | "default" | "of" | "in" | "delete" | "instanceof" | "typeof" | "readonly" | "match" | "when" | "union" | "static"
   | "(" | ")" | "{" | "}" | "[" | "]" | "," | ";" | ":" | "." | "..." | "?" | "@"
-  | "+" | "-" | "*" | "/" | "%" | "=" | "==" | "!=" | "<" | "<=" | ">" | ">="
+  | "++" | "--" | "+" | "-" | "*" | "/" | "%" | "=" | "==" | "!=" | "<" | "<=" | ">" | ">="
   | "&&" | "||" | "??" | "?." | "|" | "&" | "^" | "~" | "<<" | ">>" | "=>" | "!" | "satisfies" | "as" | "eof"
   // V30.19: operadores compuestos. Azucar sobre `x = x op y` pero emitido
   // como una sola expresion en C++ (`x += y;` en vez de `x = x + y;`).

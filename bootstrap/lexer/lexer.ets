@@ -132,7 +132,7 @@ export class Lexer {
     }
     // Like the host lexer, only parentheses/brackets suppress newlines.
     const next: string = this.peek(0);
-    if (newlines > 0 && this.depth == 0 && !(next != "" && ".([+-*/%=?:<>!&|^~".includes(next, 0))) {
+    if (newlines > 0 && this.depth == 0 && (!(next != "" && ".([+-*/%=?:<>!&|^~".includes(next, 0)) || next+this.peek(1) == "++" || next+this.peek(1) == "--")) {
       this.emit("newline", "\n", this.offset, this.line, this.column);
     }
   }
@@ -277,7 +277,7 @@ export class Lexer {
       this.advance(); this.advance(); this.advance(); this.emit(three, three, offset, line, column); return;
     }
     const two: string = this.peek(0) + this.peek(1);
-    const doubles: string[] = ["==", "!=", "<=", ">=", "&&", "||", "=>", "??", "?.", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="];
+    const doubles: string[] = ["++", "--", "==", "!=", "<=", ">=", "&&", "||", "=>", "??", "?.", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="];
     if (doubles.includes(two)) {
       this.advance(); this.advance(); this.emit(two, two, offset, line, column); return;
     }

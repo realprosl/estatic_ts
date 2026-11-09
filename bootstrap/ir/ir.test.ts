@@ -16,6 +16,10 @@ function run(source: string, files: Record<string,string> = {}, mode = "", statu
   const ir = JSON.parse(p.stdout); assert.equal(ir.success, status === 0); return ir;
 }
 function instructions(ir: any) { return ir.functions.flatMap((f:any) => f.blocks.flatMap((b:any) => b.instructions)); }
+test("native IR: update expressions preserve values and evaluate destinations once", () => {
+  const ir = run('let i=0;print(i++);print(++i);print(i--);print(--i);for(let j=0;j<3;j++){print(j);}let xs=[4];let calls=0;function index():number{calls+=1;return 0;}print(xs[index()]++);print(++xs[index()]);print(calls);print(xs[0]);');
+  assert.deepEqual(execute(ir), ["0", "2", "2", "0", "0", "1", "2", "4", "6", "2", "6"]);
+});
 // A small test oracle executes the public IR, independently of the AST/checker.
 function execute(ir:any) {
   const globals:any[] = []; const output:string[] = []; let budget = 10000;

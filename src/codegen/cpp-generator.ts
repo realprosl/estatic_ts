@@ -640,6 +640,7 @@ export class CppGenerator {
         case "AwaitExpression": return visitExpr(node.operand);
         case "BinaryExpression": return visitExpr(node.left) || visitExpr(node.right);
         case "UnaryExpression": return visitExpr(node.operand);
+        case "UpdateExpression": return visitExpr(node.target);
         case "MemberExpression": return visitExpr(node.object);
         case "AssignmentExpression": return visitExpr(node.value);
         case "CompoundAssignmentExpression": return visitExpr(node.value);
@@ -2219,7 +2220,7 @@ export class CppGenerator {
     }
   }
   private expressionMutatesThis(node: Expression, classDecl: ClassDeclaration, visited: Set<string>): boolean {
-    if (node.kind === "AssignmentExpression" || node.kind === "CompoundAssignmentExpression") {
+    if (node.kind === "AssignmentExpression" || node.kind === "CompoundAssignmentExpression" || node.kind === "UpdateExpression") {
       let target: Expression = node.target;
       // Arena fields such as this.nodes[i].span still mutate the receiver.
       while (target.kind === "MemberExpression" || target.kind === "IndexExpression") target = target.object;
@@ -3092,8 +3093,7 @@ export class CppGenerator {
     //    equivalente). Si no, es muy arriesgado asumir monotonia.
     //    Aceptamos varios patrones comunes:
     //    - AssignmentExpression con target == counter
-    //    - UpdateExpression (++i o i++) — no tenemos nodo explicito;
-    //      el codegen lo emite como assignment.
+    //    Los UpdateExpression no participan en esta heurística de reserva.
     if (!node.increment) return null;
     if (node.increment.kind !== "AssignmentExpression") return null;
     const inc = node.increment;
@@ -3820,6 +3820,10 @@ export class CppGenerator {
       // mismos operadores para tipos primitivos; el dialecto los pasa
       // tal cual. El type-checker valida que el target sea mutable y
       // que el operador aplique al tipo del target.
+      case "UpdateExpression": {
+        const target = this.emitExpression(node.target);
+        return node.prefix ? `(${node.operator}${target})` : `(${target}${node.operator})`;
+      }
       case "CompoundAssignmentExpression": {
         const targetText = this.emitExpression(node.target);
         const valueText = this.emitExpression(node.value);

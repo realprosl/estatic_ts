@@ -46,6 +46,21 @@ test("native etsc is quiet in pipes and check keeps its result on stdout",()=>{
  const input=source("checked",'print("checked");');
  const p=run([input,"--frontend",frontend,"--check"]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/Comprobado:/);assert.equal(p.stderr,"");
 });
+test("native etsc builds update expressions without Node",()=>{
+ const input=source("updates",'for(let i:number=0;i<3;i++){print(i);}let n=0;print(n++);print(++n);');
+ const output=join(dir,"updates-app");
+ const built=run(["build",input,"--frontend",frontend,"-o",output+".cpp","--binary",output],{NODE:"/missing/node"});
+ assert.equal(built.status,0,built.stderr);
+ const executed=spawnSync(output,[],{encoding:"utf8",timeout:15000});
+ assert.ifError(executed.error);assert.equal(executed.status,0,executed.stderr);assert.equal(executed.stdout,"0\n1\n2\n0\n2\n");
+});
+test("native etsc reports primary source errors without redundant IR_INPUT",()=>{
+ for(const text of ['const n=0;n++;','for(let i=0;i<3;1++){}','let n=;']){
+  const input=source("invalid-updates",text);
+  const p=run(["build",input,"--frontend",frontend],{NODE:"/missing/node"});
+  assert.equal(p.status,1,p.stderr);assert.match(p.stderr,/CHECKER_ERROR|PARSER_ERROR/);assert.doesNotMatch(p.stderr,/IR_INPUT|IR_INVALID/);
+ }
+});
 test("native etsc builds multiline objects and void ternaries",()=>{
  const input=source("parser-ir-regressions",'interface Options{method:string;body:string;}const options:Options={\n method:"GET",\n body:""\n};function a():void{print(options.method);}function b():void{print("b");}true?a():b();false?a():b();print(false?7:8);');
  const output=join(dir,"parser-ir-regressions-app"),cpp=output+".cpp";
@@ -83,6 +98,8 @@ test("native verbose frontend traces update one line even across split writes",(
  assert.equal(p.status,0,p.stderr);
  assert.match(p.stderr,/frontend: reading one/);
  assert.match(p.stderr,/frontend: checking/);
+ assert.match(p.stderr,/frontend: IR: preparando módulos y tipos/);
+ assert.match(p.stderr,/frontend: IR: verificando IR/);
  const lines=p.stderr.replace(/\r\n/g,"\n").split("\n").filter(Boolean);
  assert.equal(lines.length,4,p.stderr);
  for(const [index,label] of ["Cargando configuración","Analizando fuentes y verificando IR","Generando C++ desde IR verificado","Compilación completada"].entries()){

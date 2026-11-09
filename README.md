@@ -144,6 +144,8 @@ En perfiles de release se separan funciones y datos por sección, el enlazador e
 - Funciones tipadas, bloques, `return`, `if/else` y `while`.
 - Bucles `for`, junto con `break` y `continue` validados por contexto.
 - Operadores aritméticos, relacionales, igualdad y lógica booleana.
+- Incremento y decremento prefijo/postfijo: `++i`, `i++`, `--i`, `i--` sobre
+  destinos numéricos mutables, también en `for (let i=0; i<3; i++)`.
 - Salida variádica separada por `stdout` y `stderr`.
 - Diagnósticos con archivo, línea, columna y fragmento de código.
 - Biblioteca estándar mínima para strings, archivos y argumentos de proceso.

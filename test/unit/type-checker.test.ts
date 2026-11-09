@@ -43,6 +43,13 @@ function expectError(source: string, messageSubstring: string) {
     throw e;
   }
 }
+test("checker: update expressions accept numeric mutable targets", () => {
+  check('let n:i8=1;const old:i8=n++;const next:i8=++n;let xs=[1];xs[0]--;for(let i=0;i<3;i++){}');
+  check('function inc(n:ref<number>):number{return ++n;}let n=1;inc(n);');
+});
+for (const source of ['const n=1;n++;', 'const n=1;++n;', 'let n="s";n++;', 'let n=true;--n;', 'function f(n:constRef<number>):void{n++;}', 'class C{readonly x:number=1;}let c=new C();c.x++;']) test(`checker rejects invalid update: ${source}`, () => {
+  assert.throws(() => check(source), DiagnosticError);
+});
 
 test("checker: acepta declaración simple", () => {
   const { checker } = check("const x: number = 42;");

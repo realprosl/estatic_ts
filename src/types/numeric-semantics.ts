@@ -29,5 +29,6 @@ export function promoteBinary(left: string | undefined, right: string | undefine
 export function binaryNumericType(node: Expression, op: string): NumericType | undefined {
   if (node.kind === "BinaryExpression") return promoteBinary(numericTypeOf(node.left), numericTypeOf(node.right), op);
   if (node.kind === "CompoundAssignmentExpression") return promoteBinary(numericTypeOf(node.target), numericTypeOf(node.value), op);
+  if (node.kind === "UpdateExpression") return promoteBinary(numericTypeOf(node), numericTypeOf(node), op);
   return undefined;
 }

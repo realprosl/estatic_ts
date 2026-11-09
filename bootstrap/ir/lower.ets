@@ -442,6 +442,7 @@ export class IrLowering {
       const result: number = this.emit("typeTag",typeId,[],-1,-1,"",id); const operand: number = bindingChild(n,EdgeRole.Operand); this.result.functions[this.currentFunction].blocks[this.block].instructions[this.result.functions[this.currentFunction].blocks[this.block].instructions.length-1].signature = this.typeId(this.checked.files[this.module].types[operand],operand); return result;
     }
     if (kind == NodeKind.UnaryExpression) return this.emit("unary",typeId,[this.readValue(this.expression(bindingChild(n,EdgeRole.Operand)),id)],-1,-1,n.get(AttributeKind.Operator),id);
+    if (kind == NodeKind.UpdateExpression) return this.update(id,typeId);
     if (kind == NodeKind.TernaryExpression) return this.conditional(id,bindingChild(n,EdgeRole.Condition),bindingChild(n,EdgeRole.ThenBranch),bindingChild(n,EdgeRole.ElseBranch),typeId,"");
     if (kind == NodeKind.BinaryExpression) {
       const op: string = n.get(AttributeKind.Operator); const left: number = bindingChild(n,EdgeRole.Left); const right: number = bindingChild(n,EdgeRole.Right);
@@ -470,6 +471,17 @@ export class IrLowering {
     let value: number = this.readValue(this.expression(bindingChild(n,EdgeRole.Value)),id);
     if (n.kind == NodeKind.CompoundAssignmentExpression) { const op: string = n.get(AttributeKind.Operator); value = this.binary(op.slice(0,op.length-1),previous,value,pt,id); }
     value = this.convert(value,pt,id); this.emit("store",-1,[value],p,-1,"",id); return p;
+  }
+  update(id: number, typeId: number): number {
+    const n = this.node(id); const target: number = bindingChild(n,EdgeRole.Target);
+    let p: number = this.rootPlace(target); if (p < 0) return -1;
+    const shape = this.result.typeDefinitions[this.result.functions[this.currentFunction].places[p].typeId];
+    if (shape.kind == "ref") p = this.projection(p,"deref",shape.arguments[0],-1,-1,target);
+    const previous: number = this.emit("load",typeId,[],p,-1,"",target);
+    const one: number = this.emit("constant",typeId,[],-1,-1,"1",id);
+    const value: number = this.convert(this.binary(n.get(AttributeKind.Operator) == "++" ? "+" : "-",previous,one,typeId,id),typeId,id);
+    this.emit("store",-1,[value],p,-1,"",id);
+    return n.get(AttributeKind.Prefix) == "true" ? value : previous;
   }
   conditional(id: number, condition: number, yes: number, no: number, typeId: number, logical: string): number {
     const value: number = this.expression(condition);
@@ -969,7 +981,7 @@ export class IrLowering {
   run(trace: boolean = false): IrProject {
     const started: number = Date.now();
     let reported: number = started;
-    if (trace) progressDetail("IR: preparando módulos y tipos");
+    if (trace) progressDetail("frontend: IR: preparando módulos y tipos");
     // Require complete tables from a successful native analysis of this graph.
     if (!this.graph.success || !this.binding.success || !this.checked.success || this.graph.diagnostics.length > 0 || this.binding.diagnostics.length > 0 || this.checked.diagnostics.length > 0 || this.checked.files.length != this.graph.modules.length || this.binding.files.length != this.graph.modules.length || this.checked.moduleRecords.length != this.graph.modules.length || this.checked.symbolIds.length != this.binding.symbols.length || this.checked.symbolTypes.length != this.binding.symbols.length) {
       const source = new IrSource("","",this.graph.entry,-1,0,0); this.result.diagnostics.push(new IrIssue("IR_INPUT","Se requiere un proyecto comprobado sin diagnósticos de una misma carga",source)); return this.result;
@@ -1055,7 +1067,7 @@ export class IrLowering {
       { const pendingPush = new IrFunction("$fini",this.checked.moduleRecords[m].id+":fini",this.typeId("void",root),this.source(root)); this.result.functions.push(pendingPush); } this.functionModules.push(m); this.functionNodes.push(root);
     }
     for (let f: number = 0; f < this.result.functions.length; f = f+1) {
-      if (trace && (f == 0 || Date.now()-reported >= 1000)) { reported = Date.now(); progressDetail("IR: función "+(f+1)+" de "+this.result.functions.length+" descubiertas ("+(reported-started)+" ms)"); }
+      if (trace && (f == 0 || Date.now()-reported >= 1000)) { reported = Date.now(); progressDetail("frontend: IR: función "+(f+1)+" de "+this.result.functions.length+" descubiertas ("+(reported-started)+" ms)"); }
       this.currentFunction = f; this.module = this.functionModules[f]; this.symbols = []; this.breakTargets = []; this.continueTargets = []; this.breakDepths = []; this.continueDepths = []; this.cleanupScopes = [new IrCleanupScope()];
       const id: number = this.functionNodes[f]; this.block = this.newBlock(id);
       if (this.result.functions[f].name == "$fini") {
@@ -1100,17 +1112,17 @@ export class IrLowering {
       let changed: boolean = true;
       while (changed) { let before: number = this.result.dispatches.length; for (const shape of this.result.typeDefinitions) before = before+shape.variants.length; for (let at: number = 0; at < this.interfaceFrom.length; at = at+1) this.implementation(this.interfaceFrom[at],this.interfaceTo[at],id); let after: number = this.result.dispatches.length; for (const shape of this.result.typeDefinitions) after = after+shape.variants.length; changed = after != before; }
     }
-    if (trace) progressDetail("IR: ordenando módulos ("+(Date.now()-started)+" ms)");
+    if (trace) progressDetail("frontend: IR: ordenando módulos ("+(Date.now()-started)+" ms)");
     for (let m: number = 0; m < this.graph.modules.length; m = m+1) this.order(m);
     for (let at: number = this.result.initializationOrder.length-1; at >= 0; at = at-1) for (const module of this.result.modules) if (module.initializer == this.result.initializationOrder[at]) this.result.finalizationOrder.push(module.finalizer);
     for (let f: number = 0; f < this.result.functions.length; f = f+1) if (this.result.functions[f].asynchronous) { for (let value: number = 0; value < this.result.functions[f].values.length; value = value+1) this.result.functions[f].frameValues.push(value); for (let place: number = 0; place < this.result.functions[f].places.length; place = place+1) if ((this.result.functions[f].places[place].base) < 0 && (this.result.functions[f].places[place].global) < 0) this.result.functions[f].framePlaces.push(place); }
-    if (trace) progressDetail("IR: preservando contratos ("+(Date.now()-started)+" ms)");
+    if (trace) progressDetail("frontend: IR: preservando contratos ("+(Date.now()-started)+" ms)");
     if (this.result.diagnostics.length == 0) this.result = preserveContracts(this.graph,this.checked,this.result);
-    if (trace) progressDetail("IR: finalizando préstamos ("+(Date.now()-started)+" ms)");
+    if (trace) progressDetail("frontend: IR: finalizando préstamos ("+(Date.now()-started)+" ms)");
     if (this.result.diagnostics.length == 0) this.result = finishBorrows(this.result);
-    if (trace) progressDetail("IR: verificando IR ("+(Date.now()-started)+" ms)");
+    if (trace) progressDetail("frontend: IR: verificando IR ("+(Date.now()-started)+" ms)");
     if (this.result.diagnostics.length == 0) this.result.diagnostics = verifyIr(this.result);
-    if (trace) progressDetail("IR: completado ("+(Date.now()-started)+" ms)");
+    if (trace) progressDetail("frontend: IR: completado ("+(Date.now()-started)+" ms)");
     this.result.success = this.result.diagnostics.length == 0; return this.result;
   }
 }

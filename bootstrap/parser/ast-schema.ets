@@ -1,7 +1,8 @@
 // Closed syntax vocabulary. Text values remain stable at JSON/cache boundaries.
 
-export enum NodeKind { Invalid, ArrayBinding, ArrayLiteralExpression, ArrowFunctionExpression, AsExpression, AssignmentExpression, AwaitExpression, BinaryExpression, Binding, BlockStatement, BreakStatement, CallExpression, CaseClause, ClassDeclaration, ClassField, ClassMethod, CompoundAssignmentExpression, ContinueStatement, Decorator, DefaultClause, DeleteStatement, Discriminator, EnumDeclaration, EnumMember, ErrorNode, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, ExpressionStatement, ForInStatement, ForOfStatement, ForStatement, FunctionDeclaration, GenericIdentifierExpression, IdentifierExpression, IfStatement, ImportDeclaration, ImportSpecifier, IndexExpression, InterfaceDeclaration, InterfaceField, InterfaceMethod, LiteralExpression, MemberCallExpression, MemberExpression, ModuleHeaderDeclaration, NamedArgumentExpression, NewExpression, ObjectBinding, ObjectLiteralExpression, ObjectProperty, Parameter, Program, RawCppExpression, ReturnStatement, SatisfiesExpression, SpreadElement, SwitchStatement, TemplateLiteralExpression, TemplatePart, TernaryExpression, TypeAliasDeclaration, TypeParameter, UnaryExpression, UnionDeclaration, UnionVariant, UsingDeclaration, VariableDeclaration, WhileStatement }
+export enum NodeKind { Invalid, ArrayBinding, ArrayLiteralExpression, ArrowFunctionExpression, AsExpression, AssignmentExpression, AwaitExpression, BinaryExpression, Binding, BlockStatement, BreakStatement, CallExpression, CaseClause, ClassDeclaration, ClassField, ClassMethod, CompoundAssignmentExpression, ContinueStatement, Decorator, DefaultClause, DeleteStatement, Discriminator, EnumDeclaration, EnumMember, ErrorNode, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, ExpressionStatement, ForInStatement, ForOfStatement, ForStatement, FunctionDeclaration, GenericIdentifierExpression, IdentifierExpression, IfStatement, ImportDeclaration, ImportSpecifier, IndexExpression, InterfaceDeclaration, InterfaceField, InterfaceMethod, LiteralExpression, MemberCallExpression, MemberExpression, ModuleHeaderDeclaration, NamedArgumentExpression, NewExpression, ObjectBinding, ObjectLiteralExpression, ObjectProperty, Parameter, Program, RawCppExpression, ReturnStatement, SatisfiesExpression, SpreadElement, SwitchStatement, TemplateLiteralExpression, TemplatePart, TernaryExpression, TypeAliasDeclaration, TypeParameter, UnaryExpression, UnionDeclaration, UnionVariant, UsingDeclaration, VariableDeclaration, WhileStatement, UpdateExpression }
 export function nodeKindName(value: NodeKind): string {
+  if (value == NodeKind.UpdateExpression) return "UpdateExpression";
   if (value == NodeKind.ArrayBinding) return "ArrayBinding";
   if (value == NodeKind.ArrayLiteralExpression) return "ArrayLiteralExpression";
   if (value == NodeKind.ArrowFunctionExpression) return "ArrowFunctionExpression";
@@ -74,6 +75,7 @@ export function nodeKindName(value: NodeKind): string {
   return "";
 }
 export function parseNodeKind(text: string): NodeKind {
+  if (text == "UpdateExpression") return NodeKind.UpdateExpression;
   if (text == "ArrayBinding") return NodeKind.ArrayBinding;
   if (text == "ArrayLiteralExpression") return NodeKind.ArrayLiteralExpression;
   if (text == "ArrowFunctionExpression") return NodeKind.ArrowFunctionExpression;
@@ -232,8 +234,9 @@ export function parseEdgeRole(text: string): EdgeRole {
   return EdgeRole.Invalid;
 }
 
-export enum AttributeKind { Invalid, Access, Alias, Anonymous, Async, Await, Callee, ClassName, Constraint, DeclaredType, Default, Exported, Field, Form, GeneratedColumn, GeneratedDefinition, GeneratedEndOffset, GeneratedExternal, GeneratedLine, GeneratedOffset, GeneratedOriginalName, GeneratedSource, Imported, IsAsync, IsStatic, Key, LiteralType, Local, Member, Method, Mutable, Name, Namespace, Operator, Optional, Out, ParameterProperty, Passing, Pattern, Payload, Property, Raw, Readonly, ReturnType, SideEffect, Source, TargetType, Type, TypeArgument, TypeOnly, Underlying, Value, Variadic, VariadicTypeParameter }
+export enum AttributeKind { Invalid, Access, Alias, Anonymous, Async, Await, Callee, ClassName, Constraint, DeclaredType, Default, Exported, Field, Form, GeneratedColumn, GeneratedDefinition, GeneratedEndOffset, GeneratedExternal, GeneratedLine, GeneratedOffset, GeneratedOriginalName, GeneratedSource, Imported, IsAsync, IsStatic, Key, LiteralType, Local, Member, Method, Mutable, Name, Namespace, Operator, Optional, Out, ParameterProperty, Passing, Pattern, Payload, Property, Raw, Readonly, ReturnType, SideEffect, Source, TargetType, Type, TypeArgument, TypeOnly, Underlying, Value, Variadic, VariadicTypeParameter, Prefix }
 export function attributeKindName(value: AttributeKind): string {
+  if (value == AttributeKind.Prefix) return "prefix";
   if (value == AttributeKind.Access) return "access";
   if (value == AttributeKind.Alias) return "alias";
   if (value == AttributeKind.Anonymous) return "anonymous";
@@ -290,6 +293,7 @@ export function attributeKindName(value: AttributeKind): string {
   return "";
 }
 export function parseAttributeKind(text: string): AttributeKind {
+  if (text == "prefix") return AttributeKind.Prefix;
   if (text == "access") return AttributeKind.Access;
   if (text == "alias") return AttributeKind.Alias;
   if (text == "anonymous") return AttributeKind.Anonymous;

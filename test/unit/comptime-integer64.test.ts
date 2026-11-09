@@ -12,6 +12,11 @@ function source(type: string, expression: string, a: number, b: number) {
   return `@comptime function calc(a: ${type}, b: ${type}): ${type} { return ${expression}; }
     const result: ${type} = calc(${a}, ${b});`;
 }
+test("comptime integer64: update expressions retain exact values", () => {
+  const {ast}=compile('const result:u64=comptime(():u64=>{let n:u64=9007199254740993;const old:u64=n++;const next:u64=++n;return old+(next-n);});');
+  const result=ast.statements.find(stmt=>stmt.kind==="VariableDeclaration"&&stmt.name==="result");
+  assert.ok(result?.kind==="VariableDeclaration");assert.equal((result.initializer as {exactInteger?:string}).exactInteger,"9007199254740993");
+});
 
 for (const [type, expression, a, b, expected] of [
   ["i64", "a << b", 1, 40, 1099511627776],
