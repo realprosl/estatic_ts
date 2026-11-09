@@ -1137,13 +1137,17 @@ export class Parser {
     }
     if (token.kind == "{") {
       const result: number = this.add(NodeKind.ObjectLiteralExpression, token, token);
+      this.skipNewlines();
       while (!this.check("}") && !this.check("eof")) {
         const key: ParserToken = this.expect("identifier"); let value: number = -1;
-        if (this.accept(":")) value = this.expression();
+        this.skipNewlines();
+        if (this.accept(":")) { this.skipNewlines(); value = this.expression(); }
         else { value = this.add(NodeKind.IdentifierExpression, key, key); this.attr(value, AttributeKind.Name, key.lexeme); }
         const property: number = this.add(NodeKind.ObjectProperty, key, this.node(value).end);
         this.attr(property, AttributeKind.Key, key.lexeme); this.edge(property, EdgeRole.Value, value); this.edge(result, EdgeRole.Properties, property);
+        this.skipNewlines();
         if (!this.accept(",")) break;
+        this.skipNewlines();
       }
       this.setEnd(result, this.expect("}")); return result;
     }

@@ -46,6 +46,14 @@ test("native etsc is quiet in pipes and check keeps its result on stdout",()=>{
  const input=source("checked",'print("checked");');
  const p=run([input,"--frontend",frontend,"--check"]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/Comprobado:/);assert.equal(p.stderr,"");
 });
+test("native etsc builds multiline objects and void ternaries",()=>{
+ const input=source("parser-ir-regressions",'interface Options{method:string;body:string;}const options:Options={\n method:"GET",\n body:""\n};function a():void{print(options.method);}function b():void{print("b");}true?a():b();false?a():b();print(false?7:8);');
+ const output=join(dir,"parser-ir-regressions-app"),cpp=output+".cpp";
+ const built=run(["build",input,"--frontend",frontend,"-o",cpp,"--binary",output],{NODE:"/missing/node"});
+ assert.equal(built.status,0,built.stderr);
+ const executed=spawnSync(output,[],{encoding:"utf8",timeout:15000});
+ assert.ifError(executed.error);assert.equal(executed.status,0,executed.stderr);assert.equal(executed.stdout,"GET\nb\n8\n");
+});
 test("native etsc verbose identifies reused project object caches",()=>{
  const input=source("cached",'print("cached");'),config=join(dir,"estatic.config.json");
  writeFileSync(config,JSON.stringify({entry:input,output:{cpp:"build/cache.cpp",binary:"build/cache"},incremental:{enabled:true},compiler:{flags:["-O0"]}}));

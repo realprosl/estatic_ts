@@ -148,6 +148,11 @@ test("native IR: named arguments evaluate in source order", () => {
   const ir=run('let n=0;function next():number{n+=1;return n;}function pair(a:number,b:number):number{return a*10+b;} print(pair(b:next(),a:next()));');
   assert.deepEqual(execute(ir),["21"]);
 });
+test("native IR: void ternaries preserve branch and condition effects", () => {
+  const ir = run('let n=0;function condition(value:boolean):boolean{n+=1;return value;}function a():void{print("a");}function b():void{print("b");}condition(true)?a():b();condition(false)?a():b();true?(false?a():b()):a();print(n);print(false?7:8);');
+  assert.deepEqual(execute(ir), ["a", "b", "b", "2", "8"]);
+  assert.ok(ir.functions.every((f:any) => f.places.every((p:any) => ir.types[p.typeId] !== "void")));
+});
 test("native IR: modules initialize dependencies once, aliases use symbol identities", () => {
   const ir=run('import {get as first} from "./dep";import {get as second} from "./dep";print(first(),second());',{"dep.ets":'export let value=3;export function get():number{return value;} print("dep");'});
   assert.equal(ir.initializationOrder.length,2); assert.deepEqual(execute(ir),["dep","3 3"]);

@@ -98,6 +98,8 @@ tamaño de entrada.
 ## Cobertura comprobada
 
 - Literales, identificadores, arrays y objetos con shorthand, spread y `new`.
+- Los objetos admiten saltos de línea y comentarios entre propiedades, alrededor
+  de `:` y antes de `}`; la coma separa propiedades y puede cerrar la lista.
 - Templates con segmentos vacíos, multilínea, escapes crudos e interpolaciones
   de expresiones, incluidas llamadas, objetos y templates anidados; strings y
   comentarios dentro de las interpolaciones protegen sus delimitadores.
