@@ -81,8 +81,8 @@ jobs:
           # tres. `a | b & c` es `a | (b & c)`, no `(a | b) & c`: agruparlos
           # al mismo nivel devolvia un resultado numerico incorrecto sin
           # ningun diagnostico.
-          compile_case bitwise_precedence_or_and 'const a: number = 6; const b: number = 3; const c: number = 1; print(a | b & c);'
-          compile_case bitwise_precedence_xor_and 'const a: number = 6; const b: number = 3; const c: number = 1; print(a ^ b & c);'
-          compile_case bitwise_precedence_and_or 'const a: number = 6; const b: number = 3; const c: number = 1; print(a & b | c);'
-          compile_case bitwise_precedence_shift 'const a: number = 6; const b: number = 3; const c: number = 1; print(a << b & c);'
-          compile_case arithmetic_precedence 'const a: number = 6; const b: number = 3; const c: number = 1; print(a + b * c);'
+          compile_case bitwise_precedence_or_and pass 'const a: number = 6; const b: number = 3; const c: number = 1; print(a | b & c);'
+          compile_case bitwise_precedence_xor_and pass 'const a: number = 6; const b: number = 3; const c: number = 1; print(a ^ b & c);'
+          compile_case bitwise_precedence_and_or pass 'const a: number = 6; const b: number = 3; const c: number = 1; print(a & b | c);'
+          compile_case bitwise_precedence_shift pass 'const a: number = 6; const b: number = 3; const c: number = 1; print(a << b & c);'
+          compile_case arithmetic_precedence pass 'const a: number = 6; const b: number = 3; const c: number = 1; print(a + b * c);'
