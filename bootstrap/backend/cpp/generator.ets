@@ -168,6 +168,10 @@ this.headers.add(_cppLoop51Result?"runtime/ets_http_drogon.hpp":"runtime/ets_htt
   convert(value:string,from:number,to:number):string {
     if(from==to)return value;
     const a=this.shape(from);const  b=this.shape(to);const  T=this.cppTypeId(to);
+    // Un literal de tipo se materializa como su primitivo: el valor concreto
+    // ya lo garantiza el checker, asi que la conversion es la identidad.
+    if(a.kind=="literal")return this.convert(value,a.discriminatorType,to);
+    if(b.kind=="literal")return this.convert(value,from,b.discriminatorType);
     if(["ref","constRef"].includes(a.kind)&&!["ref","constRef"].includes(b.kind))return this.convert(`(*(${value}))`,a.arguments[0],to);
     if(b.kind=="readonly")return this.convert(value,from,b.arguments[0]);
     if(this.numeric(from)&&this.numeric(to))return `ets::ir::cast<${T}>(${value})`;

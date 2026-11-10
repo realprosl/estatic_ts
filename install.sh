@@ -25,13 +25,15 @@ ar_tool="${AR:-ar}"
 
 usage() {
   cat <<'EOF'
-Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario]
+Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario] [--seed-only]
 
-Compila la semilla C++ de native-cpp/ y instala el compilador nativo etsc.
+Compila la semilla C++ de native-cpp/ y con ella compila bootstrap/, y
+publica el ejecutable resultante como el compilador nativo etsc.
 
   --prefix DIR     donde instalar (por defecto /usr/local)
   --cxx COMPILADOR compilador C++20 (por defecto g++, o $CXX)
   --frontend BIN   usar un frontend ya construido en vez de compilar la semilla
+  --seed-only      publicar la semilla sin la generacion 2 (compilador rapido)
   --help           esta ayuda
 
 No requiere Node.js. Requisitos: un compilador C++20, `ar` y las cabeceras de
@@ -42,9 +44,11 @@ EOF
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
+seed_only=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
+    --seed-only) seed_only=1; shift ;;
     --prefix|--cxx|--frontend)
       [ $# -ge 2 ] || fail "Opcion sin valor: $1"
       case "$1" in
@@ -138,6 +142,33 @@ etsc_spin "Semilla · coordinador y emisor" "$cxx" -std=c++20 -O2 \
   "$seed_dir/bootstrap/native/driver.cpp" \
   "$seed_dir/src/codegen/ir/native/generator.cpp" \
   -lcrypto -o "$work/native/etsc"
+
+# --- Generacion 2: la semilla compila bootstrap/ ------------------------------
+# La semilla es el generador: con ella se compila el frontend ETS de
+# `bootstrap/` y el ejecutable resultante es el compilador que se instala. Asi
+# el `etsc` publicado refleja siempre el codigo actual de `bootstrap/`, y no el
+# snapshot C++ de la semilla, que puede quedar desfasado.
+#
+# Con --seed-only se conserva el comportamiento anterior (publicar la
+# semilla) para quien solo quiere el compilador rapido sin Node.
+if [ "$seed_only" -eq 0 ]; then
+  etsc_info "Generacion 2 · compilando bootstrap/ con la semilla"
+  generation="$work/generation"
+  mkdir -p "$generation"
+  etsc_spin "Semilla · analizar bootstrap/" "$work/native/frontend" \
+    "$repo_dir/bootstrap/driver/main.ets" >"$generation/driver.ir.json"
+  etsc_spin "Semilla · construir el compilador" "$work/native/etsc" \
+    --from-ir "$generation/driver.ir.json" --build \
+    -o "$generation/etsc.cpp" --binary "$generation/etsc" \
+    --cxx-flag -O1 --cxx-flag "-I$repo_dir" --no-progress
+  if [ ! -x "$generation/etsc" ]; then
+    fail "La generacion 2 no produjo un ejecutable."
+  fi
+  # El ejecutable de la generacion 2 sustituye a la semilla como comando
+  # publicado: es el que implementa el codigo actual de bootstrap/.
+  cp "$generation/etsc" "$work/native/etsc"
+  chmod +x "$work/native/etsc"
+fi
 
 command_hash="$(hash_file "$work/native/etsc")"
 
