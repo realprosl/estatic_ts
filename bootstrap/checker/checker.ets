@@ -5,7 +5,7 @@ import { ModuleGraph } from "../modules/loader";
 import { BindingResult, BindingSymbol, bindingChild, callableBinding } from "../binder/binder";
 import { AstNode } from "../parser/parser";
 import { diagnosticAt, SourceDiagnostic } from "../frontend/frontend";
-import { joinTypes, ungroupElement, splitTypes, functionClose, functionParams, functionReturn, restPosition, argumentType, numericType, primitiveType, typeCompatible, replaceType, memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticArray, semanticTuple, semanticElement, containsMemory, fixedArraySize, fixedArrayElement, semanticFixedArray, genericBase, genericArguments, canonicalSymbol } from "./types";
+import { joinTypes, ungroupElement, splitTypes, functionClose, functionParams, functionReturn, restPosition, argumentType, numericType, primitiveType, typeCompatible, replaceType, memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticArray, semanticTuple, semanticElement, containsMemory, fixedArraySize, fixedArrayElement, semanticFixedArray, genericBase, genericArguments, canonicalSymbol, literalType, literalKind, literalValue, literalTypeText, literalTypePrefix } from "./types";
 
 import { TypedFile, CheckResult, NativeDecorator, NativeTypeQuery } from "./model";
 export { TypedFile, CheckResult } from "./model";
@@ -44,6 +44,11 @@ export class NativeChecker {
   compatibleInner(actual: string, expected: string): boolean {
     if (actual == "!never") return true;
     if (typeCompatible(actual,expected)) return true;
+    // Un literal de tipo se ensancha a su primitivo: `"Hola"` es un string.
+    if (literalType(actual) && primitiveType(expected)) return literalKind(actual) == expected;
+    // El primitivo ensancha a un literal solo si el tipo literal es el primitivo
+    // sin restringir: un `string` no es un `"Hola"`, eso lo comprueba el valor.
+    if (literalType(expected) && primitiveType(actual)) return literalKind(expected) == actual;
     if (borrowedType(actual) && !borrowedType(expected)) return this.compatible(memoryInner(actual),expected);
     if (genericBase(actual) == "variant" && this.compatible(genericArguments(actual)[0],expected)) return true;
     const bound: string = this.parameterBound(actual); if (bound != "") return this.compatible(bound,expected);
@@ -98,9 +103,55 @@ export class NativeChecker {
   requireType(module: number, id: number, actual: string, expected: string): void {
     if (borrowedType(actual) && this.transferType(expected)) this.report(module,id,"E4101: una vista prestada no puede copiarse como owner");
     this.literalRange(module,id,expected);
+    if (this.literalMismatch(module,id,actual,expected)) return;
     if (ownedType(expected) && actual == memoryInner(expected) && id >= 0 && this.node(module,id).kind == NodeKind.NewExpression) return;
     if (id >= 0 && actual != expected && actual != "!error" && expected != "!error" && expected != "" && this.compatible(actual,expected)) this.result.files[module].conversions[id] = expected;
     if (!this.compatible(actual, expected)) this.report(module, id, "Tipo '" + this.displayType(actual) + "' incompatible con '" + this.displayType(expected) + "'");
+  }
+  // Comprueba si el valor de la posicion coincide con un tipo literal. Un
+  // literal de tipo solo acepta el valor exacto: `"Hola"` no satisface
+  // `"Adios"`. Devuelve true cuando ya se emitio un diagnostico.
+  literalMismatch(module: number, id: number, actual: string, expected: string): boolean {
+    const targets: string[] = splitTypes(expected,"|");
+    let hasLiteral: boolean = false;
+    for (const target of targets) if (literalType(target)) hasLiteral = true;
+    if (!hasLiteral) return false;
+    if (id < 0) return false;
+    const value: string = this.nodeLiteralValue(module,id);
+    if (value == "") return false;
+    const kind: string = this.nodeLiteralKind(module,id);
+    if (kind == "") return false;
+    for (const target of targets) {
+      if (!literalType(target)) continue;
+      if (literalKind(target) != kind) continue;
+      if (literalValue(target) == value) return false;
+    }
+    this.report(module,id,"El valor '" + value + "' no pertenece a '" + this.displayType(expected) + "'");
+    return true;
+  }
+  // Tipo primitivo del literal de la posicion: string, number o boolean.
+  nodeLiteralKind(module: number, id: number): string {
+    const n: AstNode = this.node(module,id);
+    if (n.kind == NodeKind.UnaryExpression && (n.get(AttributeKind.Operator) == "-" || n.get(AttributeKind.Operator) == "+")) return this.nodeLiteralKind(module,bindingChild(n,EdgeRole.Operand));
+    if (n.kind != NodeKind.LiteralExpression) return "";
+    return n.get(AttributeKind.LiteralType);
+  }
+  // Valor canonico de un literal de expresion: el texto ya viene decodificado
+  // por el lexer, y los numeros se canonicalizan con la misma regla que el
+  // parser. Devuelve "" si la posicion no es un literal simple.
+  nodeLiteralValue(module: number, id: number): string {
+    const n: AstNode = this.node(module,id);
+    if (n.kind == NodeKind.UnaryExpression && (n.get(AttributeKind.Operator) == "-" || n.get(AttributeKind.Operator) == "+")) {
+      const operand: number = bindingChild(n,EdgeRole.Operand); const inner: string = this.nodeLiteralValue(module,operand);
+      if (inner == "") return "";
+      if (n.get(AttributeKind.Operator) == "-") return "-" + inner;
+      return inner;
+    }
+    if (n.kind != NodeKind.LiteralExpression) return "";
+    const kind: string = n.get(AttributeKind.LiteralType);
+    if (kind == "string" || kind == "boolean") return n.get(AttributeKind.Value);
+    if (kind == "number") { const raw: string = n.get(AttributeKind.Raw) == "" ? n.get(AttributeKind.Value) : n.get(AttributeKind.Raw); const exact: string = nativeIntegerText(raw); return exact == "" ? "" : exact; }
+    return "";
   }
   literalRange(module: number, id: number, expected: string): void {
     if (!numericType(expected) || id < 0) return;
@@ -189,8 +240,17 @@ export class NativeChecker {
     // Los tipos nominales ("#<symbolId>") y los parametros de tipo ("@<symbolId>")
     // se codifican con ids internos. En los mensajes del usuario se sustituyen
     // por el nombre del simbolo: "#218" -> "Point", "@219" -> "T".
-    if (text.indexOf("#",0) < 0 && text.indexOf("@",0) < 0) return text;
+    // Un literal de tipo ("$lit:string=Hola") se muestra como el literal fuente.
     let result: string = text;
+    if (result.indexOf(literalTypePrefix(),0) >= 0) {
+      for (const part of splitTypes(result,"|")) {
+        if (!literalType(part)) continue;
+        const kind: string = literalKind(part); const value: string = literalValue(part);
+        const shown: string = kind == "string" ? "\"" + value + "\"" : kind == "boolean" ? value : value;
+        result = replaceType(result, part, shown);
+      }
+    }
+    if (result.indexOf("#",0) < 0 && result.indexOf("@",0) < 0) return result;
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
       const symbol: BindingSymbol = this.binding.symbols[sid];
       if (symbol.name == "") continue;
@@ -329,6 +389,12 @@ export class NativeChecker {
   annotationInner(module: number, id: number, text: string): string {
     if (text == "") return "";
     const grouped: string = ungroupElement(text); if (grouped != text) return this.annotation(module,id,grouped);
+    if (literalType(text)) {
+      const kind: string = literalKind(text); const value: string = literalValue(text);
+      if (kind != "string" && kind != "number" && kind != "boolean") { this.report(module,id,"Un literal de tipo debe ser de tipo string, number o boolean"); return "!error"; }
+      if (value == "") { this.report(module,id,"Un literal de tipo necesita un valor"); return "!error"; }
+      return text;
+    }
     if (primitiveType(text)) return text;
     const mode: string = memoryMode(text);
     if (mode != "") {

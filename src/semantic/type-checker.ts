@@ -3,7 +3,7 @@ import { isNumericName, promoteBinary, promoteUnary } from "../types/numeric-sem
 import type { Program, Statement, Expression, TypeName, Parameter, TypeParameter, FunctionDeclaration, InterfaceDeclaration, InterfaceMethod, ClassDeclaration, ClassMethod, ArrowFunctionExpression, TypeAliasDeclaration, EnumDeclaration, UnionDeclaration, EnumMember, MatchExpression, LiteralExpression, BlockStatement } from "../ast/nodes.ts";
 import { DiagnosticError, withGeneratedSource, type Diagnostic } from "../core/diagnostic.ts";
 import { Scope, type FunctionSignature, type FunctionSymbol, type SymbolInfo } from "./symbols.ts";
-import { arrayElement, arrayType, fixedArrayElement, fixedArraySize, functionParameters, functionResult, functionType, genericArguments, genericBase, genericType, intersectionMembers, isArrayType, isFixedArrayType, isFunctionType, isGenericType, isIntersectionType, isMapType, isNumericType, isPrimitive, isPromiseType, isReadonlyType, isSetType, isTupleType, isTypeofType, isUnionType, numericBitWidth, numericKind, numericSign, promiseResult, readonlyInner, readonlyType, registerFixedArray, resolvedTypeToTypeName, toResolvedRuntimeType, toResolvedType, tupleElements, tupleType, typeMatches, typeofTarget, unionMembers } from "../types/type-system.ts";
+import { arrayElement, arrayType, fixedArrayElement, fixedArraySize, functionParameters, functionResult, functionType, genericArguments, genericBase, genericType, intersectionMembers, isArrayType, isFixedArrayType, isFunctionType, isGenericType, isIntersectionType, isLiteralType, isMapType, isNumericType, isPrimitive, isPromiseType, isReadonlyType, isSetType, isTupleType, isTypeofType, isUnionType, literalKind, literalValue, numericBitWidth, numericKind, numericSign, promiseResult, readonlyInner, readonlyType, registerFixedArray, resolvedTypeToTypeName, toResolvedRuntimeType, toResolvedType, tupleElements, tupleType, typeMatches, typeofTarget, unionMembers } from "../types/type-system.ts";
 import { HELPER_METADATA } from "./helpers.ts";
 import { registerBuiltins } from "./builtin-registry.ts";
 import { exactIntegerLiteral, I64_MIN, I64_MAX, U64_MAX } from "../types/integer64.ts";
@@ -1254,6 +1254,23 @@ export class TypeChecker {
     }
   }
 
+  // Un tipo literal (`$lit:string=Hola`) solo acepta su valor exacto. El tipo
+  // ya es compatible porque ambos lados son `string`; aqui se comprueba que
+  // el valor concreto pertenezca a la union de literales.
+  private validateLiteralValue(node: Expression, expectedType: TypeName, reportNode: { span: import("../core/span.ts").Span }): void {
+    if (!expectedType) return;
+    const members = unionMembers(expectedType).filter(member => isLiteralType(member));
+    if (members.length === 0) return;
+    const literal = literalValueOf(node);
+    if (literal === undefined) return;
+    const kind = literalKindOf(node);
+    for (const member of members) {
+      if (literalKind(member) !== kind) continue;
+      if (literalValue(member) === literal) return;
+    }
+    this.report(reportNode, `El valor '${literal}' no pertenece a '${expectedType}'`);
+  }
+
   private validateType(type: TypeName, node: { span: import("../core/span.ts").Span }, interfaceAllowed: boolean, primitiveOnly = false, scope?: Scope, visited?: Set<string>): TypeName {
     // Resolver cualquier `typeof X` en posición de tipo antes de validar.
     // Devolvemos el tipo ya resuelto para que el llamador pueda reescribirlo
@@ -1488,12 +1505,16 @@ export class TypeChecker {
       return type;
     }
     const primitive = isPrimitive(type);
+    // Un literal de tipo (`$lit:string=Hola`) es un tipo valido: su valor
+    // concreto ya esta codificado en el texto canonico.
+    const literal = isLiteralType(type);
     const concrete = this.classes.has(type) || this.aliases.has(type) || this.enums.has(type) || ["TcpListener", "TcpConnection", "TlsContext", "TlsConnection", "CancellationSource", "CancellationToken", "JsonValue", "FileReader", "Request", "Response", "Server", "HttpClientResponse", "Timer", "FsWatcher", "FsEvent", "Regex", "Console"].includes(type);
     const contract = interfaceAllowed && this.interfaces.has(type);
     // Los tipos genéricos `Promise<T>`, `Result<T, E>`, `Map<K, V>`, `Set<T>`,
     // `Optional<T>` se aceptan siempre (son tipos del runtime).
     const genericBaseName = type.includes("<") ? type.slice(0, type.indexOf("<")) : "";
     const genericConcrete = ["Promise", "Result", "Map", "Set", "Optional"].includes(genericBaseName);
+    if (literal) return;
     if (!primitive && (primitiveOnly || (!concrete && !contract && !genericConcrete))) {
       // V30.12.0: forward declaration. Si el tipo no esta declarado
       // todavia (uso antes de declaracion), encolamos en forwardRefs
@@ -1549,6 +1570,10 @@ export class TypeChecker {
           && !!this.resolveClass(actual)
           && actual !== "void";
         if (!typeMatches(actual, expected) && !isPtrImplicit) this.report(node, `Se esperaba ${expected}, pero se obtuvo ${actual}`);
+        // Un tipo literal solo acepta su valor exacto: `"Hola"` no satisface
+        // el alias `"Adios"`. El tipo ya es compatible (ambos son string), asi
+        // que la comprobacion del valor se hace aparte.
+        this.validateLiteralValue(node.initializer, expected, node);
         // V22 PR#134: detectar borrow conflicts. Si el tipo declarado es
         // `ref<T>`/`constRef<T>` y el initializer es `ref(x)`/`constRef(x)`,
         // registramos el borrow sobre la fuente `x` y comprobamos aliasing
@@ -4614,4 +4639,33 @@ export class TypeChecker {
     const matching = union.variants.filter(v => v.discriminator && v.discriminator.field === discriminator.field && v.discriminator.value === discriminator.value);
     return union.variants.filter(v => !matching.includes(v)).map(v => v.name);
   }
+}
+
+// Valor textual de un literal de expresion, o undefined si no es un literal
+// simple. El numero se canonicaliza con la misma regla que el parser.
+function literalValueOf(node: Expression): string | undefined {
+  if (node.kind === "LiteralExpression") {
+    if (node.literalType === "number") return canonicalNumberText(node.value, node.raw);
+    return String(node.value);
+  }
+  if (node.kind === "UnaryExpression" && (node.operator === "-" || node.operator === "+")) {
+    const inner = literalValueOf(node.operand);
+    if (inner === undefined) return undefined;
+    return node.operator === "-" ? "-" + inner : inner;
+  }
+  return undefined;
+}
+
+// Tipo primitivo del literal: string, number o boolean.
+function literalKindOf(node: Expression): string {
+  if (node.kind === "LiteralExpression") return node.literalType === "null" || node.literalType === "undefined" ? "" : node.literalType;
+  if (node.kind === "UnaryExpression" && (node.operator === "-" || node.operator === "+")) return literalKindOf(node.operand);
+  return "";
+}
+
+// Texto canonico de un literal numerico: el `raw` si existe (respeta la
+// notacion del fuente), si no el valor normalizado.
+function canonicalNumberText(value: number, raw?: string): string {
+  if (raw !== undefined && raw !== "") return raw;
+  return String(value);
 }

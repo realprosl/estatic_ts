@@ -97,6 +97,50 @@ export function promiseType(result: TypeName): TypeName { return genericType("Pr
 export function isPromiseType(type: TypeName): boolean { return isGenericType(type) && genericBase(type) === "Promise" && genericArguments(type).length === 1; }
 export function promiseResult(type: TypeName): TypeName { return isPromiseType(type) ? genericArguments(type)[0] : "void"; }
 
+// Un literal usado como tipo se codifica como `$lit:<tipo>=<valor>`. Es la
+// misma forma canonica que usa el frontend nativo, para que ambos pipelines
+// coincidan. El prefijo no puede colisionar con un identificador.
+export const LITERAL_TYPE_PREFIX = "$lit:";
+export function isLiteralType(type: TypeName): boolean { return type.startsWith(LITERAL_TYPE_PREFIX); }
+export function literalKind(type: TypeName): TypeName {
+  if (!isLiteralType(type)) return "";
+  const rest = type.slice(LITERAL_TYPE_PREFIX.length);
+  const split = rest.indexOf("=");
+  return split < 0 ? "" : rest.slice(0, split);
+}
+export function literalValue(type: TypeName): string {
+  if (!isLiteralType(type)) return "";
+  const rest = type.slice(LITERAL_TYPE_PREFIX.length);
+  const split = rest.indexOf("=");
+  return split < 0 ? "" : unescapeLiteralValue(rest.slice(split + 1));
+}
+export function literalType(kind: TypeName, value: string): TypeName { return `${LITERAL_TYPE_PREFIX}${kind}=${escapeLiteralValue(value)}`; }
+// El valor de un literal se escapa para que el texto canonico sobreviva a un
+// round-trip: un `|` separaria miembros de una union y un `=` separaria el
+// valor del resto del tipo.
+export function escapeLiteralValue(value: string): string {
+  let result = "";
+  for (const c of value) {
+    if (c === "\\") result += "\\\\";
+    else if (c === "|") result += "\\|";
+    else if (c === "=") result += "\\=";
+    else result += c;
+  }
+  return result;
+}
+export function unescapeLiteralValue(value: string): string {
+  let result = "";
+  for (let at = 0; at < value.length; at += 1) {
+    const c = value.charAt(at);
+    if (c === "\\" && at + 1 < value.length) {
+      const next = value.charAt(at + 1);
+      if (next === "\\" || next === "|" || next === "=") { result += next; at += 1; continue; }
+    }
+    result += c;
+  }
+  return result;
+}
+
 // Union types: sintaxis `A | B | C` en el lenguaje fuente. La representación
 // canónica es la cadena `"A | B | C"`; estas helpers dividen y testean a nivel
 // top-level (respetando (), [], <>).
@@ -104,6 +148,8 @@ export function isUnionType(type: TypeName): boolean {
   let round = 0; let square = 0; let angle = 0;
   for (let i = 0; i < type.length; i++) {
     const c = type[i];
+    // Un `\|` escapado dentro de un literal de tipo no separa miembros.
+    if (c === "\\") { i += 1; continue; }
     if (c === "(") round++; else if (c === ")") round--;
     else if (c === "[") square++; else if (c === "]") square--;
     else if (c === "<") angle++; else if (c === ">") angle--;
@@ -118,6 +164,8 @@ export function unionMembers(type: TypeName): TypeName[] {
   let round = 0; let square = 0; let angle = 0; let start = 0;
   for (let i = 0; i < type.length; i++) {
     const c = type[i];
+    // Un `\|` escapado dentro de un literal de tipo no separa miembros.
+    if (c === "\\") { i += 1; continue; }
     if (c === "(") round++; else if (c === ")") round--;
     else if (c === "[") square++; else if (c === "]") square--;
     else if (c === "<") angle++; else if (c === ">") angle--;
@@ -197,6 +245,11 @@ export function typeMatches(actual: TypeName, expected: TypeName): boolean {
     return false;
   }
   if (expected === actual) return true;
+  // Un literal de tipo se ensancha a su primitivo: `"Hola"` es un string.
+  // El caso inverso (un `string` cualquiera contra un literal concreto) lo
+  // resuelve el type-checker mirando el valor, no solo el tipo.
+  if (isLiteralType(actual) && isPrimitive(expected)) return literalKind(actual) === expected;
+  if (isLiteralType(expected) && isPrimitive(actual)) return literalKind(expected) === actual;
   if (!isUnionType(expected)) return false;
   if (isUnionType(actual)) return unionMembers(actual).every(member => unionMembers(expected).includes(member));
   return unionMembers(expected).includes(actual);

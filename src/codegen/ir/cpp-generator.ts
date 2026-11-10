@@ -21,6 +21,9 @@ export class IrCppGenerator {
     if(recordKinds.has(s.kind)||sumKinds.has(s.kind))return `ir_t${id}`;
     switch(s.kind) {
       case "scalar": return cppType(this.project.types[id]);
+      // Un literal de tipo se materializa como su primitivo: en C++ el valor
+      // concreto ya lo garantiza el checker.
+      case "literal": return this.type(s.discriminatorType);
       case "enum": return t(a[0]);
       case "ptr": case "constPtr": return `std::unique_ptr<${s.kind==="constPtr"?"const ":""}${t(a[0])}>`;
       case "ref": case "constRef": return `${s.kind==="constRef"?"const ":""}${t(a[0])}*`;
@@ -99,6 +102,8 @@ export class IrCppGenerator {
   inner(id:number):number { return ["ref","constRef","ptr","constPtr","readonly"].includes(this.shape(id).kind)?this.shape(id).arguments[0]:id; }
   literal(text:string,id:number):string {
     const s=this.shape(id);if(s.kind==="enum")return this.literal(text,s.arguments[0]);
+    // Un literal de tipo se materializa como su primitivo.
+    if(s.kind==="literal")return this.literal(text,s.discriminatorType);
     const name=this.project.types[id];
     if(name==="string")return `std::string(${JSON.stringify(text)},${Buffer.byteLength(text,"utf8")})`;
     if(name==="boolean"){if(!["true","false"].includes(text))this.fail("Constante boolean inválida");return text;}
@@ -117,6 +122,10 @@ export class IrCppGenerator {
   convert(value:string,from:number,to:number):string {
     if(from===to)return value;
     const a=this.shape(from), b=this.shape(to), T=this.type(to);
+    // Un literal de tipo se materializa como su primitivo: el valor concreto
+    // ya lo garantiza el checker, asi que la conversion es la identidad.
+    if(a.kind==="literal")return this.convert(value,a.discriminatorType,to);
+    if(b.kind==="literal")return this.convert(value,from,b.discriminatorType);
     if(["ref","constRef"].includes(a.kind)&&!["ref","constRef"].includes(b.kind))return this.convert(`(*(${value}))`,a.arguments[0],to);
     if(b.kind==="readonly")return this.convert(value,from,b.arguments[0]);
     if(this.numeric(from)&&this.numeric(to))return `ets::ir::cast<${T}>(${value})`;
@@ -334,6 +343,8 @@ export class IrCppGenerator {
   }
   printable(id:number,history:number[]=[]):boolean {
     if(history.includes(id))return false;const s=this.shape(id);
+    // Un literal de tipo se imprime como su primitivo.
+    if(s.kind==="literal")return this.printable(s.discriminatorType,[...history,id]);
     if(["scalar","enum","variant","ptr","constPtr"].includes(s.kind))return true;
     if(["ref","constRef","readonly"].includes(s.kind))return this.printable(s.arguments[0],[...history,id]);
     return sumKinds.has(s.kind)&&this.choices(id).every(t=>this.printable(t,[...history,id]));

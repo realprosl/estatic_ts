@@ -115,9 +115,11 @@ declarados.
 | T15 | P | Type predicates (`x is T`) con narrowing por el predicado. | `parser/parser.ets`, `checker/checker.ets` |
 | T16 | P | Index signatures `[key: string]: T` con semantica de diccionario. | `checker/checker.ets`, `runtime/ets_runtime.hpp` |
 | T17 | P | Tuplas variadicas (`[...T, ...U]`) y tuplas con spread (`[T, ...U]`). Relacionado con los packs de tipo. | `parser/parser.ets`, `checker/checker.ets` |
-| T18 | P | `as const`: los literales conservan su tipo exacto. Requiere tipos de literal generales, que hoy el dialecto no tiene: un literal solo es tipo en el discriminador de una variante de union. | `parser/parser.ets`, `checker/checker.ets` |
+| T18 | P | `as const`: los literales conservan su tipo exacto. La base de tipos literales ya existe (T30): un literal puede declararse en un alias `type` y un valor solo satisface el literal si coincide exactamente. Falta la sintaxis `as const` y la propagacion del tipo exacto a la expresion. | `parser/parser.ets`, `checker/checker.ets` |
 
-| G05 | P | `const` type parameters (`<const T>`): el tipo inferido se conserva como literal. Depende de los tipos de literal generales de T18. El parser ya tiene la ranura del prefijo (`...` de los packs); falta aceptar `const` y la inferencia de literal. | `parser/parser.ets`, `checker/checker.ets` |
+| T30 | I | Tipos literales en alias `type`: `type option = "Hola" | "Adios"` acepta literales de string, number y boolean. El valor concreto se comprueba en el checker y se materializa como su primitivo en C++, sin tocar el runtime. | `literalType` en `checker/types.ets`; [native literal type aliases](./parser/parser.test.ts); [checker accepts literalTypeAlias](./checker/checker.test.ts) |
+
+| G05 | P | `const` type parameters (`<const T>`): el tipo inferido se conserva como literal. Depende de T18. El parser ya tiene la ranura del prefijo (`...` de los packs); falta aceptar `const` y la inferencia de literal. | `parser/parser.ets`, `checker/checker.ets` |
 | O04 | P | Getters y setters (`get`/`set`): acceso a propiedad que ejecuta un metodo. | `parser/parser.ets`, `checker/checker.ets`, `src/codegen/cpp-generator.ts`, `ir/lower.ets` |
 | T21 | P | `===` y `!==`: igualdad estricta sin coercion. | `src/lexer/token.ts`, `bootstrap/lexer/lexer.ets`, ambos parsers y checkers |
 | T22 | P | `>>>`: unsigned shift. | `src/lexer/token.ts`, `bootstrap/lexer/lexer.ets`, ambos parsers y checkers |

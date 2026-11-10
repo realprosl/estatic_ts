@@ -33,6 +33,9 @@ export class IrCppGenerator {
     if(recordKinds.includes(s.kind)||sumKinds.includes(s.kind))return `ir_t${id}`;
     switch(s.kind) {
       case "scalar": return cppType(this.project.types[id]);
+      // Un literal de tipo se materializa como su primitivo: en C++ el valor
+      // concreto ya lo garantiza el checker.
+      case "literal": return this.cppTypeId(s.discriminatorType);
       case "enum": return this.cppTypeId(a[0]);
       case "ptr": case "constPtr": return `std::unique_ptr<${s.kind=="constPtr"?"const ":""}${this.cppTypeId(a[0])}>`;
       case "ref": case "constRef": return `${s.kind=="constRef"?"const ":""}${this.cppTypeId(a[0])}*`;
@@ -579,6 +582,8 @@ value=`${i.text}(${_cppLoop31Result.join(",")})`;}}break;
   }
   printable(id:number,history:number[]=[]):boolean {
     if(history.includes(id))return false;const s=this.shape(id);
+    // Un literal de tipo se imprime como su primitivo.
+    if(s.kind=="literal")return this.printable(s.discriminatorType,[...history,id]);
     if(["scalar","enum","variant","ptr","constPtr"].includes(s.kind))return true;
     if(["ref","constRef","readonly"].includes(s.kind))return this.printable(s.arguments[0],[...history,id]);
     {

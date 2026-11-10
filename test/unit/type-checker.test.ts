@@ -1831,3 +1831,35 @@ test("V30.12.0: tipo que no existe en ningun lado se sigue reportando (no regres
     class Holder { a: NonExistentType }
   `, "NonExistentType");
 });
+
+// Tipos literales en alias `type`. El texto canonico es `$lit:<tipo>=<valor>`,
+// el mismo que usa el frontend nativo, para que ambos pipelines coincidan.
+test("checker: acepta un alias con tipos literales", () => {
+  const { ast } = check(`type option = "Hola" | "Adios"; const s:option = "Hola"; print(s);`);
+  const alias = ast.statements[0];
+  if (alias.kind !== "TypeAliasDeclaration") throw new Error("expected TypeAliasDeclaration");
+  assert.equal(alias.type, "$lit:string=Hola | $lit:string=Adios");
+});
+
+test("checker: acepta alias literales de number y boolean", () => {
+  check(`type count = 1 | 2; const n:count = 1; print(n);`);
+  check(`type flag = true | false; const f:flag = false; print(f);`);
+});
+
+test("checker: un literal ensancha a su primitivo", () => {
+  check(`type option = "Hola" | "Adios"; const s:string = "Hola"; print(s);`);
+});
+
+test("checker: un literal de tipo acepta solo su valor exacto", () => {
+  expectError(`type option = "Hola" | "Adios"; const s:option = "Chao"; print(s);`, "no pertenece");
+  expectError(`type count = 1 | 2; const n:count = 3; print(n);`, "no pertenece");
+  expectError(`type flag = true | false; const f:flag = "true"; print(f);`, "no pertenece");
+});
+
+test("checker: el escape del valor literal sobrevive al round-trip", () => {
+  check(`type o = "a|b"; const s:o = "a|b"; print(s);`);
+  const { ast } = check(`type o = "a|b";`);
+  const alias = ast.statements[0];
+  if (alias.kind !== "TypeAliasDeclaration") throw new Error("expected TypeAliasDeclaration");
+  assert.equal(alias.type, "$lit:string=a\\|b");
+});

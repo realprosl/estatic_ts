@@ -126,6 +126,9 @@ tamaño de entrada.
   Las consultas typeof admiten rutas cualificadas y sufijos; las tuplas también
   admiten sufijos de arrays/unions. Esto amplía el parser nativo; stage 0 mantiene
   sus límites de consultas y composición.
+- Tipos literales en posición de tipo: `type option = "Hola" | "Adios"` acepta
+  literales de string, number y boolean. El texto canónico es `$lit:<tipo>=<valor>`
+  y el valor se escapa para que un `|` o un `=` no rompan la forma canónica.
 - Bloques, `if/else`, `while`, `for` clásico, `for of/in/await of`, `return`,
   `break`, `continue` y `delete` por índice. Terminadores significativos y `;`.
 - Export de declaraciones y decoradores previos a declaraciones compatibles.

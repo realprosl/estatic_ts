@@ -7,7 +7,7 @@ export function verifyIrTables(project: constRef<IrProject>): IrIssue[] {
   if (project.typeDefinitions.length != count) { issues.push(new IrIssue("IR_INVALID","Tabla de tipos incompleta",source)); return issues; }
   for (let at: number = 0; at < count; at = at+1) {
     const shape = project.typeDefinitions[at];
-    if (!["scalar","ref","constRef","ptr","constPtr","readonly","function","array","fixedArray","tuple","sum","intersection","variant","enum","union","interface","record","Optional","Result","Map","Set","Promise","pack","iterator","runtime","parameter"].includes(shape.kind)) issues.push(new IrIssue("IR_INVALID","Shape desconocida",source));
+    if (!["scalar","ref","constRef","ptr","constPtr","readonly","function","array","fixedArray","tuple","sum","intersection","variant","enum","union","interface","record","Optional","Result","Map","Set","Promise","pack","iterator","runtime","parameter","literal"].includes(shape.kind)) issues.push(new IrIssue("IR_INVALID","Shape desconocida",source));
     for (const child of shape.arguments) if (child < 0 || child >= count) issues.push(new IrIssue("IR_INVALID","Argumento de tipo inexistente",source));
     for (const child of shape.fields) if (child < 0 || child >= count) issues.push(new IrIssue("IR_INVALID","Campo de tipo inexistente",source));
     if (shape.methods.length != shape.methodTypes.length) issues.push(new IrIssue("IR_INVALID","Tabla de métodos incompleta",source));

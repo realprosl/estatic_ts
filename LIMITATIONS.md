@@ -69,6 +69,10 @@ Lista no exhaustiva — ver `README.md`, `examples/` y los nodos AST en
 - Genéricos con constraints (`<T extends X>`) y parameter packs (`<...T>`).
 - Sobrecargas de funciones libres resueltas estáticamente por firma.
 - Type aliases (`type X = …`).
+- **Tipos literales** en alias (`type option = "Hola" | "Adios"`): un literal de
+  string, number o boolean es un tipo y solo satisface el alias si el valor
+  coincide exactamente. El valor concreto se comprueba en el checker y se
+  materializa como su primitivo en C++.
 - **Unions** (`A | B | C`) e **intersecciones** (`A & B`) de tipos.
 - **Satisfies operator** (`expr satisfies T`, TS 4.9).
 - `typeof` valor y `typeof` tipo (`T typeof expr`).

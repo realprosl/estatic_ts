@@ -1142,6 +1142,26 @@ for(const[source,expected]of [
 });
 for(const source of ['type Q=typeof ns.;','type Q=typeof ns..value;','type Q=typeof ns.value[;'])test(`bootstrap parser rejects malformed type query: ${source}`,()=>assert.ok(native(source).diagnostics.length>0));
 
+// Los tipos literales codifican su valor con el prefijo `$lit:` seguido del
+// tipo y el valor separados por `=`. El prefijo no puede colisionar con un
+// identificador: el lexer solo admite letras, `_` y digitos.
+for(const[source,expected]of [
+ ['type option = "Hola" | "Adios";','$lit:string=Hola | $lit:string=Adios'],
+ ['type count = 1 | 2;','$lit:number=1 | $lit:number=2'],
+ ['type flag = true | false;','$lit:boolean=true | $lit:boolean=false'],
+ ['type only = "Hola";','$lit:string=Hola'],
+ ['type mixed = "Hola" | 1 | true;','$lit:string=Hola | $lit:number=1 | $lit:boolean=true'],
+] as const)test(`bootstrap parser accepts literal type aliases: ${source}`,()=>{
+ const result=native(source);assert.deepEqual(result.diagnostics,[]);
+ const alias=result.nodes.find(n=>n.kind==='TypeAliasDeclaration');assert.ok(alias);
+ assert.equal(alias.attributes.find(a=>a.name==='type')?.value,expected);
+});
+test('bootstrap parser: literal type alias does not cascade diagnostics',()=>{
+ const result=native('type option = "Hola" | "Adios"');
+ assert.deepEqual(result.diagnostics,[]);
+ assert.equal(result.nodes.filter(n=>n.kind==='ErrorNode').length,0);
+});
+
 for(const[source,expected]of [
  ['type F=((x:number)=>number)|string;','((number)=>number) | string'],
  ['type F=(number|string)[];','(number | string)[]'],
