@@ -13,7 +13,23 @@ on:
 permissions:
   contents: read
 jobs:
+  native-copy-regressions:
+    name: Native backend copy regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install native dependencies
+        run: sudo apt-get update && sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
+      - name: Verify canonical and seed backends remain identical
+        run: cmp src/codegen/ir/native/generator.cpp native-cpp/src/codegen/ir/native/generator.cpp
+      - name: Verify aggregate fast paths and value semantics
+        run: node --experimental-strip-types --test --test-name-pattern='native aggregate fast paths|temporary argument value semantics|temporary constructor value semantics|length snapshot semantics|length mutation ordering' bootstrap/ir/native.test.ts
   selfhost:
+    needs: native-copy-regressions
     strategy:
       fail-fast: false
       matrix:
@@ -24,10 +40,9 @@ jobs:
       ESTATIC_ANALYSIS_JOBS: '2'
       ESTATIC_PROFILE_ANALYSIS: '1'
     runs-on: ubuntu-24.04
-    # Includes a second full source analysis for the sequential/parallel pair.
-    # The job builds the C++ seed and two ETS generations, so it runs for
-    # roughly 90 minutes: the timeout needs headroom over that, otherwise a
-    # loaded runner cancels the job instead of reporting a real failure.
+    # Includes full sequential/parallel analyses after building two generations.
+    # Keep headroom, but diagnose regressions through timings.tsv; increasing
+    # this limit alone must not hide lost aggregate-copy optimizations.
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
