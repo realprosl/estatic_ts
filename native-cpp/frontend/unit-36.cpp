@@ -25,5 +25,5 @@ std::string formatContracts(const IrProject& project) {
     return ets::concat(std::string("\"effectContracts\":["), ets_join_vec(contracts, std::string(",")), std::string("],\"annotations\":["), ets_join_vec(annotations, std::string(",")), std::string("]"));
 }
 
-void ets_init_bootstrap_ir_format_contracts_3e2a3d6a() {
+void ets_init_bootstrap_ir_format_contracts_912d0d90() {
 }

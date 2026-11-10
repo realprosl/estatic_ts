@@ -22106,45 +22106,45 @@ struct IrLowering {
     }
 };
 
-void ets_init_bootstrap_driver_host_5cdd6c7b();
-void ets_init_bootstrap_analysis_options_876b7c37();
-void ets_init_bootstrap_progress_progress_0809dea3();
-void ets_init_bootstrap_parser_ast_schema_c87a5319();
-void ets_init_bootstrap_parser_parser_c7f03350();
-void ets_init_bootstrap_lexer_lexer_139a0aad();
-void ets_init_bootstrap_frontend_frontend_71598122();
-void ets_init_bootstrap_modules_platform_5ca8746a();
-void ets_init_bootstrap_modules_syntax_cache_b49b13e5();
-void ets_init_bootstrap_modules_loader_2e111b50();
-void ets_init_bootstrap_frontend_builtins_a4273184();
-void ets_init_bootstrap_binder_binder_1367c37e();
-void ets_init_bootstrap_checker_types_f1a5f64a();
-void ets_init_bootstrap_checker_model_d9eb2c5e();
-void ets_init_bootstrap_checker_module_records_e828114e();
-void ets_init_bootstrap_checker_constant_10a3e67c();
-void ets_init_bootstrap_checker_numeric_99db9de7();
-void ets_init_bootstrap_checker_comptime_14465de6();
-void ets_init_bootstrap_checker_effects_26f81858();
-void ets_init_bootstrap_checker_ownership_f6ad3ebb();
-void ets_init_bootstrap_checker_safety_88c3403a();
-void ets_init_bootstrap_checker_checker_b1f45756();
-void ets_init_bootstrap_checker_expansion_c15c8aed();
-void ets_init_bootstrap_ir_model_e1b1176c();
-void ets_init_bootstrap_ir_type_traits_55205947();
-void ets_init_bootstrap_ir_borrows_34b30c88();
-void ets_init_bootstrap_ir_contracts_946405c8();
-void ets_init_bootstrap_ir_verify_contracts_15f5a5a4();
-void ets_init_bootstrap_ir_verify_ownership_b1da2c6e();
-void ets_init_bootstrap_ir_verify_shapes_a43248b9();
-void ets_init_bootstrap_ir_verify_memory_9a5f20b0();
-void ets_init_bootstrap_ir_verify_borrows_7094b439();
-void ets_init_bootstrap_ir_verify_093cf4d0();
-void ets_init_bootstrap_ir_lower_45e87b9b();
-void ets_init_bootstrap_binder_format_2b22398f();
-void ets_init_bootstrap_ir_format_source_bf72ebe4();
-void ets_init_bootstrap_ir_format_contracts_3e2a3d6a();
-void ets_init_bootstrap_ir_format_40e08632();
-void ets_init_bootstrap_ir_demo_b3577aad();
+void ets_init_bootstrap_driver_host_862efdc1();
+void ets_init_bootstrap_analysis_options_94e9913b();
+void ets_init_bootstrap_progress_progress_0365d9f9();
+void ets_init_bootstrap_parser_ast_schema_5289349f();
+void ets_init_bootstrap_parser_parser_ac18791a();
+void ets_init_bootstrap_lexer_lexer_df27c6e7();
+void ets_init_bootstrap_frontend_frontend_7a900e75();
+void ets_init_bootstrap_modules_platform_8fe6afba();
+void ets_init_bootstrap_modules_syntax_cache_bfc8ae19();
+void ets_init_bootstrap_modules_loader_ac8191d2();
+void ets_init_bootstrap_frontend_builtins_ab6c0609();
+void ets_init_bootstrap_binder_binder_1c5e05a6();
+void ets_init_bootstrap_checker_types_71b4ed17();
+void ets_init_bootstrap_checker_model_80275e1b();
+void ets_init_bootstrap_checker_module_records_d933f8fe();
+void ets_init_bootstrap_checker_constant_4f712795();
+void ets_init_bootstrap_checker_numeric_16be9374();
+void ets_init_bootstrap_checker_comptime_0c032780();
+void ets_init_bootstrap_checker_effects_d6dfccb9();
+void ets_init_bootstrap_checker_ownership_0086a83d();
+void ets_init_bootstrap_checker_safety_19515c74();
+void ets_init_bootstrap_checker_checker_80aa1e2f();
+void ets_init_bootstrap_checker_expansion_7e0d4139();
+void ets_init_bootstrap_ir_model_7080054c();
+void ets_init_bootstrap_ir_type_traits_ecea0c3b();
+void ets_init_bootstrap_ir_borrows_2fdc1506();
+void ets_init_bootstrap_ir_contracts_141fd47f();
+void ets_init_bootstrap_ir_verify_contracts_18b4bee9();
+void ets_init_bootstrap_ir_verify_ownership_450ec18e();
+void ets_init_bootstrap_ir_verify_shapes_14484802();
+void ets_init_bootstrap_ir_verify_memory_d2465644();
+void ets_init_bootstrap_ir_verify_borrows_978ac375();
+void ets_init_bootstrap_ir_verify_0e1063ec();
+void ets_init_bootstrap_ir_lower_d645e93b();
+void ets_init_bootstrap_binder_format_427ab3d5();
+void ets_init_bootstrap_ir_format_source_2b0cfb6e();
+void ets_init_bootstrap_ir_format_contracts_912d0d90();
+void ets_init_bootstrap_ir_format_60a49266();
+void ets_init_bootstrap_ir_demo_afe9bd11();
 
 #include <runtime/ets_compiler_host.hpp>
 #include <bootstrap/modules/platform.hpp>
@@ -22277,7 +22277,7 @@ bool directories(std::string fileName) {
     return false;
 }
 
-void ets_init_bootstrap_driver_host_5cdd6c7b() {
+void ets_init_bootstrap_driver_host_862efdc1() {
 
 }
 
@@ -22329,7 +22329,7 @@ void profileEnd(std::string name, std::vector<double> before, std::string counts
     printError(ets::concat(std::string("frontend: profile "), name, std::string(" wall_ms="), numberToString((after[static_cast<std::size_t>(0.0)] - before[static_cast<std::size_t>(0.0)])), std::string(" cpu_ms="), numberToString((after[static_cast<std::size_t>(1.0)] - before[static_cast<std::size_t>(1.0)])), std::string(" self_peak_rss_kib="), numberToString(after[static_cast<std::size_t>(2.0)]), std::string(" worker_peak_rss_kib="), numberToString(after[static_cast<std::size_t>(3.0)]), ((counts == std::string("")) ? std::string("") : ets::concat(std::string(" "), counts))));
 }
 
-void ets_init_bootstrap_analysis_options_876b7c37() {
+void ets_init_bootstrap_analysis_options_94e9913b() {
 }
 
 // Generated module. Do not edit.
@@ -22366,7 +22366,7 @@ void progressSummary(std::string cpp, std::string binary) {
     progress.summary(cpp, binary);
 }
 
-void ets_init_bootstrap_progress_progress_0809dea3() {
+void ets_init_bootstrap_progress_progress_0365d9f9() {
     progress = Progress{}.constructor();
 }
 
@@ -23382,7 +23382,7 @@ bool isExpressionNodeKind(NodeKind kind) {
     return ets_includes_vec<NodeKind>(std::vector<NodeKind>{NodeKind::ArrayLiteralExpression, NodeKind::ArrowFunctionExpression, NodeKind::AsExpression, NodeKind::AssignmentExpression, NodeKind::AwaitExpression, NodeKind::BinaryExpression, NodeKind::CallExpression, NodeKind::CompoundAssignmentExpression, NodeKind::GenericIdentifierExpression, NodeKind::IdentifierExpression, NodeKind::IndexExpression, NodeKind::LiteralExpression, NodeKind::MemberCallExpression, NodeKind::MemberExpression, NodeKind::NamedArgumentExpression, NodeKind::NewExpression, NodeKind::ObjectLiteralExpression, NodeKind::RawCppExpression, NodeKind::SatisfiesExpression, NodeKind::TemplateLiteralExpression, NodeKind::TernaryExpression, NodeKind::UnaryExpression}, kind);
 }
 
-void ets_init_bootstrap_parser_ast_schema_c87a5319() {
+void ets_init_bootstrap_parser_ast_schema_5289349f() {
 
 
 
@@ -23489,7 +23489,7 @@ std::string inspectAst(std::vector<ParserToken> tokens) {
     return parser.inspect();
 }
 
-void ets_init_bootstrap_parser_parser_c7f03350() {
+void ets_init_bootstrap_parser_parser_ac18791a() {
 }
 
 // Generated module. Do not edit.
@@ -23549,7 +23549,7 @@ std::string inspectTokens(std::string source) {
     return ets::concat(output, std::string("]}"));
 }
 
-void ets_init_bootstrap_lexer_lexer_139a0aad() {
+void ets_init_bootstrap_lexer_lexer_df27c6e7() {
 }
 
 // Generated module. Do not edit.
@@ -23657,7 +23657,7 @@ std::string inspectSource(std::string source, std::string file) {
     return formatSource(result);
 }
 
-void ets_init_bootstrap_frontend_frontend_71598122() {
+void ets_init_bootstrap_frontend_frontend_7a900e75() {
 }
 
 // Generated module. Do not edit.
@@ -23692,7 +23692,7 @@ std::vector<std::string> readSnapshot(std::string file) {
     return std::vector<std::string>();
 }
 
-void ets_init_bootstrap_modules_platform_5ca8746a() {
+void ets_init_bootstrap_modules_platform_8fe6afba() {
 
 }
 
@@ -23876,7 +23876,7 @@ double sourceUnits(std::string text) {
     return units;
 }
 
-void ets_init_bootstrap_modules_syntax_cache_b49b13e5() {
+void ets_init_bootstrap_modules_syntax_cache_bfc8ae19() {
 }
 
 // Generated module. Do not edit.
@@ -24002,7 +24002,7 @@ std::string formatGraph(ModuleGraph graph) {
     return ets_join_vec(parts, std::string(""));
 }
 
-void ets_init_bootstrap_modules_loader_2e111b50() {
+void ets_init_bootstrap_modules_loader_ac8191d2() {
 }
 
 // Generated module. Do not edit.
@@ -24667,7 +24667,7 @@ std::vector<std::string> nativeBuiltinTypes() {
     return std::vector<std::string>{std::string("FsEvent"), std::string("FsWatcher"), std::string("HttpClientResponse"), std::string("Promise"), std::string("Request"), std::string("Response"), std::string("Server"), std::string("Timer")};
 }
 
-void ets_init_bootstrap_frontend_builtins_a4273184() {
+void ets_init_bootstrap_frontend_builtins_ab6c0609() {
 }
 
 // Generated module. Do not edit.
@@ -24714,7 +24714,7 @@ std::vector<std::string> bindingBuiltinTypes() {
     return names;
 }
 
-void ets_init_bootstrap_binder_binder_1367c37e() {
+void ets_init_bootstrap_binder_binder_1c5e05a6() {
 }
 
 // Generated module. Do not edit.
@@ -25165,7 +25165,7 @@ std::vector<std::string> genericArguments(std::string text) {
     return splitTypes(::ets::string_slice(text, (::ets::string_length(base) + 1.0), (::ets::string_length(text) - 1.0)), std::string(","));
 }
 
-void ets_init_bootstrap_checker_types_f1a5f64a() {
+void ets_init_bootstrap_checker_types_71b4ed17() {
 }
 
 // Generated module. Do not edit.
@@ -25174,7 +25174,7 @@ double argumentParameter(const ets_import_8_TypedFile& file, double node, double
     return ((file.argumentParameters[static_cast<std::size_t>(node)] >= 0.0) ? file.argumentParameters[static_cast<std::size_t>(node)] : position);
 }
 
-void ets_init_bootstrap_checker_model_d9eb2c5e() {
+void ets_init_bootstrap_checker_model_80275e1b() {
 }
 
 // Generated module. Do not edit.
@@ -25207,7 +25207,7 @@ ets_import_9_CheckResult attachModuleRecords(ModuleGraph graph, BindingResult bi
     return builder.run();
 }
 
-void ets_init_bootstrap_checker_module_records_e828114e() {
+void ets_init_bootstrap_checker_module_records_d933f8fe() {
 }
 
 // Generated module. Do not edit.
@@ -25582,7 +25582,7 @@ ConstantValue constantNumeric(ConstantValue left, ConstantValue right, std::stri
     return constantCast(constantNumber(value), name);
 }
 
-void ets_init_bootstrap_checker_constant_10a3e67c() {
+void ets_init_bootstrap_checker_constant_4f712795() {
 }
 
 // Generated module. Do not edit.
@@ -25759,7 +25759,7 @@ std::string nativeBinaryPromotion(std::string left, std::string right, std::stri
     return std::string("u32");
 }
 
-void ets_init_bootstrap_checker_numeric_99db9de7() {
+void ets_init_bootstrap_checker_numeric_16be9374() {
 }
 
 // Generated module. Do not edit.
@@ -25769,12 +25769,12 @@ ets_import_9_CheckResult evaluateNativeComptime(ModuleGraph graph, BindingResult
     return evaluator.run();
 }
 
-void ets_init_bootstrap_checker_comptime_14465de6() {
+void ets_init_bootstrap_checker_comptime_0c032780() {
 }
 
 // Generated module. Do not edit.
 
-void ets_init_bootstrap_checker_effects_26f81858() {
+void ets_init_bootstrap_checker_effects_d6dfccb9() {
 }
 
 // Generated module. Do not edit.
@@ -25929,7 +25929,7 @@ std::string resourceSubstitution(std::string pattern, std::string actual, std::s
     return inferred;
 }
 
-void ets_init_bootstrap_checker_ownership_f6ad3ebb() {
+void ets_init_bootstrap_checker_ownership_0086a83d() {
 }
 
 // Generated module. Do not edit.
@@ -25940,7 +25940,7 @@ void validateSafety(ModuleGraph graph, BindingResult binding, ets_import_9_Check
     (result = analyzer.run());
 }
 
-void ets_init_bootstrap_checker_safety_88c3403a() {
+void ets_init_bootstrap_checker_safety_19515c74() {
 }
 
 // Generated module. Do not edit.
@@ -25955,7 +25955,7 @@ ets_import_9_CheckResult checkProject(ModuleGraph graph, BindingResult binding, 
     return attachModuleRecords(graph, binding, checked);
 }
 
-void ets_init_bootstrap_checker_checker_b1f45756() {
+void ets_init_bootstrap_checker_checker_80aa1e2f() {
 }
 
 // Generated module. Do not edit.
@@ -25970,12 +25970,12 @@ FrontendProject analyzeProject(ModuleGraph graph, bool trace) {
     return FrontendProject{}.constructor(expanded, binding, checkProject(expanded, binding, trace));
 }
 
-void ets_init_bootstrap_checker_expansion_c15c8aed() {
+void ets_init_bootstrap_checker_expansion_7e0d4139() {
 }
 
 // Generated module. Do not edit.
 
-void ets_init_bootstrap_ir_model_e1b1176c() {
+void ets_init_bootstrap_ir_model_7080054c() {
 }
 
 // Generated module. Do not edit.
@@ -26057,7 +26057,7 @@ bool irNumericConstant(std::string raw, bool floating) {
     return ((value - value) == 0.0);
 }
 
-void ets_init_bootstrap_ir_type_traits_55205947() {
+void ets_init_bootstrap_ir_type_traits_ecea0c3b() {
 }
 
 // Generated module. Do not edit.
@@ -26171,7 +26171,7 @@ IrProject finishBorrows(IrProject project) {
     return project;
 }
 
-void ets_init_bootstrap_ir_borrows_34b30c88() {
+void ets_init_bootstrap_ir_borrows_2fdc1506() {
 }
 
 // Generated module. Do not edit.
@@ -26230,7 +26230,7 @@ IrProject preserveContracts(const ModuleGraph& graph, const ets_import_9_CheckRe
     return project;
 }
 
-void ets_init_bootstrap_ir_contracts_946405c8() {
+void ets_init_bootstrap_ir_contracts_141fd47f() {
 }
 
 // Generated module. Do not edit.
@@ -26556,7 +26556,7 @@ std::vector<IrIssue> verifyModuleContracts(const IrProject& project) {
     return issues;
 }
 
-void ets_init_bootstrap_ir_verify_contracts_15f5a5a4() {
+void ets_init_bootstrap_ir_verify_contracts_18b4bee9() {
 }
 
 // Generated module. Do not edit.
@@ -26719,7 +26719,7 @@ std::vector<IrIssue> verifyOwnershipRoutes(const IrProject& project, const IrFun
     return issues;
 }
 
-void ets_init_bootstrap_ir_verify_ownership_b1da2c6e() {
+void ets_init_bootstrap_ir_verify_ownership_450ec18e() {
 }
 
 // Generated module. Do not edit.
@@ -27030,7 +27030,7 @@ std::string verifyShapeInstruction(const IrProject& project, const IrFunction& f
     return std::string("Opcode de shape desconocido");
 }
 
-void ets_init_bootstrap_ir_verify_shapes_a43248b9() {
+void ets_init_bootstrap_ir_verify_shapes_14484802() {
 }
 
 // Generated module. Do not edit.
@@ -27067,7 +27067,7 @@ bool irInitialPlace(const IrFunction& f, double place) {
     return ((f.places[static_cast<std::size_t>(root)].parameter || (f.places[static_cast<std::size_t>(root)].global >= 0.0)) || (f.places[static_cast<std::size_t>(root)].kind == std::string("capture")));
 }
 
-void ets_init_bootstrap_ir_verify_memory_9a5f20b0() {
+void ets_init_bootstrap_ir_verify_memory_d2465644() {
 }
 
 // Generated module. Do not edit.
@@ -27217,7 +27217,7 @@ std::vector<IrIssue> verifyBorrowRoutes(const IrProject& project, IrFunction f) 
     return issues;
 }
 
-void ets_init_bootstrap_ir_verify_borrows_7094b439() {
+void ets_init_bootstrap_ir_verify_borrows_978ac375() {
 }
 
 // Generated module. Do not edit.
@@ -27229,7 +27229,7 @@ std::vector<IrIssue> verifyIr(IrProject project) {
     return verifier.run();
 }
 
-void ets_init_bootstrap_ir_verify_093cf4d0() {
+void ets_init_bootstrap_ir_verify_0e1063ec() {
 }
 
 // Generated module. Do not edit.
@@ -27277,7 +27277,7 @@ IrProject lowerProject(ModuleGraph graph, BindingResult binding, ets_import_9_Ch
     return lowering.run(trace);
 }
 
-void ets_init_bootstrap_ir_lower_45e87b9b() {
+void ets_init_bootstrap_ir_lower_d645e93b() {
 }
 
 // Generated module. Do not edit.
@@ -27345,7 +27345,7 @@ std::string formatBinding(BindingResult result, ModuleGraph graph) {
     return ets_join_vec(output, std::string(""));
 }
 
-void ets_init_bootstrap_binder_format_2b22398f() {
+void ets_init_bootstrap_binder_format_427ab3d5() {
 }
 
 // Generated module. Do not edit.
@@ -27354,7 +27354,7 @@ std::string formatIrSource(IrSource source) {
     return ets::concat(std::string("{\"moduleId\":"), quoteSource(source.moduleId), std::string(",\"generatedId\":"), quoteSource(source.generatedId), std::string(",\"generatedStart\":"), numberToString(source.generatedStart), std::string(",\"generatedEnd\":"), numberToString(source.generatedEnd), std::string(",\"sourceHash\":"), quoteSource(source.sourceHash), std::string(",\"file\":"), quoteSource(source.file), std::string(",\"node\":"), numberToString(source.node), std::string(",\"start\":"), numberToString(source.start), std::string(",\"end\":"), numberToString(source.end), std::string("}"));
 }
 
-void ets_init_bootstrap_ir_format_source_bf72ebe4() {
+void ets_init_bootstrap_ir_format_source_2b0cfb6e() {
 }
 
 // Generated module. Do not edit.
@@ -27383,7 +27383,7 @@ std::string formatContracts(const IrProject& project) {
     return ets::concat(std::string("\"effectContracts\":["), ets_join_vec(contracts, std::string(",")), std::string("],\"annotations\":["), ets_join_vec(annotations, std::string(",")), std::string("]"));
 }
 
-void ets_init_bootstrap_ir_format_contracts_3e2a3d6a() {
+void ets_init_bootstrap_ir_format_contracts_912d0d90() {
 }
 
 // Generated module. Do not edit.
@@ -27491,7 +27491,7 @@ std::string formatIr(IrProject project) {
     return ets_join_vec(output, std::string(""));
 }
 
-void ets_init_bootstrap_ir_format_40e08632() {
+void ets_init_bootstrap_ir_format_60a49266() {
 }
 
 // Generated module. Do not edit.
@@ -27585,51 +27585,51 @@ static inline void runIr() {
     }
 }
 
-void ets_init_bootstrap_ir_demo_b3577aad() {
+void ets_init_bootstrap_ir_demo_afe9bd11() {
     runIr();
 }
 
 int main(int argc, char** argv) {
     ets_argc = argc;
     ets_argv = argv;
-    ets_init_bootstrap_driver_host_5cdd6c7b();
-    ets_init_bootstrap_analysis_options_876b7c37();
-    ets_init_bootstrap_progress_progress_0809dea3();
-    ets_init_bootstrap_parser_ast_schema_c87a5319();
-    ets_init_bootstrap_parser_parser_c7f03350();
-    ets_init_bootstrap_lexer_lexer_139a0aad();
-    ets_init_bootstrap_frontend_frontend_71598122();
-    ets_init_bootstrap_modules_platform_5ca8746a();
-    ets_init_bootstrap_modules_syntax_cache_b49b13e5();
-    ets_init_bootstrap_modules_loader_2e111b50();
-    ets_init_bootstrap_frontend_builtins_a4273184();
-    ets_init_bootstrap_binder_binder_1367c37e();
-    ets_init_bootstrap_checker_types_f1a5f64a();
-    ets_init_bootstrap_checker_model_d9eb2c5e();
-    ets_init_bootstrap_checker_module_records_e828114e();
-    ets_init_bootstrap_checker_constant_10a3e67c();
-    ets_init_bootstrap_checker_numeric_99db9de7();
-    ets_init_bootstrap_checker_comptime_14465de6();
-    ets_init_bootstrap_checker_effects_26f81858();
-    ets_init_bootstrap_checker_ownership_f6ad3ebb();
-    ets_init_bootstrap_checker_safety_88c3403a();
-    ets_init_bootstrap_checker_checker_b1f45756();
-    ets_init_bootstrap_checker_expansion_c15c8aed();
-    ets_init_bootstrap_ir_model_e1b1176c();
-    ets_init_bootstrap_ir_type_traits_55205947();
-    ets_init_bootstrap_ir_borrows_34b30c88();
-    ets_init_bootstrap_ir_contracts_946405c8();
-    ets_init_bootstrap_ir_verify_contracts_15f5a5a4();
-    ets_init_bootstrap_ir_verify_ownership_b1da2c6e();
-    ets_init_bootstrap_ir_verify_shapes_a43248b9();
-    ets_init_bootstrap_ir_verify_memory_9a5f20b0();
-    ets_init_bootstrap_ir_verify_borrows_7094b439();
-    ets_init_bootstrap_ir_verify_093cf4d0();
-    ets_init_bootstrap_ir_lower_45e87b9b();
-    ets_init_bootstrap_binder_format_2b22398f();
-    ets_init_bootstrap_ir_format_source_bf72ebe4();
-    ets_init_bootstrap_ir_format_contracts_3e2a3d6a();
-    ets_init_bootstrap_ir_format_40e08632();
-    ets_init_bootstrap_ir_demo_b3577aad();
+    ets_init_bootstrap_driver_host_862efdc1();
+    ets_init_bootstrap_analysis_options_94e9913b();
+    ets_init_bootstrap_progress_progress_0365d9f9();
+    ets_init_bootstrap_parser_ast_schema_5289349f();
+    ets_init_bootstrap_parser_parser_ac18791a();
+    ets_init_bootstrap_lexer_lexer_df27c6e7();
+    ets_init_bootstrap_frontend_frontend_7a900e75();
+    ets_init_bootstrap_modules_platform_8fe6afba();
+    ets_init_bootstrap_modules_syntax_cache_bfc8ae19();
+    ets_init_bootstrap_modules_loader_ac8191d2();
+    ets_init_bootstrap_frontend_builtins_ab6c0609();
+    ets_init_bootstrap_binder_binder_1c5e05a6();
+    ets_init_bootstrap_checker_types_71b4ed17();
+    ets_init_bootstrap_checker_model_80275e1b();
+    ets_init_bootstrap_checker_module_records_d933f8fe();
+    ets_init_bootstrap_checker_constant_4f712795();
+    ets_init_bootstrap_checker_numeric_16be9374();
+    ets_init_bootstrap_checker_comptime_0c032780();
+    ets_init_bootstrap_checker_effects_d6dfccb9();
+    ets_init_bootstrap_checker_ownership_0086a83d();
+    ets_init_bootstrap_checker_safety_19515c74();
+    ets_init_bootstrap_checker_checker_80aa1e2f();
+    ets_init_bootstrap_checker_expansion_7e0d4139();
+    ets_init_bootstrap_ir_model_7080054c();
+    ets_init_bootstrap_ir_type_traits_ecea0c3b();
+    ets_init_bootstrap_ir_borrows_2fdc1506();
+    ets_init_bootstrap_ir_contracts_141fd47f();
+    ets_init_bootstrap_ir_verify_contracts_18b4bee9();
+    ets_init_bootstrap_ir_verify_ownership_450ec18e();
+    ets_init_bootstrap_ir_verify_shapes_14484802();
+    ets_init_bootstrap_ir_verify_memory_d2465644();
+    ets_init_bootstrap_ir_verify_borrows_978ac375();
+    ets_init_bootstrap_ir_verify_0e1063ec();
+    ets_init_bootstrap_ir_lower_d645e93b();
+    ets_init_bootstrap_binder_format_427ab3d5();
+    ets_init_bootstrap_ir_format_source_2b0cfb6e();
+    ets_init_bootstrap_ir_format_contracts_912d0d90();
+    ets_init_bootstrap_ir_format_60a49266();
+    ets_init_bootstrap_ir_demo_afe9bd11();
     return 0;
 }

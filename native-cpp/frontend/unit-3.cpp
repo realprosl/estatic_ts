@@ -1011,7 +1011,7 @@ bool isExpressionNodeKind(NodeKind kind) {
     return ets_includes_vec<NodeKind>(std::vector<NodeKind>{NodeKind::ArrayLiteralExpression, NodeKind::ArrowFunctionExpression, NodeKind::AsExpression, NodeKind::AssignmentExpression, NodeKind::AwaitExpression, NodeKind::BinaryExpression, NodeKind::CallExpression, NodeKind::CompoundAssignmentExpression, NodeKind::GenericIdentifierExpression, NodeKind::IdentifierExpression, NodeKind::IndexExpression, NodeKind::LiteralExpression, NodeKind::MemberCallExpression, NodeKind::MemberExpression, NodeKind::NamedArgumentExpression, NodeKind::NewExpression, NodeKind::ObjectLiteralExpression, NodeKind::RawCppExpression, NodeKind::SatisfiesExpression, NodeKind::TemplateLiteralExpression, NodeKind::TernaryExpression, NodeKind::UnaryExpression}, kind);
 }
 
-void ets_init_bootstrap_parser_ast_schema_c87a5319() {
+void ets_init_bootstrap_parser_ast_schema_5289349f() {
 
 
 

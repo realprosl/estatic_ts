@@ -11,5 +11,5 @@ ets_import_9_CheckResult checkProject(ModuleGraph graph, BindingResult binding, 
     return attachModuleRecords(graph, binding, checked);
 }
 
-void ets_init_bootstrap_checker_checker_b1f45756() {
+void ets_init_bootstrap_checker_checker_80aa1e2f() {
 }

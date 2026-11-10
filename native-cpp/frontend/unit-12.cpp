@@ -447,5 +447,5 @@ std::vector<std::string> genericArguments(std::string text) {
     return splitTypes(::ets::string_slice(text, (::ets::string_length(base) + 1.0), (::ets::string_length(text) - 1.0)), std::string(","));
 }
 
-void ets_init_bootstrap_checker_types_f1a5f64a() {
+void ets_init_bootstrap_checker_types_71b4ed17() {
 }

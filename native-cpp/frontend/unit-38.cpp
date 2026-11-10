@@ -90,51 +90,51 @@ static inline void runIr() {
     }
 }
 
-void ets_init_bootstrap_ir_demo_b3577aad() {
+void ets_init_bootstrap_ir_demo_afe9bd11() {
     runIr();
 }
 
 int main(int argc, char** argv) {
     ets_argc = argc;
     ets_argv = argv;
-    ets_init_bootstrap_driver_host_5cdd6c7b();
-    ets_init_bootstrap_analysis_options_876b7c37();
-    ets_init_bootstrap_progress_progress_0809dea3();
-    ets_init_bootstrap_parser_ast_schema_c87a5319();
-    ets_init_bootstrap_parser_parser_c7f03350();
-    ets_init_bootstrap_lexer_lexer_139a0aad();
-    ets_init_bootstrap_frontend_frontend_71598122();
-    ets_init_bootstrap_modules_platform_5ca8746a();
-    ets_init_bootstrap_modules_syntax_cache_b49b13e5();
-    ets_init_bootstrap_modules_loader_2e111b50();
-    ets_init_bootstrap_frontend_builtins_a4273184();
-    ets_init_bootstrap_binder_binder_1367c37e();
-    ets_init_bootstrap_checker_types_f1a5f64a();
-    ets_init_bootstrap_checker_model_d9eb2c5e();
-    ets_init_bootstrap_checker_module_records_e828114e();
-    ets_init_bootstrap_checker_constant_10a3e67c();
-    ets_init_bootstrap_checker_numeric_99db9de7();
-    ets_init_bootstrap_checker_comptime_14465de6();
-    ets_init_bootstrap_checker_effects_26f81858();
-    ets_init_bootstrap_checker_ownership_f6ad3ebb();
-    ets_init_bootstrap_checker_safety_88c3403a();
-    ets_init_bootstrap_checker_checker_b1f45756();
-    ets_init_bootstrap_checker_expansion_c15c8aed();
-    ets_init_bootstrap_ir_model_e1b1176c();
-    ets_init_bootstrap_ir_type_traits_55205947();
-    ets_init_bootstrap_ir_borrows_34b30c88();
-    ets_init_bootstrap_ir_contracts_946405c8();
-    ets_init_bootstrap_ir_verify_contracts_15f5a5a4();
-    ets_init_bootstrap_ir_verify_ownership_b1da2c6e();
-    ets_init_bootstrap_ir_verify_shapes_a43248b9();
-    ets_init_bootstrap_ir_verify_memory_9a5f20b0();
-    ets_init_bootstrap_ir_verify_borrows_7094b439();
-    ets_init_bootstrap_ir_verify_093cf4d0();
-    ets_init_bootstrap_ir_lower_45e87b9b();
-    ets_init_bootstrap_binder_format_2b22398f();
-    ets_init_bootstrap_ir_format_source_bf72ebe4();
-    ets_init_bootstrap_ir_format_contracts_3e2a3d6a();
-    ets_init_bootstrap_ir_format_40e08632();
-    ets_init_bootstrap_ir_demo_b3577aad();
+    ets_init_bootstrap_driver_host_862efdc1();
+    ets_init_bootstrap_analysis_options_94e9913b();
+    ets_init_bootstrap_progress_progress_0365d9f9();
+    ets_init_bootstrap_parser_ast_schema_5289349f();
+    ets_init_bootstrap_parser_parser_ac18791a();
+    ets_init_bootstrap_lexer_lexer_df27c6e7();
+    ets_init_bootstrap_frontend_frontend_7a900e75();
+    ets_init_bootstrap_modules_platform_8fe6afba();
+    ets_init_bootstrap_modules_syntax_cache_bfc8ae19();
+    ets_init_bootstrap_modules_loader_ac8191d2();
+    ets_init_bootstrap_frontend_builtins_ab6c0609();
+    ets_init_bootstrap_binder_binder_1c5e05a6();
+    ets_init_bootstrap_checker_types_71b4ed17();
+    ets_init_bootstrap_checker_model_80275e1b();
+    ets_init_bootstrap_checker_module_records_d933f8fe();
+    ets_init_bootstrap_checker_constant_4f712795();
+    ets_init_bootstrap_checker_numeric_16be9374();
+    ets_init_bootstrap_checker_comptime_0c032780();
+    ets_init_bootstrap_checker_effects_d6dfccb9();
+    ets_init_bootstrap_checker_ownership_0086a83d();
+    ets_init_bootstrap_checker_safety_19515c74();
+    ets_init_bootstrap_checker_checker_80aa1e2f();
+    ets_init_bootstrap_checker_expansion_7e0d4139();
+    ets_init_bootstrap_ir_model_7080054c();
+    ets_init_bootstrap_ir_type_traits_ecea0c3b();
+    ets_init_bootstrap_ir_borrows_2fdc1506();
+    ets_init_bootstrap_ir_contracts_141fd47f();
+    ets_init_bootstrap_ir_verify_contracts_18b4bee9();
+    ets_init_bootstrap_ir_verify_ownership_450ec18e();
+    ets_init_bootstrap_ir_verify_shapes_14484802();
+    ets_init_bootstrap_ir_verify_memory_d2465644();
+    ets_init_bootstrap_ir_verify_borrows_978ac375();
+    ets_init_bootstrap_ir_verify_0e1063ec();
+    ets_init_bootstrap_ir_lower_d645e93b();
+    ets_init_bootstrap_binder_format_427ab3d5();
+    ets_init_bootstrap_ir_format_source_2b0cfb6e();
+    ets_init_bootstrap_ir_format_contracts_912d0d90();
+    ets_init_bootstrap_ir_format_60a49266();
+    ets_init_bootstrap_ir_demo_afe9bd11();
     return 0;
 }

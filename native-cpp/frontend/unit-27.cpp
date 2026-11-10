@@ -322,5 +322,5 @@ std::vector<IrIssue> verifyModuleContracts(const IrProject& project) {
     return issues;
 }
 
-void ets_init_bootstrap_ir_verify_contracts_15f5a5a4() {
+void ets_init_bootstrap_ir_verify_contracts_18b4bee9() {
 }

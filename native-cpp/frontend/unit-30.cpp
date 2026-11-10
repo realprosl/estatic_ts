@@ -33,5 +33,5 @@ bool irInitialPlace(const IrFunction& f, double place) {
     return ((f.places[static_cast<std::size_t>(root)].parameter || (f.places[static_cast<std::size_t>(root)].global >= 0.0)) || (f.places[static_cast<std::size_t>(root)].kind == std::string("capture")));
 }
 
-void ets_init_bootstrap_ir_verify_memory_9a5f20b0() {
+void ets_init_bootstrap_ir_verify_memory_d2465644() {
 }

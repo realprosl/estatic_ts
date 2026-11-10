@@ -122,5 +122,5 @@ std::string formatGraph(ModuleGraph graph) {
     return ets_join_vec(parts, std::string(""));
 }
 
-void ets_init_bootstrap_modules_loader_2e111b50() {
+void ets_init_bootstrap_modules_loader_ac8191d2() {
 }

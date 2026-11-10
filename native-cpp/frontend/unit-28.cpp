@@ -159,5 +159,5 @@ std::vector<IrIssue> verifyOwnershipRoutes(const IrProject& project, const IrFun
     return issues;
 }
 
-void ets_init_bootstrap_ir_verify_ownership_b1da2c6e() {
+void ets_init_bootstrap_ir_verify_ownership_450ec18e() {
 }
