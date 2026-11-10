@@ -25,7 +25,10 @@ jobs:
       ESTATIC_PROFILE_ANALYSIS: '1'
     runs-on: ubuntu-24.04
     # Includes a second full source analysis for the sequential/parallel pair.
-    timeout-minutes: 90
+    # The job builds the C++ seed and two ETS generations, so it runs for
+    # roughly 90 minutes: the timeout needs headroom over that, otherwise a
+    # loaded runner cancels the job instead of reporting a real failure.
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
       - name: Install native dependencies
