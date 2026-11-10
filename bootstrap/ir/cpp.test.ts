@@ -116,18 +116,24 @@ for(const [name,source,expected] of [
 ] as const)test(`IR C++ executes ${name}`,()=>assert.equal(execute(source),expected));
 test("IR C++ executes readonly Node owner-array visit callbacks",()=>{
  const source=`class Node {
-  title:string;
-  page:number;
-  children:ptr<Node>[];
-  getClass():string{return "Node";}
+  private children:ptr<Node>[];
+  constructor(private title:string,private className:string,private page:i16){this.children=[];}
+  add(child:ptr<Node>):void{this.children.push(move(child));}
+  getClass():string{return this.className;}
   getTitle():string{return this.title;}
-  getPage():number{return this.page;}
+  getPage():i16{return this.page;}
   visit(callback:(node:constRef<Node>)=>void):void{
    callback(this);
-   this.children.forEach(callback);
+   this.children.forEach((child:constRef<Node>):void=>callback(child));
   }
  }
- const document=new Node("Documento",1,[new Node("Seccion",2,[])]);
+ function make():ptr<Node>{
+  let root:ptr<Node>=new Node("Documento","Node",1);
+  let child:ptr<Node>=new Node("Seccion","Node",2);
+  root.add(move(child));
+  return move(root);
+ }
+ let document:ptr<Node>=make();
  document.visit((node:constRef<Node>):void=>{
   if(node.getClass()=="Node"&&node.getPage()>0)print(node.getTitle());
  });`;
