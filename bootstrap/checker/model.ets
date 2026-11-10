@@ -59,11 +59,12 @@ export class NativeModuleRecord {
 export function readonlyMethodReceiver(binding: constRef<BindingResult>, summaries: constRef<EffectSummary[]>, captures: constRef<NativeCapture[]>, module: number, node: number): boolean {
   // Reference captures currently carry mutable receiver handles in the IR.
   // Do not silently reinterpret such a closure as a readonly capture.
-  for (const capture of captures) {
-    const symbol = binding.symbols[capture.symbol];
+  for (let at: number = 0; at < captures.length; at = at+1) {
+    const symbol = binding.symbols[captures[at].symbol];
     if (symbol.kind == "receiver" && symbol.module == module && symbol.scope >= 0 && binding.scopes[symbol.scope].node == node) return false;
   }
-  for (const summary of summaries) if (summary.module == module && summary.node == node && summary.phase == "body") {
+  for (let at: number = 0; at < summaries.length; at = at+1) if (summaries[at].module == module && summaries[at].node == node && summaries[at].phase == "body") {
+    const summary = summaries[at];
     if (summary.unknown || summary.external || summary.invokes.length > 0) return false;
     for (const sid of summary.writes.concat(summary.moves).concat(summary.retains)) {
       if (sid < 0 || sid >= binding.symbols.length) return false;
