@@ -504,7 +504,7 @@ export class IrLowering {
     const previousModule: number = this.module; const previousFunction: number = this.currentFunction;
     let signature: string = this.resolved(wanted); this.module = owner;
     const n = this.node(id); const pattern: string = this.checked.files[owner].types[id];
-    const receiverMode: string = receiver != "" && n.get(AttributeKind.Name) != "constructor" && readonlyMethodReceiver(this.binding,this.checked.effects,this.checked.captures,owner,id) ? "constRef" : "ref";
+    const receiverMode: string = receiver != "" && n.get(AttributeKind.Name) != "constructor" && readonlyMethodReceiver(this.binding,this.checked,owner,id) ? "constRef" : "ref";
     const receiverText: string = receiver == "" ? "" : receiverMode+"<"+memoryValue(receiver)+">";
     let from: string[] = []; let to: string[] = [];
     if (previousFunction >= 0) { from = this.result.functions[previousFunction].substitutionFrom; to = this.result.functions[previousFunction].substitutionTo; }

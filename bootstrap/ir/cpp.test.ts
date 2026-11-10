@@ -128,12 +128,12 @@ test("IR C++ executes readonly Node owner-array visit callbacks",()=>{
   }
  }
  function make():ptr<Node>{
-  let root:ptr<Node>=new Node("Documento","Node",1);
-  let child:ptr<Node>=new Node("Seccion","Node",2);
+  let root:ptr<Node> = new Node("Documento","Node",1);
+  let child:ptr<Node> = new Node("Seccion","Node",2);
   root.add(move(child));
   return move(root);
  }
- let document:ptr<Node>=make();
+ let document:ptr<Node> = make();
  document.visit((node:constRef<Node>):void=>{
   if(node.getClass()=="Node"&&node.getPage()>0)print(node.getTitle());
  });`;

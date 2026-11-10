@@ -381,7 +381,7 @@ export class SafetyAnalyzer {
     if (["Map","Set"].includes(genericBase(memoryValue(this.result.files[module].types[bindingChild(n,EdgeRole.Object)])))) return ["set","add","delete","clear"].includes(n.get(AttributeKind.Method));
     const target: number = this.result.files[module].selected[id]; const targetModule: number = this.result.files[module].selectedModules[id];
     if (target < 0 || targetModule < 0) return false;
-    return !readonlyMethodReceiver(this.binding,this.effects.summaries,this.result.captures,targetModule,target);
+    return !readonlyMethodReceiver(this.binding,this.result,targetModule,target);
   }
   within(scope: number, ancestor: number): boolean {
     let at: number = scope; while (at >= 0) { if (at == ancestor) return true; at = this.binding.scopes[at].parent; } return false;

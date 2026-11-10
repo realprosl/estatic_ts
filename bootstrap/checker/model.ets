@@ -56,15 +56,16 @@ export class NativeModuleRecord {
 // Receiver capability is intrinsic to the method, not the first caller's
 // mutability. Use the transitive body summary rather than treating every
 // this.otherMethod() as a write. Unknown/symbolic effects stay conservative.
-export function readonlyMethodReceiver(binding: constRef<BindingResult>, summaries: constRef<EffectSummary[]>, captures: constRef<NativeCapture[]>, module: number, node: number): boolean {
+export function readonlyMethodReceiver(binding: constRef<BindingResult>, checked: constRef<CheckResult>, module: number, node: number): boolean {
+  // Borrow the containing record: stage zero cannot index constRef<T[]>.
   // Reference captures currently carry mutable receiver handles in the IR.
   // Do not silently reinterpret such a closure as a readonly capture.
-  for (let at: number = 0; at < captures.length; at = at+1) {
-    const symbol = binding.symbols[captures[at].symbol];
+  for (let at: number = 0; at < checked.captures.length; at = at+1) {
+    const symbol = binding.symbols[checked.captures[at].symbol];
     if (symbol.kind == "receiver" && symbol.module == module && symbol.scope >= 0 && binding.scopes[symbol.scope].node == node) return false;
   }
-  for (let at: number = 0; at < summaries.length; at = at+1) if (summaries[at].module == module && summaries[at].node == node && summaries[at].phase == "body") {
-    const summary = summaries[at];
+  for (let at: number = 0; at < checked.effects.length; at = at+1) if (checked.effects[at].module == module && checked.effects[at].node == node && checked.effects[at].phase == "body") {
+    const summary = checked.effects[at];
     if (summary.unknown || summary.external || summary.invokes.length > 0) return false;
     for (const sid of summary.writes.concat(summary.moves).concat(summary.retains)) {
       if (sid < 0 || sid >= binding.symbols.length) return false;
