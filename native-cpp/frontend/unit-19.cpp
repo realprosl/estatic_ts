@@ -1,15 +1,15 @@
 // Generated module. Do not edit.
 #include "estatic_common.hpp"
 
-bool resourceType(const ModuleGraph& graph, const BindingResult& binding, const ets_import_7_CheckResult& checked, std::string text, std::vector<std::string> history) {
+bool resourceType(const ModuleGraph& graph, const BindingResult& binding, const ets_import_9_CheckResult& checked, std::string text, std::vector<std::string> history) {
     if ((ownedType(text) || (text == std::string("Server")))) {
         return true;
     }
     if ((borrowedType(text) || (functionClose(text) >= 0.0))) {
         return false;
     }
-    if ((ets_import_0_memoryMode(text) != std::string(""))) {
-        return resourceType(graph, binding, checked, ets_import_2_memoryInner(text), history);
+    if ((ets_import_2_memoryMode(text) != std::string(""))) {
+        return resourceType(graph, binding, checked, ets_import_4_memoryInner(text), history);
     }
     if ((genericBase(text) == std::string("Promise"))) {
         return true;
@@ -114,8 +114,8 @@ std::string resourceSubstitution(std::string pattern, std::string actual, std::s
     if ((::ets::string_endsWith(pattern, std::string("[]")) && ::ets::string_endsWith(actual, std::string("[]")))) {
         return resourceSubstitution(semanticElement(pattern), semanticElement(actual), token);
     }
-    if (((ets_import_0_memoryMode(pattern) != std::string("")) && (ets_import_0_memoryMode(pattern) == ets_import_0_memoryMode(actual)))) {
-        return resourceSubstitution(ets_import_2_memoryInner(pattern), ets_import_2_memoryInner(actual), token);
+    if (((ets_import_2_memoryMode(pattern) != std::string("")) && (ets_import_2_memoryMode(pattern) == ets_import_2_memoryMode(actual)))) {
+        return resourceSubstitution(ets_import_4_memoryInner(pattern), ets_import_4_memoryInner(actual), token);
     }
     std::vector<std::string> patterns = std::vector<std::string>();
     std::vector<std::string> values = std::vector<std::string>();

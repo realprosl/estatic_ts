@@ -109,6 +109,32 @@ for(const [name,source,expected] of [
  ["detached task drain",'async function f():Promise<void>{await sleep(1);print("done");}spawn(f());',"done\n"],
  ["Result",'function f():Result<number>{return ok(4);}const r=f();if(r.isOk())print(r.value());',"4\n"],
 ] as const)test(`IR C++ executes ${name}`,()=>assert.equal(execute(source),expected));
+test("IR C++ native aggregate fast paths survive seed synchronization",{skip:!process.env.ESTATIC_NATIVE_CODEGEN},()=>{
+ const project=ir('function count(xs:number[]):number{return xs.length;}function forward(xs:number[]):number{return count(xs);}let xs=[1,2];const n=forward(xs);print(n);print(xs.length);');
+ const {cpp}=generateCppFromIr(project);
+ // A size query must read the original place, not materialize an aggregate
+ // snapshot first. Reintroducing that load makes compiler analysis quadratic.
+ let fused=0,stores=0,calls=0;
+ for(const f of project.functions){
+  const uses=f.values.map(()=>0);
+  for(const b of f.blocks){if(b.value>=0)uses[b.value]++;for(const i of b.instructions)for(const operand of i.operands)uses[operand]++;}
+  for(const p of f.places)if(p.index>=0)uses[p.index]++;
+  for(const value of f.frameValues)uses[value]++;
+  for(const b of f.blocks)for(let at=0;at<b.instructions.length;at++){
+   const i=b.instructions[at],next=b.instructions[at+1];
+   if(i.op==='load'&&i.result>=0&&uses[i.result]===1&&i.place>=0&&f.places[i.place].kind!=='index'&&next?.op==='property'&&['length','size'].includes(next.text)&&next.operands[0]===i.result){
+    assert.ok(cpp.includes(`v${next.result}.set(static_cast<double>((`),'length/size must bypass the aggregate load');fused++;
+   }
+   if(i.op==='store'&&i.operands.length===1&&uses[i.operands[0]]===1&&at>0&&b.instructions[at-1].result===i.operands[0]){
+    assert.ok(cpp.includes(`.set(v${i.operands[0]}.take());`),'adjacent single-use stores must move the temporary');stores++;
+   }
+   if(i.op==='call')for(const value of i.operands)if(uses[value]===1&&b.instructions.slice(0,at).some(def=>def.result===value)&&project.typeDefinitions[f.values[value]].kind==='array'){
+    assert.ok(cpp.includes(`v${value}.take()`),'single-use aggregate call arguments must move the temporary');calls++;
+   }
+  }
+ }
+ assert.ok(fused>0&&stores>0&&calls>0,'fixture must exercise all three fast paths');
+});
 test("IR C++ preserves escaped and template literal newlines",()=>{
  assert.equal(execute('print("A\\nB");print(\`C\\nD\`);'),"A\nB\nC\nD\n");
  assert.equal(execute('print(\`C\nD\`);'),"C\nD\n");

@@ -121,6 +121,74 @@ bool primitiveType(std::string text) {
     return (numericType(text) || ets_includes_vec<std::string>(std::vector<std::string>{std::string("string"), std::string("boolean"), std::string("void")}, text));
 }
 
+std::string literalTypePrefix() {
+    return std::string("$lit:");
+}
+
+bool literalType(std::string text) {
+    return ::ets::string_startsWith(text, literalTypePrefix());
+}
+
+std::string literalKind(std::string text) {
+    if ((!literalType(text))) {
+        return std::string("");
+    }
+    const std::string rest = ::ets::string_slice(text, ::ets::string_length(literalTypePrefix()), ::ets::string_length(text));
+    const double split = ::ets::string_indexOf(rest, std::string("="), 0.0);
+    return ((split < 0.0) ? std::string("") : ::ets::string_slice(rest, 0.0, split));
+}
+
+std::string literalValue(std::string text) {
+    if ((!literalType(text))) {
+        return std::string("");
+    }
+    const std::string rest = ::ets::string_slice(text, ::ets::string_length(literalTypePrefix()), ::ets::string_length(text));
+    const double split = ::ets::string_indexOf(rest, std::string("="), 0.0);
+    return ((split < 0.0) ? std::string("") : unescapeLiteralValue(::ets::string_slice(rest, (split + 1.0), ::ets::string_length(rest))));
+}
+
+std::string literalTypeText(std::string kind, std::string value) {
+    return ets::concat(literalTypePrefix(), kind, std::string("="), ets_import_1_escapeLiteralValue(value));
+}
+
+std::string ets_import_1_escapeLiteralValue(std::string value) {
+    std::string result = std::string("");
+    for (double at = 0.0; (at < ::ets::string_length(value)); (at = (at + 1.0))) {
+        const std::string c = ::ets::string_charAt(value, at);
+        if ((c == std::string("\\"))) {
+            (result = ets::concat(result, std::string("\\\\")));
+        } else {
+            if ((c == std::string("|"))) {
+                (result = ets::concat(result, std::string("\\|")));
+            } else {
+                if ((c == std::string("="))) {
+                    (result = ets::concat(result, std::string("\\=")));
+                } else {
+                    (result = ets::concat(result, c));
+                }
+            }
+        }
+    }
+    return result;
+}
+
+std::string unescapeLiteralValue(std::string value) {
+    std::string result = std::string("");
+    for (double at = 0.0; (at < ::ets::string_length(value)); (at = (at + 1.0))) {
+        const std::string c = ::ets::string_charAt(value, at);
+        if (((c == std::string("\\")) && ((at + 1.0) < ::ets::string_length(value)))) {
+            const std::string next = ::ets::string_charAt(value, (at + 1.0));
+            if ((((next == std::string("\\")) || (next == std::string("|"))) || (next == std::string("=")))) {
+                (result = ets::concat(result, next));
+                (at = (at + 1.0));
+                continue;
+            }
+        }
+        (result = ets::concat(result, c));
+    }
+    return result;
+}
+
 double canonicalSymbol(std::string text) {
     const double open = ::ets::string_indexOf(text, std::string("<"), 0.0);
     const double end = ((open >= 0.0) ? open : ::ets::string_length(text));
@@ -148,19 +216,19 @@ bool typeCompatible(std::string actual, std::string expected) {
     if (((actual == expected) || (numericType(actual) && numericType(expected)))) {
         return true;
     }
-    const std::string a = ets_import_0_memoryMode(actual);
-    const std::string e = ets_import_0_memoryMode(expected);
+    const std::string a = ets_import_2_memoryMode(actual);
+    const std::string e = ets_import_2_memoryMode(expected);
     if ((e == std::string("readonly"))) {
-        return typeCompatible(ets_import_2_memoryInner(actual), ets_import_2_memoryInner(expected));
+        return typeCompatible(ets_import_4_memoryInner(actual), ets_import_4_memoryInner(expected));
     }
     if (((e == std::string("ref")) || (e == std::string("constRef")))) {
         if (((e == std::string("ref")) && readonlyType(actual))) {
             return false;
         }
-        return ((actual == ets_import_2_memoryInner(expected)) || (ets_import_4_memoryValue(actual) == ets_import_2_memoryInner(expected)));
+        return ((actual == ets_import_4_memoryInner(expected)) || (ets_import_6_memoryValue(actual) == ets_import_4_memoryInner(expected)));
     }
     if (((a == std::string("ref")) || (a == std::string("constRef")))) {
-        return typeCompatible(ets_import_2_memoryInner(actual), expected);
+        return typeCompatible(ets_import_4_memoryInner(actual), expected);
     }
     const std::vector<std::string> unions = splitTypes(expected, std::string("|"));
     if ((unions.size() > 1.0)) {
@@ -208,7 +276,7 @@ std::string replaceType(std::string text, std::string from, std::string to) {
     return result;
 }
 
-std::string ets_import_0_memoryMode(std::string text) {
+std::string ets_import_2_memoryMode(std::string text) {
     for (const auto& name : std::vector<std::string>{std::string("ptr"), std::string("constPtr"), std::string("ref"), std::string("constRef"), std::string("readonly")}) {
         if ((::ets::string_startsWith(text, ets::concat(name, std::string("<"))) && ::ets::string_endsWith(text, std::string(">")))) {
             double depth = 0.0;
@@ -228,29 +296,29 @@ std::string ets_import_0_memoryMode(std::string text) {
     return std::string("");
 }
 
-std::string ets_import_2_memoryInner(std::string text) {
-    const std::string mode = ets_import_0_memoryMode(text);
+std::string ets_import_4_memoryInner(std::string text) {
+    const std::string mode = ets_import_2_memoryMode(text);
     return ((mode == std::string("")) ? text : ::ets::string_slice(text, (::ets::string_length(mode) + 1.0), (::ets::string_length(text) - 1.0)));
 }
 
-std::string ets_import_4_memoryValue(std::string text) {
+std::string ets_import_6_memoryValue(std::string text) {
     std::string result = text;
-    while ((ets_import_0_memoryMode(result) != std::string(""))) {
-        (result = ets_import_2_memoryInner(result));
+    while ((ets_import_2_memoryMode(result) != std::string(""))) {
+        (result = ets_import_4_memoryInner(result));
     }
     return result;
 }
 
 bool ownedType(std::string text) {
-    return ((ets_import_0_memoryMode(text) == std::string("ptr")) || (ets_import_0_memoryMode(text) == std::string("constPtr")));
+    return ((ets_import_2_memoryMode(text) == std::string("ptr")) || (ets_import_2_memoryMode(text) == std::string("constPtr")));
 }
 
 bool borrowedType(std::string text) {
-    return ((ets_import_0_memoryMode(text) == std::string("ref")) || (ets_import_0_memoryMode(text) == std::string("constRef")));
+    return ((ets_import_2_memoryMode(text) == std::string("ref")) || (ets_import_2_memoryMode(text) == std::string("constRef")));
 }
 
 bool readonlyType(std::string text) {
-    return ets_includes_vec<std::string>(std::vector<std::string>{std::string("readonly"), std::string("constRef"), std::string("constPtr")}, ets_import_0_memoryMode(text));
+    return ets_includes_vec<std::string>(std::vector<std::string>{std::string("readonly"), std::string("constRef"), std::string("constPtr")}, ets_import_2_memoryMode(text));
 }
 
 std::string aggregateElement(std::string element) {

@@ -1,6 +1,27 @@
 // Generated module. Do not edit.
 #include "estatic_common.hpp"
 
+std::string ets_import_0_escapeLiteralValue(std::string value) {
+    std::string result = std::string("");
+    for (double at = 0.0; (at < ::ets::string_length(value)); (at = (at + 1.0))) {
+        const std::string c = ::ets::string_charAt(value, at);
+        if ((c == std::string("\\"))) {
+            (result = ets::concat(result, std::string("\\\\")));
+        } else {
+            if ((c == std::string("|"))) {
+                (result = ets::concat(result, std::string("\\|")));
+            } else {
+                if ((c == std::string("="))) {
+                    (result = ets::concat(result, std::string("\\=")));
+                } else {
+                    (result = ets::concat(result, c));
+                }
+            }
+        }
+    }
+    return result;
+}
+
 double nodeBegin(AstNode node) {
     return ((node.analysisStart >= 0.0) ? node.analysisStart : node.start.offset);
 }

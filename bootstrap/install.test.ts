@@ -11,7 +11,11 @@ import { buildIrFrontend } from "./ir/cpp.ts";
 const temporary=()=>{mkdirSync(join(root,"build/test-tmp"),{recursive:true});return mkdtempSync(join(root,"build/test-tmp/install-"));};
 // El instalador es un script de shell: no usa Node. Se invoca con bash y con
 // Node envenenado en el PATH para comprobar que no lo necesita.
-const install=(prefix:string,extra:string[]=[])=>spawnSync("bash",[join(root,"install.sh"),"--prefix",prefix,...extra],{cwd:root,encoding:"utf8",timeout:600000});
+//
+// Por defecto se instala solo la semilla (`--seed-only`): la generacion 2
+// (compilar bootstrap/ con la semilla) cuesta varios minutos por
+// instalacion y hay un test dedicado que la cubre.
+const install=(prefix:string,extra:string[]=[])=>spawnSync("bash",[join(root,"install.sh"),"--prefix",prefix,"--seed-only",...extra],{cwd:root,encoding:"utf8",timeout:600000});
 
 test("runtime cache invalidates headers and ABI flags and recovers corrupted archives",async()=>{
  const dir=temporary();try{
@@ -137,7 +141,7 @@ test("install compiles the C++ seed without Node",async()=>{
   const poison=join(dir,"without-node"),sentinel=join(dir,"node-was-used");mkdirSync(poison);
   for(const executable of ["node","nodejs","npm"]){const path=join(poison,executable);writeFileSync(path,`#!/bin/sh\necho forbidden >> '${sentinel}'\nexit 99\n`);chmodSync(path,0o755);}
   const env={...process.env,PATH:poison+":"+process.env.PATH,NODE:"/missing/node"};
-  const p=spawnSync("bash",[join(root,"install.sh"),"--prefix",prefix],{cwd:root,encoding:"utf8",timeout:900000,env});
+  const p=spawnSync("bash",[join(root,"install.sh"),"--prefix",prefix,"--seed-only"],{cwd:root,encoding:"utf8",timeout:900000,env});
   assert.equal(p.status,0,p.stderr+p.stdout);
   assert(!existsSync(sentinel),"install.sh must never execute Node");
   const bin=join(prefix,"bin/etsc");assert(existsSync(bin));
@@ -173,5 +177,25 @@ for(const owned of [true,false])test(`install migrates estc and preserves unrela
   assert(existsSync(join(dir,"bin/etsc")));assert.equal(existsSync(legacy),!owned);
   if(!owned)assert.equal(readFileSync(legacy,"utf8"),"old native driver");
   const version=spawnSync(join(dir,"bin/etsc"),["--version"],{encoding:"utf8"});assert.equal(version.status,0,version.stderr);assert.match(version.stdout,/^etsc /);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test("install builds bootstrap/ with the seed and publishes that executable",async()=>{
+ // La cadena completa: la semilla compila bootstrap/ y el ejecutable
+ // resultante se publica como `etsc`. Asi el compilador instalado refleja
+ // el codigo actual de bootstrap/ y no el snapshot de la semilla.
+ const dir=temporary();const prefix=join(dir,"prefix");
+ try{
+  const p=spawnSync("bash",[join(root,"install.sh"),"--prefix",prefix],{cwd:root,encoding:"utf8",timeout:3600000});
+  assert.equal(p.status,0,p.stderr+p.stdout);
+  const bin=join(prefix,"bin/etsc");assert(existsSync(bin));
+  const home=realpathSync(join(prefix,"lib/estc/current"));
+  // La generacion 2 produce el compilador bootstrap ETS, no la semilla.
+  const version=spawnSync(bin,["--version"],{encoding:"utf8",env:{...process.env,ESTC_ROOT:home}});
+  assert.equal(version.status,0,version.stderr);
+  assert.match(version.stdout,/etsc bootstrap ETS/);
+  // El runtime y las librerias que lo acompanan siguen en la distribucion.
+  assert(existsSync(join(home,"native/frontend")));
+  assert(existsSync(join(home,"runtime")));
  }finally{rmSync(dir,{recursive:true,force:true});}
 });

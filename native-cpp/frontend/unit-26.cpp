@@ -1,7 +1,7 @@
 // Generated module. Do not edit.
 #include "estatic_common.hpp"
 
-static inline IrSource contractSource(const ModuleGraph& graph, const ets_import_7_CheckResult& checked, double module, double id) {
+static inline IrSource contractSource(const ModuleGraph& graph, const ets_import_9_CheckResult& checked, double module, double id) {
     const auto n = graph.modules[static_cast<std::size_t>(module)].cached.result.ast.nodes[static_cast<std::size_t>(id)];
     const auto record = checked.moduleRecords[static_cast<std::size_t>(module)];
     auto source = IrSource{}.constructor(record.id, record.sourceHash, graph.modules[static_cast<std::size_t>(module)].file, id, n.start.offset, n.end.endOffset);
@@ -13,7 +13,7 @@ static inline IrSource contractSource(const ModuleGraph& graph, const ets_import
     return source;
 }
 
-static inline std::vector<std::string> contractSymbols(const ets_import_7_CheckResult& checked, std::vector<double> symbols) {
+static inline std::vector<std::string> contractSymbols(const ets_import_9_CheckResult& checked, std::vector<double> symbols) {
     std::vector<std::string> result = std::vector<std::string>();
     for (const auto& symbol : symbols) {
         ets_push_vec<std::string>(result, (((symbol >= 0.0) && (symbol < checked.symbolIds.size())) ? checked.symbolIds[static_cast<std::size_t>(symbol)] : std::string("unknown")));
@@ -21,7 +21,7 @@ static inline std::vector<std::string> contractSymbols(const ets_import_7_CheckR
     return result;
 }
 
-IrProject preserveContracts(const ModuleGraph& graph, const ets_import_7_CheckResult& checked, IrProject project) {
+IrProject preserveContracts(const ModuleGraph& graph, const ets_import_9_CheckResult& checked, IrProject project) {
     for (const auto& effect : checked.effects) {
         auto result = IrEffectContract{}.constructor(contractSource(graph, checked, effect.module, effect.node));
         (result.phase = effect.phase);

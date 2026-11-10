@@ -23,6 +23,9 @@ public:
  S type(int id){const auto& s=shape(id);const auto& a=s.arguments;const S& k=s.kind;
   if(record(id)||sum(id))return "ir_t"+n(id);
   if(k=="scalar"){auto it=nativeTypes.find(p.types.at(id));if(it==nativeTypes.end())return fail("Tipo escalar inválido");return it->second;}
+  // Un literal de tipo se materializa como su primitivo: en C++ el valor
+  // concreto ya lo garantiza el checker.
+  if(k=="literal")return type(s.discriminatorType);
   if(k=="enum"||k=="readonly")return type(a.at(0));
   if(k=="ptr"||k=="constPtr")return "std::unique_ptr<"+S(k=="constPtr"?"const ":"")+type(a.at(0))+">";
   if(k=="ref"||k=="constRef")return S(k=="constRef"?"const ":"")+type(a.at(0))+"*";
@@ -54,7 +57,10 @@ public:
  }
  S elementType(int id){return p.types.at(id)=="boolean"?"ets::ir::Boolean":type(id);}
  S interfaceVariant(int id){V<S> items;for(int t:shape(id).variants)items.push_back("ets::ir::Box<"+type(t)+">");return "std::variant<"+(items.empty()?S("std::monostate"):join(items))+">";}
- S literal(S text,int id){auto& s=shape(id);if(s.kind=="enum")return literal(text,s.arguments.at(0));const auto& name=p.types.at(id);
+ S literal(S text,int id){auto& s=shape(id);if(s.kind=="enum")return literal(text,s.arguments.at(0));
+  // Un literal de tipo se materializa como su primitivo.
+  if(s.kind=="literal")return literal(text,s.discriminatorType);
+  const auto& name=p.types.at(id);
   if(name=="string")return "std::string("+quote(text)+","+std::to_string(text.size())+")";
   if(name=="boolean"){if(!in(text,{"true","false"}))return fail("Constante boolean inválida");return text;}
   text.erase(std::remove(text.begin(),text.end(),'_'),text.end());
@@ -70,6 +76,10 @@ public:
   return "static_cast<"+type(id)+">("+text+")";
  }
  S convert(const S& value,int from,int to){if(from==to)return value;const auto& a=shape(from);const auto& b=shape(to);S T=type(to);
+  // Un literal de tipo se materializa como su primitivo: el valor concreto
+  // ya lo garantiza el checker, asi que la conversion es la identidad.
+  if(a.kind=="literal")return convert(value,a.discriminatorType,to);
+  if(b.kind=="literal")return convert(value,from,b.discriminatorType);
   if(in(a.kind,{"ref","constRef"})&&!in(b.kind,{"ref","constRef"}))return convert("(*("+value+"))",a.arguments.at(0),to);
   if(b.kind=="readonly")return convert(value,from,b.arguments.at(0));
   if(numeric(from)&&numeric(to))return "ets::ir::cast<"+T+">("+value+")";
@@ -123,7 +133,8 @@ public:
  S signature(const Function&,int);
  S body(const Function&,int);
  S declarations();
- bool printable(int id,V<int> history={})const{if(has(history,id))return false;const auto& s=shape(id);if(in(s.kind,{"scalar","enum","variant","ptr","constPtr"}))return true;if(in(s.kind,{"ref","constRef","readonly"})){history.push_back(id);return printable(s.arguments.at(0),history);}if(sum(id)){history.push_back(id);for(int t:choices(id))if(!printable(t,history))return false;return true;}return false;}
+ bool printable(int id,V<int> history={})const{if(has(history,id))return false;const auto& s=shape(id);// Un literal de tipo se imprime como su primitivo.
+  if(s.kind=="literal"){history.push_back(id);return printable(s.discriminatorType,history);}if(in(s.kind,{"scalar","enum","variant","ptr","constPtr"}))return true;if(in(s.kind,{"ref","constRef","readonly"})){history.push_back(id);return printable(s.arguments.at(0),history);}if(sum(id)){history.push_back(id);for(int t:choices(id))if(!printable(t,history))return false;return true;}return false;}
  S output(const S& value,int id){const auto& s=shape(id);if(in(s.kind,{"ref","constRef"}))return output("(*("+value+"))",s.arguments.at(0));if(!printable(id))return fail("Tipo sin contrato de impresión C++: "+p.types.at(id));if(in(s.kind,{"ptr","constPtr"}))return "("+value+").get()";return s.numericKind=="integer"&&s.bits==8?"static_cast<int>("+value+")":value;}
  const Instruction& definition(const Function& f,int value)const{for(auto& b:f.blocks)for(auto& i:b.instructions)if(i.result==value)return i;throw Error("Temporal sin definición",f.source);}
  void validate();Result generate();
@@ -198,7 +209,9 @@ S Generator::body(const Function& f,int id){V<S> out;int parameter=0;
  for(int k=0;k<int(f.values.size());k++)out.push_back("ets::ir::Slot<"+type(f.values[k])+"> v"+n(k)+";");
  for(int k=0;k<int(f.blocks.size());k++){auto& b=f.blocks[k];if(b.terminator=="suspend"){int t=shape(f.values.at(b.value)).arguments.at(0);if(p.types.at(t)!="void")out.push_back("ets::ir::Slot<"+type(t)+"> await"+n(k)+";");}}
  for(int k=0;k<int(f.places.size());k++)if(f.places[k].parameter){const bool borrowed=in(shape(f.places[k].typeId).kind,{"ref","constRef"});out.push_back("p"+n(k)+".set("+(borrowed?"std::addressof(a":"std::move(a")+n(parameter++)+"));");}out.push_back("goto b0;");
- // Seed compatibility: keep the same conservative size fusion as the ETS backend.
+ // Keep canonical backend and seed aligned: querying length/size must not
+ // copy the entire aggregate. Consume only single-use temporaries whose
+ // definitions precede their use in the same block.
  V<int> uses(f.values.size(),0),definitionBlocks(f.values.size(),-1),definitionPositions(f.values.size(),-1);
  for(int block=0;block<int(f.blocks.size());block++)for(int position=0;position<int(f.blocks[block].instructions.size());position++){int result=f.blocks[block].instructions[position].result;if(result>=0){definitionBlocks.at(result)=block;definitionPositions.at(result)=position;}}
  for(const auto& block:f.blocks){if(block.value>=0)uses.at(block.value)++;for(const auto& op:block.instructions)for(int value:op.operands)uses.at(value)++;}

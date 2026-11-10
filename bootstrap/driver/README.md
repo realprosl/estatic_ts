@@ -59,11 +59,9 @@ ambas generaciones:
 
 ```sh
 bash scripts/regenerate-ets-native.sh
-bash native-cpp/build-ets.sh
 ```
 
-El snapshot generado queda en `native-cpp/compiler/unity.cpp`. La segunda orden
-construye `native-cpp/native/etsc-ets` usando únicamente C++ y el soporte de
-`native-cpp/`. No copia fuentes ETS a ese directorio ni sobrescribe la semilla
-anterior. El snapshot se genera de forma explícita; no se incluye como un segundo
-árbol de fuentes manuales.
+El snapshot generado queda en `native-cpp/compiler/unity.cpp`. La orden construye
+`native-cpp/native/etsc-ets` usando únicamente C++ y el soporte de `native-cpp/`. No
+copia fuentes ETS a ese directorio ni sobrescribe la semilla anterior. El snapshot se
+genera de forma explícita; no se incluye como un segundo árbol de fuentes manuales.
