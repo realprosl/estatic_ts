@@ -44,8 +44,8 @@ export class IrVerifier {
     while (place >= 0 && place < f.places.length && remaining > 0) {
       const p = f.places[place];
       if (p.kind == "deref" && p.base >= 0 && p.base < f.places.length) {
-        const type: number = f.places[p.base].typeId;
-        if (this.typeId(type) && ["constRef","constPtr","readonly"].includes(this.project.typeDefinitions[type].kind)) return true;
+        const baseType: number = f.places[p.base].typeId;
+        if (this.typeId(baseType) && ["constRef","constPtr","readonly"].includes(this.project.typeDefinitions[baseType].kind)) return true;
       }
       place = p.base; remaining = remaining-1;
     }
