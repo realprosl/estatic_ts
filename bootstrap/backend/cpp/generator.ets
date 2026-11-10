@@ -515,7 +515,7 @@ const concrete:number=_cppLoop2Input[k];
           const d=this.dispatch(receiver,concrete,i.text,i.signature);
           if(d.callee<0)this.fail("Dispatch de interfaz incompleto",i.source);
           const target=this.project.functions[d.callee];
-          // El receptor implícito es un `ref<T>` → llega a la firma como `T&`.
+          // El receptor prestado llega como `T&` o `const T&`; box.get() preserva const.
           let args=[`box.get()`];
           for(let n=1;n<i.operands.length;n=n+1){
             const formal=target.parameterTypes[n];
@@ -826,7 +826,7 @@ if(s.methods.length!=s.methodTypes.length||!_cppLoop42Result)this.fail("Tabla de
     let dispatchKeys=new Set<string>();
     for(const d of p.dispatches) {
       const target=p.functions[d.callee];const key=`${d.interfaceType}:${d.concreteType}:${d.name}:${d.signature}`;
-      if(!this.validType(d.interfaceType)||!this.validType(d.concreteType)||!this.validType(d.signature)||d.callee<0||d.callee>=p.functions.length||!this.isInterface(d.interfaceType)||!this.shape(d.interfaceType).variants.includes(d.concreteType)||this.shape(d.signature).kind!="function"||target.parameterTypes.length!=this.shape(d.signature).arguments.length||this.shape(target.parameterTypes[0]).kind!="ref"||this.shape(target.parameterTypes[0]).arguments[0]!=d.concreteType||dispatchKeys.has(key))this.fail("Contrato de dispatch de interfaz inválido");
+      if(!this.validType(d.interfaceType)||!this.validType(d.concreteType)||!this.validType(d.signature)||d.callee<0||d.callee>=p.functions.length||!this.isInterface(d.interfaceType)||!this.shape(d.interfaceType).variants.includes(d.concreteType)||this.shape(d.signature).kind!="function"||target.parameterTypes.length!=this.shape(d.signature).arguments.length||!["ref","constRef"].includes(this.shape(target.parameterTypes[0]).kind)||this.shape(target.parameterTypes[0]).arguments[0]!=d.concreteType||dispatchKeys.has(key))this.fail("Contrato de dispatch de interfaz inválido");
       dispatchKeys.add(key);
     }
     for(const f of p.functions) {

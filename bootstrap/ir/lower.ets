@@ -2,7 +2,7 @@ import {profileBegin,profileEnd} from "../analysis/options";
 import { IrDispatch, IrCleanupScope, IrRuntimeContract, IrType, IrSource, IrPlace, IrInstruction, IrBlock, IrFunction, IrModule, IrIssue, IrProject, IrAnnotation } from "./model";
 import { ModuleGraph } from "../modules/loader";
 import { BindingResult, bindingChild } from "../binder/binder";
-import { CheckResult } from "../checker/model";
+import { CheckResult, readonlyMethodReceiver } from "../checker/model";
 import { functionParams, functionReturn, primitiveType, functionClose, numericType, semanticElement, semanticTuple, splitTypes, joinTypes, fixedArraySize, fixedArrayElement, canonicalSymbol, genericBase, genericArguments, replaceType, literalType, literalKind, literalValue } from "../checker/types";
 import { AstNode } from "../parser/parser";
 import { NodeKind, EdgeRole, AttributeKind, nodeKindName } from "../parser/ast-schema";
@@ -504,6 +504,8 @@ export class IrLowering {
     const previousModule: number = this.module; const previousFunction: number = this.currentFunction;
     let signature: string = this.resolved(wanted); this.module = owner;
     const n = this.node(id); const pattern: string = this.checked.files[owner].types[id];
+    const receiverMode: string = receiver != "" && n.get(AttributeKind.Name) != "constructor" && readonlyMethodReceiver(this.binding,this.checked.effects,this.checked.captures,owner,id) ? "constRef" : "ref";
+    const receiverText: string = receiver == "" ? "" : receiverMode+"<"+memoryValue(receiver)+">";
     let from: string[] = []; let to: string[] = [];
     if (previousFunction >= 0) { from = this.result.functions[previousFunction].substitutionFrom; to = this.result.functions[previousFunction].substitutionTo; }
     for (let context: number = 0; context < this.contextFrom.length; context = context+1) {
@@ -522,7 +524,7 @@ export class IrLowering {
       if (inferred == "" || inferred == "!conflicting-inference") { this.fail(id,"Instancia genérica sin sustitución concreta: "+token); }
       else { let at: number = -1; for (let p: number = 0; p < from.length; p = p+1) if (from[p] == token) at = p; if (at < 0) { from.push(token); to.push(inferred); } else to[at] = inferred; }
     }
-    for (let f: number = 0; f < this.functionNodes.length; f = f+1) if (this.functionNodes[f] == id && this.functionModules[f] == owner && this.result.functions[f].signature == signature && this.result.functions[f].substitutionFrom.join(",") == from.join(",") && this.result.functions[f].substitutionTo.join(",") == to.join(",") && (receiver == "" ? this.result.functions[f].receiverType == -1 : this.result.functions[f].receiverType >= 0 && this.result.types[this.result.functions[f].receiverType] == "ref<"+memoryValue(receiver)+">")) { this.module = previousModule; return f; }
+    for (let f: number = 0; f < this.functionNodes.length; f = f+1) if (this.functionNodes[f] == id && this.functionModules[f] == owner && this.result.functions[f].signature == signature && this.result.functions[f].substitutionFrom.join(",") == from.join(",") && this.result.functions[f].substitutionTo.join(",") == to.join(",") && (receiver == "" ? this.result.functions[f].receiverType == -1 : this.result.functions[f].receiverType >= 0 && this.result.types[this.result.functions[f].receiverType] == receiverText)) { this.module = previousModule; return f; }
     const symbol: number = this.binding.files[owner].declarations[id];
     let f = new IrFunction(n.get(AttributeKind.Name),symbol >= 0 ? this.checked.symbolIds[symbol] : this.checked.moduleRecords[owner].id+":closure:"+numberToString(id),-1,this.source(id));
     f.signature = signature; f.substitutionFrom = from; f.substitutionTo = to;
@@ -531,7 +533,7 @@ export class IrLowering {
     this.result.functions[index].asynchronous = n.get(AttributeKind.Async) == "true" || n.get(AttributeKind.IsAsync) == "true";
     if (this.result.functions[index].asynchronous && genericBase(functionReturn(signature)) == "Promise") this.result.functions[index].bodyReturns = this.typeId(genericArguments(functionReturn(signature))[0],id);
     for (let p: number = 0; p < functionParams(signature).length; p = p+1) { let parameter: string = functionParams(signature)[p]; if (parameter.startsWith("...")) parameter = parameter.slice(3,parameter.length); { const pendingPush = this.typeId(parameter,id); this.result.functions[index].parameterTypes.push(pendingPush); } }
-    if (receiver != "") { this.result.functions[index].receiverType = this.typeId("ref<"+memoryValue(receiver)+">",id); this.result.functions[index].parameterTypes = [this.result.functions[index].receiverType].concat(this.result.functions[index].parameterTypes); }
+    if (receiver != "") { this.result.functions[index].receiverType = this.typeId(receiverText,id); this.result.functions[index].parameterTypes = [this.result.functions[index].receiverType].concat(this.result.functions[index].parameterTypes); }
     for (const capture of this.checked.captures) if (capture.module == owner && capture.closure == id && !this.globalSymbols.includes(capture.symbol)) {
       const captured = this.binding.symbols[capture.symbol]; if (captured.kind == "FunctionDeclaration") continue;
       this.result.functions[index].captureSymbols.push(this.checked.symbolIds[capture.symbol]);
@@ -629,7 +631,11 @@ export class IrLowering {
       while (this.argumentSymbols.length > saved) { this.argumentSymbols.pop(); this.argumentValues.pop(); }
       operands = ordered;
     }
-    if (callee >= 0 && this.result.functions[callee].receiverType >= 0) operands = [this.emit("address",this.result.functions[callee].receiverType,[],receiver,-1,"",id)].concat(operands);
+    if (callee >= 0 && this.result.functions[callee].receiverType >= 0) {
+      const receiverType: number = this.result.functions[callee].receiverType;
+      const mode: string = this.result.typeDefinitions[receiverType].kind;
+      operands = [this.emit(mode == "constRef" ? "borrow" : "address",receiverType,[],receiver,-1,mode == "constRef" ? "constRef" : "",id)].concat(operands);
+    }
     if (callee >= 0 && this.result.functions[callee].captureTypes.length > 0) { callable = this.closureValue(owner,selected,signature,id); callee = -1; }
     if (callable >= 0) operands = [callable].concat(operands);
     const result: number = this.emit(escape ? "backendEscape" : intrinsic != "" ? "intrinsic" : callable >= 0 ? "callIndirect" : callee >= 0 && this.result.functions[callee].asynchronous ? "taskCreate" : "call",typeId,operands,-1,callee,intrinsic,id);

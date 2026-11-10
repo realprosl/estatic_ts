@@ -4,6 +4,8 @@ export function irAssignable(project: constRef<IrProject>, from: number, to: num
   if (from < 0 || to < 0 || from >= project.types.length || to >= project.types.length || depth > 64) return false;
   if (from == to) return true;
   const a = project.typeDefinitions[from]; const b = project.typeDefinitions[to];
+  // Borrow widening preserves the exact pointee; it must never erase constness.
+  if (["ref","constRef"].includes(b.kind)) return a.kind == "ref" && b.kind == "constRef" && a.arguments.length == 1 && b.arguments.length == 1 && a.arguments[0] == b.arguments[0];
   if (numericType(project.types[from]) && numericType(project.types[to])) return true;
   if (a.kind == "enum" && a.arguments.length == 1) return irAssignable(project,a.arguments[0],to,depth+1);
   // Un literal de tipo se ensancha a su primitivo; dos literales solo son

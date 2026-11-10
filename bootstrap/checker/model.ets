@@ -1,4 +1,5 @@
 import { SourceDiagnostic } from "../frontend/frontend";
+import { BindingResult } from "../binder/binder";
 
 export class TypedFile {
   matchCoverage: string[]; receivers: string[]; types: string[]; members: number[]; selected: number[]; selectedModules: number[]; signatures: string[]; states: number[];
@@ -52,6 +53,28 @@ export class NativeModuleRecord {
   dependencies: string[]; bodyDependencies: string[]; requiresBody: boolean;
   constructor(file: string, id: string, sourceHash: string) { this.file = file; this.id = id; this.sourceHash = sourceHash; this.interfaceHash = ""; this.implementationHash = ""; this.semanticKey = ""; this.dependencies = []; this.bodyDependencies = []; this.requiresBody = false; }
 }
+// Receiver capability is intrinsic to the method, not the first caller's
+// mutability. Use the transitive body summary rather than treating every
+// this.otherMethod() as a write. Unknown/symbolic effects stay conservative.
+export function readonlyMethodReceiver(binding: constRef<BindingResult>, summaries: constRef<EffectSummary[]>, captures: constRef<NativeCapture[]>, module: number, node: number): boolean {
+  // Reference captures currently carry mutable receiver handles in the IR.
+  // Do not silently reinterpret such a closure as a readonly capture.
+  for (const capture of captures) {
+    const symbol = binding.symbols[capture.symbol];
+    if (symbol.kind == "receiver" && symbol.module == module && symbol.scope >= 0 && binding.scopes[symbol.scope].node == node) return false;
+  }
+  for (const summary of summaries) if (summary.module == module && summary.node == node && summary.phase == "body") {
+    if (summary.unknown || summary.external || summary.invokes.length > 0) return false;
+    for (const sid of summary.writes.concat(summary.moves).concat(summary.retains)) {
+      if (sid < 0 || sid >= binding.symbols.length) return false;
+      const symbol = binding.symbols[sid];
+      if (symbol.kind == "receiver" && symbol.module == module && symbol.scope >= 0 && binding.scopes[symbol.scope].node == node) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
 export class CheckResult {
   moduleRecords: NativeModuleRecord[]; symbolIds: string[]; queries: NativeTypeQuery[]; decorators: NativeDecorator[]; files: TypedFile[]; symbolTypes: string[]; captures: NativeCapture[]; borrows: BorrowLease[]; effects: EffectSummary[]; diagnostics: SourceDiagnostic[]; success: boolean;
   constructor() { this.moduleRecords = []; this.symbolIds = []; this.queries = []; this.decorators = []; this.files = []; this.symbolTypes = []; this.captures = []; this.borrows = []; this.effects = []; this.diagnostics = []; this.success = false; }
