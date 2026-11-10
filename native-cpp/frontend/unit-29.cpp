@@ -16,6 +16,17 @@ bool irAssignable(const IrProject& project, double from, double to, double depth
     if (((a.kind == std::string("enum")) && (a.arguments.size() == 1.0))) {
         return irAssignable(project, a.arguments[static_cast<std::size_t>(0.0)], to, (depth + 1.0));
     }
+    if ((a.kind == std::string("literal"))) {
+        if ((b.kind == std::string("literal"))) {
+            return ((a.discriminatorType == b.discriminatorType) && (a.discriminatorValue == b.discriminatorValue));
+        }
+        if ((b.kind == std::string("scalar"))) {
+            return irAssignable(project, a.discriminatorType, to, (depth + 1.0));
+        }
+    }
+    if (((b.kind == std::string("literal")) && (a.kind == std::string("scalar")))) {
+        return irAssignable(project, to, b.discriminatorType, (depth + 1.0));
+    }
     if ((((a.kind == std::string("variant")) && (a.arguments.size() == 1.0)) && (a.arguments[static_cast<std::size_t>(0.0)] == to))) {
         return true;
     }

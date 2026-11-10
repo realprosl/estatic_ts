@@ -24,7 +24,7 @@ static inline std::string framedList(std::vector<std::string> values) {
     return output;
 }
 
-ets_import_7_CheckResult attachModuleRecords(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult checked) {
+ets_import_9_CheckResult attachModuleRecords(ModuleGraph graph, BindingResult binding, ets_import_9_CheckResult checked) {
     auto builder = ModuleRecordBuilder{}.constructor(graph, binding, checked);
     return builder.run();
 }

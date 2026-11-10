@@ -10,19 +10,19 @@ static inline double irIndex(std::vector<double> values, double value) {
     return (-1.0);
 }
 
-static inline std::string ets_import_1_memoryMode(std::string text) {
+static inline std::string ets_import_3_memoryMode(std::string text) {
     const std::string base = genericBase(text);
     return (ets_includes_vec<std::string>(std::vector<std::string>{std::string("ptr"), std::string("constPtr"), std::string("ref"), std::string("constRef"), std::string("readonly")}, base) ? base : std::string(""));
 }
 
-static inline std::string ets_import_3_memoryInner(std::string text) {
-    return ((ets_import_1_memoryMode(text) == std::string("")) ? text : genericArguments(text)[static_cast<std::size_t>(0.0)]);
+static inline std::string ets_import_5_memoryInner(std::string text) {
+    return ((ets_import_3_memoryMode(text) == std::string("")) ? text : genericArguments(text)[static_cast<std::size_t>(0.0)]);
 }
 
-static inline std::string ets_import_5_memoryValue(std::string text) {
+static inline std::string ets_import_7_memoryValue(std::string text) {
     std::string value = text;
-    while ((ets_import_1_memoryMode(value) != std::string(""))) {
-        (value = ets_import_3_memoryInner(value));
+    while ((ets_import_3_memoryMode(value) != std::string(""))) {
+        (value = ets_import_5_memoryInner(value));
     }
     return value;
 }
@@ -39,7 +39,7 @@ static inline bool irSameNumbers(std::vector<double> left, std::vector<double> r
     return true;
 }
 
-IrProject lowerProject(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult checked, bool trace) {
+IrProject lowerProject(ModuleGraph graph, BindingResult binding, ets_import_9_CheckResult checked, bool trace) {
     auto lowering = IrLowering{}.constructor(graph, binding, checked);
     return lowering.run(trace);
 }

@@ -219,7 +219,7 @@ struct BoundFile;
 struct BindingResult;
 struct ScopeWork;
 struct Binder;
-struct ets_import_6_TypedFile;
+struct ets_import_8_TypedFile;
 struct NativeCapture;
 struct BorrowLease;
 struct EffectPoint;
@@ -228,7 +228,7 @@ struct EffectSummary;
 struct NativeDecorator;
 struct NativeTypeQuery;
 struct NativeModuleRecord;
-struct ets_import_7_CheckResult;
+struct ets_import_9_CheckResult;
 struct ModuleRecordBuilder;
 struct ConstantValue;
 struct NativeNumericLiteral;
@@ -322,6 +322,7 @@ std::string attributeKindName(AttributeKind value);
 AttributeKind parseAttributeKind(std::string text);
 bool isCallableNodeKind(NodeKind kind);
 bool isExpressionNodeKind(NodeKind kind);
+std::string ets_import_0_escapeLiteralValue(std::string value);
 double nodeBegin(AstNode node);
 double nodeEnd(AstNode node);
 static inline std::string quoteAst(std::string text);
@@ -385,12 +386,19 @@ double restPosition(std::string text);
 std::string argumentType(std::string text, bool spread);
 bool numericType(std::string text);
 bool primitiveType(std::string text);
+std::string literalTypePrefix();
+bool literalType(std::string text);
+std::string literalKind(std::string text);
+std::string literalValue(std::string text);
+std::string literalTypeText(std::string kind, std::string value);
+std::string ets_import_1_escapeLiteralValue(std::string value);
+std::string unescapeLiteralValue(std::string value);
 double canonicalSymbol(std::string text);
 bool typeCompatible(std::string actual, std::string expected);
 std::string replaceType(std::string text, std::string from, std::string to);
-std::string ets_import_0_memoryMode(std::string text);
-std::string ets_import_2_memoryInner(std::string text);
-std::string ets_import_4_memoryValue(std::string text);
+std::string ets_import_2_memoryMode(std::string text);
+std::string ets_import_4_memoryInner(std::string text);
+std::string ets_import_6_memoryValue(std::string text);
 bool ownedType(std::string text);
 bool borrowedType(std::string text);
 bool readonlyType(std::string text);
@@ -406,11 +414,11 @@ bool containsMemory(std::string text);
 bool localBinding(std::string kind);
 std::string genericBase(std::string text);
 std::vector<std::string> genericArguments(std::string text);
-double argumentParameter(const ets_import_6_TypedFile& file, double node, double position);
+double argumentParameter(const ets_import_8_TypedFile& file, double node, double position);
 static inline std::string framed(std::string text);
 static inline double compareKeys(std::string a, std::string b);
 static inline std::string framedList(std::vector<std::string> values);
-ets_import_7_CheckResult attachModuleRecords(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult checked);
+ets_import_9_CheckResult attachModuleRecords(ModuleGraph graph, BindingResult binding, ets_import_9_CheckResult checked);
 ConstantValue constantError(std::string code, std::string message);
 ConstantValue constantNumber(double value, std::string name = std::string("number"));
 ConstantValue constantBoolean(bool value);
@@ -430,11 +438,11 @@ std::string nativeInteger64(std::string raw, bool negative, std::string expected
 NativeNumericLiteral nativeNumericLiteral(std::string raw);
 std::string nativeUnaryPromotion(std::string text);
 std::string nativeBinaryPromotion(std::string left, std::string right, std::string op);
-ets_import_7_CheckResult evaluateNativeComptime(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult checked);
-bool resourceType(const ModuleGraph& graph, const BindingResult& binding, const ets_import_7_CheckResult& checked, std::string text, std::vector<std::string> history);
+ets_import_9_CheckResult evaluateNativeComptime(ModuleGraph graph, BindingResult binding, ets_import_9_CheckResult checked);
+bool resourceType(const ModuleGraph& graph, const BindingResult& binding, const ets_import_9_CheckResult& checked, std::string text, std::vector<std::string> history);
 std::string resourceSubstitution(std::string pattern, std::string actual, std::string token);
-void validateSafety(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult& result, bool trace = false);
-ets_import_7_CheckResult checkProject(ModuleGraph graph, BindingResult binding, bool trace = false);
+void validateSafety(ModuleGraph graph, BindingResult binding, ets_import_9_CheckResult& result, bool trace = false);
+ets_import_9_CheckResult checkProject(ModuleGraph graph, BindingResult binding, bool trace = false);
 FrontendProject analyzeProject(ModuleGraph graph, bool trace = false);
 double irNumericWidth(std::string text);
 std::string irNumericKind(std::string text);
@@ -444,9 +452,9 @@ std::vector<double> irLeaseUnion(std::vector<double> left, std::vector<double> r
 bool irLeaseEqual(std::vector<double> left, std::vector<double> right);
 std::vector<double> irLeaseRemove(std::vector<double> values, double value);
 IrProject finishBorrows(IrProject project);
-static inline IrSource contractSource(const ModuleGraph& graph, const ets_import_7_CheckResult& checked, double module, double id);
-static inline std::vector<std::string> contractSymbols(const ets_import_7_CheckResult& checked, std::vector<double> symbols);
-IrProject preserveContracts(const ModuleGraph& graph, const ets_import_7_CheckResult& checked, IrProject project);
+static inline IrSource contractSource(const ModuleGraph& graph, const ets_import_9_CheckResult& checked, double module, double id);
+static inline std::vector<std::string> contractSymbols(const ets_import_9_CheckResult& checked, std::vector<double> symbols);
+IrProject preserveContracts(const ModuleGraph& graph, const ets_import_9_CheckResult& checked, IrProject project);
 std::vector<IrIssue> verifyIrTables(const IrProject& project);
 std::vector<IrIssue> verifyFunctionContracts(const IrProject& project, const IrFunction& f);
 std::vector<IrIssue> verifyModuleContracts(const IrProject& project);
@@ -460,11 +468,11 @@ bool irInitialPlace(const IrFunction& f, double place);
 std::vector<IrIssue> verifyBorrowRoutes(const IrProject& project, IrFunction f);
 std::vector<IrIssue> verifyIr(IrProject project);
 static inline double irIndex(std::vector<double> values, double value);
-static inline std::string ets_import_1_memoryMode(std::string text);
-static inline std::string ets_import_3_memoryInner(std::string text);
-static inline std::string ets_import_5_memoryValue(std::string text);
+static inline std::string ets_import_3_memoryMode(std::string text);
+static inline std::string ets_import_5_memoryInner(std::string text);
+static inline std::string ets_import_7_memoryValue(std::string text);
 static inline bool irSameNumbers(std::vector<double> left, std::vector<double> right);
-IrProject lowerProject(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult checked, bool trace = false);
+IrProject lowerProject(ModuleGraph graph, BindingResult binding, ets_import_9_CheckResult checked, bool trace = false);
 std::string bindingBoolean(bool value);
 std::string bindingNumbers(std::vector<double> values);
 std::string formatBinding(BindingResult result, ModuleGraph graph);
@@ -2443,6 +2451,23 @@ struct Parser {
         return result;
     }
 
+    std::string literalType() {
+        const ParserToken token = (*this).peek(0.0);
+        if ((token.kind == std::string("string"))) {
+            (*this).take();
+            return ets::concat(std::string("$lit:string="), ets_import_0_escapeLiteralValue(token.lexeme));
+        }
+        if ((token.kind == std::string("number"))) {
+            (*this).take();
+            return ets::concat(std::string("$lit:number="), ets_import_0_escapeLiteralValue((*this).numericText(token)));
+        }
+        if (((token.kind == std::string("true")) || (token.kind == std::string("false")))) {
+            (*this).take();
+            return ets::concat(std::string("$lit:boolean="), token.lexeme);
+        }
+        return std::string("");
+    }
+
     std::string typeInner() {
         if ((*this).accept(std::string("readonly"))) {
             return ets::concat(std::string("readonly<"), (*this).typeName(), std::string(">"));
@@ -2485,6 +2510,10 @@ struct Parser {
             return (*this).typeSuffix(ets::concat(std::string("["), ets_join_vec(parts, std::string(",")), std::string("]")));
         }
         std::string result = std::string("");
+        const std::string literal = (*this).literalType();
+        if ((literal != std::string(""))) {
+            return (*this).typeSuffix(literal);
+        }
         if (((*this).check(std::string("identifier")) || (*this).check(std::string("type")))) {
             (result = (*this).take().lexeme);
         } else {
@@ -4876,6 +4905,16 @@ struct Binder {
         std::string previous = std::string("");
         bool first = true;
         while ((at < ::ets::string_length(text))) {
+            if ((::ets::string_slice(text, at, (at + 5.0)) == std::string("$lit:"))) {
+                (at = (at + 5.0));
+                while (((at < ::ets::string_length(text)) && (::ets::string_charAt(text, at) != std::string("|")))) {
+                    if ((::ets::string_charAt(text, at) == std::string("\\"))) {
+                        (at = (at + 1.0));
+                    }
+                    (at = (at + 1.0));
+                }
+                continue;
+            }
             const std::string c = ::ets::string_charAt(text, at);
             const double code = ::ets::string_charCodeAt(text, at);
             if (((c == std::string("\"")) || (c == std::string("'")))) {
@@ -5074,7 +5113,7 @@ struct Binder {
     }
 };
 
-struct ets_import_6_TypedFile {
+struct ets_import_8_TypedFile {
     std::vector<std::string> matchCoverage;
     std::vector<std::string> receivers;
     std::vector<std::string> types;
@@ -5094,7 +5133,7 @@ struct ets_import_6_TypedFile {
     std::vector<double> argumentParameters;
     std::vector<double> argumentElements;
 
-    ets_import_6_TypedFile& constructor(double count) {
+    ets_import_8_TypedFile& constructor(double count) {
         ((*this).matchCoverage = std::vector<std::string>());
         ((*this).receivers = std::vector<std::string>());
         ((*this).types = std::vector<std::string>());
@@ -5397,12 +5436,12 @@ struct NativeModuleRecord {
     }
 };
 
-struct ets_import_7_CheckResult {
+struct ets_import_9_CheckResult {
     std::vector<NativeModuleRecord> moduleRecords;
     std::vector<std::string> symbolIds;
     std::vector<NativeTypeQuery> queries;
     std::vector<NativeDecorator> decorators;
-    std::vector<ets_import_6_TypedFile> files;
+    std::vector<ets_import_8_TypedFile> files;
     std::vector<std::string> symbolTypes;
     std::vector<NativeCapture> captures;
     std::vector<BorrowLease> borrows;
@@ -5410,12 +5449,12 @@ struct ets_import_7_CheckResult {
     std::vector<SourceDiagnostic> diagnostics;
     bool success;
 
-    ets_import_7_CheckResult& constructor() {
+    ets_import_9_CheckResult& constructor() {
         ((*this).moduleRecords = std::vector<NativeModuleRecord>());
         ((*this).symbolIds = std::vector<std::string>());
         ((*this).queries = std::vector<NativeTypeQuery>());
         ((*this).decorators = std::vector<NativeDecorator>());
-        ((*this).files = std::vector<ets_import_6_TypedFile>());
+        ((*this).files = std::vector<ets_import_8_TypedFile>());
         ((*this).symbolTypes = std::vector<std::string>());
         ((*this).captures = std::vector<NativeCapture>());
         ((*this).borrows = std::vector<BorrowLease>());
@@ -5429,10 +5468,10 @@ struct ets_import_7_CheckResult {
 struct ModuleRecordBuilder {
     ModuleGraph graph;
     BindingResult binding;
-    ets_import_7_CheckResult checked;
+    ets_import_9_CheckResult checked;
     std::vector<std::string> scopeKeys;
 
-    ModuleRecordBuilder& constructor(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult checked) {
+    ModuleRecordBuilder& constructor(ModuleGraph graph, BindingResult binding, ets_import_9_CheckResult checked) {
         ((*this).graph = graph);
         ((*this).binding = binding);
         ((*this).checked = checked);
@@ -5657,7 +5696,7 @@ struct ModuleRecordBuilder {
         return false;
     }
 
-    ets_import_7_CheckResult run() {
+    ets_import_9_CheckResult run() {
         ((*this).checked.moduleRecords = std::vector<NativeModuleRecord>());
         ((*this).checked.symbolIds = std::vector<std::string>());
         ((*this).scopeKeys = std::vector<std::string>());
@@ -5753,7 +5792,7 @@ struct ModuleRecordBuilder {
     void default_constructor() {
         (*this).graph = ModuleGraph{};
         (*this).binding = BindingResult{};
-        (*this).checked = ets_import_7_CheckResult{};
+        (*this).checked = ets_import_9_CheckResult{};
         (*this).scopeKeys = std::vector<std::string>{};
     }
 };
@@ -5860,7 +5899,7 @@ struct ConstantLocation {
 struct NativeComptime {
     ModuleGraph graph;
     BindingResult binding;
-    ets_import_7_CheckResult checked;
+    ets_import_9_CheckResult checked;
     std::vector<ConstantValue> values;
     std::vector<ConstantCell> cells;
     std::vector<ConstantEnvironment> environments;
@@ -5877,7 +5916,7 @@ struct NativeComptime {
     std::string signal;
     double returned;
 
-    NativeComptime& constructor(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult checked) {
+    NativeComptime& constructor(ModuleGraph graph, BindingResult binding, ets_import_9_CheckResult checked) {
         ((*this).graph = graph);
         ((*this).binding = binding);
         ((*this).checked = checked);
@@ -7809,7 +7848,7 @@ struct NativeComptime {
         }
     }
 
-    ets_import_7_CheckResult run() {
+    ets_import_9_CheckResult run() {
         for (double m = 0.0; (m < (*this).checked.files.size()); (m = (m + 1.0))) {
             for (double id = 0.0; (id < (*this).checked.files[static_cast<std::size_t>(m)].types.size()); (id = (id + 1.0))) {
                 if ((((*this).binding.files[static_cast<std::size_t>(m)].nodeScopes[static_cast<std::size_t>(id)] < 0.0) || (!ets_includes_vec<NodeKind>(std::vector<NodeKind>{NodeKind::CallExpression, NodeKind::MemberCallExpression}, (*this).node(m, id).kind)))) {
@@ -7834,7 +7873,7 @@ struct NativeComptime {
     void default_constructor() {
         (*this).graph = ModuleGraph{};
         (*this).binding = BindingResult{};
-        (*this).checked = ets_import_7_CheckResult{};
+        (*this).checked = ets_import_9_CheckResult{};
         (*this).values = std::vector<ConstantValue>{};
         (*this).cells = std::vector<ConstantCell>{};
         (*this).environments = std::vector<ConstantEnvironment>{};
@@ -7952,7 +7991,7 @@ struct EffectCall {
 struct EffectAnalyzer {
     ModuleGraph graph;
     BindingResult binding;
-    ets_import_7_CheckResult checked;
+    ets_import_9_CheckResult checked;
     std::vector<double> offsets;
     double nodes;
     std::vector<EffectPoint> points;
@@ -7973,7 +8012,7 @@ struct EffectAnalyzer {
     double edgeCursor;
     double edgeVisits;
 
-    EffectAnalyzer& constructor(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult checked) {
+    EffectAnalyzer& constructor(ModuleGraph graph, BindingResult binding, ets_import_9_CheckResult checked) {
         ((*this).graph = graph);
         ((*this).binding = binding);
         ((*this).checked = checked);
@@ -8277,7 +8316,7 @@ struct EffectAnalyzer {
         if ((n.kind != NodeKind::MemberCallExpression)) {
             return (-1.0);
         }
-        const std::string receiver = ets_import_4_memoryValue((*this).receiver(module, id));
+        const std::string receiver = ets_import_6_memoryValue((*this).receiver(module, id));
         const bool collection = (ets_includes_vec<std::string>(std::vector<std::string>{std::string("Map"), std::string("Set")}, genericBase(receiver)) && (n.get(AttributeKind::Method) == std::string("forEach")));
         const bool optional = ((genericBase(receiver) == std::string("Optional")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("map"), std::string("andThen")}, n.get(AttributeKind::Method)));
         if ((((!optional) && (!collection)) && ((!::ets::string_endsWith(receiver, std::string("[]"))) || (!ets_includes_vec<std::string>(std::vector<std::string>{std::string("map"), std::string("filter"), std::string("reduce"), std::string("forEach"), std::string("find"), std::string("some"), std::string("every"), std::string("flatMap"), std::string("sort")}, n.get(AttributeKind::Method)))))) {
@@ -8345,7 +8384,7 @@ struct EffectAnalyzer {
             ets_push_vec<double>(inputs, bindingChild(n, EdgeRole::Args));
         }
         ets_push_vec<double>(inputs, bindingChild(n, EdgeRole::Object));
-        if (((n.get(AttributeKind::Method) == std::string("sort")) || (genericBase(ets_import_4_memoryValue((*this).receiver(module, id))) == std::string("Map")))) {
+        if (((n.get(AttributeKind::Method) == std::string("sort")) || (genericBase(ets_import_6_memoryValue((*this).receiver(module, id))) == std::string("Map")))) {
             ets_push_vec<double>(inputs, bindingChild(n, EdgeRole::Object));
         }
         return inputs;
@@ -8361,7 +8400,7 @@ struct EffectAnalyzer {
 
     std::string borrowMode(double sid) const {
         const auto s = (*this).binding.symbols[static_cast<std::size_t>(sid)];
-        return ((((s.kind == std::string("Parameter")) && (s.module >= 0.0)) && ((*this).node(s.module, s.node).get(AttributeKind::Out) == std::string("true"))) ? std::string("ref") : ets_import_0_memoryMode((*this).checked.symbolTypes[static_cast<std::size_t>(sid)]));
+        return ((((s.kind == std::string("Parameter")) && (s.module >= 0.0)) && ((*this).node(s.module, s.node).get(AttributeKind::Out) == std::string("true"))) ? std::string("ref") : ets_import_2_memoryMode((*this).checked.symbolTypes[static_cast<std::size_t>(sid)]));
     }
 
     std::string receiver(double module, double id) const {
@@ -8403,7 +8442,7 @@ struct EffectAnalyzer {
         }
         if ((n.kind == NodeKind::MemberCallExpression)) {
             const double object = bindingChild(n, EdgeRole::Object);
-            const std::string receiver = ets_import_4_memoryValue((*this).receiver(module, id));
+            const std::string receiver = ets_import_6_memoryValue((*this).receiver(module, id));
             if ((nativeBuiltinSignatures(ets::concat(receiver, std::string("."), n.get(AttributeKind::Method))).size() > 0.0)) {
                 return true;
             }
@@ -8418,7 +8457,7 @@ struct EffectAnalyzer {
             return (-1.0);
         }
         const double object = bindingChild(n, EdgeRole::Object);
-        for (const auto& part : splitTypes(ets_import_4_memoryValue((*this).receiver(module, id)), std::string("|"))) {
+        for (const auto& part : splitTypes(ets_import_6_memoryValue((*this).receiver(module, id)), std::string("|"))) {
             const std::string base = ((genericBase(part) == std::string("variant")) ? genericArguments(part)[static_cast<std::size_t>(0.0)] : part);
             const double sid = canonicalSymbol(base);
             if ((((sid >= 0.0) && (sid < (*this).binding.symbols.size())) && ((*this).binding.symbols[static_cast<std::size_t>(sid)].kind == std::string("UnionDeclaration")))) {
@@ -8512,7 +8551,7 @@ struct EffectAnalyzer {
     }
 
     double fieldOf(double module, double object, std::string name) const {
-        const std::string text = ets_import_4_memoryValue((*this).checked.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(object)]);
+        const std::string text = ets_import_6_memoryValue((*this).checked.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(object)]);
         const double sid = canonicalSymbol(text);
         if (((sid >= 0.0) && (sid < (*this).binding.symbols.size()))) {
             const auto owner = (*this).binding.symbols[static_cast<std::size_t>(sid)];
@@ -8714,7 +8753,7 @@ struct EffectAnalyzer {
                         }
                     }
                 }
-                if (((n.kind == NodeKind::MemberCallExpression) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("Optional"), std::string("Result")}, genericBase(ets_import_4_memoryValue((*this).receiver(m, id)))))) {
+                if (((n.kind == NodeKind::MemberCallExpression) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("Optional"), std::string("Result")}, genericBase(ets_import_6_memoryValue((*this).receiver(m, id)))))) {
                     if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("value"), std::string("valueOr"), std::string("error"), std::string("orElse")}, n.get(AttributeKind::Method))) {
                         (*this).addEdge((*this).vertex(m, bindingChild(n, EdgeRole::Object)), vertex, true);
                         for (const auto& edge : n.edges) {
@@ -8724,10 +8763,10 @@ struct EffectAnalyzer {
                         }
                     }
                 }
-                if ((((n.kind == NodeKind::MemberCallExpression) && (n.get(AttributeKind::Method) == std::string("get"))) && (genericBase(ets_import_4_memoryValue((*this).receiver(m, id))) == std::string("Map")))) {
+                if ((((n.kind == NodeKind::MemberCallExpression) && (n.get(AttributeKind::Method) == std::string("get"))) && (genericBase(ets_import_6_memoryValue((*this).receiver(m, id))) == std::string("Map")))) {
                     (*this).addEdge((*this).vertex(m, bindingChild(n, EdgeRole::Object)), vertex, true);
                 }
-                if ((((n.kind == NodeKind::MemberCallExpression) && ::ets::string_endsWith(ets_import_4_memoryValue((*this).receiver(m, id)), std::string("[]"))) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("filter"), std::string("find"), std::string("sort"), std::string("slice"), std::string("concat")}, n.get(AttributeKind::Method)))) {
+                if ((((n.kind == NodeKind::MemberCallExpression) && ::ets::string_endsWith(ets_import_6_memoryValue((*this).receiver(m, id)), std::string("[]"))) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("filter"), std::string("find"), std::string("sort"), std::string("slice"), std::string("concat")}, n.get(AttributeKind::Method)))) {
                     (*this).addEdge((*this).vertex(m, bindingChild(n, EdgeRole::Object)), vertex, true);
                     if ((n.get(AttributeKind::Method) == std::string("concat"))) {
                         for (const auto& edge : n.edges) {
@@ -9113,7 +9152,7 @@ struct EffectAnalyzer {
                     for (const auto& edge : n.edges) {
                         if ((edge.role == EdgeRole::Args)) {
                             const double p = argumentParameter((*this).checked.files[static_cast<std::size_t>(m)], edge.node, at);
-                            if (((p < params.size()) && (ets_import_0_memoryMode(params[static_cast<std::size_t>(p)]) == std::string("ref")))) {
+                            if (((p < params.size()) && (ets_import_2_memoryMode(params[static_cast<std::size_t>(p)]) == std::string("ref")))) {
                                 (*this).addEffect(owner, (*this).root(m, edge.node), std::string("write"));
                             }
                             (at = (at + 1.0));
@@ -9180,7 +9219,7 @@ struct EffectAnalyzer {
                     if (ets_includes_vec<double>((*this).summaries[static_cast<std::size_t>(call.owner)].parameters, callback)) {
                         for (const auto& parameter : (*this).summaries[static_cast<std::size_t>(call.owner)].parameters) {
                             if (borrowedType((*this).checked.symbolTypes[static_cast<std::size_t>(parameter)])) {
-                                (*this).obligation(call.owner, call.node, callback, parameter, ets_import_0_memoryMode((*this).checked.symbolTypes[static_cast<std::size_t>(parameter)]));
+                                (*this).obligation(call.owner, call.node, callback, parameter, ets_import_2_memoryMode((*this).checked.symbolTypes[static_cast<std::size_t>(parameter)]));
                             }
                         }
                     }
@@ -9353,7 +9392,7 @@ struct EffectAnalyzer {
     void default_constructor() {
         (*this).graph = ModuleGraph{};
         (*this).binding = BindingResult{};
-        (*this).checked = ets_import_7_CheckResult{};
+        (*this).checked = ets_import_9_CheckResult{};
         (*this).offsets = std::vector<double>{};
         (*this).nodes = double{};
         (*this).points = std::vector<EffectPoint>{};
@@ -9538,7 +9577,7 @@ struct SafetyTarget {
 struct SafetyAnalyzer {
     ModuleGraph graph;
     BindingResult binding;
-    ets_import_7_CheckResult result;
+    ets_import_9_CheckResult result;
     EffectAnalyzer effects;
     std::vector<SafetyArgument> arguments;
     std::vector<double> offsets;
@@ -9567,7 +9606,7 @@ struct SafetyAnalyzer {
     bool collectFlow;
     std::vector<FlowFinding> findings;
 
-    SafetyAnalyzer& constructor(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult result) {
+    SafetyAnalyzer& constructor(ModuleGraph graph, BindingResult binding, ets_import_9_CheckResult result) {
         ((*this).graph = graph);
         ((*this).binding = binding);
         ((*this).result = result);
@@ -9964,8 +10003,8 @@ struct SafetyAnalyzer {
         if ((genericBase(text) == std::string("Promise"))) {
             return true;
         }
-        if ((ets_import_0_memoryMode(text) != std::string(""))) {
-            return (*this).carrier(ets_import_2_memoryInner(text), seen);
+        if ((ets_import_2_memoryMode(text) != std::string(""))) {
+            return (*this).carrier(ets_import_4_memoryInner(text), seen);
         }
         const std::vector<std::string> contracts = splitTypes(text, std::string("&"));
         if ((contracts.size() > 1.0)) {
@@ -10061,7 +10100,7 @@ struct SafetyAnalyzer {
     }
 
     std::string borrowMode(double sid) const {
-        return ((*this).effects.borrowedSymbol(sid) ? (*this).effects.borrowMode(sid) : ets_import_0_memoryMode((*this).resolved((*this).result.symbolTypes[static_cast<std::size_t>(sid)])));
+        return ((*this).effects.borrowedSymbol(sid) ? (*this).effects.borrowMode(sid) : ets_import_2_memoryMode((*this).resolved((*this).result.symbolTypes[static_cast<std::size_t>(sid)])));
     }
 
     bool transferType(std::string text) {
@@ -10129,12 +10168,12 @@ struct SafetyAnalyzer {
             (*this).memoryType(module, id, ::ets::string_slice(text, 3.0, ::ets::string_length(text)), position);
             return;
         }
-        const std::string mode = ets_import_0_memoryMode(text);
+        const std::string mode = ets_import_2_memoryMode(text);
         if ((mode != std::string(""))) {
             if (((borrowedType(text) && (position != std::string("parameter"))) && (position != std::string("local")))) {
                 (*this).report(module, id, ets::concat(std::string("E4203: un préstamo no puede almacenarse ni retornarse en "), position));
             }
-            (*this).memoryType(module, id, ets_import_2_memoryInner(text), std::string("argument"));
+            (*this).memoryType(module, id, ets_import_4_memoryInner(text), std::string("argument"));
             return;
         }
         if ((functionClose(text) >= 0.0)) {
@@ -10256,7 +10295,7 @@ struct SafetyAnalyzer {
                             (*this).report(m, id, std::string("E4208: no se puede demostrar el origen del préstamo local"));
                         } else {
                             ets_set_vec<double>((*this).borrowSources, sid, root);
-                            BorrowLease lease = BorrowLease{}.constructor(m, sid, root, (*this).owner((*this).binding.symbols[static_cast<std::size_t>(sid)].scope), nodeEnd(n), ets_import_0_memoryMode((*this).result.symbolTypes[static_cast<std::size_t>(sid)]));
+                            BorrowLease lease = BorrowLease{}.constructor(m, sid, root, (*this).owner((*this).binding.symbols[static_cast<std::size_t>(sid)].scope), nodeEnd(n), ets_import_2_memoryMode((*this).result.symbolTypes[static_cast<std::size_t>(sid)]));
                             for (const auto& r : (*this).binding.references) {
                                 if ((((r.target == sid) && (r.module == m)) && ((*this).owner(r.scope) == lease.owner))) {
                                     const double offset = nodeBegin((*this).node(m, r.node));
@@ -10377,7 +10416,7 @@ struct SafetyAnalyzer {
         if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("push"), std::string("pop"), std::string("sort")}, n.get(AttributeKind::Method))) {
             return true;
         }
-        if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("Map"), std::string("Set")}, genericBase(ets_import_4_memoryValue((*this).result.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(bindingChild(n, EdgeRole::Object))])))) {
+        if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("Map"), std::string("Set")}, genericBase(ets_import_6_memoryValue((*this).result.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(bindingChild(n, EdgeRole::Object))])))) {
             return ets_includes_vec<std::string>(std::vector<std::string>{std::string("set"), std::string("add"), std::string("delete"), std::string("clear")}, n.get(AttributeKind::Method));
         }
         const double target = (*this).result.files[static_cast<std::size_t>(module)].selected[static_cast<std::size_t>(id)];
@@ -10925,7 +10964,7 @@ struct SafetyAnalyzer {
         const AstNode n = (*this).node(module, id);
         const std::vector<std::string> params = functionParams((*this).result.files[static_cast<std::size_t>(module)].signatures[static_cast<std::size_t>(id)]);
         const bool display = (ets_includes_vec<std::string>(std::vector<std::string>{std::string("print"), std::string("printError"), std::string("write"), std::string("writeError")}, (*this).helper(module, id)) || ((n.kind == NodeKind::MemberCallExpression) && ((*this).result.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(bindingChild(n, EdgeRole::Object))] == std::string("Console"))));
-        const bool comparison = (((n.kind == NodeKind::MemberCallExpression) && (n.get(AttributeKind::Method) == std::string("includes"))) && ::ets::string_endsWith(ets_import_4_memoryValue((*this).result.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(bindingChild(n, EdgeRole::Object))]), std::string("[]")));
+        const bool comparison = (((n.kind == NodeKind::MemberCallExpression) && (n.get(AttributeKind::Method) == std::string("includes"))) && ::ets::string_endsWith(ets_import_6_memoryValue((*this).result.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(bindingChild(n, EdgeRole::Object))]), std::string("[]")));
         std::vector<double> roots = std::vector<double>();
         std::vector<std::string> modes = std::vector<std::string>();
         double at = 0.0;
@@ -10943,7 +10982,7 @@ struct SafetyAnalyzer {
                     (expected = (((*this).node(module, edge.node).kind == NodeKind::SpreadElement) ? bundle : (((slot >= 0.0) && (slot < elements.size())) ? elements[static_cast<std::size_t>(slot)] : actual)));
                 }
                 const double root = (*this).root(module, arg);
-                const std::string mode = (borrowedType(expected) ? ets_import_0_memoryMode(expected) : (((*this).helper(module, arg) == std::string("move")) ? std::string("move") : (((display || comparison) && (*this).transferType(actual)) ? std::string("constRef") : std::string("read"))));
+                const std::string mode = (borrowedType(expected) ? ets_import_2_memoryMode(expected) : (((*this).helper(module, arg) == std::string("move")) ? std::string("move") : (((display || comparison) && (*this).transferType(actual)) ? std::string("constRef") : std::string("read"))));
                 if (((((!display) && (!comparison)) && (*this).transferType(expected)) && (borrowedType(actual) || ((*this).transferType(actual) && (!(*this).freshTransfer(module, arg)))))) {
                     (*this).report(module, arg, std::string("E4101: argumento owner requiere move(identifier)"));
                 }
@@ -11350,7 +11389,7 @@ struct SafetyAnalyzer {
                 (lease.end = nodeEnd(n));
                 ets_push_vec<BorrowLease>((*this).leases, lease);
             }
-            if ((genericBase(ets_import_4_memoryValue((*this).result.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(object)])) == std::string("Optional"))) {
+            if ((genericBase(ets_import_6_memoryValue((*this).result.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(object)])) == std::string("Optional"))) {
                 SafetyState choice = state;
                 (*this).invoke(module, id, choice, active, false);
                 (state = (*this).join(state, choice));
@@ -11434,7 +11473,7 @@ struct SafetyAnalyzer {
             const auto scope = (*this).binding.scopes[static_cast<std::size_t>(classScope)];
             const AstNode declaration = (*this).node(scope.module, scope.node);
             const double object = bindingChild((*this).node(module, id), EdgeRole::Object);
-            const std::string receiver = (*this).resolved(ets_import_4_memoryValue(((object >= 0.0) ? (*this).effects.receiver(module, id) : (*this).result.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(id)])));
+            const std::string receiver = (*this).resolved(ets_import_6_memoryValue(((object >= 0.0) ? (*this).effects.receiver(module, id) : (*this).result.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(id)])));
             const std::vector<std::string> inputs = genericArguments(receiver);
             double at = 0.0;
             for (const auto& edge : declaration.edges) {
@@ -12341,7 +12380,7 @@ struct SafetyAnalyzer {
         }
     }
 
-    ets_import_7_CheckResult run() {
+    ets_import_9_CheckResult run() {
         if ((analysisJobs() < 1.0)) {
             (*this).report(0.0, (*this).graph.modules[static_cast<std::size_t>(0.0)].cached.result.ast.root, std::string("ANALYSIS_JOBS: ESTATIC_ANALYSIS_JOBS debe ser un entero entre 1 y 32"));
             return (*this).result;
@@ -12382,7 +12421,7 @@ struct SafetyAnalyzer {
     void default_constructor() {
         (*this).graph = ModuleGraph{};
         (*this).binding = BindingResult{};
-        (*this).result = ets_import_7_CheckResult{};
+        (*this).result = ets_import_9_CheckResult{};
         (*this).effects = EffectAnalyzer{};
         (*this).arguments = std::vector<SafetyArgument>{};
         (*this).offsets = std::vector<double>{};
@@ -12416,7 +12455,7 @@ struct SafetyAnalyzer {
 struct NativeChecker {
     ModuleGraph graph;
     BindingResult binding;
-    ets_import_7_CheckResult result;
+    ets_import_9_CheckResult result;
     std::vector<double> symbolStates;
     double depth;
     double switches;
@@ -12428,7 +12467,7 @@ struct NativeChecker {
     NativeChecker& constructor(ModuleGraph graph, BindingResult binding) {
         ((*this).graph = graph);
         ((*this).binding = binding);
-        ((*this).result = ets_import_7_CheckResult{}.constructor());
+        ((*this).result = ets_import_9_CheckResult{}.constructor());
         ((*this).symbolStates = std::vector<double>());
         ((*this).depth = 0.0);
         ((*this).switches = 0.0);
@@ -12489,8 +12528,14 @@ struct NativeChecker {
         if (typeCompatible(actual, expected)) {
             return true;
         }
+        if ((literalType(actual) && primitiveType(expected))) {
+            return (literalKind(actual) == expected);
+        }
+        if ((literalType(expected) && primitiveType(actual))) {
+            return (literalKind(expected) == actual);
+        }
         if ((borrowedType(actual) && (!borrowedType(expected)))) {
-            return (*this).compatible(ets_import_2_memoryInner(actual), expected);
+            return (*this).compatible(ets_import_4_memoryInner(actual), expected);
         }
         if (((genericBase(actual) == std::string("variant")) && (*this).compatible(genericArguments(actual)[static_cast<std::size_t>(0.0)], expected))) {
             return true;
@@ -12614,7 +12659,10 @@ struct NativeChecker {
             (*this).report(module, id, std::string("E4101: una vista prestada no puede copiarse como owner"));
         }
         (*this).literalRange(module, id, expected);
-        if ((((ownedType(expected) && (actual == ets_import_2_memoryInner(expected))) && (id >= 0.0)) && ((*this).node(module, id).kind == NodeKind::NewExpression))) {
+        if ((*this).literalMismatch(module, id, actual, expected)) {
+            return;
+        }
+        if ((((ownedType(expected) && (actual == ets_import_4_memoryInner(expected))) && (id >= 0.0)) && ((*this).node(module, id).kind == NodeKind::NewExpression))) {
             return;
         }
         if (((((((id >= 0.0) && (actual != expected)) && (actual != std::string("!error"))) && (expected != std::string("!error"))) && (expected != std::string(""))) && (*this).compatible(actual, expected))) {
@@ -12623,6 +12671,82 @@ struct NativeChecker {
         if ((!(*this).compatible(actual, expected))) {
             (*this).report(module, id, ets::concat(std::string("Tipo '"), (*this).displayType(actual), std::string("' incompatible con '"), (*this).displayType(expected), std::string("'")));
         }
+    }
+
+    bool literalMismatch(double module, double id, std::string actual, std::string expected) {
+        const std::vector<std::string> targets = splitTypes(expected, std::string("|"));
+        bool hasLiteral = false;
+        for (const auto& target : targets) {
+            if (literalType(target)) {
+                (hasLiteral = true);
+            }
+        }
+        if ((!hasLiteral)) {
+            return false;
+        }
+        if ((id < 0.0)) {
+            return false;
+        }
+        const std::string value = (*this).nodeLiteralValue(module, id);
+        if ((value == std::string(""))) {
+            return false;
+        }
+        const std::string kind = (*this).nodeLiteralKind(module, id);
+        if ((kind == std::string(""))) {
+            return false;
+        }
+        for (const auto& target : targets) {
+            if ((!literalType(target))) {
+                continue;
+            }
+            if ((literalKind(target) != kind)) {
+                continue;
+            }
+            if ((literalValue(target) == value)) {
+                return false;
+            }
+        }
+        (*this).report(module, id, ets::concat(std::string("El valor '"), value, std::string("' no pertenece a '"), (*this).displayType(expected), std::string("'")));
+        return true;
+    }
+
+    std::string nodeLiteralKind(double module, double id) const {
+        const AstNode n = (*this).node(module, id);
+        if (((n.kind == NodeKind::UnaryExpression) && ((n.get(AttributeKind::Operator) == std::string("-")) || (n.get(AttributeKind::Operator) == std::string("+"))))) {
+            return (*this).nodeLiteralKind(module, bindingChild(n, EdgeRole::Operand));
+        }
+        if ((n.kind != NodeKind::LiteralExpression)) {
+            return std::string("");
+        }
+        return n.get(AttributeKind::LiteralType);
+    }
+
+    std::string nodeLiteralValue(double module, double id) const {
+        const AstNode n = (*this).node(module, id);
+        if (((n.kind == NodeKind::UnaryExpression) && ((n.get(AttributeKind::Operator) == std::string("-")) || (n.get(AttributeKind::Operator) == std::string("+"))))) {
+            const double operand = bindingChild(n, EdgeRole::Operand);
+            const std::string inner = (*this).nodeLiteralValue(module, operand);
+            if ((inner == std::string(""))) {
+                return std::string("");
+            }
+            if ((n.get(AttributeKind::Operator) == std::string("-"))) {
+                return ets::concat(std::string("-"), inner);
+            }
+            return inner;
+        }
+        if ((n.kind != NodeKind::LiteralExpression)) {
+            return std::string("");
+        }
+        const std::string kind = n.get(AttributeKind::LiteralType);
+        if (((kind == std::string("string")) || (kind == std::string("boolean")))) {
+            return n.get(AttributeKind::Value);
+        }
+        if ((kind == std::string("number"))) {
+            const std::string raw = ((n.get(AttributeKind::Raw) == std::string("")) ? n.get(AttributeKind::Value) : n.get(AttributeKind::Raw));
+            const std::string exact = nativeIntegerText(raw);
+            return ((exact == std::string("")) ? std::string("") : exact);
+        }
+        return std::string("");
     }
 
     void literalRange(double module, double id, std::string expected) {
@@ -12779,7 +12903,7 @@ struct NativeChecker {
                 if ((sid >= 0.0)) {
                     (value = (*this).symbolType(sid, module, id));
                 }
-                ets_push_vec<double>(symbols, (*this).memberSymbol(ets_import_4_memoryValue(value), names[static_cast<std::size_t>(part)]));
+                ets_push_vec<double>(symbols, (*this).memberSymbol(ets_import_6_memoryValue(value), names[static_cast<std::size_t>(part)]));
                 (value = (*this).member(module, id, value, names[static_cast<std::size_t>(part)], true));
                 (sid = (-1.0));
             }
@@ -12814,10 +12938,21 @@ struct NativeChecker {
     }
 
     std::string displayType(std::string text) const {
-        if (((::ets::string_indexOf(text, std::string("#"), 0.0) < 0.0) && (::ets::string_indexOf(text, std::string("@"), 0.0) < 0.0))) {
-            return text;
-        }
         std::string result = text;
+        if ((::ets::string_indexOf(result, literalTypePrefix(), 0.0) >= 0.0)) {
+            for (const auto& part : splitTypes(result, std::string("|"))) {
+                if ((!literalType(part))) {
+                    continue;
+                }
+                const std::string kind = literalKind(part);
+                const std::string value = literalValue(part);
+                const std::string shown = ((kind == std::string("string")) ? ets::concat(std::string("\""), value, std::string("\"")) : ((kind == std::string("boolean")) ? value : value));
+                (result = replaceType(result, part, shown));
+            }
+        }
+        if (((::ets::string_indexOf(result, std::string("#"), 0.0) < 0.0) && (::ets::string_indexOf(result, std::string("@"), 0.0) < 0.0))) {
+            return result;
+        }
         for (double sid = 0.0; (sid < (*this).binding.symbols.size()); (sid = (sid + 1.0))) {
             const BindingSymbol symbol = (*this).binding.symbols[static_cast<std::size_t>(sid)];
             if ((symbol.name == std::string(""))) {
@@ -12939,7 +13074,7 @@ struct NativeChecker {
             const double nominal = (*this).nominalSymbol(target);
             std::vector<std::string> parts = std::vector<std::string>();
             for (const auto& part : splitTypes((*this).flowType(sid, module, id), std::string("|"))) {
-                const std::string value = ets_import_4_memoryValue(part);
+                const std::string value = ets_import_6_memoryValue(part);
                 const bool matches = (((value == target) || ((target == std::string("number")) && numericType(value))) || ((nominal >= 0.0) && ((*this).nominalSymbol(value) == nominal)));
                 if ((matches == truth)) {
                     ets_push_vec<std::string>(parts, part);
@@ -12965,7 +13100,7 @@ struct NativeChecker {
                     std::vector<std::string> parts = std::vector<std::string>();
                     const bool match = (((n.get(AttributeKind::Operator) == std::string("!=")) || (n.get(AttributeKind::Operator) == std::string("!=="))) ? (!truth) : truth);
                     for (const auto& alternative : splitTypes((*this).flowType(sid, module, id), std::string("|"))) {
-                        const std::string value = ets_import_4_memoryValue(alternative);
+                        const std::string value = ets_import_6_memoryValue(alternative);
                         const std::string kind = ((functionClose(value) >= 0.0) ? std::string("function") : (numericType(value) ? std::string("number") : (ets_includes_vec<std::string>(std::vector<std::string>{std::string("string"), std::string("boolean"), std::string("void")}, value) ? ((value == std::string("void")) ? std::string("undefined") : value) : std::string("object"))));
                         if (((kind == tag.get(AttributeKind::Value)) == match)) {
                             ets_push_vec<std::string>(parts, alternative);
@@ -13062,7 +13197,7 @@ struct NativeChecker {
     }
 
     std::string instantiateMember(std::string receiver, std::string text) const {
-        const std::string value = (::ets::string_startsWith(receiver, std::string("class:")) ? ::ets::string_slice(receiver, 6.0, ::ets::string_length(receiver)) : ets_import_4_memoryValue(receiver));
+        const std::string value = (::ets::string_startsWith(receiver, std::string("class:")) ? ::ets::string_slice(receiver, 6.0, ::ets::string_length(receiver)) : ets_import_6_memoryValue(receiver));
         const double sid = (*this).nominalSymbol(value);
         const double open = ::ets::string_indexOf(value, std::string("<"), 0.0);
         if (((sid < 0.0) || (open < 0.0))) {
@@ -13146,12 +13281,25 @@ struct NativeChecker {
         if ((grouped != text)) {
             return (*this).annotation(module, id, grouped);
         }
+        if (literalType(text)) {
+            const std::string kind = literalKind(text);
+            const std::string value = literalValue(text);
+            if ((((kind != std::string("string")) && (kind != std::string("number"))) && (kind != std::string("boolean")))) {
+                (*this).report(module, id, std::string("Un literal de tipo debe ser de tipo string, number o boolean"));
+                return std::string("!error");
+            }
+            if ((value == std::string(""))) {
+                (*this).report(module, id, std::string("Un literal de tipo necesita un valor"));
+                return std::string("!error");
+            }
+            return text;
+        }
         if (primitiveType(text)) {
             return text;
         }
-        const std::string mode = ets_import_0_memoryMode(text);
+        const std::string mode = ets_import_2_memoryMode(text);
         if ((mode != std::string(""))) {
-            const std::vector<std::string> args = splitTypes(ets_import_2_memoryInner(text), std::string(","));
+            const std::vector<std::string> args = splitTypes(ets_import_4_memoryInner(text), std::string(","));
             if ((args.size() != 1.0)) {
                 (*this).report(module, id, std::string("El modificador de memoria necesita un tipo"));
                 return std::string("!error");
@@ -13879,7 +14027,7 @@ struct NativeChecker {
     }
 
     double memberSymbol(std::string valueType, std::string name) const {
-        std::string receiver = ets_import_4_memoryValue(valueType);
+        std::string receiver = ets_import_6_memoryValue(valueType);
         if (::ets::string_startsWith(receiver, std::string("class:"))) {
             (receiver = ::ets::string_slice(receiver, 6.0, ::ets::string_length(receiver)));
         }
@@ -13908,8 +14056,8 @@ struct NativeChecker {
     }
 
     std::string member(double module, double id, std::string input, std::string name, bool query = false) {
-        const std::string boundType = (*this).parameterBound(ets_import_4_memoryValue(input));
-        const std::string valueType = ((boundType == std::string("")) ? ets_import_4_memoryValue(input) : boundType);
+        const std::string boundType = (*this).parameterBound(ets_import_6_memoryValue(input));
+        const std::string valueType = ((boundType == std::string("")) ? ets_import_6_memoryValue(input) : boundType);
         const double bound = (query ? (-1.0) : (*this).reference(module, id));
         if ((bound >= 0.0)) {
             ets_set_vec<double>((*this).result.files[static_cast<std::size_t>(module)].members, id, bound);
@@ -14360,7 +14508,7 @@ struct NativeChecker {
         if ((n.kind == NodeKind::MemberExpression)) {
             (sid = (*this).result.files[static_cast<std::size_t>(module)].members[static_cast<std::size_t>(id)]);
             const double object = bindingChild(n, EdgeRole::Object);
-            const std::string receiver = ets_import_4_memoryValue((*this).result.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(object)]);
+            const std::string receiver = ets_import_6_memoryValue((*this).result.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(object)]);
             if (((genericBase(receiver) == std::string("Result")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("kind"), std::string("ok")}, n.get(AttributeKind::Member)))) {
                 (*this).report(module, id, std::string("El discriminador de Result es inmutable"));
             }
@@ -14403,7 +14551,7 @@ struct NativeChecker {
                 (*this).report(module, id, std::string("No se puede modificar un builtin"));
                 return;
             }
-            if (((s.kind == std::string("receiver")) || (ets_import_0_memoryMode((*this).result.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(id)]) == std::string("ref")))) {
+            if (((s.kind == std::string("receiver")) || (ets_import_2_memoryMode((*this).result.files[static_cast<std::size_t>(module)].types[static_cast<std::size_t>(id)]) == std::string("ref")))) {
                 return;
             }
             const bool variable = ets_includes_vec<std::string>(std::vector<std::string>{std::string("VariableDeclaration"), std::string("ArrayBinding"), std::string("ObjectBinding"), std::string("UsingDeclaration")}, s.kind);
@@ -14515,7 +14663,7 @@ struct NativeChecker {
 
     std::string arrayCall(double module, double id, std::string method, std::string receiver) {
         const AstNode n = (*this).node(module, id);
-        const std::string array = ets_import_4_memoryValue(receiver);
+        const std::string array = ets_import_6_memoryValue(receiver);
         if ((ets_includes_vec<std::string>(std::vector<std::string>{std::string("Map"), std::string("Set")}, genericBase(array)) && (method == std::string("forEach")))) {
             const std::vector<std::string> parts = genericArguments(array);
             const std::vector<std::string> parameters = ((genericBase(array) == std::string("Map")) ? std::vector<std::string>{parts[static_cast<std::size_t>(1.0)], parts[static_cast<std::size_t>(0.0)]} : std::vector<std::string>{parts[static_cast<std::size_t>(0.0)]});
@@ -14626,7 +14774,7 @@ struct NativeChecker {
             if ((!(*this).compatible(parameters[static_cast<std::size_t>(at)], inputs[static_cast<std::size_t>(at)]))) {
                 (*this).report(module, callback, std::string("Parámetro de callback incompatible con el elemento de array"));
             }
-            if (((ets_import_0_memoryMode(inputs[static_cast<std::size_t>(at)]) == std::string("ref")) && (!(reduce && (at == 0.0))))) {
+            if (((ets_import_2_memoryMode(inputs[static_cast<std::size_t>(at)]) == std::string("ref")) && (!(reduce && (at == 0.0))))) {
                 (*this).report(module, callback, std::string("E4300: el callback observa elementos readonly"));
             }
             if ((((*this).transferType(parameters[static_cast<std::size_t>(at)]) && (!borrowedType(inputs[static_cast<std::size_t>(at)]))) && (!(reduce && (at == 0.0))))) {
@@ -14683,7 +14831,7 @@ struct NativeChecker {
 
     std::string optionalCall(double module, double id, std::string method, std::string receiver, std::string expected) {
         const AstNode n = (*this).node(module, id);
-        const std::string element = genericArguments(ets_import_4_memoryValue(receiver))[static_cast<std::size_t>(0.0)];
+        const std::string element = genericArguments(ets_import_6_memoryValue(receiver))[static_cast<std::size_t>(0.0)];
         std::vector<double> args = std::vector<double>();
         std::vector<std::string> explicitTypes = std::vector<std::string>();
         double position = 0.0;
@@ -14726,7 +14874,7 @@ struct NativeChecker {
             if ((!(*this).compatible(element, inputs[static_cast<std::size_t>(0.0)]))) {
                 (*this).report(module, callback, std::string("Parámetro de callback incompatible con el payload de Optional"));
             }
-            if ((ets_import_0_memoryMode(inputs[static_cast<std::size_t>(0.0)]) == std::string("ref"))) {
+            if ((ets_import_2_memoryMode(inputs[static_cast<std::size_t>(0.0)]) == std::string("ref"))) {
                 (*this).report(module, callback, std::string("E4300: el callback observa un payload readonly"));
             }
             if (((*this).transferType(element) && (!borrowedType(inputs[static_cast<std::size_t>(0.0)])))) {
@@ -14866,13 +15014,13 @@ struct NativeChecker {
                 }
                 if ((parameters.size() == 1.0)) {
                     (*this).requireType(module, callback, input, parameters[static_cast<std::size_t>(0.0)]);
-                    if ((ets_import_0_memoryMode(parameters[static_cast<std::size_t>(0.0)]) == std::string("ref"))) {
+                    if ((ets_import_2_memoryMode(parameters[static_cast<std::size_t>(0.0)]) == std::string("ref"))) {
                         (mode = std::string("ref"));
                     }
                     if ((*this).transferType(parameters[static_cast<std::size_t>(0.0)])) {
                         (consumes = true);
                     }
-                    if (((borrowedType(subject) && (*this).transferType(ets_import_2_memoryInner(subject))) && (*this).transferType(parameters[static_cast<std::size_t>(0.0)]))) {
+                    if (((borrowedType(subject) && (*this).transferType(ets_import_4_memoryInner(subject))) && (*this).transferType(parameters[static_cast<std::size_t>(0.0)]))) {
                         (*this).report(module, callback, std::string("E4101: un callback no puede copiar ownership desde un subject prestado"));
                     }
                 }
@@ -15121,7 +15269,7 @@ struct NativeChecker {
                 }
             }
             const std::string actual = (*this).expression(module, args[static_cast<std::size_t>(0.0)], context);
-            if ((!numericType(ets_import_4_memoryValue(actual)))) {
+            if ((!numericType(ets_import_6_memoryValue(actual)))) {
                 (*this).report(module, args[static_cast<std::size_t>(0.0)], std::string("Un cast numérico requiere un valor numérico"));
             }
             ets_set_vec<double>((*this).result.files[static_cast<std::size_t>(module)].argumentParameters, args[static_cast<std::size_t>(0.0)], 0.0);
@@ -15273,7 +15421,7 @@ struct NativeChecker {
             if ((callable == std::string("!ref"))) {
                 (*this).writable(module, args[static_cast<std::size_t>(0.0)]);
             }
-            return ets::concat(::ets::string_slice(callable, 1.0, ::ets::string_length(callable)), std::string("<"), ets_import_4_memoryValue(actual[static_cast<std::size_t>(0.0)]), std::string(">"));
+            return ets::concat(::ets::string_slice(callable, 1.0, ::ets::string_length(callable)), std::string("<"), ets_import_6_memoryValue(actual[static_cast<std::size_t>(0.0)]), std::string(">"));
         }
         if ((callable == std::string("!length"))) {
             if ((args.size() != 1.0)) {
@@ -15314,7 +15462,7 @@ struct NativeChecker {
                     if ((!(*this).compatible(actual[static_cast<std::size_t>(a)], params[static_cast<std::size_t>(a)]))) {
                         (matches = false);
                     }
-                    if (((actual[static_cast<std::size_t>(a)] == params[static_cast<std::size_t>(a)]) || (actual[static_cast<std::size_t>(a)] == ets_import_2_memoryInner(params[static_cast<std::size_t>(a)])))) {
+                    if (((actual[static_cast<std::size_t>(a)] == params[static_cast<std::size_t>(a)]) || (actual[static_cast<std::size_t>(a)] == ets_import_4_memoryInner(params[static_cast<std::size_t>(a)])))) {
                         (rank = (rank + 1.0));
                     }
                 }
@@ -15336,7 +15484,7 @@ struct NativeChecker {
             for (double a = 0.0; (a < args.size()); (a = (a + 1.0))) {
                 const double value = (*this).argumentValue(module, args[static_cast<std::size_t>(a)]);
                 ets_set_vec<double>((*this).result.files[static_cast<std::size_t>(module)].argumentParameters, args[static_cast<std::size_t>(a)], a);
-                if ((ets_import_0_memoryMode(params[static_cast<std::size_t>(a)]) == std::string("ref"))) {
+                if ((ets_import_2_memoryMode(params[static_cast<std::size_t>(a)]) == std::string("ref"))) {
                     if (((*this).node(module, value).kind != NodeKind::IdentifierExpression)) {
                         (*this).report(module, value, std::string("Un argumento out de builtin debe ser una variable mutable"));
                     }
@@ -15376,7 +15524,7 @@ struct NativeChecker {
                     (*this).report(module, args[static_cast<std::size_t>(i)], std::string("El spread dinámico requiere un parámetro rest"));
                 }
                 ets_set_vec<double>((*this).result.files[static_cast<std::size_t>(module)].argumentParameters, args[static_cast<std::size_t>(i)], p);
-                if ((ets_import_0_memoryMode(argumentType(parameters[static_cast<std::size_t>(p)], spread)) == std::string("ref"))) {
+                if ((ets_import_2_memoryMode(argumentType(parameters[static_cast<std::size_t>(p)], spread)) == std::string("ref"))) {
                     (*this).mutableArgument(module, (*this).argumentValue(module, args[static_cast<std::size_t>(i)]), actual[static_cast<std::size_t>(i)]);
                 }
                 (*this).requireType(module, (*this).argumentValue(module, args[static_cast<std::size_t>(i)]), actual[static_cast<std::size_t>(i)], argumentType(parameters[static_cast<std::size_t>(p)], spread));
@@ -15464,7 +15612,7 @@ struct NativeChecker {
                         }
                         const std::string pattern = argumentType(parameters[static_cast<std::size_t>(p)], ((*this).node(module, args[static_cast<std::size_t>(a)]).kind == NodeKind::SpreadElement));
                         std::string inferred = (*this).inferToken(pattern, actual[static_cast<std::size_t>(a)], genericNames[static_cast<std::size_t>(g)]);
-                        if (((ets_import_0_memoryMode(pattern) == std::string("ref")) && (ets_import_0_memoryMode(actual[static_cast<std::size_t>(a)]) != std::string("ref")))) {
+                        if (((ets_import_2_memoryMode(pattern) == std::string("ref")) && (ets_import_2_memoryMode(actual[static_cast<std::size_t>(a)]) != std::string("ref")))) {
                             bool isOut = false;
                             double parameterIndex = 0.0;
                             for (const auto& edge : declaration.edges) {
@@ -15475,7 +15623,7 @@ struct NativeChecker {
                                     (parameterIndex = (parameterIndex + 1.0));
                                 }
                             }
-                            (inferred = (*this).inferToken(ets_import_2_memoryInner(pattern), (isOut ? actual[static_cast<std::size_t>(a)] : ets_import_4_memoryValue(actual[static_cast<std::size_t>(a)])), genericNames[static_cast<std::size_t>(g)]));
+                            (inferred = (*this).inferToken(ets_import_4_memoryInner(pattern), (isOut ? actual[static_cast<std::size_t>(a)] : ets_import_6_memoryValue(actual[static_cast<std::size_t>(a)])), genericNames[static_cast<std::size_t>(g)]));
                         }
                         if ((pattern == genericNames[static_cast<std::size_t>(g)])) {
                             (inferred = actual[static_cast<std::size_t>(a)]);
@@ -15559,7 +15707,7 @@ struct NativeChecker {
                 }
                 const std::string parameter = argumentType(parameters[static_cast<std::size_t>(p)], spread);
                 const std::string target = ((((*this).optionalParameter(ownerModule, candidate, p) && (genericBase(parameter) == std::string("Optional"))) && (genericBase(actual[static_cast<std::size_t>(a)]) != std::string("Optional"))) ? genericArguments(parameter)[static_cast<std::size_t>(0.0)] : parameter);
-                if (((!(*this).compatible(actual[static_cast<std::size_t>(a)], target)) && (!((ownedType(target) && (actual[static_cast<std::size_t>(a)] == ets_import_2_memoryInner(target))) && ((*this).node(module, (*this).argumentValue(module, args[static_cast<std::size_t>(a)])).kind == NodeKind::NewExpression))))) {
+                if (((!(*this).compatible(actual[static_cast<std::size_t>(a)], target)) && (!((ownedType(target) && (actual[static_cast<std::size_t>(a)] == ets_import_4_memoryInner(target))) && ((*this).node(module, (*this).argumentValue(module, args[static_cast<std::size_t>(a)])).kind == NodeKind::NewExpression))))) {
                     (matches = false);
                 }
             }
@@ -15635,10 +15783,10 @@ struct NativeChecker {
                             (*this).report(module, value, std::string("Un argumento out debe ser una variable mutable"));
                         }
                     }
-                    if ((ets_import_0_memoryMode(target) == std::string("ref"))) {
+                    if ((ets_import_2_memoryMode(target) == std::string("ref"))) {
                         (*this).mutableArgument(module, value, actual[static_cast<std::size_t>(a)]);
                     }
-                    (*this).requireType(module, value, actual[static_cast<std::size_t>(a)], (isOut ? ets_import_2_memoryInner(target) : target));
+                    (*this).requireType(module, value, actual[static_cast<std::size_t>(a)], (isOut ? ets_import_4_memoryInner(target) : target));
                 }
                 if (wrap) {
                     ets_set_vec<std::string>((*this).result.files[static_cast<std::size_t>(module)].conversions, value, parameters[static_cast<std::size_t>(p)]);
@@ -15856,7 +16004,7 @@ struct NativeChecker {
                 }
                 return valueType;
             }
-            if (((ets_includes_vec<std::string>(std::vector<std::string>{std::string("Optional"), std::string("Result"), std::string("Map")}, genericBase(ets_import_4_memoryValue(receiver))) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("value"), std::string("valueOr"), std::string("get")}, n.get(AttributeKind::Method))) && (*this).transferType(functionReturn(valueType)))) {
+            if (((ets_includes_vec<std::string>(std::vector<std::string>{std::string("Optional"), std::string("Result"), std::string("Map")}, genericBase(ets_import_6_memoryValue(receiver))) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("value"), std::string("valueOr"), std::string("get")}, n.get(AttributeKind::Method))) && (*this).transferType(functionReturn(valueType)))) {
                 const AstNode receiverNode = (*this).node(module, object);
                 bool consumed = ((receiverNode.kind == NodeKind::NewExpression) || (receiverNode.kind == NodeKind::ArrayLiteralExpression));
                 if ((receiverNode.kind == NodeKind::CallExpression)) {
@@ -15867,14 +16015,14 @@ struct NativeChecker {
                     (*this).report(module, id, std::string("E4101: extraer un payload con ownership requiere consumir el contenedor con move"));
                 }
             }
-            if (((::ets::string_endsWith(ets_import_4_memoryValue(receiver), std::string("[]")) && (*this).transferType(ets_import_4_memoryValue(receiver))) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("slice"), std::string("concat"), std::string("filter"), std::string("find"), std::string("sort")}, n.get(AttributeKind::Method)))) {
+            if (((::ets::string_endsWith(ets_import_6_memoryValue(receiver), std::string("[]")) && (*this).transferType(ets_import_6_memoryValue(receiver))) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("slice"), std::string("concat"), std::string("filter"), std::string("find"), std::string("sort")}, n.get(AttributeKind::Method)))) {
                 const AstNode receiverNode = (*this).node(module, object);
                 if ((borrowedType(receiver) || (!ets_includes_vec<NodeKind>(std::vector<NodeKind>{NodeKind::CallExpression, NodeKind::MemberCallExpression, NodeKind::NewExpression, NodeKind::ArrayLiteralExpression, NodeKind::TernaryExpression}, receiverNode.kind)))) {
                     (*this).report(module, id, std::string("E4101: una operación que copia owners requiere consumir el array con move"));
                 }
             }
             const double memberId = (*this).result.files[static_cast<std::size_t>(module)].members[static_cast<std::size_t>(id)];
-            if (((((memberId >= 0.0) && (*this).methodMutates(memberId)) || (::ets::string_endsWith(ets_import_4_memoryValue(receiver), std::string("[]")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("push"), std::string("pop"), std::string("sort")}, n.get(AttributeKind::Method)))) || (ets_includes_vec<std::string>(std::vector<std::string>{std::string("Map"), std::string("Set")}, genericBase(ets_import_4_memoryValue(receiver))) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("set"), std::string("add"), std::string("delete"), std::string("clear")}, n.get(AttributeKind::Method))))) {
+            if (((((memberId >= 0.0) && (*this).methodMutates(memberId)) || (::ets::string_endsWith(ets_import_6_memoryValue(receiver), std::string("[]")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("push"), std::string("pop"), std::string("sort")}, n.get(AttributeKind::Method)))) || (ets_includes_vec<std::string>(std::vector<std::string>{std::string("Map"), std::string("Set")}, genericBase(ets_import_6_memoryValue(receiver))) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("set"), std::string("add"), std::string("delete"), std::string("clear")}, n.get(AttributeKind::Method))))) {
                 (*this).writableTarget(module, object, true);
             }
             const bool optional = (n.get(AttributeKind::Optional) == std::string("true"));
@@ -15887,8 +16035,8 @@ struct NativeChecker {
             const double rawSymbol = ((::ets::string_indexOf(raw, std::string("<"), 0.0) < 0.0) ? (*this).qualifiedType(module, id, raw) : (-1.0));
             std::string valueType = std::string("");
             if ((((rawSymbol >= 0.0) && ((*this).binding.symbols[static_cast<std::size_t>(rawSymbol)].kind == std::string("ClassDeclaration"))) && ((*this).genericParameters(rawSymbol).size() > 0.0))) {
-                if (((*this).nominalSymbol(ets_import_4_memoryValue(expected)) == rawSymbol)) {
-                    (valueType = ets_import_4_memoryValue(expected));
+                if (((*this).nominalSymbol(ets_import_6_memoryValue(expected)) == rawSymbol)) {
+                    (valueType = ets_import_6_memoryValue(expected));
                 } else {
                     const auto owner = (*this).binding.symbols[static_cast<std::size_t>(rawSymbol)];
                     const std::vector<double> generic = (*this).genericParameters(rawSymbol);
@@ -16029,8 +16177,8 @@ struct NativeChecker {
                 }
                 return std::string("boolean");
             }
-            std::string left = ets_import_4_memoryValue((*this).expression(module, leftId, (((expected == std::string("i64")) || (expected == std::string("u64"))) ? expected : std::string(""))));
-            const std::string right = ets_import_4_memoryValue((*this).expression(module, rightId, ((((left == std::string("i64")) || (left == std::string("u64"))) && (*this).integerLiteral(module, rightId)) ? left : std::string(""))));
+            std::string left = ets_import_6_memoryValue((*this).expression(module, leftId, (((expected == std::string("i64")) || (expected == std::string("u64"))) ? expected : std::string(""))));
+            const std::string right = ets_import_6_memoryValue((*this).expression(module, rightId, ((((left == std::string("i64")) || (left == std::string("u64"))) && (*this).integerLiteral(module, rightId)) ? left : std::string(""))));
             const std::string op = n.get(AttributeKind::Operator);
             if ((((right == std::string("i64")) || (right == std::string("u64"))) && (*this).integerLiteral(module, leftId))) {
                 (left = (*this).expression(module, leftId, right));
@@ -16075,7 +16223,7 @@ struct NativeChecker {
                 (*this).literalRange(module, id, expected);
                 return expected;
             }
-            const std::string operand = ets_import_4_memoryValue((*this).expression(module, bindingChild(n, EdgeRole::Operand), std::string("")));
+            const std::string operand = ets_import_6_memoryValue((*this).expression(module, bindingChild(n, EdgeRole::Operand), std::string("")));
             const std::string op = n.get(AttributeKind::Operator);
             if ((op == std::string("typeof"))) {
                 return std::string("string");
@@ -16097,7 +16245,7 @@ struct NativeChecker {
         if ((kind == NodeKind::UpdateExpression)) {
             const double target = bindingChild(n, EdgeRole::Target);
             const std::string actual = (*this).expression(module, target, std::string(""));
-            const std::string valueType = ets_import_4_memoryValue(actual);
+            const std::string valueType = ets_import_6_memoryValue(actual);
             (*this).writable(module, target);
             if (((!numericType(valueType)) && (valueType != std::string("!error")))) {
                 (*this).report(module, id, ets::concat(std::string("El operador '"), n.get(AttributeKind::Operator), std::string("' requiere un destino numérico, no '"), (*this).displayType(actual), std::string("'")));
@@ -16117,7 +16265,7 @@ struct NativeChecker {
             const std::string value = (*this).expression(module, bindingChild(n, EdgeRole::Value), valueType);
             (*this).requireType(module, bindingChild(n, EdgeRole::Value), value, valueType);
             (*this).writable(module, target);
-            if ((((kind == NodeKind::CompoundAssignmentExpression) && (!numericType(ets_import_4_memoryValue(valueType)))) && (!((ets_import_4_memoryValue(valueType) == std::string("string")) && (n.get(AttributeKind::Operator) == std::string("+=")))))) {
+            if ((((kind == NodeKind::CompoundAssignmentExpression) && (!numericType(ets_import_6_memoryValue(valueType)))) && (!((ets_import_6_memoryValue(valueType) == std::string("string")) && (n.get(AttributeKind::Operator) == std::string("+=")))))) {
                 (*this).report(module, id, std::string("Asignación compuesta inválida"));
             }
             return valueType;
@@ -16133,7 +16281,7 @@ struct NativeChecker {
                 if ((edge.role == EdgeRole::Elements)) {
                     const bool spread = ((*this).node(module, edge.node).kind == NodeKind::SpreadElement);
                     if (spread) {
-                        const std::string source = ets_import_4_memoryValue((*this).expression(module, edge.node, ((element == std::string("")) ? std::string("") : semanticArray(element))));
+                        const std::string source = ets_import_6_memoryValue((*this).expression(module, edge.node, ((element == std::string("")) ? std::string("") : semanticArray(element))));
                         std::vector<std::string> additions = std::vector<std::string>();
                         double extent = 1.0;
                         if (::ets::string_endsWith(source, std::string("[]"))) {
@@ -16215,7 +16363,7 @@ struct NativeChecker {
             return ets::concat(std::string("["), ets_join_vec(items, std::string(",")), std::string("]"));
         }
         if ((kind == NodeKind::IndexExpression)) {
-            const std::string object = ets_import_4_memoryValue((*this).expression(module, bindingChild(n, EdgeRole::Object), std::string("")));
+            const std::string object = ets_import_6_memoryValue((*this).expression(module, bindingChild(n, EdgeRole::Object), std::string("")));
             const double indexId = bindingChild(n, EdgeRole::Index);
             (*this).requireType(module, indexId, (*this).expression(module, indexId, std::string("")), std::string("number"));
             if ((object == std::string("string"))) {
@@ -16473,7 +16621,7 @@ struct NativeChecker {
                 (context = semanticArray(element));
             }
         }
-        const std::string source = ets_import_4_memoryValue((*this).expression(module, init, context));
+        const std::string source = ets_import_6_memoryValue((*this).expression(module, init, context));
         if ((context != std::string(""))) {
             (*this).requireType(module, init, source, context);
         }
@@ -16678,7 +16826,7 @@ struct NativeChecker {
             const AstNode ets_local_index = (*this).node(module, target);
             const double object = bindingChild(ets_local_index, EdgeRole::Object);
             const double key = bindingChild(ets_local_index, EdgeRole::Index);
-            const std::string container = ets_import_4_memoryValue((*this).expression(module, object, std::string("")));
+            const std::string container = ets_import_6_memoryValue((*this).expression(module, object, std::string("")));
             std::string keyType = std::string("!error");
             if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("Map"), std::string("Set")}, genericBase(container))) {
                 (keyType = genericArguments(container)[static_cast<std::size_t>(0.0)]);
@@ -16699,7 +16847,7 @@ struct NativeChecker {
         }
         if (((kind == NodeKind::ForOfStatement) || (kind == NodeKind::ForInStatement))) {
             const double source = bindingChild(n, ((kind == NodeKind::ForOfStatement) ? EdgeRole::Iterable : EdgeRole::Target));
-            const std::string container = ets_import_4_memoryValue((*this).expression(module, source, std::string("")));
+            const std::string container = ets_import_6_memoryValue((*this).expression(module, source, std::string("")));
             std::string element = std::string("!error");
             if (::ets::string_endsWith(container, std::string("[]"))) {
                 (element = semanticElement(container));
@@ -16746,7 +16894,7 @@ struct NativeChecker {
             if (((n.get(AttributeKind::Await) == std::string("true")) && borrowedType(declared))) {
                 (*this).report(module, binding, std::string("E4203: el resultado de for await necesita almacenamiento local por valor"));
             }
-            if ((((n.get(AttributeKind::Await) != std::string("true")) && (*this).transferType(element)) && (ets_import_0_memoryMode(declared) != std::string("constRef")))) {
+            if ((((n.get(AttributeKind::Await) != std::string("true")) && (*this).transferType(element)) && (ets_import_2_memoryMode(declared) != std::string("constRef")))) {
                 (*this).report(module, binding, std::string("E4101: iterar un elemento con ownership requiere constRef"));
             }
             const std::string valueType = ((declared == std::string("")) ? element : declared);
@@ -17033,7 +17181,7 @@ struct NativeChecker {
         }
     }
 
-    ets_import_7_CheckResult check() {
+    ets_import_9_CheckResult check() {
         if ((*this).trace) {
             progressDetail(std::string("frontend: types"));
         }
@@ -17048,7 +17196,7 @@ struct NativeChecker {
             ets_push_vec<double>((*this).symbolStates, 0.0);
         }
         for (const auto& m : (*this).graph.modules) {
-            ets_push_vec<ets_import_6_TypedFile>((*this).result.files, ets_import_6_TypedFile{}.constructor(m.cached.result.ast.nodes.size()));
+            ets_push_vec<ets_import_8_TypedFile>((*this).result.files, ets_import_8_TypedFile{}.constructor(m.cached.result.ast.nodes.size()));
         }
         for (double m = 0.0; (m < (*this).graph.modules.size()); (m = (m + 1.0))) {
             if ((*this).trace) {
@@ -17080,7 +17228,7 @@ struct NativeChecker {
             }
         }
         if (((*this).result.diagnostics.size() == 0.0)) {
-            ets_import_7_CheckResult checked = (*this).result;
+            ets_import_9_CheckResult checked = (*this).result;
             validateSafety((*this).graph, (*this).binding, checked, (*this).trace);
             ((*this).result = checked);
         }
@@ -17097,7 +17245,7 @@ struct NativeChecker {
     void default_constructor() {
         (*this).graph = ModuleGraph{};
         (*this).binding = BindingResult{};
-        (*this).result = ets_import_7_CheckResult{};
+        (*this).result = ets_import_9_CheckResult{};
         (*this).symbolStates = std::vector<double>{};
         (*this).depth = double{};
         (*this).switches = double{};
@@ -17111,9 +17259,9 @@ struct NativeChecker {
 struct FrontendProject {
     ModuleGraph graph;
     BindingResult binding;
-    ets_import_7_CheckResult checked;
+    ets_import_9_CheckResult checked;
 
-    FrontendProject& constructor(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult checked) {
+    FrontendProject& constructor(ModuleGraph graph, BindingResult binding, ets_import_9_CheckResult checked) {
         ((*this).graph = graph);
         ((*this).binding = binding);
         ((*this).checked = checked);
@@ -17123,7 +17271,7 @@ struct FrontendProject {
     void default_constructor() {
         (*this).graph = ModuleGraph{};
         (*this).binding = BindingResult{};
-        (*this).checked = ets_import_7_CheckResult{};
+        (*this).checked = ets_import_9_CheckResult{};
     }
 };
 
@@ -17395,7 +17543,7 @@ struct NativeExpansion {
             ets_push_vec<double>(checker.symbolStates, 0.0);
         }
         for (const auto& m : (*this).graph.modules) {
-            ets_push_vec<ets_import_6_TypedFile>(checker.result.files, ets_import_6_TypedFile{}.constructor(m.cached.result.ast.nodes.size()));
+            ets_push_vec<ets_import_8_TypedFile>(checker.result.files, ets_import_8_TypedFile{}.constructor(m.cached.result.ast.nodes.size()));
         }
         for (const auto& declaration : symbol.declarations) {
             checker.statement(symbol.module, declaration, std::string(""), 0.0);
@@ -19120,7 +19268,7 @@ struct IrLowering {
     std::vector<std::string> contextTo;
     ModuleGraph graph;
     BindingResult binding;
-    ets_import_7_CheckResult checked;
+    ets_import_9_CheckResult checked;
     IrProject result;
     double module;
     double currentFunction;
@@ -19144,7 +19292,7 @@ struct IrLowering {
     std::vector<double> globalSymbols;
     std::vector<double> orderState;
 
-    IrLowering& constructor(ModuleGraph graph, BindingResult binding, ets_import_7_CheckResult checked) {
+    IrLowering& constructor(ModuleGraph graph, BindingResult binding, ets_import_9_CheckResult checked) {
         ((*this).interfaceFrom = std::vector<double>());
         ((*this).interfaceTo = std::vector<double>());
         ((*this).dispatchInterfaces = std::vector<double>());
@@ -19235,131 +19383,137 @@ struct IrLowering {
         }
         std::string kind = std::string("");
         std::vector<std::string> arguments = std::vector<std::string>();
-        const std::string mode = ets_import_1_memoryMode(text);
+        const std::string mode = ets_import_3_memoryMode(text);
         const double nominal = canonicalSymbol(text);
         if (primitiveType(text)) {
             (kind = std::string("scalar"));
         } else {
-            if ((mode != std::string(""))) {
-                (kind = mode);
-                ets_push_vec<std::string>(arguments, ets_import_3_memoryInner(text));
+            if (literalType(text)) {
+                (kind = std::string("literal"));
+                ((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].discriminatorValue = literalValue(text));
+                ((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].discriminatorType = (*this).typeId(literalKind(text), id));
             } else {
-                if ((functionClose(text) >= 0.0)) {
-                    (kind = std::string("function"));
-                    (arguments = functionParams(text));
-                    ets_push_vec<std::string>(arguments, functionReturn(text));
+                if ((mode != std::string(""))) {
+                    (kind = mode);
+                    ets_push_vec<std::string>(arguments, ets_import_5_memoryInner(text));
                 } else {
-                    if (::ets::string_endsWith(text, std::string("[]"))) {
-                        (kind = std::string("array"));
-                        ets_push_vec<std::string>(arguments, semanticElement(text));
+                    if ((functionClose(text) >= 0.0)) {
+                        (kind = std::string("function"));
+                        (arguments = functionParams(text));
+                        ets_push_vec<std::string>(arguments, functionReturn(text));
                     } else {
-                        if ((fixedArraySize(text) >= 0.0)) {
-                            (kind = std::string("fixedArray"));
-                            ets_push_vec<std::string>(arguments, fixedArrayElement(text));
-                            ((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].length = fixedArraySize(text));
+                        if (::ets::string_endsWith(text, std::string("[]"))) {
+                            (kind = std::string("array"));
+                            ets_push_vec<std::string>(arguments, semanticElement(text));
                         } else {
-                            if (semanticTuple(text)) {
-                                (kind = std::string("tuple"));
-                                (arguments = splitTypes(::ets::string_slice(text, 1.0, (::ets::string_length(text) - 1.0)), std::string(",")));
+                            if ((fixedArraySize(text) >= 0.0)) {
+                                (kind = std::string("fixedArray"));
+                                ets_push_vec<std::string>(arguments, fixedArrayElement(text));
+                                ((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].length = fixedArraySize(text));
                             } else {
-                                if ((splitTypes(text, std::string("|")).size() > 1.0)) {
-                                    (kind = std::string("sum"));
-                                    (arguments = splitTypes(text, std::string("|")));
+                                if (semanticTuple(text)) {
+                                    (kind = std::string("tuple"));
+                                    (arguments = splitTypes(::ets::string_slice(text, 1.0, (::ets::string_length(text) - 1.0)), std::string(",")));
                                 } else {
-                                    if ((splitTypes(text, std::string("&")).size() > 1.0)) {
-                                        (kind = std::string("intersection"));
-                                        (arguments = splitTypes(text, std::string("&")));
+                                    if ((splitTypes(text, std::string("|")).size() > 1.0)) {
+                                        (kind = std::string("sum"));
+                                        (arguments = splitTypes(text, std::string("|")));
                                     } else {
-                                        if ((genericBase(text) == std::string("variant"))) {
-                                            (kind = std::string("variant"));
-                                            (*this).variantShape(ets_local_index, text, id);
+                                        if ((splitTypes(text, std::string("&")).size() > 1.0)) {
+                                            (kind = std::string("intersection"));
+                                            (arguments = splitTypes(text, std::string("&")));
                                         } else {
-                                            if (((nominal >= 0.0) && (nominal < (*this).binding.symbols.size()))) {
-                                                const auto owner = (*this).binding.symbols[static_cast<std::size_t>(nominal)];
-                                                (kind = ((owner.kind == std::string("EnumDeclaration")) ? std::string("enum") : ((owner.kind == std::string("UnionDeclaration")) ? std::string("union") : ((owner.kind == std::string("InterfaceDeclaration")) ? std::string("interface") : std::string("record")))));
-                                                ((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].symbolId = (*this).checked.symbolIds[static_cast<std::size_t>(nominal)]);
-                                                (arguments = genericArguments(text));
-                                                const auto declaration = (*this).graph.modules[static_cast<std::size_t>(owner.module)].cached.result.ast.nodes[static_cast<std::size_t>(owner.node)];
-                                                std::vector<std::string> tokens = std::vector<std::string>();
-                                                for (const auto& e : declaration.edges) {
-                                                    if ((e.role == EdgeRole::TypeParameters)) {
-                                                        ets_push_vec<std::string>(tokens, ets::concat(std::string("@"), numberToString((*this).binding.files[static_cast<std::size_t>(owner.module)].declarations[static_cast<std::size_t>(e.node)])));
-                                                    }
-                                                }
-                                                if ((kind == std::string("enum"))) {
-                                                    ets_push_vec<std::string>(arguments, declaration.get(AttributeKind::Underlying));
-                                                }
-                                                if ((kind == std::string("union"))) {
+                                            if ((genericBase(text) == std::string("variant"))) {
+                                                (kind = std::string("variant"));
+                                                (*this).variantShape(ets_local_index, text, id);
+                                            } else {
+                                                if (((nominal >= 0.0) && (nominal < (*this).binding.symbols.size()))) {
+                                                    const auto owner = (*this).binding.symbols[static_cast<std::size_t>(nominal)];
+                                                    (kind = ((owner.kind == std::string("EnumDeclaration")) ? std::string("enum") : ((owner.kind == std::string("UnionDeclaration")) ? std::string("union") : ((owner.kind == std::string("InterfaceDeclaration")) ? std::string("interface") : std::string("record")))));
+                                                    ((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].symbolId = (*this).checked.symbolIds[static_cast<std::size_t>(nominal)]);
+                                                    (arguments = genericArguments(text));
+                                                    const auto declaration = (*this).graph.modules[static_cast<std::size_t>(owner.module)].cached.result.ast.nodes[static_cast<std::size_t>(owner.node)];
+                                                    std::vector<std::string> tokens = std::vector<std::string>();
                                                     for (const auto& e : declaration.edges) {
-                                                        if ((e.role == EdgeRole::Variants)) {
-                                                            const auto pendingPush = (*this).typeId(ets::concat(std::string("variant<"), text, std::string(","), numberToString(e.node), std::string(">")), id);
-                                                            ets_push_vec<double>((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].variants, pendingPush);
+                                                        if ((e.role == EdgeRole::TypeParameters)) {
+                                                            ets_push_vec<std::string>(tokens, ets::concat(std::string("@"), numberToString((*this).binding.files[static_cast<std::size_t>(owner.module)].declarations[static_cast<std::size_t>(e.node)])));
                                                         }
                                                     }
-                                                    if (((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].variants.size() > 0.0)) {
-                                                        const double first = (*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].variants[static_cast<std::size_t>(0.0)];
-                                                        for (double field = 0.0; (field < (*this).result.typeDefinitions[static_cast<std::size_t>(first)].names.size()); (field = (field + 1.0))) {
-                                                            const std::string name = (*this).result.typeDefinitions[static_cast<std::size_t>(first)].names[static_cast<std::size_t>(field)];
-                                                            std::vector<std::string> fields = std::vector<std::string>();
-                                                            bool common = true;
-                                                            for (const auto& variant : (*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].variants) {
-                                                                bool found = false;
-                                                                for (double at = 0.0; (at < (*this).result.typeDefinitions[static_cast<std::size_t>(variant)].names.size()); (at = (at + 1.0))) {
-                                                                    if (((*this).result.typeDefinitions[static_cast<std::size_t>(variant)].names[static_cast<std::size_t>(at)] == name)) {
-                                                                        (found = true);
-                                                                        const std::string text = (*this).result.types[static_cast<std::size_t>((*this).result.typeDefinitions[static_cast<std::size_t>(variant)].fields[static_cast<std::size_t>(at)])];
-                                                                        if ((!ets_includes_vec<std::string>(fields, text))) {
-                                                                            ets_push_vec<std::string>(fields, text);
+                                                    if ((kind == std::string("enum"))) {
+                                                        ets_push_vec<std::string>(arguments, declaration.get(AttributeKind::Underlying));
+                                                    }
+                                                    if ((kind == std::string("union"))) {
+                                                        for (const auto& e : declaration.edges) {
+                                                            if ((e.role == EdgeRole::Variants)) {
+                                                                const auto pendingPush = (*this).typeId(ets::concat(std::string("variant<"), text, std::string(","), numberToString(e.node), std::string(">")), id);
+                                                                ets_push_vec<double>((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].variants, pendingPush);
+                                                            }
+                                                        }
+                                                        if (((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].variants.size() > 0.0)) {
+                                                            const double first = (*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].variants[static_cast<std::size_t>(0.0)];
+                                                            for (double field = 0.0; (field < (*this).result.typeDefinitions[static_cast<std::size_t>(first)].names.size()); (field = (field + 1.0))) {
+                                                                const std::string name = (*this).result.typeDefinitions[static_cast<std::size_t>(first)].names[static_cast<std::size_t>(field)];
+                                                                std::vector<std::string> fields = std::vector<std::string>();
+                                                                bool common = true;
+                                                                for (const auto& variant : (*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].variants) {
+                                                                    bool found = false;
+                                                                    for (double at = 0.0; (at < (*this).result.typeDefinitions[static_cast<std::size_t>(variant)].names.size()); (at = (at + 1.0))) {
+                                                                        if (((*this).result.typeDefinitions[static_cast<std::size_t>(variant)].names[static_cast<std::size_t>(at)] == name)) {
+                                                                            (found = true);
+                                                                            const std::string text = (*this).result.types[static_cast<std::size_t>((*this).result.typeDefinitions[static_cast<std::size_t>(variant)].fields[static_cast<std::size_t>(at)])];
+                                                                            if ((!ets_includes_vec<std::string>(fields, text))) {
+                                                                                ets_push_vec<std::string>(fields, text);
+                                                                            }
                                                                         }
                                                                     }
+                                                                    if ((!found)) {
+                                                                        (common = false);
+                                                                    }
                                                                 }
-                                                                if ((!found)) {
-                                                                    (common = false);
-                                                                }
-                                                            }
-                                                            if (common) {
-                                                                ets_push_vec<std::string>((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].names, name);
-                                                                {
-                                                                    const auto pendingPush = (*this).typeId(joinTypes(fields, std::string("|")), id);
-                                                                    ets_push_vec<double>((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].fields, pendingPush);
+                                                                if (common) {
+                                                                    ets_push_vec<std::string>((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].names, name);
+                                                                    {
+                                                                        const auto pendingPush = (*this).typeId(joinTypes(fields, std::string("|")), id);
+                                                                        ets_push_vec<double>((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].fields, pendingPush);
+                                                                    }
                                                                 }
                                                             }
                                                         }
                                                     }
-                                                }
-                                                for (double field = 0.0; (field < (*this).binding.symbols.size()); (field = (field + 1.0))) {
-                                                    const auto member = (*this).binding.symbols[static_cast<std::size_t>(field)];
-                                                    if (((((member.module != owner.module) || (member.scope < 0.0)) || ((*this).binding.scopes[static_cast<std::size_t>(member.scope)].node != owner.node)) || (!ets_includes_vec<std::string>(std::vector<std::string>{std::string("ClassField"), std::string("InterfaceField")}, member.kind)))) {
-                                                        continue;
+                                                    for (double field = 0.0; (field < (*this).binding.symbols.size()); (field = (field + 1.0))) {
+                                                        const auto member = (*this).binding.symbols[static_cast<std::size_t>(field)];
+                                                        if (((((member.module != owner.module) || (member.scope < 0.0)) || ((*this).binding.scopes[static_cast<std::size_t>(member.scope)].node != owner.node)) || (!ets_includes_vec<std::string>(std::vector<std::string>{std::string("ClassField"), std::string("InterfaceField")}, member.kind)))) {
+                                                            continue;
+                                                        }
+                                                        const auto fieldNode = (*this).graph.modules[static_cast<std::size_t>(member.module)].cached.result.ast.nodes[static_cast<std::size_t>(member.node)];
+                                                        if ((fieldNode.get(AttributeKind::IsStatic) == std::string("true"))) {
+                                                            continue;
+                                                        }
+                                                        std::string value = (*this).checked.symbolTypes[static_cast<std::size_t>(field)];
+                                                        for (double at = 0.0; ((at < tokens.size()) && (at < arguments.size())); (at = (at + 1.0))) {
+                                                            (value = replaceType(value, tokens[static_cast<std::size_t>(at)], arguments[static_cast<std::size_t>(at)]));
+                                                        }
+                                                        const double fieldType = (*this).typeId(value, id);
+                                                        ets_push_vec<double>((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].fields, fieldType);
+                                                        ets_push_vec<std::string>((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].names, member.name);
                                                     }
-                                                    const auto fieldNode = (*this).graph.modules[static_cast<std::size_t>(member.module)].cached.result.ast.nodes[static_cast<std::size_t>(member.node)];
-                                                    if ((fieldNode.get(AttributeKind::IsStatic) == std::string("true"))) {
-                                                        continue;
-                                                    }
-                                                    std::string value = (*this).checked.symbolTypes[static_cast<std::size_t>(field)];
-                                                    for (double at = 0.0; ((at < tokens.size()) && (at < arguments.size())); (at = (at + 1.0))) {
-                                                        (value = replaceType(value, tokens[static_cast<std::size_t>(at)], arguments[static_cast<std::size_t>(at)]));
-                                                    }
-                                                    const double fieldType = (*this).typeId(value, id);
-                                                    ets_push_vec<double>((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].fields, fieldType);
-                                                    ets_push_vec<std::string>((*this).result.typeDefinitions[static_cast<std::size_t>(ets_local_index)].names, member.name);
-                                                }
-                                            } else {
-                                                if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("Optional"), std::string("Result"), std::string("Map"), std::string("Set"), std::string("Promise"), std::string("pack"), std::string("variant"), std::string("iterator")}, genericBase(text))) {
-                                                    (kind = genericBase(text));
-                                                    (arguments = genericArguments(text));
                                                 } else {
-                                                    if (::ets::string_startsWith(text, std::string("@"))) {
-                                                        (kind = std::string("parameter"));
+                                                    if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("Optional"), std::string("Result"), std::string("Map"), std::string("Set"), std::string("Promise"), std::string("pack"), std::string("variant"), std::string("iterator")}, genericBase(text))) {
+                                                        (kind = genericBase(text));
+                                                        (arguments = genericArguments(text));
                                                     } else {
-                                                        for (const auto& symbol : (*this).binding.symbols) {
-                                                            if (((symbol.kind == std::string("builtin-type")) && (symbol.name == text))) {
-                                                                (kind = std::string("runtime"));
+                                                        if (::ets::string_startsWith(text, std::string("@"))) {
+                                                            (kind = std::string("parameter"));
+                                                        } else {
+                                                            for (const auto& symbol : (*this).binding.symbols) {
+                                                                if (((symbol.kind == std::string("builtin-type")) && (symbol.name == text))) {
+                                                                    (kind = std::string("runtime"));
+                                                                }
                                                             }
-                                                        }
-                                                        if ((kind == std::string(""))) {
-                                                            (*this).fail(id, ets::concat(std::string("Tipo sin contrato IR: "), text));
-                                                            (kind = std::string("invalid"));
+                                                            if ((kind == std::string(""))) {
+                                                                (*this).fail(id, ets::concat(std::string("Tipo sin contrato IR: "), text));
+                                                                (kind = std::string("invalid"));
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -19816,7 +19970,7 @@ struct IrLowering {
     }
 
     double memberFor(std::string text, std::string name, std::string signature = std::string("")) const {
-        const double nominal = canonicalSymbol(ets_import_5_memoryValue(text));
+        const double nominal = canonicalSymbol(ets_import_7_memoryValue(text));
         if ((nominal < 0.0)) {
             return (-1.0);
         }
@@ -20048,7 +20202,7 @@ struct IrLowering {
         }
         double value = (*this).expressionInner(id);
         const std::string conversion = (*this).checked.files[static_cast<std::size_t>((*this).module)].conversions[static_cast<std::size_t>(id)];
-        if (((conversion != std::string("")) && (!ets_includes_vec<std::string>(std::vector<std::string>{std::string("ref"), std::string("constRef")}, ets_import_1_memoryMode(conversion))))) {
+        if (((conversion != std::string("")) && (!ets_includes_vec<std::string>(std::vector<std::string>{std::string("ref"), std::string("constRef")}, ets_import_3_memoryMode(conversion))))) {
             (value = (*this).convert(value, (*this).typeId(conversion, id), id));
         }
         return value;
@@ -20364,11 +20518,11 @@ struct IrLowering {
             }
         }
         if ((receiver != std::string(""))) {
-            const double classId = canonicalSymbol(ets_import_5_memoryValue(receiver));
+            const double classId = canonicalSymbol(ets_import_7_memoryValue(receiver));
             if ((classId >= 0.0)) {
                 const auto classSymbol = (*this).binding.symbols[static_cast<std::size_t>(classId)];
                 const auto declaration = (*this).graph.modules[static_cast<std::size_t>(classSymbol.module)].cached.result.ast.nodes[static_cast<std::size_t>(classSymbol.node)];
-                const std::vector<std::string> actuals = genericArguments(ets_import_5_memoryValue(receiver));
+                const std::vector<std::string> actuals = genericArguments(ets_import_7_memoryValue(receiver));
                 double at = 0.0;
                 for (const auto& e : declaration.edges) {
                     if (((e.role == EdgeRole::TypeParameters) && (at < actuals.size()))) {
@@ -20402,7 +20556,7 @@ struct IrLowering {
             }
         }
         for (double f = 0.0; (f < (*this).functionNodes.size()); (f = (f + 1.0))) {
-            if ((((((((*this).functionNodes[static_cast<std::size_t>(f)] == id) && ((*this).functionModules[static_cast<std::size_t>(f)] == owner)) && ((*this).result.functions[static_cast<std::size_t>(f)].signature == signature)) && (ets_join_vec((*this).result.functions[static_cast<std::size_t>(f)].substitutionFrom, std::string(",")) == ets_join_vec(from, std::string(",")))) && (ets_join_vec((*this).result.functions[static_cast<std::size_t>(f)].substitutionTo, std::string(",")) == ets_join_vec(to, std::string(",")))) && ((receiver == std::string("")) ? ((*this).result.functions[static_cast<std::size_t>(f)].receiverType == (-1.0)) : (((*this).result.functions[static_cast<std::size_t>(f)].receiverType >= 0.0) && ((*this).result.types[static_cast<std::size_t>((*this).result.functions[static_cast<std::size_t>(f)].receiverType)] == ets::concat(std::string("ref<"), ets_import_5_memoryValue(receiver), std::string(">"))))))) {
+            if ((((((((*this).functionNodes[static_cast<std::size_t>(f)] == id) && ((*this).functionModules[static_cast<std::size_t>(f)] == owner)) && ((*this).result.functions[static_cast<std::size_t>(f)].signature == signature)) && (ets_join_vec((*this).result.functions[static_cast<std::size_t>(f)].substitutionFrom, std::string(",")) == ets_join_vec(from, std::string(",")))) && (ets_join_vec((*this).result.functions[static_cast<std::size_t>(f)].substitutionTo, std::string(",")) == ets_join_vec(to, std::string(",")))) && ((receiver == std::string("")) ? ((*this).result.functions[static_cast<std::size_t>(f)].receiverType == (-1.0)) : (((*this).result.functions[static_cast<std::size_t>(f)].receiverType >= 0.0) && ((*this).result.types[static_cast<std::size_t>((*this).result.functions[static_cast<std::size_t>(f)].receiverType)] == ets::concat(std::string("ref<"), ets_import_7_memoryValue(receiver), std::string(">"))))))) {
                 ((*this).module = previousModule);
                 return f;
             }
@@ -20434,7 +20588,7 @@ struct IrLowering {
             }
         }
         if ((receiver != std::string(""))) {
-            ((*this).result.functions[static_cast<std::size_t>(ets_local_index)].receiverType = (*this).typeId(ets::concat(std::string("ref<"), ets_import_5_memoryValue(receiver), std::string(">")), id));
+            ((*this).result.functions[static_cast<std::size_t>(ets_local_index)].receiverType = (*this).typeId(ets::concat(std::string("ref<"), ets_import_7_memoryValue(receiver), std::string(">")), id));
             ((*this).result.functions[static_cast<std::size_t>(ets_local_index)].parameterTypes = ets_concat_vec<double>({std::vector<double>{(*this).result.functions[static_cast<std::size_t>(ets_local_index)].receiverType}, (*this).result.functions[static_cast<std::size_t>(ets_local_index)].parameterTypes}));
         }
         for (const auto& capture : (*this).checked.captures) {
@@ -20688,7 +20842,7 @@ struct IrLowering {
     }
 
     double classConstruct(double id, double typeId) {
-        const std::string valueType = ets_import_5_memoryValue((*this).result.types[static_cast<std::size_t>(typeId)]);
+        const std::string valueType = ets_import_7_memoryValue((*this).result.types[static_cast<std::size_t>(typeId)]);
         const double valueId = (*this).typeId(valueType, id);
         const double nominal = canonicalSymbol(valueType);
         if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("Map"), std::string("Set")}, genericBase(valueType))) {
@@ -20789,7 +20943,7 @@ struct IrLowering {
                 ets_push_vec<double>(args, e.node);
             }
         }
-        const double subject = (*this).unwrappedPlace(args[static_cast<std::size_t>(0.0)], (*this).typeId(ets_import_5_memoryValue((*this).resolved((*this).checked.files[static_cast<std::size_t>((*this).module)].types[static_cast<std::size_t>(args[static_cast<std::size_t>(0.0)])])), id));
+        const double subject = (*this).unwrappedPlace(args[static_cast<std::size_t>(0.0)], (*this).typeId(ets_import_7_memoryValue((*this).resolved((*this).checked.files[static_cast<std::size_t>((*this).module)].types[static_cast<std::size_t>(args[static_cast<std::size_t>(0.0)])])), id));
         const double subjectType = (*this).result.functions[static_cast<std::size_t>((*this).currentFunction)].places[static_cast<std::size_t>(subject)].typeId;
         double discriminator = subject;
         if ((args.size() == 3.0)) {
@@ -21123,7 +21277,7 @@ struct IrLowering {
             if (ets_includes_vec<double>((*this).globalSymbols, member)) {
                 (p = (*this).place(member, id));
             } else {
-                const double base = (*this).unwrappedPlace(receiver, (*this).typeId(ets_import_5_memoryValue((*this).resolved((*this).checked.files[static_cast<std::size_t>((*this).module)].receivers[static_cast<std::size_t>(id)])), id));
+                const double base = (*this).unwrappedPlace(receiver, (*this).typeId(ets_import_7_memoryValue((*this).resolved((*this).checked.files[static_cast<std::size_t>((*this).module)].receivers[static_cast<std::size_t>(id)])), id));
                 const auto shape = (*this).result.typeDefinitions[static_cast<std::size_t>((*this).result.functions[static_cast<std::size_t>((*this).currentFunction)].places[static_cast<std::size_t>(base)].typeId)];
                 for (double field = 0.0; (field < shape.names.size()); (field = (field + 1.0))) {
                     if ((shape.names[static_cast<std::size_t>(field)] == (*this).binding.symbols[static_cast<std::size_t>(member)].name)) {
@@ -21138,7 +21292,7 @@ struct IrLowering {
             const double callable = (*this).emit(std::string("load"), (*this).typeId(signature, id), std::vector<double>(), p, (-1.0), std::string(""), id);
             return (*this).call(id, typeId, (-1.0), callable);
         }
-        const std::string resolvedReceiver = ets_import_5_memoryValue((*this).resolved((*this).checked.files[static_cast<std::size_t>((*this).module)].receivers[static_cast<std::size_t>(id)]));
+        const std::string resolvedReceiver = ets_import_7_memoryValue((*this).resolved((*this).checked.files[static_cast<std::size_t>((*this).module)].receivers[static_cast<std::size_t>(id)]));
         if (((member >= 0.0) && ((*this).binding.symbols[static_cast<std::size_t>(member)].kind == std::string("InterfaceMethod")))) {
             const double actual = (*this).memberFor(resolvedReceiver, n.get(AttributeKind::Method), (*this).resolved((*this).checked.files[static_cast<std::size_t>((*this).module)].signatures[static_cast<std::size_t>(id)]));
             if (((actual >= 0.0) && ((*this).binding.symbols[static_cast<std::size_t>(actual)].kind == std::string("ClassMethod")))) {
@@ -21174,10 +21328,10 @@ struct IrLowering {
         if (((member >= 0.0) && ((*this).binding.symbols[static_cast<std::size_t>(member)].kind == std::string("ClassMethod")))) {
             const auto method = (*this).binding.symbols[static_cast<std::size_t>(member)];
             const auto declaration = (*this).graph.modules[static_cast<std::size_t>(method.module)].cached.result.ast.nodes[static_cast<std::size_t>(method.node)];
-            return (*this).call(id, typeId, ((declaration.get(AttributeKind::IsStatic) == std::string("true")) ? (-1.0) : (*this).unwrappedPlace(receiver, (*this).typeId(ets_import_5_memoryValue((*this).resolved((*this).checked.files[static_cast<std::size_t>((*this).module)].receivers[static_cast<std::size_t>(id)])), id))));
+            return (*this).call(id, typeId, ((declaration.get(AttributeKind::IsStatic) == std::string("true")) ? (-1.0) : (*this).unwrappedPlace(receiver, (*this).typeId(ets_import_7_memoryValue((*this).resolved((*this).checked.files[static_cast<std::size_t>((*this).module)].receivers[static_cast<std::size_t>(id)])), id))));
         }
         const std::string name = n.get(AttributeKind::Method);
-        const std::string receiverType = ets_import_5_memoryValue((*this).resolved((*this).checked.files[static_cast<std::size_t>((*this).module)].receivers[static_cast<std::size_t>(id)]));
+        const std::string receiverType = ets_import_7_memoryValue((*this).resolved((*this).checked.files[static_cast<std::size_t>((*this).module)].receivers[static_cast<std::size_t>(id)]));
         std::vector<double> operands = std::vector<double>();
         std::vector<std::string> effects = std::vector<std::string>{std::string("runtime")};
         const double receiverSymbol = (*this).reference(receiver);
@@ -21210,7 +21364,7 @@ struct IrLowering {
                 (at = (at + 1.0));
             }
         }
-        const std::string base = (::ets::string_startsWith(receiverType, std::string("!")) ? receiverType : ((genericBase(ets_import_5_memoryValue(receiverType)) != std::string("")) ? genericBase(ets_import_5_memoryValue(receiverType)) : (::ets::string_endsWith(receiverType, std::string("[]")) ? std::string("array") : receiverType)));
+        const std::string base = (::ets::string_startsWith(receiverType, std::string("!")) ? receiverType : ((genericBase(ets_import_7_memoryValue(receiverType)) != std::string("")) ? genericBase(ets_import_7_memoryValue(receiverType)) : (::ets::string_endsWith(receiverType, std::string("[]")) ? std::string("array") : receiverType)));
         return (*this).runtime(ets::concat(base, std::string("."), name), typeId, operands, id, effects);
     }
 
@@ -21929,7 +22083,7 @@ struct IrLowering {
         (*this).contextTo = std::vector<std::string>{};
         (*this).graph = ModuleGraph{};
         (*this).binding = BindingResult{};
-        (*this).checked = ets_import_7_CheckResult{};
+        (*this).checked = ets_import_9_CheckResult{};
         (*this).result = IrProject{};
         (*this).module = double{};
         (*this).currentFunction = double{};

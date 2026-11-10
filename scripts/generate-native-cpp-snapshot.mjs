@@ -48,6 +48,15 @@ const runtimeTarget = join(directory, "runtime");
 rmSync(runtimeTarget, { recursive: true, force: true });
 cpSync(runtimeSource, runtimeTarget, { recursive: true });
 
+// Native IR backend. `native-cpp/build-all.sh` compiles this copy to build
+// the `etsc` coordinator, so the seed must carry the same generator that
+// `src/` uses. Without this sync the installed compiler keeps the previous
+// backend and rejects any IR shape the current `src/` backend knows about.
+const nativeBackendSource = "src/codegen/ir/native";
+const nativeBackendTarget = join(directory, "src/codegen/ir/native");
+rmSync(nativeBackendTarget, { recursive: true, force: true });
+cpSync(nativeBackendSource, nativeBackendTarget, { recursive: true });
+
 // Project templates. `etsc init` writes these; without them an installed
 // compiler could not create a project, so they travel with the snapshot.
 // They are generated in the same shape the installer publishes: the config is
