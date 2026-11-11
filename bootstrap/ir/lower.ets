@@ -126,6 +126,13 @@ export class IrLowering {
     return index;
   }
   valueType(value: number): number { return value >= 0 ? this.result.functions[this.currentFunction].values[value] : -1; }
+  // Identifier/member chains whose place can be computed again without side effects.
+  purePlace(id: number): boolean {
+    const n = this.node(id);
+    if (n.kind == NodeKind.IdentifierExpression) return true;
+    if (n.kind == NodeKind.MemberExpression) return this.purePlace(bindingChild(n,EdgeRole.Object));
+    return false;
+  }
   unwrappedPlace(id: number, expected: number): number {
     let place: number = this.materialize(id); let count: number = 0;
     while (place >= 0 && this.result.functions[this.currentFunction].places[place].typeId != expected && count < 8) {
@@ -864,7 +871,13 @@ export class IrLowering {
         const actual: number = this.typeId(this.checked.files[this.module].types[receiver],receiver);
         // Read-only calls on collection places borrow them too: loading by value copies the whole Map/Set/array per call.
         const collection: boolean = ["Map","Set"].includes(genericBase(receiverType)) || receiverType.endsWith("[]");
-        if ((this.result.typeDefinitions[actual].resource || collection) && [NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.node(receiver).kind)) operands.push(this.emit("borrow",this.typeId("constRef<"+this.result.types[actual]+">",id),[],this.rootPlace(receiver),-1,"constRef",id));
+        let borrowed: number = -1;
+        if (!this.result.typeDefinitions[actual].resource && collection && this.purePlace(receiver)) {
+          const element: number = this.typeId(receiverType,id); const p: number = this.unwrappedPlace(receiver,element);
+          if (p >= 0 && this.result.functions[this.currentFunction].places[p].typeId == element) borrowed = this.emit("borrow",this.typeId("constRef<"+this.result.types[element]+">",id),[],p,-1,"constRef",id);
+        }
+        if (borrowed >= 0) operands.push(borrowed);
+        else if (this.result.typeDefinitions[actual].resource && [NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.node(receiver).kind)) operands.push(this.emit("borrow",this.typeId("constRef<"+this.result.types[actual]+">",id),[],this.rootPlace(receiver),-1,"constRef",id));
         else operands.push(this.expression(receiver));
       }
     }
