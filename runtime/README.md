@@ -18,9 +18,15 @@ y macOS; no hay backend Windows/IOCP.
 | `ets_io_uring.hpp` | Linux-only (`__NR_io_uring_*`), ring reusado por worker; usado por fs async cuando disponible, fallback POSIX. |
 | `ets_syntax.hpp` | Validación sintáctica paralela con Tree-sitter; rechaza `throw`/`try`/`extends` (consistente con `Result<T>`-sin-excepciones). |
 | `ets_process.hpp` | Driver de proceso usado por el compilador: `compileCpp`, `runNativeProcess`, `sourceUsesTreeSitter`. |
+| `ets_child_process.hpp` | API Node-style del dialecto: `child_process.spawn` con streams de stdin/stdout/stderr y eventos, además de `process.stdin/stdout/stderr`; libuv asíncrono. |
 | `ets_ast.hpp` + `ast/*.hpp` | Header AST de Tree-sitter; expone `estaticTypedAstJson` / `estaticTypedAstRecords`. |
 
 ## Cómo se incluyen
+
+El compilador bootstrap incorpora `runtime/ets_child_process.hpp` solo cuando el
+programa usa `process.stdin/stdout/stderr` o `child_process.spawn`; `install.sh`
+publica su snapshot desde `native-cpp/runtime/`. El runtime de procesos se apoya
+en la instancia compartida de libuv.
 
 `CppGenerator.includes()` (`src/codegen/cpp-generator.ts:47-49`) decide según el
 AST:

@@ -226,7 +226,7 @@ cíclicos y las identidades de símbolo universales siguen pendientes.
 - Helpers async: `all(tasks)`, `race(tasks)`, `sleep(ms)`.
 - File I/O: `readFile`, `writeFile`, `appendFile`, `copyFile`, `moveFile`,
   `removeFile`, `fileExists` (+ variantes `Async`).
-- Console: `print`, `printError`, `write`, `writeError` + `console.log/info/debug/trace/warn/error`.
+- Console: `print`, `printError`, `write`, `writeError` + `console.log/info/debug/trace/warn/error`. Streams Node-style: `process.stdin.on("data"|"end", ...)`, `process.stdout.write`, `process.stderr.write`; hijos con `child_process.spawn(command, args)`, streams `stdin/stdout/stderr` y eventos `exit/close/error`. Chunks UTF-8 como `string`; no `Buffer`, opciones de spawn, señales ni backpressure avanzado. Los callbacks retenidos no pueden escapar capturando locales mutables por referencia. `spawn(task)` sigue siendo una tarea del event loop, no un hijo.
 - Servidor HTTP: cpp-httplib por defecto y Drogon con `@cpp_drogon`.
   `http-server.ets` es un ejemplo manual sobre TCP, no un tercer backend.
 - TLS: `tls-server.ets` con `TlsContext` y `TlsConnection`.

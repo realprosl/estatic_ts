@@ -197,5 +197,18 @@ test("install builds bootstrap/ with the seed and publishes that executable",asy
   // El runtime y las librerias que lo acompanan siguen en la distribucion.
   assert(existsSync(join(home,"native/frontend")));
   assert(existsSync(join(home,"runtime")));
- }finally{rmSync(dir,{recursive:true,force:true});}
+   const source=join(dir,"node-streams.ets"),app=join(dir,"node-streams-app");
+   writeFileSync(source,`process.stdin.on("data",(chunk:string):void=>{process.stdout.write("parent:"+chunk);});
+const childArgs:string[]=["-c","printf child-out; printf child-err >&2; cat"];
+const child=child_process.spawn("/bin/sh",childArgs);
+child.stdout.on("data",(chunk:string):void=>{process.stdout.write("child:"+chunk);});
+child.stderr.on("data",(chunk:string):void=>{process.stderr.write("child-error:"+chunk);});
+child.stdin.write("child-input");child.stdin.end();
+child.on("close",(code:number):void=>print("child-close:",code));
+`);
+   const run=spawnSync(bin,["run",source,"--binary",app,"--no-progress"],{cwd:dir,encoding:"utf8",input:"stdin-input",timeout:180000,env:{...process.env,ESTC_ROOT:home}});
+   assert.equal(run.status,0,run.stderr+run.stdout);
+   assert.match(run.stdout,/parent:stdin-input/);assert.match(run.stdout,/child:child-out/);assert.match(run.stdout,/child:child-input/);assert.match(run.stdout,/child-close:\s*0/);
+   assert.match(run.stderr,/child-error:child-err/);
+  }finally{rmSync(dir,{recursive:true,force:true});}
 });
