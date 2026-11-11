@@ -302,7 +302,7 @@ export class IrCppGenerator {
           const d=this.project.dispatches?.find(d=>d.interfaceType===receiver&&d.concreteType===concrete&&d.name===i.text&&d.signature===i.signature);
           if(!d)this.fail("Dispatch de interfaz incompleto",i.source);
           const target=this.project.functions[d.callee];
-          // El receptor prestado llega como `T&` o `const T&`; box.get() preserva const.
+          // El receptor implícito es un `ref<T>` → llega a la firma como `T&`.
           const args=[`box.get()`];
           for(let n=1;n<i.operands.length;n++){
             const formal=target.parameterTypes[n];
@@ -435,7 +435,7 @@ export class IrCppGenerator {
     const dispatchKeys=new Set<string>();
     for(const d of p.dispatches??[]) {
       const target=p.functions[d.callee],key=`${d.interfaceType}:${d.concreteType}:${d.name}:${d.signature}`;
-      if(!type(d.interfaceType)||!type(d.concreteType)||!type(d.signature)||!target||!this.interface(d.interfaceType)||!this.shape(d.interfaceType).variants.includes(d.concreteType)||this.shape(d.signature).kind!=="function"||target.parameterTypes.length!==this.shape(d.signature).arguments.length||!["ref","constRef"].includes(this.shape(target.parameterTypes[0]).kind)||this.shape(target.parameterTypes[0]).arguments[0]!==d.concreteType||dispatchKeys.has(key))this.fail("Contrato de dispatch de interfaz inválido");
+      if(!type(d.interfaceType)||!type(d.concreteType)||!type(d.signature)||!target||!this.interface(d.interfaceType)||!this.shape(d.interfaceType).variants.includes(d.concreteType)||this.shape(d.signature).kind!=="function"||target.parameterTypes.length!==this.shape(d.signature).arguments.length||this.shape(target.parameterTypes[0]).kind!=="ref"||this.shape(target.parameterTypes[0]).arguments[0]!==d.concreteType||dispatchKeys.has(key))this.fail("Contrato de dispatch de interfaz inválido");
       dispatchKeys.add(key);
     }
     for(const f of p.functions) {

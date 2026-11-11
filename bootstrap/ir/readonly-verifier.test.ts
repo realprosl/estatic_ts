@@ -17,7 +17,7 @@ import { IrVerifier } from "../bootstrap/ir/verify";
 import { irAssignable } from "../bootstrap/ir/verify-shapes";
 import { verifyFunctionContracts } from "../bootstrap/ir/verify-contracts";
 function expect(value:boolean, label:string):void { if (!value) { printError(label); exitProcess(1); } }
-function main():void {
+function run():void {
   let p = new IrProject();
   p.types = ["number","void","Node","ref<Node>","constRef<Node>","I","ref<I>","constRef<I>","()=>number","readonly Node","constPtr<Node>"];
   for (const kind of ["scalar","scalar","record","ref","constRef","interface","ref","constRef","function","readonly","constPtr"]) p.typeDefinitions.push(new IrType(kind));
@@ -71,7 +71,7 @@ function main():void {
   v.instruction(f,call); expect(v.issues.length > 0,"readonly interface cannot dispatch to mutable method");
   print("readonly verifier ok");
 }
-main();
+run();
 `);
     const binary = await buildLoader(join(directory, "binary"), relative(root, entry), true);
     const result = spawnSync(binary, [], { encoding: "utf8", timeout: 30000 });

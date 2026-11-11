@@ -381,6 +381,27 @@ export class SafetyAnalyzer {
     if (["Map","Set"].includes(genericBase(memoryValue(this.result.files[module].types[bindingChild(n,EdgeRole.Object)])))) return ["set","add","delete","clear"].includes(n.get(AttributeKind.Method));
     const target: number = this.result.files[module].selected[id]; const targetModule: number = this.result.files[module].selectedModules[id];
     if (target < 0 || targetModule < 0) return false;
+    // Capture discovery precedes the effect fixpoint. Preserve its original
+    // syntactic classification there: missing summaries are not proof that a
+    // getter writes its receiver (which would turn snapshots into references).
+    if (this.result.effects.length == 0) {
+      let work: number[] = [target];
+      while (work.length > 0) {
+        const nodeId: number = work[work.length-1]; const item: AstNode = this.node(targetModule,nodeId); work.pop();
+        let at: number = -1;
+        if (item.kind == NodeKind.AssignmentExpression || item.kind == NodeKind.CompoundAssignmentExpression || item.kind == NodeKind.UpdateExpression) at = bindingChild(item,EdgeRole.Target);
+        else if (item.kind == NodeKind.MemberCallExpression) at = bindingChild(item,EdgeRole.Object);
+        else if (this.helper(targetModule,nodeId) == "move") at = bindingChild(item,EdgeRole.Args);
+        while (at >= 0) {
+          const receiver: AstNode = this.node(targetModule,at);
+          if (receiver.kind == NodeKind.IdentifierExpression && receiver.get(AttributeKind.Name) == "this") return true;
+          if (receiver.kind != NodeKind.MemberExpression && receiver.kind != NodeKind.IndexExpression) break;
+          at = bindingChild(receiver,EdgeRole.Object);
+        }
+        for (const edge of item.edges) work.push(edge.node);
+      }
+      return false;
+    }
     return !readonlyMethodReceiver(this.binding,this.result,targetModule,target);
   }
   within(scope: number, ancestor: number): boolean {

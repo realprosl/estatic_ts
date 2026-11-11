@@ -852,14 +852,42 @@ export class NativeChecker {
     }
     return this.instantiateMember(valueType,this.symbolType(sid,module,id));
   }
-  methodMutates(sid: number): boolean {
+  // Un método de la misma clase al que se llama sobre `this` solo muta si
+  // ese método muta: un getter encadenado no invalida al receptor.
+  siblingMethod(s: BindingSymbol, name: string): number {
+    if (name == "") return -1;
+    for (let at: number = 0; at < this.binding.symbols.length; at = at+1) {
+      const candidate: BindingSymbol = this.binding.symbols[at];
+      if (candidate.kind == "ClassMethod" && candidate.module == s.module && candidate.scope == s.scope && candidate.name == name) return at;
+    }
+    return -1;
+  }
+  methodMutates(sid: number, visited: string[] = []): boolean {
     const s: BindingSymbol = this.binding.symbols[sid]; if ((s.module) < 0 || s.kind != "ClassMethod") return false;
+    const key: string = numberToString(s.module) + ":" + numberToString(s.node);
+    if (visited.includes(key)) return false;
+    visited.push(key);
     let work: number[] = []; for (const declaration of s.declarations) work.push(declaration);
     while (work.length > 0) {
       const nodeId: number = work[work.length-1]; const n: AstNode = this.node(s.module,nodeId); work.pop();
       let target: number = -1;
       if (n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression || n.kind == NodeKind.UpdateExpression) target = bindingChild(n,EdgeRole.Target);
-      else if (n.kind == NodeKind.MemberCallExpression) target = bindingChild(n,EdgeRole.Object);
+      else if (n.kind == NodeKind.MemberCallExpression) {
+        const object: number = bindingChild(n,EdgeRole.Object);
+        const receiver: AstNode = this.node(s.module,object);
+        const name: string = n.get(AttributeKind.Method);
+        if (receiver.kind == NodeKind.IdentifierExpression && receiver.get(AttributeKind.Name) == "this") {
+          const sibling: number = this.siblingMethod(s,name);
+          if (sibling >= 0 && this.methodMutates(sibling,visited)) return true;
+        } else if (receiver.kind == NodeKind.MemberExpression) {
+          // Un builtin que muta un campo de `this` cambia su estado observable.
+          const base: number = bindingChild(receiver,EdgeRole.Object);
+          const baseNode: AstNode = this.node(s.module,base);
+          if (baseNode.kind == NodeKind.IdentifierExpression && baseNode.get(AttributeKind.Name) == "this" && ["push","pop","sort","set","add","delete","clear"].includes(name)) return true;
+        }
+        for (const edge of n.edges) work.push(edge.node);
+        continue;
+      }
       else if (n.kind == NodeKind.CallExpression) { const helper: number = this.reference(s.module,nodeId); if (helper >= 0 && this.binding.symbols[helper].name == "move" && (this.binding.symbols[helper].module) < 0) target = bindingChild(n,EdgeRole.Args); }
       while (target >= 0) {
         const receiver: AstNode = this.node(s.module,target);

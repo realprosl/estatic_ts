@@ -64,10 +64,15 @@ export function readonlyMethodReceiver(binding: constRef<BindingResult>, checked
     const symbol = binding.symbols[checked.captures[at].symbol];
     if (symbol.kind == "receiver" && symbol.module == module && symbol.scope >= 0 && binding.scopes[symbol.scope].node == node) return false;
   }
-  for (let at: number = 0; at < checked.effects.length; at = at+1) if (checked.effects[at].module == module && checked.effects[at].node == node && checked.effects[at].phase == "body") {
+  for (let at: number = 0; at < checked.effects.length; at = at+1) {
     const summary = checked.effects[at];
+    if (summary.module != module || summary.node != node || summary.phase != "body") continue;
+    // Unknown, external or callback-driven effects keep the receiver mutable.
     if (summary.unknown || summary.external || summary.invokes.length > 0) return false;
-    for (const sid of summary.writes.concat(summary.moves).concat(summary.retains)) {
+    // Retained values and mutable borrows can outlive the caller's view.
+    if (summary.retains.length > 0) return false;
+    for (const borrow of summary.borrows) if (borrow.mode == "ref") return false;
+    for (const sid of summary.writes.concat(summary.moves)) {
       if (sid < 0 || sid >= binding.symbols.length) return false;
       const symbol = binding.symbols[sid];
       if (symbol.kind == "receiver" && symbol.module == module && symbol.scope >= 0 && binding.scopes[symbol.scope].node == node) return false;
