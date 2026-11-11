@@ -100,5 +100,5 @@ std::string inspectAst(std::vector<ParserToken> tokens) {
     return parser.inspect();
 }
 
-void ets_init_bootstrap_parser_parser_c7f03350() {
+void ets_init_bootstrap_parser_parser_42b9bbf9() {
 }

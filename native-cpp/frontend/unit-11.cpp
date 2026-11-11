@@ -43,5 +43,5 @@ std::vector<std::string> bindingBuiltinTypes() {
     return names;
 }
 
-void ets_init_bootstrap_binder_binder_1367c37e() {
+void ets_init_bootstrap_binder_binder_c1b23e8f() {
 }

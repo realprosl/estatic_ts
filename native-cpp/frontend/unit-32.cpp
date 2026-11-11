@@ -8,5 +8,5 @@ std::vector<IrIssue> verifyIr(IrProject project) {
     return verifier.run();
 }
 
-void ets_init_bootstrap_ir_verify_093cf4d0() {
+void ets_init_bootstrap_ir_verify_d09f62ef() {
 }

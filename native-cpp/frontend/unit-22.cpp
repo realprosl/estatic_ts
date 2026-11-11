@@ -11,5 +11,5 @@ FrontendProject analyzeProject(ModuleGraph graph, bool trace) {
     return FrontendProject{}.constructor(expanded, binding, checkProject(expanded, binding, trace));
 }
 
-void ets_init_bootstrap_checker_expansion_c15c8aed() {
+void ets_init_bootstrap_checker_expansion_5b48ea3d() {
 }

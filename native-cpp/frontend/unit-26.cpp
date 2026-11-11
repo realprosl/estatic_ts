@@ -55,5 +55,5 @@ IrProject preserveContracts(const ModuleGraph& graph, const ets_import_9_CheckRe
     return project;
 }
 
-void ets_init_bootstrap_ir_contracts_946405c8() {
+void ets_init_bootstrap_ir_contracts_d1083918() {
 }

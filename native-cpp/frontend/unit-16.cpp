@@ -173,5 +173,5 @@ std::string nativeBinaryPromotion(std::string left, std::string right, std::stri
     return std::string("u32");
 }
 
-void ets_init_bootstrap_checker_numeric_99db9de7() {
+void ets_init_bootstrap_checker_numeric_6ffed12d() {
 }
