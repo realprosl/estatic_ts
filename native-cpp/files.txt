@@ -58,6 +58,7 @@
 ./runtime/ets_ast.hpp
 ./runtime/ets_async.hpp
 ./runtime/ets_buffer_pool.hpp
+./runtime/ets_child_process.hpp
 ./runtime/ets_collections.hpp
 ./runtime/ets_compiler_host.hpp
 ./runtime/ets_core.hpp

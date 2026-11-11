@@ -1,0 +1,12 @@
+{
+  "types": ["ProcessReadable", "ProcessWritable", "ChildProcess"],
+  "contracts": [
+    ["!child_process.spawn", ["string", "string[]"], "ChildProcess"],
+    ["ProcessReadable.on", ["string", "(string)=>void"], "ProcessReadable"],
+    ["ProcessReadable.on", ["string", "()=>void"], "ProcessReadable"],
+    ["ProcessWritable.write", ["string"], "boolean"],
+    ["ProcessWritable.end", [], "void"],
+    ["ChildProcess.on", ["string", "(number)=>void"], "ChildProcess"],
+    ["ChildProcess.on", ["string", "(string)=>void"], "ChildProcess"]
+  ]
+}

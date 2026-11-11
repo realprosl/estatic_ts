@@ -709,7 +709,7 @@ export class NativeChecker {
     if (name == "length") return "!length";
     if (["Math","JSON","Date"].includes(name)) return "!" + name;
     if (name == "console") return "Console";
-    if (["fs","path","process","http"].includes(name)) return "!"+name;
+    if (["fs","path","process","http","child_process"].includes(name)) return "!"+name;
     if (nativeBuiltinSignatures(name).length > 0) return "!builtin:"+name;
     if (name == "charAt" || name == "lineAt") return "(string,number)=>string";
     if (name == "substring") return "(string,number,number)=>string";
@@ -842,6 +842,10 @@ export class NativeChecker {
       if ((container == "Optional" && ["isPresent","isEmpty"].includes(name)) || (container == "Result" && name == "isOk")) return "()=>boolean";
       if (container == "Result" && name == "error") return "()=>" + parts[1];
     }
+    if (valueType == "!process" && ["stdin"].includes(name)) return "ProcessReadable";
+    if (valueType == "!process" && ["stdout","stderr"].includes(name)) return "ProcessWritable";
+    if (valueType == "ChildProcess" && name == "stdin") return "ProcessWritable";
+    if (valueType == "ChildProcess" && ["stdout","stderr"].includes(name)) return "ProcessReadable";
     if (valueType == "Request" && this.node(module,id).kind == NodeKind.MemberExpression && ["method","path","rawQuery","body"].includes(name)) return "string";
     const catalog: string = valueType+"."+name;
     if (nativeBuiltinSignatures(catalog).length > 0) return "!builtin:"+catalog;

@@ -443,6 +443,28 @@ declare global {
   function moveFile(source: string, destination: string): Result<boolean>;
   function moveFile(source: string, destination: string, error: string): boolean;
   function removeFile(path: string): Result<boolean>;
+
+  // Streams compatibles con el subconjunto de Node implementado por el runtime.
+  // Los chunks son UTF-8 `string` (no Buffer); las lecturas y callbacks se
+  // ejecutan en el event loop de libuv.
+  interface ProcessReadable {
+    on(event: string, listener: (chunk: string) => void): ProcessReadable;
+    on(event: string, listener: () => void): ProcessReadable;
+  }
+  interface ProcessWritable {
+    write(chunk: string): boolean;
+    end(): void;
+  }
+  interface ChildProcess {
+    readonly stdin: ProcessWritable;
+    readonly stdout: ProcessReadable;
+    readonly stderr: ProcessReadable;
+    on(event: string, listener: (code: number) => void): ChildProcess;
+    on(event: string, listener: (message: string) => void): ChildProcess;
+  }
+  namespace child_process {
+    function spawn(command: string, args: string[]): ChildProcess;
+  }
   function removeFile(path: string, error: string): boolean;
 
   function readFileAsync(path: string): Promise<Result<string>>;
@@ -770,6 +792,9 @@ declare global {
   namespace process {
     const argc: number;
     const argv: string[];
+    const stdin: ProcessReadable;
+    const stdout: ProcessWritable;
+    const stderr: ProcessWritable;
     function cwd(): string;
     function exit(code: number): void;
   }

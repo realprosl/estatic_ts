@@ -468,6 +468,7 @@ export class EffectAnalyzer {
     const helper: string = this.helper(module,id);
     if ((["setTimeout","setInterval"].includes(helper) && position == 0) || (helper == "watchFs" && position == 1)) return true;
     if (this.node(module,id).kind == NodeKind.MemberCallExpression && this.receiver(module,id) == "Server" && ["get","post","put","patch","delete"].includes(this.node(module,id).get(AttributeKind.Method)) && position == 1) return true;
+    if (this.node(module,id).kind == NodeKind.MemberCallExpression && this.node(module,id).get(AttributeKind.Method) == "on" && ["ProcessReadable","ChildProcess"].includes(this.receiver(module,id)) && position == 1) return true;
     if (this.helper(module,id) == "spawn") return true;
     if (this.builtin(module,id)) return false;
     let sourcePosition: number = 0;

@@ -283,6 +283,20 @@ La salida de consola está separada por canal y por uso de salto de línea:
 - `printError(...)` escribe en `stderr` y termina la línea.
 - `writeError(...)` escribe en `stderr` sin salto y vacía el buffer.
 
+El proceso sigue una superficie familiar de Node para las streams estándar y los hijos. `process.stdin` emite eventos `"data"` y `"end"`; `process.stdout.write(...)` y `process.stderr.write(...)` escriben sin añadir salto de línea. `child_process.spawn(command, args)` inicia un hijo de forma asíncrona y devuelve streams `stdin`, `stdout` y `stderr`, además de eventos `"exit"`, `"close"` y `"error"`. `child_process.spawn` es distinto del builtin global `spawn(task)`, que agenda una tarea del event loop.
+
+```typescript
+process.stdin.on("data", (chunk: string): void => { process.stdout.write(chunk); });
+
+const child = child_process.spawn("cat", []);
+child.stdout.on("data", (chunk: string): void => { process.stdout.write(chunk); });
+child.stdin.write("hola\n");
+child.stdin.end();
+child.on("close", (code: number): void => print(code));
+```
+
+El subconjunto inicial entrega chunks como `string` UTF-8 (no `Buffer`) y aún no expone opciones de `spawn`, señales ni backpressure avanzado. Los listeners retenidos no pueden escapar capturando variables locales mutables por referencia; el checker los rechaza para evitar referencias colgantes. Los callbacks se procesan en el event loop de libuv.
+
 Las utilidades `fail(message, out error)`, `hasError(error)` y `clearError(out error)` permiten construir errores explícitos en funciones propias.
 
 ### API estilo Node (`console.*`)

@@ -64,5 +64,5 @@ std::string formatBinding(BindingResult result, ModuleGraph graph) {
     return ets_join_vec(output, std::string(""));
 }
 
-void ets_init_bootstrap_binder_format_d243f694() {
+void ets_init_bootstrap_binder_format_b59f8b20() {
 }

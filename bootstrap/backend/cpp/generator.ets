@@ -23,9 +23,10 @@ const ops:string[]=["constant","load","store","address","move","borrow","dropRem
 export class IrCppGenerator {
   headers:HeaderSet;
   backends:RuntimeBackends;
+  processIo:boolean;
   project:IrProject;
   consuming:number[];cppGenerators:number[];layoutDone:number[];layoutActive:number[];layoutOutput:string[];
-  constructor(project: IrProject) { this.project=project;this.headers=new HeaderSet();this.backends=new RuntimeBackends();this.consuming=[];this.cppGenerators=[];this.layoutDone=[];this.layoutActive=[];this.layoutOutput=[]; }
+  constructor(project: IrProject) { this.project=project;this.headers=new HeaderSet();this.backends=new RuntimeBackends();this.processIo=false;this.consuming=[];this.cppGenerators=[];this.layoutDone=[];this.layoutActive=[];this.layoutOutput=[]; }
   fail(message:string,source:IrSource=new IrSource("","","",-1,0,0)):string{printError("IR_CPP_UNSUPPORTED: "+source.file+":"+numberToString(source.start)+": "+message);exitProcess(1);return "";}
   shape(id:number):IrType{if(id<0||id>=this.project.typeDefinitions.length)this.fail("Tipo IR inexistente: "+numberToString(id));return this.project.typeDefinitions[id];}
   cppTypeId(id: number): string {
@@ -88,9 +89,10 @@ return `ets::${s.kind}<${_cppLoop76Result.join(",")}>`;}
         if(name=="Request"||name=="Response"){this.httpServer();return name=="Request"?"const ets::HttpRequest*":"ets::HttpResponse*";}
         if(name=="HttpClientResponse"){this.headers.add("runtime/ets_http_curl_async.hpp");this.backends.libuv=true;this.backends.curl=true;return "ets::HttpClientResponse";}
         if(name=="Timer")this.fail("runtime:Timer necesita un contrato de ownership/copia en el IR para reutilizar el Timer no copiable de C++");
-        if(["JsonValue","Console","Regex","Request","Response","HttpClientResponse","FileReader","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","Server","Timer","FsWatcher","FsEvent"].includes(name)) {
-          if(name=="Regex")this.headers.add("runtime/ets_regex.hpp");
-          else if(!["JsonValue","Console"].includes(name)){this.headers.add("runtime/ets_runtime_full.hpp");this.backends.libuv=true;}
+        if(["JsonValue","Console","Regex","Request","Response","HttpClientResponse","FileReader","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","Server","Timer","FsWatcher","FsEvent","ProcessReadable","ProcessWritable","ChildProcess"].includes(name)) {
+          if(["ProcessReadable","ProcessWritable","ChildProcess"].includes(name)){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;}
+           if(name=="Regex")this.headers.add("runtime/ets_regex.hpp");
+          else if(!["JsonValue","Console","ProcessReadable","ProcessWritable","ChildProcess"].includes(name)){this.headers.add("runtime/ets_runtime_full.hpp");this.backends.libuv=true;}
           return cppType(name);
         }
       }
@@ -320,7 +322,7 @@ for(let n:number=0;n<_cppLoop68Input.length;n=n+1){
 const _:number=_cppLoop68Input[n];
 _cppLoop68Result.push(`auto&& x${n}`);continue;
 }
-return `[&](${_cppLoop68Result.join(",")})->${this.cppTypeId(s.arguments[s.arguments.length-1])}{${this.project.types[s.arguments[s.arguments.length-1]]=="void"?"":"return "}${this.operand(f,i,k,false)}(${_cppLoop23Result.join(",")});}`;}}
+return `[fn=${this.operand(f,i,k,false)}](${_cppLoop68Result.join(",")})->${this.cppTypeId(s.arguments[s.arguments.length-1])}{${this.project.types[s.arguments[s.arguments.length-1]]=="void"?"":"return "}fn(${_cppLoop23Result.join(",")});}`;}}
   }
   instruction(f:constRef<IrFunction>,i:constRef<IrInstruction>,block:number):string {
     const  T=i.typeId>=0?this.cppTypeId(i.typeId):"void";
@@ -907,6 +909,8 @@ let  T=this.cppTypeId(i.typeId);
     if(["optionalMap","optionalAndThen"].includes(name))return `${name}(${this.operand(f,i,0)},${this.callback(f,i,1)})`;
 
     if(name=="stopLoop"){this.headers.add("runtime/ets_async.hpp");this.backends.libuv=true;return "ets::defaultEventLoop.stop()";}
+    if(["process.stdin","process.stdout","process.stderr"].includes(name)){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;return `ets::processStdio.${name.slice(8,name.length)}.stream()`;}
+    if(name=="!child_process.spawn"){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;return `ets::child_process.spawn(${this.runtimeArguments(f,i)})`;}
     if(name=="length")return `ets::length(${this.operand(f,i,0)})`;
     if(name=="optionalSome")return `${T}::some(${this.operand(f,i,0)})`;
     if(name=="optionalNone")return `${T}::none()`;
@@ -929,10 +933,21 @@ let  T=this.cppTypeId(i.typeId);
       }
       return `ets::${name}(${this.runtimeArguments(f,i)})`;
     }
+    const builtinDot=name.lastIndexOf(".");const builtinBase=name.slice(0,builtinDot);const builtinMethod=name.slice(builtinDot+1,name.length);
+    if(builtinBase=="ChildProcess"&&["stdin","stdout","stderr"].includes(builtinMethod)){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;return `(${this.operand(f,i,0,false)}).${builtinMethod}Stream()`;}
+    if(builtinBase=="ProcessReadable"&&builtinMethod=="on"){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;return `(${this.operand(f,i,0,false)}).on(${this.operand(f,i,1)},${this.callback(f,i,2)})`;}
+    if(builtinBase=="ProcessWritable"&&(builtinMethod=="write"||builtinMethod=="end")){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;return `(${this.operand(f,i,0,false)}).${builtinMethod}(${builtinMethod=="write"?this.operand(f,i,1):""})`;}
+    if(builtinBase=="ChildProcess"&&builtinMethod=="on"){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;const callbackType=this.cppTypeId(f.values[i.operands[2]]);return `(${this.operand(f,i,0,false)}).on(${this.operand(f,i,1)},${callbackType}(${this.callback(f,i,2)}))`;}
     return this.fail(`Capacidad runtime no implementada: ${c.capability}`,i.source);
   }
   const dot=c.name.lastIndexOf(".");const  base=c.name.slice(0,dot);const  method=c.name.slice(dot+1,c.name.length);
-  if(base=="!http") {
+    if(base=="process"&&["stdin","stdout","stderr"].includes(method)){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;return `ets::processStdio.${method}.stream()`;}
+    if(base=="!child_process"&&method=="spawn"){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;return `ets::child_process.spawn(${this.runtimeArguments(f,i)})`;}
+    if(base=="ChildProcess"&&["stdin","stdout","stderr"].includes(method)){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;return `(${this.operand(f,i,0,false)}).${method}Stream()`;}
+    if(base=="ProcessReadable"&&method=="on"){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;return `(${this.operand(f,i,0,false)}).on(${this.operand(f,i,1)},${this.callback(f,i,2)})`;}
+    if(base=="ProcessWritable"&&(method=="write"||method=="end")){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;return `(${this.operand(f,i,0,false)}).${method}(${method=="write"?this.operand(f,i,1):""})`;}
+    if(base=="ChildProcess"&&method=="on"){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;const callbackType=this.cppTypeId(f.values[i.operands[2]]);return `(${this.operand(f,i,0,false)}).on(${this.operand(f,i,1)},${callbackType}(${this.callback(f,i,2)}))`;}
+    if(base=="!http") {
     if(["createServer","express","server"].includes(method)){this.httpServer();return "ets::Server{}";}
     if(["param","query","header"].includes(method)){this.httpServer();return `ets::http_${method}(*(${this.operand(f,i,0,false)}),${this.operand(f,i,1)})`;}
     if(["get","post"].includes(method)) {
@@ -1160,7 +1175,7 @@ for(let _cppLoop72Index:number=0;_cppLoop72Index<_cppLoop72Input.length;_cppLoop
 const id:number=_cppLoop72Input[_cppLoop72Index];
 _cppLoop72Result.push(this.project.functions[id].asynchronous?`ets::syncWait(ir_f${id}());`:`ir_f${id}();`);continue;
 }
-const main=`int main(int argc,char** argv){ets_argc=argc;ets_argv=argv;${_cppLoop71Result.join("")}${this.backends.libuv?"ets::defaultEventLoop.drainDetached();":""}${_cppLoop20Result?"ets::defaultEventLoop.run();":""}${_cppLoop72Result.join("")}return 0;}`;
+const main=`int main(int argc,char** argv){ets_argc=argc;ets_argv=argv;${_cppLoop71Result.join("")}${this.backends.libuv?"ets::defaultEventLoop.drainDetached();":""}${_cppLoop20Result?"ets::defaultEventLoop.run();":""}${_cppLoop72Result.join("")}${this.processIo?"ets::runProcessIo();":""}return 0;}`;
     
 let _cppLoop18Result:string[]=[];
 const _cppLoop18Input:IrType[]=this.project.typeDefinitions;

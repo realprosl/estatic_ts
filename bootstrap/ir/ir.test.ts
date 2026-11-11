@@ -1,6 +1,6 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, openSync, closeSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { buildLoader, root } from "../modules/build.ts";
@@ -8,6 +8,39 @@ const directory = mkdtempSync(join(root, "build-ir-test-"));
 let binary: string;
 before(async () => { binary = await buildLoader(join(directory, "binary"), "bootstrap/ir/test-driver.ets", true); });
 after(() => rmSync(directory, { recursive: true, force: true }));
+test("child process runtime streams stdout/stderr and process stdin through libuv", { skip: process.platform === "win32" }, () => {
+  const source = join(directory, "child-process-streams.cpp"), binary = join(directory, "child-process-streams");
+  writeFileSync(source, `#include "runtime/ets_runtime_full.hpp"
+#include "runtime/ets_child_process.hpp"
+#include <iostream>
+#include <string>
+int main(int argc, char** argv) {
+  const std::string expectedParent=argc>1?argv[1]:"parent-input";
+  std::string childOut, childErr, parentIn, spawnError; int childClose=-1, failedClose=-1; bool parentEnded=false, childOutEnded=false;
+  ets::processStdio.stdin.on("data", [&](std::string chunk) { parentIn += chunk; ets::processStdio.stdout.stream().write("parent:" + chunk); });
+  ets::processStdio.stdin.on("end", [&]() { parentEnded=true; });
+  auto child=ets::child_process.spawn("/bin/sh", {"-c", "printf child-out; printf child-err >&2; cat"});
+  auto childStdout=child.stdoutStream();
+  childStdout.on("data", [&](std::string chunk) { childOut += chunk; }); childStdout.on("end", [&]() { childOutEnded=true; });
+  child.stderrStream().on("data", [&](std::string chunk) { childErr += chunk; });
+  child.on("close", [&](double code) { childClose=static_cast<int>(code); });
+  child.stdinStream().write("child-input"); child.stdinStream().end();
+  auto failed=ets::child_process.spawn("/definitely/not/a/program", {});
+  failed.on("error", [&](std::string error) { spawnError=error; });
+  failed.on("close", [&](double code) { failedClose=static_cast<int>(code); });
+  ets::runProcessIo();
+  return childOut=="child-outchild-input" && childErr=="child-err" && parentIn==expectedParent && childClose==0 && failedClose==-1 && !spawnError.empty() && parentEnded && childOutEnded ? 0 : 1;
+}
+`);
+  const built=spawnSync("g++",["-std=c++20","-pthread","-fno-exceptions",`-I${root}`,source,join(root,"runtime/runtime_ets_libuv.cpp"),join(root,"runtime/runtime_ets_net_libuv.cpp"),"-luv","-o",binary],{encoding:"utf8",timeout:120000});
+  assert.ifError(built.error); assert.equal(built.status,0,built.stderr);
+  const result=spawnSync(binary,[],{input:"parent-input",encoding:"utf8",timeout:15000});
+  assert.ifError(result.error); assert.equal(result.status,0,result.stderr); assert.equal(result.stdout,"parent:parent-input");
+  const outputFile=join(directory,"process-stdout-redirected.txt"),inputFile=join(directory,"process-stdin-redirected.txt");writeFileSync(inputFile,"file-input");
+  const outputFd=openSync(outputFile,"w"),inputFd=openSync(inputFile,"r");
+  const redirected=spawnSync(binary,["file-input"],{encoding:"utf8",timeout:15000,stdio:[inputFd,outputFd,"pipe"]});closeSync(inputFd);closeSync(outputFd);
+  assert.ifError(redirected.error);assert.equal(redirected.status,0,redirected.stderr);assert.equal(readFileSync(outputFile,"utf8"),"parent:file-input");
+});
 function run(source: string, files: Record<string,string> = {}, mode = "", status = 0) {
   const dir = mkdtempSync(join(directory, "fixture-"));
   for (const [name, text] of Object.entries({"main.ets": source, ...files})) { mkdirSync(dirname(join(dir,name)), {recursive:true}); writeFileSync(join(dir,name), text); }
@@ -241,6 +274,12 @@ test("native IR records narrow integer promotions explicitly",()=>{
 test("native IR preserves opaque runtime requirements explicitly",()=>{
   const ir=run('const result=readFile("input.txt");print(result);');
   const contract=ir.runtimeContracts.find((c:any)=>c.name==="builtin.readFile");assert.ok(contract);assert.ok(contract.effects.includes("opaque"));assert.equal(contract.capability,"runtime:builtin.readFile");
+});
+test("native IR declares Node-style process streams and child-process contracts",()=>{
+ const ir=run('const args:string[]=["hello"];const child=child_process.spawn("/bin/echo",args);child.stdout.on("data",(chunk:string):void=>write(chunk));process.stdin.on("data",(chunk:string):void=>{process.stdout.write(chunk);});');
+ for(const name of ["!child_process.spawn","ChildProcess.stdout","process.stdin","ProcessReadable.on","ProcessWritable.write"]){
+  const contract=ir.runtimeContracts.find((c:any)=>c.name==name);assert.ok(contract,name);assert.ok(contract.effects.includes("runtime"),name);assert.equal(contract.capability,"runtime:"+name);
+ }
 });
 for(const [name,source,expected] of [
  ["owner move",'class C{n:number=3;}let p:ptr<C> = new C();const q=move(p);print(q.n);',["3"]],

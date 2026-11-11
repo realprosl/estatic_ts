@@ -2,6 +2,9 @@
 #include "estatic_common.hpp"
 
 std::vector<std::string> nativeBuiltinSignatures(std::string key) {
+    if ((key == std::string("!child_process.spawn"))) {
+        return std::vector<std::string>{std::string("(string,string[])=>ChildProcess")};
+    }
     if ((key == std::string("!Date.now"))) {
         return std::vector<std::string>{std::string("()=>number")};
     }
@@ -190,6 +193,9 @@ std::vector<std::string> nativeBuiltinSignatures(std::string key) {
     }
     if ((key == std::string("charAt"))) {
         return std::vector<std::string>{std::string("(string,number)=>string")};
+    }
+    if ((key == std::string("ChildProcess.on"))) {
+        return std::vector<std::string>{std::string("(string,(number)=>void)=>ChildProcess"), std::string("(string,(string)=>void)=>ChildProcess")};
     }
     if ((key == std::string("clearError"))) {
         return std::vector<std::string>{std::string("(ref<string>)=>void")};
@@ -418,6 +424,15 @@ std::vector<std::string> nativeBuiltinSignatures(std::string key) {
     }
     if ((key == std::string("printError"))) {
         return std::vector<std::string>{std::string("()=>void")};
+    }
+    if ((key == std::string("ProcessReadable.on"))) {
+        return std::vector<std::string>{std::string("(string,(string)=>void)=>ProcessReadable"), std::string("(string,()=>void)=>ProcessReadable")};
+    }
+    if ((key == std::string("ProcessWritable.end"))) {
+        return std::vector<std::string>{std::string("()=>void")};
+    }
+    if ((key == std::string("ProcessWritable.write"))) {
+        return std::vector<std::string>{std::string("(string)=>boolean")};
     }
     if ((key == std::string("readFile"))) {
         return std::vector<std::string>{std::string("(string,ref<string>,ref<string>)=>boolean"), std::string("(string)=>Result<string,string>")};
@@ -658,8 +673,8 @@ std::vector<std::string> nativeBuiltinNames() {
 }
 
 std::vector<std::string> nativeBuiltinTypes() {
-    return std::vector<std::string>{std::string("FsEvent"), std::string("FsWatcher"), std::string("HttpClientResponse"), std::string("Promise"), std::string("Request"), std::string("Response"), std::string("Server"), std::string("Timer")};
+    return std::vector<std::string>{std::string("ChildProcess"), std::string("FsEvent"), std::string("FsWatcher"), std::string("HttpClientResponse"), std::string("ProcessReadable"), std::string("ProcessWritable"), std::string("Promise"), std::string("Request"), std::string("Response"), std::string("Server"), std::string("Timer")};
 }
 
-void ets_init_bootstrap_frontend_builtins_4364c337() {
+void ets_init_bootstrap_frontend_builtins_2c1278e5() {
 }

@@ -29,5 +29,5 @@ ets_import_9_CheckResult attachModuleRecords(ModuleGraph graph, BindingResult bi
     return builder.run();
 }
 
-void ets_init_bootstrap_checker_module_records_2a01df70() {
+void ets_init_bootstrap_checker_module_records_3961b602() {
 }

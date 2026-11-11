@@ -880,6 +880,8 @@ export class IrLowering {
     }
     if (symbol >= 0 && this.globalSymbols.includes(symbol)) return this.emit("load",typeId,[],this.place(symbol,id),-1,"",id);
     const name: string = n.get(AttributeKind.Member); const receiver: string = this.resolved(this.checked.files[this.module].receivers[id]);
+    if (receiver == "!process" && ["stdin","stdout","stderr"].includes(name)) return this.runtime("process."+name,typeId,[],id,["runtime","read"]);
+    if (receiver == "ChildProcess" && ["stdin","stdout","stderr"].includes(name)) return this.runtime("ChildProcess."+name,typeId,[this.expression(bindingChild(n,EdgeRole.Object))],id,["runtime","read"]);
     if (receiver == "Request" && ["method","path","rawQuery","body"].includes(name)) return this.runtime("Request.property."+name,typeId,[this.expression(bindingChild(n,EdgeRole.Object))],id,["runtime","read"]);
     if (["length","size","kind","ok"].includes(name) && (receiver == "string" || receiver.endsWith("[]") || fixedArraySize(receiver) >= 0 || semanticTuple(receiver) || ["Map","Set","Optional","Result"].includes(genericBase(receiver)))) { const input: number = bindingChild(n,EdgeRole.Object); const actual: number = this.typeId(this.checked.files[this.module].types[input],input); let value: number = -1; if (this.result.typeDefinitions[actual].resource) value = this.emit("borrow",this.typeId("constRef<"+this.result.types[actual]+">",id),[],this.rootPlace(input),-1,"constRef",id); else value = this.expression(input); return this.emit("property",typeId,[value],-1,-1,name,id); }
     return this.emit("load",typeId,[],this.rootPlace(id),-1,"",id);

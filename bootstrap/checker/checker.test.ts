@@ -710,6 +710,9 @@ for(const [name,source] of Object.entries({
  console:'console.log("x",1,true);console.warn("warning");',
  files:'const r:Result<string> = readFile("input.txt");',
  date:'const n=Date.now();print(n);',
+ processStdio:'process.stdout.write("out");process.stderr.write("err");process.stdin.on("data",(chunk:string):void=>print(chunk));process.stdin.on("end",():void=>{});',
+     childProcess:'const args:string[]=["hello"];const child=child_process.spawn("/bin/cat",args);child.stdout.on("data",(chunk:string):void=>write(chunk));child.stderr.on("data",(chunk:string):void=>writeError(chunk));child.stdin.write("payload");child.stdin.end();child.on("close",(code:number):void=>print(code));',
+   processStdin:'process.stdin.on("data",(chunk:string):void=>print(chunk));process.stdin.on("end",():void=>{});',
 }))test(`native builtin contracts accept ${name}`,()=>check(source));
 for(const [name,source] of Object.entries({
  wrongLength:'print(length(1));',
@@ -719,7 +722,11 @@ for(const [name,source] of Object.entries({
  wrongJson:'const j=JSON.parseValue(1);',
  wrongFile:'const r=readFile(1);',
  voidPrint:'function f():void{}print(f());',
-}))test(`native builtin contracts reject ${name}`,()=>run(fixture(source),1));
+  wrongChildProcess:'child_process.spawn(1,[]);',
+  wrongProcessStreamCallback:'process.stdin.on("data",(chunk:number):void=>{});',
+ }))test(`native builtin contracts reject ${name}`,()=>run(fixture(source),1));
+test("retained Node stream callbacks reject mutable stack captures",()=>error('function f():void{let count=0;process.stdin.on("data",(chunk:string):void=>{count=count+1;});}',/E4210/));
+test("retained ChildProcess callbacks reject mutable stack captures",()=>error('function f():void{let codeOut=0;const child=child_process.spawn("cat",[]);child.on("close",(code:number):void=>{codeOut=code;});}',/E4210/));
 test('native effects preserve external effects separately from symbol reads',()=>{
  const g=check('function inner():void{console.log("x");}function outer():void{inner();}');assert.equal(effect(g,'inner').external,true);assert.equal(effect(g,'outer').external,true);
 });
