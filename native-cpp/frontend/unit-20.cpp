@@ -7,5 +7,5 @@ void validateSafety(ModuleGraph graph, BindingResult binding, ets_import_9_Check
     (result = analyzer.run());
 }
 
-void ets_init_bootstrap_checker_safety_8aa4dfdf() {
+void ets_init_bootstrap_checker_safety_5ec2ffb6() {
 }

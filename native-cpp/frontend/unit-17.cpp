@@ -6,5 +6,5 @@ ets_import_9_CheckResult evaluateNativeComptime(ModuleGraph graph, BindingResult
     return evaluator.run();
 }
 
-void ets_init_bootstrap_checker_comptime_453edd1a() {
+void ets_init_bootstrap_checker_comptime_c355f21e() {
 }

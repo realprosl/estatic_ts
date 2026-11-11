@@ -110,5 +110,5 @@ IrProject finishBorrows(IrProject project) {
     return project;
 }
 
-void ets_init_bootstrap_ir_borrows_58af27bc() {
+void ets_init_bootstrap_ir_borrows_175a8e51() {
 }

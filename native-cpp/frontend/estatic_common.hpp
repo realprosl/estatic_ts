@@ -9050,6 +9050,9 @@ struct EffectAnalyzer {
         if ((((((*this).node(module, id).kind == NodeKind::MemberCallExpression) && ((*this).receiver(module, id) == std::string("Server"))) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("get"), std::string("post"), std::string("put"), std::string("patch"), std::string("delete")}, (*this).node(module, id).get(AttributeKind::Method))) && (position == 1.0))) {
             return true;
         }
+        if ((((((*this).node(module, id).kind == NodeKind::MemberCallExpression) && ((*this).node(module, id).get(AttributeKind::Method) == std::string("on"))) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("ProcessReadable"), std::string("ChildProcess")}, (*this).receiver(module, id))) && (position == 1.0))) {
+            return true;
+        }
         if (((*this).helper(module, id) == std::string("spawn"))) {
             return true;
         }
@@ -13972,7 +13975,7 @@ struct NativeChecker {
         if ((name == std::string("console"))) {
             return std::string("Console");
         }
-        if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("fs"), std::string("path"), std::string("process"), std::string("http")}, name)) {
+        if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("fs"), std::string("path"), std::string("process"), std::string("http"), std::string("child_process")}, name)) {
             return ets::concat(std::string("!"), name);
         }
         if ((nativeBuiltinSignatures(name).size() > 0.0)) {
@@ -14303,6 +14306,18 @@ struct NativeChecker {
             if (((container == std::string("Result")) && (name == std::string("error")))) {
                 return ets::concat(std::string("()=>"), parts[static_cast<std::size_t>(1.0)]);
             }
+        }
+        if (((valueType == std::string("!process")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("stdin")}, name))) {
+            return std::string("ProcessReadable");
+        }
+        if (((valueType == std::string("!process")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("stdout"), std::string("stderr")}, name))) {
+            return std::string("ProcessWritable");
+        }
+        if (((valueType == std::string("ChildProcess")) && (name == std::string("stdin")))) {
+            return std::string("ProcessWritable");
+        }
+        if (((valueType == std::string("ChildProcess")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("stdout"), std::string("stderr")}, name))) {
+            return std::string("ProcessReadable");
         }
         if ((((valueType == std::string("Request")) && ((*this).node(module, id).kind == NodeKind::MemberExpression)) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("method"), std::string("path"), std::string("rawQuery"), std::string("body")}, name))) {
             return std::string("string");
@@ -21465,6 +21480,12 @@ struct IrLowering {
         }
         const std::string name = n.get(AttributeKind::Member);
         const std::string receiver = (*this).resolved((*this).checked.files[static_cast<std::size_t>((*this).module)].receivers[static_cast<std::size_t>(id)]);
+        if (((receiver == std::string("!process")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("stdin"), std::string("stdout"), std::string("stderr")}, name))) {
+            return (*this).runtime(ets::concat(std::string("process."), name), typeId, std::vector<double>(), id, std::vector<std::string>{std::string("runtime"), std::string("read")});
+        }
+        if (((receiver == std::string("ChildProcess")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("stdin"), std::string("stdout"), std::string("stderr")}, name))) {
+            return (*this).runtime(ets::concat(std::string("ChildProcess."), name), typeId, std::vector<double>{(*this).expression(bindingChild(n, EdgeRole::Object))}, id, std::vector<std::string>{std::string("runtime"), std::string("read")});
+        }
         if (((receiver == std::string("Request")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("method"), std::string("path"), std::string("rawQuery"), std::string("body")}, name))) {
             return (*this).runtime(ets::concat(std::string("Request.property."), name), typeId, std::vector<double>{(*this).expression(bindingChild(n, EdgeRole::Object))}, id, std::vector<std::string>{std::string("runtime"), std::string("read")});
         }
@@ -22192,42 +22213,42 @@ struct IrLowering {
     }
 };
 
-void ets_init_bootstrap_driver_host_5f952991();
-void ets_init_bootstrap_analysis_options_19a75f08();
-void ets_init_bootstrap_progress_progress_cb3e8773();
-void ets_init_bootstrap_parser_ast_schema_1304e857();
-void ets_init_bootstrap_parser_parser_42b9bbf9();
-void ets_init_bootstrap_lexer_lexer_935c1bee();
-void ets_init_bootstrap_frontend_frontend_a7343264();
-void ets_init_bootstrap_modules_platform_562cee50();
-void ets_init_bootstrap_modules_syntax_cache_85567346();
-void ets_init_bootstrap_modules_loader_43fa4e97();
-void ets_init_bootstrap_frontend_builtins_4364c337();
-void ets_init_bootstrap_binder_binder_c1b23e8f();
-void ets_init_bootstrap_checker_types_43cdcefd();
-void ets_init_bootstrap_checker_model_f556179b();
-void ets_init_bootstrap_checker_module_records_2a01df70();
-void ets_init_bootstrap_checker_constant_ee47b975();
-void ets_init_bootstrap_checker_numeric_6ffed12d();
-void ets_init_bootstrap_checker_comptime_453edd1a();
-void ets_init_bootstrap_checker_effects_4dbf2bf9();
-void ets_init_bootstrap_checker_ownership_f220c326();
-void ets_init_bootstrap_checker_safety_8aa4dfdf();
-void ets_init_bootstrap_checker_checker_c354a49e();
-void ets_init_bootstrap_checker_expansion_5b48ea3d();
-void ets_init_bootstrap_ir_model_774eb4bb();
-void ets_init_bootstrap_ir_type_traits_d9a7fcbe();
-void ets_init_bootstrap_ir_borrows_58af27bc();
-void ets_init_bootstrap_ir_contracts_d1083918();
-void ets_init_bootstrap_ir_verify_contracts_f5e4a2f8();
-void ets_init_bootstrap_ir_verify_ownership_e7778628();
-void ets_init_bootstrap_ir_verify_shapes_625a5811();
-void ets_init_bootstrap_ir_verify_memory_3e10e805();
-void ets_init_bootstrap_ir_verify_borrows_1aebe09f();
-void ets_init_bootstrap_ir_verify_d09f62ef();
-void ets_init_bootstrap_ir_lower_2184539b();
-void ets_init_bootstrap_binder_format_d243f694();
-void ets_init_bootstrap_ir_format_source_03178004();
-void ets_init_bootstrap_ir_format_contracts_1cbcd575();
-void ets_init_bootstrap_ir_format_5756b67d();
-void ets_init_bootstrap_ir_demo_47f3c1ee();
+void ets_init_bootstrap_driver_host_b5fb3be4();
+void ets_init_bootstrap_analysis_options_30472a8c();
+void ets_init_bootstrap_progress_progress_6e8dd651();
+void ets_init_bootstrap_parser_ast_schema_7f0a373f();
+void ets_init_bootstrap_parser_parser_4f930fc1();
+void ets_init_bootstrap_lexer_lexer_347006bc();
+void ets_init_bootstrap_frontend_frontend_876772d2();
+void ets_init_bootstrap_modules_platform_38a23446();
+void ets_init_bootstrap_modules_syntax_cache_a2301959();
+void ets_init_bootstrap_modules_loader_d0784388();
+void ets_init_bootstrap_frontend_builtins_2c1278e5();
+void ets_init_bootstrap_binder_binder_a5e8f8bc();
+void ets_init_bootstrap_checker_types_6ca42b67();
+void ets_init_bootstrap_checker_model_a78070bc();
+void ets_init_bootstrap_checker_module_records_3961b602();
+void ets_init_bootstrap_checker_constant_dff64f83();
+void ets_init_bootstrap_checker_numeric_53bb8068();
+void ets_init_bootstrap_checker_comptime_c355f21e();
+void ets_init_bootstrap_checker_effects_0428f9f1();
+void ets_init_bootstrap_checker_ownership_f81ee18c();
+void ets_init_bootstrap_checker_safety_5ec2ffb6();
+void ets_init_bootstrap_checker_checker_4b925bc0();
+void ets_init_bootstrap_checker_expansion_6d31a3c6();
+void ets_init_bootstrap_ir_model_2ab66571();
+void ets_init_bootstrap_ir_type_traits_d19a4c59();
+void ets_init_bootstrap_ir_borrows_175a8e51();
+void ets_init_bootstrap_ir_contracts_430bbff0();
+void ets_init_bootstrap_ir_verify_contracts_322fe924();
+void ets_init_bootstrap_ir_verify_ownership_e134f2b1();
+void ets_init_bootstrap_ir_verify_shapes_fb898010();
+void ets_init_bootstrap_ir_verify_memory_f7b0c869();
+void ets_init_bootstrap_ir_verify_borrows_ef38de22();
+void ets_init_bootstrap_ir_verify_41847ae1();
+void ets_init_bootstrap_ir_lower_504d42e2();
+void ets_init_bootstrap_binder_format_b59f8b20();
+void ets_init_bootstrap_ir_format_source_f8a27d8a();
+void ets_init_bootstrap_ir_format_contracts_270e346d();
+void ets_init_bootstrap_ir_format_86a288c4();
+void ets_init_bootstrap_ir_demo_5ce06c10();

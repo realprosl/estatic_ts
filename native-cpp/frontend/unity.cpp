@@ -9047,6 +9047,9 @@ struct EffectAnalyzer {
         if ((((((*this).node(module, id).kind == NodeKind::MemberCallExpression) && ((*this).receiver(module, id) == std::string("Server"))) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("get"), std::string("post"), std::string("put"), std::string("patch"), std::string("delete")}, (*this).node(module, id).get(AttributeKind::Method))) && (position == 1.0))) {
             return true;
         }
+        if ((((((*this).node(module, id).kind == NodeKind::MemberCallExpression) && ((*this).node(module, id).get(AttributeKind::Method) == std::string("on"))) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("ProcessReadable"), std::string("ChildProcess")}, (*this).receiver(module, id))) && (position == 1.0))) {
+            return true;
+        }
         if (((*this).helper(module, id) == std::string("spawn"))) {
             return true;
         }
@@ -13969,7 +13972,7 @@ struct NativeChecker {
         if ((name == std::string("console"))) {
             return std::string("Console");
         }
-        if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("fs"), std::string("path"), std::string("process"), std::string("http")}, name)) {
+        if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("fs"), std::string("path"), std::string("process"), std::string("http"), std::string("child_process")}, name)) {
             return ets::concat(std::string("!"), name);
         }
         if ((nativeBuiltinSignatures(name).size() > 0.0)) {
@@ -14300,6 +14303,18 @@ struct NativeChecker {
             if (((container == std::string("Result")) && (name == std::string("error")))) {
                 return ets::concat(std::string("()=>"), parts[static_cast<std::size_t>(1.0)]);
             }
+        }
+        if (((valueType == std::string("!process")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("stdin")}, name))) {
+            return std::string("ProcessReadable");
+        }
+        if (((valueType == std::string("!process")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("stdout"), std::string("stderr")}, name))) {
+            return std::string("ProcessWritable");
+        }
+        if (((valueType == std::string("ChildProcess")) && (name == std::string("stdin")))) {
+            return std::string("ProcessWritable");
+        }
+        if (((valueType == std::string("ChildProcess")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("stdout"), std::string("stderr")}, name))) {
+            return std::string("ProcessReadable");
         }
         if ((((valueType == std::string("Request")) && ((*this).node(module, id).kind == NodeKind::MemberExpression)) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("method"), std::string("path"), std::string("rawQuery"), std::string("body")}, name))) {
             return std::string("string");
@@ -21462,6 +21477,12 @@ struct IrLowering {
         }
         const std::string name = n.get(AttributeKind::Member);
         const std::string receiver = (*this).resolved((*this).checked.files[static_cast<std::size_t>((*this).module)].receivers[static_cast<std::size_t>(id)]);
+        if (((receiver == std::string("!process")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("stdin"), std::string("stdout"), std::string("stderr")}, name))) {
+            return (*this).runtime(ets::concat(std::string("process."), name), typeId, std::vector<double>(), id, std::vector<std::string>{std::string("runtime"), std::string("read")});
+        }
+        if (((receiver == std::string("ChildProcess")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("stdin"), std::string("stdout"), std::string("stderr")}, name))) {
+            return (*this).runtime(ets::concat(std::string("ChildProcess."), name), typeId, std::vector<double>{(*this).expression(bindingChild(n, EdgeRole::Object))}, id, std::vector<std::string>{std::string("runtime"), std::string("read")});
+        }
         if (((receiver == std::string("Request")) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("method"), std::string("path"), std::string("rawQuery"), std::string("body")}, name))) {
             return (*this).runtime(ets::concat(std::string("Request.property."), name), typeId, std::vector<double>{(*this).expression(bindingChild(n, EdgeRole::Object))}, id, std::vector<std::string>{std::string("runtime"), std::string("read")});
         }
@@ -22189,45 +22210,45 @@ struct IrLowering {
     }
 };
 
-void ets_init_bootstrap_driver_host_5f952991();
-void ets_init_bootstrap_analysis_options_19a75f08();
-void ets_init_bootstrap_progress_progress_cb3e8773();
-void ets_init_bootstrap_parser_ast_schema_1304e857();
-void ets_init_bootstrap_parser_parser_42b9bbf9();
-void ets_init_bootstrap_lexer_lexer_935c1bee();
-void ets_init_bootstrap_frontend_frontend_a7343264();
-void ets_init_bootstrap_modules_platform_562cee50();
-void ets_init_bootstrap_modules_syntax_cache_85567346();
-void ets_init_bootstrap_modules_loader_43fa4e97();
-void ets_init_bootstrap_frontend_builtins_4364c337();
-void ets_init_bootstrap_binder_binder_c1b23e8f();
-void ets_init_bootstrap_checker_types_43cdcefd();
-void ets_init_bootstrap_checker_model_f556179b();
-void ets_init_bootstrap_checker_module_records_2a01df70();
-void ets_init_bootstrap_checker_constant_ee47b975();
-void ets_init_bootstrap_checker_numeric_6ffed12d();
-void ets_init_bootstrap_checker_comptime_453edd1a();
-void ets_init_bootstrap_checker_effects_4dbf2bf9();
-void ets_init_bootstrap_checker_ownership_f220c326();
-void ets_init_bootstrap_checker_safety_8aa4dfdf();
-void ets_init_bootstrap_checker_checker_c354a49e();
-void ets_init_bootstrap_checker_expansion_5b48ea3d();
-void ets_init_bootstrap_ir_model_774eb4bb();
-void ets_init_bootstrap_ir_type_traits_d9a7fcbe();
-void ets_init_bootstrap_ir_borrows_58af27bc();
-void ets_init_bootstrap_ir_contracts_d1083918();
-void ets_init_bootstrap_ir_verify_contracts_f5e4a2f8();
-void ets_init_bootstrap_ir_verify_ownership_e7778628();
-void ets_init_bootstrap_ir_verify_shapes_625a5811();
-void ets_init_bootstrap_ir_verify_memory_3e10e805();
-void ets_init_bootstrap_ir_verify_borrows_1aebe09f();
-void ets_init_bootstrap_ir_verify_d09f62ef();
-void ets_init_bootstrap_ir_lower_2184539b();
-void ets_init_bootstrap_binder_format_d243f694();
-void ets_init_bootstrap_ir_format_source_03178004();
-void ets_init_bootstrap_ir_format_contracts_1cbcd575();
-void ets_init_bootstrap_ir_format_5756b67d();
-void ets_init_bootstrap_ir_demo_47f3c1ee();
+void ets_init_bootstrap_driver_host_b5fb3be4();
+void ets_init_bootstrap_analysis_options_30472a8c();
+void ets_init_bootstrap_progress_progress_6e8dd651();
+void ets_init_bootstrap_parser_ast_schema_7f0a373f();
+void ets_init_bootstrap_parser_parser_4f930fc1();
+void ets_init_bootstrap_lexer_lexer_347006bc();
+void ets_init_bootstrap_frontend_frontend_876772d2();
+void ets_init_bootstrap_modules_platform_38a23446();
+void ets_init_bootstrap_modules_syntax_cache_a2301959();
+void ets_init_bootstrap_modules_loader_d0784388();
+void ets_init_bootstrap_frontend_builtins_2c1278e5();
+void ets_init_bootstrap_binder_binder_a5e8f8bc();
+void ets_init_bootstrap_checker_types_6ca42b67();
+void ets_init_bootstrap_checker_model_a78070bc();
+void ets_init_bootstrap_checker_module_records_3961b602();
+void ets_init_bootstrap_checker_constant_dff64f83();
+void ets_init_bootstrap_checker_numeric_53bb8068();
+void ets_init_bootstrap_checker_comptime_c355f21e();
+void ets_init_bootstrap_checker_effects_0428f9f1();
+void ets_init_bootstrap_checker_ownership_f81ee18c();
+void ets_init_bootstrap_checker_safety_5ec2ffb6();
+void ets_init_bootstrap_checker_checker_4b925bc0();
+void ets_init_bootstrap_checker_expansion_6d31a3c6();
+void ets_init_bootstrap_ir_model_2ab66571();
+void ets_init_bootstrap_ir_type_traits_d19a4c59();
+void ets_init_bootstrap_ir_borrows_175a8e51();
+void ets_init_bootstrap_ir_contracts_430bbff0();
+void ets_init_bootstrap_ir_verify_contracts_322fe924();
+void ets_init_bootstrap_ir_verify_ownership_e134f2b1();
+void ets_init_bootstrap_ir_verify_shapes_fb898010();
+void ets_init_bootstrap_ir_verify_memory_f7b0c869();
+void ets_init_bootstrap_ir_verify_borrows_ef38de22();
+void ets_init_bootstrap_ir_verify_41847ae1();
+void ets_init_bootstrap_ir_lower_504d42e2();
+void ets_init_bootstrap_binder_format_b59f8b20();
+void ets_init_bootstrap_ir_format_source_f8a27d8a();
+void ets_init_bootstrap_ir_format_contracts_270e346d();
+void ets_init_bootstrap_ir_format_86a288c4();
+void ets_init_bootstrap_ir_demo_5ce06c10();
 
 #include <runtime/ets_compiler_host.hpp>
 #include <bootstrap/modules/platform.hpp>
@@ -22360,7 +22381,7 @@ bool directories(std::string fileName) {
     return false;
 }
 
-void ets_init_bootstrap_driver_host_5f952991() {
+void ets_init_bootstrap_driver_host_b5fb3be4() {
 
 }
 
@@ -22412,7 +22433,7 @@ void profileEnd(std::string name, std::vector<double> before, std::string counts
     printError(ets::concat(std::string("frontend: profile "), name, std::string(" wall_ms="), numberToString((after[static_cast<std::size_t>(0.0)] - before[static_cast<std::size_t>(0.0)])), std::string(" cpu_ms="), numberToString((after[static_cast<std::size_t>(1.0)] - before[static_cast<std::size_t>(1.0)])), std::string(" self_peak_rss_kib="), numberToString(after[static_cast<std::size_t>(2.0)]), std::string(" worker_peak_rss_kib="), numberToString(after[static_cast<std::size_t>(3.0)]), ((counts == std::string("")) ? std::string("") : ets::concat(std::string(" "), counts))));
 }
 
-void ets_init_bootstrap_analysis_options_19a75f08() {
+void ets_init_bootstrap_analysis_options_30472a8c() {
 }
 
 // Generated module. Do not edit.
@@ -22449,7 +22470,7 @@ void progressSummary(std::string cpp, std::string binary) {
     progress.summary(cpp, binary);
 }
 
-void ets_init_bootstrap_progress_progress_cb3e8773() {
+void ets_init_bootstrap_progress_progress_6e8dd651() {
     progress = Progress{}.constructor();
 }
 
@@ -23465,7 +23486,7 @@ bool isExpressionNodeKind(NodeKind kind) {
     return ets_includes_vec<NodeKind>(std::vector<NodeKind>{NodeKind::ArrayLiteralExpression, NodeKind::ArrowFunctionExpression, NodeKind::AsExpression, NodeKind::AssignmentExpression, NodeKind::AwaitExpression, NodeKind::BinaryExpression, NodeKind::CallExpression, NodeKind::CompoundAssignmentExpression, NodeKind::GenericIdentifierExpression, NodeKind::IdentifierExpression, NodeKind::IndexExpression, NodeKind::LiteralExpression, NodeKind::MemberCallExpression, NodeKind::MemberExpression, NodeKind::NamedArgumentExpression, NodeKind::NewExpression, NodeKind::ObjectLiteralExpression, NodeKind::RawCppExpression, NodeKind::SatisfiesExpression, NodeKind::TemplateLiteralExpression, NodeKind::TernaryExpression, NodeKind::UnaryExpression}, kind);
 }
 
-void ets_init_bootstrap_parser_ast_schema_1304e857() {
+void ets_init_bootstrap_parser_ast_schema_7f0a373f() {
 
 
 
@@ -23572,7 +23593,7 @@ std::string inspectAst(std::vector<ParserToken> tokens) {
     return parser.inspect();
 }
 
-void ets_init_bootstrap_parser_parser_42b9bbf9() {
+void ets_init_bootstrap_parser_parser_4f930fc1() {
 }
 
 // Generated module. Do not edit.
@@ -23632,7 +23653,7 @@ std::string inspectTokens(std::string source) {
     return ets::concat(output, std::string("]}"));
 }
 
-void ets_init_bootstrap_lexer_lexer_935c1bee() {
+void ets_init_bootstrap_lexer_lexer_347006bc() {
 }
 
 // Generated module. Do not edit.
@@ -23740,7 +23761,7 @@ std::string inspectSource(std::string source, std::string file) {
     return formatSource(result);
 }
 
-void ets_init_bootstrap_frontend_frontend_a7343264() {
+void ets_init_bootstrap_frontend_frontend_876772d2() {
 }
 
 // Generated module. Do not edit.
@@ -23775,7 +23796,7 @@ std::vector<std::string> readSnapshot(std::string file) {
     return std::vector<std::string>();
 }
 
-void ets_init_bootstrap_modules_platform_562cee50() {
+void ets_init_bootstrap_modules_platform_38a23446() {
 
 }
 
@@ -23959,7 +23980,7 @@ double sourceUnits(std::string text) {
     return units;
 }
 
-void ets_init_bootstrap_modules_syntax_cache_85567346() {
+void ets_init_bootstrap_modules_syntax_cache_a2301959() {
 }
 
 // Generated module. Do not edit.
@@ -24085,12 +24106,15 @@ std::string formatGraph(ModuleGraph graph) {
     return ets_join_vec(parts, std::string(""));
 }
 
-void ets_init_bootstrap_modules_loader_43fa4e97() {
+void ets_init_bootstrap_modules_loader_d0784388() {
 }
 
 // Generated module. Do not edit.
 
 std::vector<std::string> nativeBuiltinSignatures(std::string key) {
+    if ((key == std::string("!child_process.spawn"))) {
+        return std::vector<std::string>{std::string("(string,string[])=>ChildProcess")};
+    }
     if ((key == std::string("!Date.now"))) {
         return std::vector<std::string>{std::string("()=>number")};
     }
@@ -24279,6 +24303,9 @@ std::vector<std::string> nativeBuiltinSignatures(std::string key) {
     }
     if ((key == std::string("charAt"))) {
         return std::vector<std::string>{std::string("(string,number)=>string")};
+    }
+    if ((key == std::string("ChildProcess.on"))) {
+        return std::vector<std::string>{std::string("(string,(number)=>void)=>ChildProcess"), std::string("(string,(string)=>void)=>ChildProcess")};
     }
     if ((key == std::string("clearError"))) {
         return std::vector<std::string>{std::string("(ref<string>)=>void")};
@@ -24507,6 +24534,15 @@ std::vector<std::string> nativeBuiltinSignatures(std::string key) {
     }
     if ((key == std::string("printError"))) {
         return std::vector<std::string>{std::string("()=>void")};
+    }
+    if ((key == std::string("ProcessReadable.on"))) {
+        return std::vector<std::string>{std::string("(string,(string)=>void)=>ProcessReadable"), std::string("(string,()=>void)=>ProcessReadable")};
+    }
+    if ((key == std::string("ProcessWritable.end"))) {
+        return std::vector<std::string>{std::string("()=>void")};
+    }
+    if ((key == std::string("ProcessWritable.write"))) {
+        return std::vector<std::string>{std::string("(string)=>boolean")};
     }
     if ((key == std::string("readFile"))) {
         return std::vector<std::string>{std::string("(string,ref<string>,ref<string>)=>boolean"), std::string("(string)=>Result<string,string>")};
@@ -24747,10 +24783,10 @@ std::vector<std::string> nativeBuiltinNames() {
 }
 
 std::vector<std::string> nativeBuiltinTypes() {
-    return std::vector<std::string>{std::string("FsEvent"), std::string("FsWatcher"), std::string("HttpClientResponse"), std::string("Promise"), std::string("Request"), std::string("Response"), std::string("Server"), std::string("Timer")};
+    return std::vector<std::string>{std::string("ChildProcess"), std::string("FsEvent"), std::string("FsWatcher"), std::string("HttpClientResponse"), std::string("ProcessReadable"), std::string("ProcessWritable"), std::string("Promise"), std::string("Request"), std::string("Response"), std::string("Server"), std::string("Timer")};
 }
 
-void ets_init_bootstrap_frontend_builtins_4364c337() {
+void ets_init_bootstrap_frontend_builtins_2c1278e5() {
 }
 
 // Generated module. Do not edit.
@@ -24778,7 +24814,7 @@ BindingResult bindProject(ModuleGraph graph) {
 }
 
 std::vector<std::string> bindingBuiltinValues() {
-    std::vector<std::string> names = std::vector<std::string>{std::string("i8"), std::string("u8"), std::string("i16"), std::string("u16"), std::string("i32"), std::string("u32"), std::string("i64"), std::string("u64"), std::string("f32"), std::string("f64"), std::string("optionalIsPresent"), std::string("optionalValueOr"), std::string("optionalOrElse"), std::string("resultOk"), std::string("resultErr"), std::string("resultIsOk"), std::string("resultValueOr"), std::string("Date"), std::string("FileReader"), std::string("JSON"), std::string("Map"), std::string("Math"), std::string("Optional"), std::string("Promise"), std::string("Result"), std::string("Server"), std::string("Set"), std::string("__noExtend"), std::string("__noThrow"), std::string("acceptTcp"), std::string("acceptTcpUntil"), std::string("acceptTls"), std::string("all"), std::string("appendFile"), std::string("appendFileAsync"), std::string("appendFileUntil"), std::string("argument"), std::string("argumentCount"), std::string("asyncIoUringRead"), std::string("asyncIoUringWrite"), std::string("cancel"), std::string("cancelTimer"), std::string("cancellationToken"), std::string("charAt"), std::string("clearError"), std::string("closeTcp"), std::string("closeTls"), std::string("compileCpp"), std::string("compilerRoot"), std::string("comptime"), std::string("console"), std::string("constRef"), std::string("copyFile"), std::string("copyFileAsync"), std::string("copyFileUntil"), std::string("createCancellation"), std::string("createTlsServer"), std::string("ensureParentDirectory"), std::string("err"), std::string("estaticAstRecords"), std::string("estaticTypedAstJson"), std::string("estaticTypedAstRecords"), std::string("exitProcess"), std::string("fail"), std::string("fileAppend"), std::string("fileCopy"), std::string("fileExists"), std::string("fileExistsAsync"), std::string("fileMove"), std::string("fileRead"), std::string("fileRemove"), std::string("fileWrite"), std::string("fs"), std::string("hasError"), std::string("http"), std::string("indexOf"), std::string("ioUringAvailable"), std::string("ioUringRead"), std::string("ioUringWrite"), std::string("isCancelled"), std::string("jsonArrayGet"), std::string("jsonArrayLength"), std::string("jsonAsBool"), std::string("jsonAsNumber"), std::string("jsonAsString"), std::string("jsonEscape"), std::string("jsonIsArray"), std::string("jsonIsBool"), std::string("jsonIsNull"), std::string("jsonIsNumber"), std::string("jsonIsObject"), std::string("jsonIsString"), std::string("jsonObjectGet"), std::string("length"), std::string("lineAt"), std::string("lineCount"), std::string("listenTcp"), std::string("match"), std::string("move"), std::string("moveFile"), std::string("moveFileAsync"), std::string("moveFileUntil"), std::string("normalizePath"), std::string("numberToString"), std::string("ok"), std::string("openFileReader"), std::string("optionalNone"), std::string("optionalSome"), std::string("otherwise"), std::string("path"), std::string("pathDirectory"), std::string("print"), std::string("printError"), std::string("process"), std::string("promiseAll"), std::string("promiseRace"), std::string("race"), std::string("readFile"), std::string("readFileAsync"), std::string("readFileUntil"), std::string("readTcp"), std::string("readTcpUntil"), std::string("readTls"), std::string("ref"), std::string("removeFile"), std::string("removeFileAsync"), std::string("removeFileUntil"), std::string("resolveDns"), std::string("resolveImportPath"), std::string("resolveProjectPath"), std::string("retry"), std::string("setInterval"), std::string("setTimeout"), std::string("sleep"), std::string("spawn"), std::string("startsWith"), std::string("stopLoop"), std::string("substring"), std::string("syntaxTreeJson"), std::string("syntaxTreeRecords"), std::string("tcpAccept"), std::string("tcpClose"), std::string("tcpConnect"), std::string("tcpListen"), std::string("tcpRead"), std::string("tcpWrite"), std::string("timeout"), std::string("trim"), std::string("unwatchFs"), std::string("validateSyntax"), std::string("watchFs"), std::string("when"), std::string("whenType"), std::string("write"), std::string("writeError"), std::string("writeFile"), std::string("writeFileAsync"), std::string("writeFileUntil"), std::string("writeTcp"), std::string("writeTcpUntil"), std::string("writeTls")};
+    std::vector<std::string> names = std::vector<std::string>{std::string("i8"), std::string("u8"), std::string("i16"), std::string("u16"), std::string("i32"), std::string("u32"), std::string("i64"), std::string("u64"), std::string("f32"), std::string("f64"), std::string("optionalIsPresent"), std::string("optionalValueOr"), std::string("optionalOrElse"), std::string("resultOk"), std::string("resultErr"), std::string("resultIsOk"), std::string("resultValueOr"), std::string("Date"), std::string("FileReader"), std::string("JSON"), std::string("Map"), std::string("Math"), std::string("Optional"), std::string("Promise"), std::string("Result"), std::string("Server"), std::string("Set"), std::string("__noExtend"), std::string("__noThrow"), std::string("acceptTcp"), std::string("acceptTcpUntil"), std::string("acceptTls"), std::string("all"), std::string("appendFile"), std::string("appendFileAsync"), std::string("appendFileUntil"), std::string("argument"), std::string("argumentCount"), std::string("asyncIoUringRead"), std::string("asyncIoUringWrite"), std::string("cancel"), std::string("cancelTimer"), std::string("cancellationToken"), std::string("charAt"), std::string("child_process"), std::string("clearError"), std::string("closeTcp"), std::string("closeTls"), std::string("compileCpp"), std::string("compilerRoot"), std::string("comptime"), std::string("console"), std::string("constRef"), std::string("copyFile"), std::string("copyFileAsync"), std::string("copyFileUntil"), std::string("createCancellation"), std::string("createTlsServer"), std::string("ensureParentDirectory"), std::string("err"), std::string("estaticAstRecords"), std::string("estaticTypedAstJson"), std::string("estaticTypedAstRecords"), std::string("exitProcess"), std::string("fail"), std::string("fileAppend"), std::string("fileCopy"), std::string("fileExists"), std::string("fileExistsAsync"), std::string("fileMove"), std::string("fileRead"), std::string("fileRemove"), std::string("fileWrite"), std::string("fs"), std::string("hasError"), std::string("http"), std::string("indexOf"), std::string("ioUringAvailable"), std::string("ioUringRead"), std::string("ioUringWrite"), std::string("isCancelled"), std::string("jsonArrayGet"), std::string("jsonArrayLength"), std::string("jsonAsBool"), std::string("jsonAsNumber"), std::string("jsonAsString"), std::string("jsonEscape"), std::string("jsonIsArray"), std::string("jsonIsBool"), std::string("jsonIsNull"), std::string("jsonIsNumber"), std::string("jsonIsObject"), std::string("jsonIsString"), std::string("jsonObjectGet"), std::string("length"), std::string("lineAt"), std::string("lineCount"), std::string("listenTcp"), std::string("match"), std::string("move"), std::string("moveFile"), std::string("moveFileAsync"), std::string("moveFileUntil"), std::string("normalizePath"), std::string("numberToString"), std::string("ok"), std::string("openFileReader"), std::string("optionalNone"), std::string("optionalSome"), std::string("otherwise"), std::string("path"), std::string("pathDirectory"), std::string("print"), std::string("printError"), std::string("process"), std::string("promiseAll"), std::string("promiseRace"), std::string("race"), std::string("readFile"), std::string("readFileAsync"), std::string("readFileUntil"), std::string("readTcp"), std::string("readTcpUntil"), std::string("readTls"), std::string("ref"), std::string("removeFile"), std::string("removeFileAsync"), std::string("removeFileUntil"), std::string("resolveDns"), std::string("resolveImportPath"), std::string("resolveProjectPath"), std::string("retry"), std::string("setInterval"), std::string("setTimeout"), std::string("sleep"), std::string("spawn"), std::string("startsWith"), std::string("stopLoop"), std::string("substring"), std::string("syntaxTreeJson"), std::string("syntaxTreeRecords"), std::string("tcpAccept"), std::string("tcpClose"), std::string("tcpConnect"), std::string("tcpListen"), std::string("tcpRead"), std::string("tcpWrite"), std::string("timeout"), std::string("trim"), std::string("unwatchFs"), std::string("validateSyntax"), std::string("watchFs"), std::string("when"), std::string("whenType"), std::string("write"), std::string("writeError"), std::string("writeFile"), std::string("writeFileAsync"), std::string("writeFileUntil"), std::string("writeTcp"), std::string("writeTcpUntil"), std::string("writeTls")};
     for (const auto& name : nativeBuiltinNames()) {
         if ((!ets_includes_vec<std::string>(names, name))) {
             ets_push_vec<std::string>(names, name);
@@ -24797,7 +24833,7 @@ std::vector<std::string> bindingBuiltinTypes() {
     return names;
 }
 
-void ets_init_bootstrap_binder_binder_c1b23e8f() {
+void ets_init_bootstrap_binder_binder_a5e8f8bc() {
 }
 
 // Generated module. Do not edit.
@@ -25248,7 +25284,7 @@ std::vector<std::string> genericArguments(std::string text) {
     return splitTypes(::ets::string_slice(text, (::ets::string_length(base) + 1.0), (::ets::string_length(text) - 1.0)), std::string(","));
 }
 
-void ets_init_bootstrap_checker_types_43cdcefd() {
+void ets_init_bootstrap_checker_types_6ca42b67() {
 }
 
 // Generated module. Do not edit.
@@ -25294,7 +25330,7 @@ bool readonlyMethodReceiver(const BindingResult& binding, const ets_import_9_Che
     return false;
 }
 
-void ets_init_bootstrap_checker_model_f556179b() {
+void ets_init_bootstrap_checker_model_a78070bc() {
 }
 
 // Generated module. Do not edit.
@@ -25327,7 +25363,7 @@ ets_import_9_CheckResult attachModuleRecords(ModuleGraph graph, BindingResult bi
     return builder.run();
 }
 
-void ets_init_bootstrap_checker_module_records_2a01df70() {
+void ets_init_bootstrap_checker_module_records_3961b602() {
 }
 
 // Generated module. Do not edit.
@@ -25702,7 +25738,7 @@ ConstantValue constantNumeric(ConstantValue left, ConstantValue right, std::stri
     return constantCast(constantNumber(value), name);
 }
 
-void ets_init_bootstrap_checker_constant_ee47b975() {
+void ets_init_bootstrap_checker_constant_dff64f83() {
 }
 
 // Generated module. Do not edit.
@@ -25879,7 +25915,7 @@ std::string nativeBinaryPromotion(std::string left, std::string right, std::stri
     return std::string("u32");
 }
 
-void ets_init_bootstrap_checker_numeric_6ffed12d() {
+void ets_init_bootstrap_checker_numeric_53bb8068() {
 }
 
 // Generated module. Do not edit.
@@ -25889,12 +25925,12 @@ ets_import_9_CheckResult evaluateNativeComptime(ModuleGraph graph, BindingResult
     return evaluator.run();
 }
 
-void ets_init_bootstrap_checker_comptime_453edd1a() {
+void ets_init_bootstrap_checker_comptime_c355f21e() {
 }
 
 // Generated module. Do not edit.
 
-void ets_init_bootstrap_checker_effects_4dbf2bf9() {
+void ets_init_bootstrap_checker_effects_0428f9f1() {
 }
 
 // Generated module. Do not edit.
@@ -26049,7 +26085,7 @@ std::string resourceSubstitution(std::string pattern, std::string actual, std::s
     return inferred;
 }
 
-void ets_init_bootstrap_checker_ownership_f220c326() {
+void ets_init_bootstrap_checker_ownership_f81ee18c() {
 }
 
 // Generated module. Do not edit.
@@ -26060,7 +26096,7 @@ void validateSafety(ModuleGraph graph, BindingResult binding, ets_import_9_Check
     (result = analyzer.run());
 }
 
-void ets_init_bootstrap_checker_safety_8aa4dfdf() {
+void ets_init_bootstrap_checker_safety_5ec2ffb6() {
 }
 
 // Generated module. Do not edit.
@@ -26075,7 +26111,7 @@ ets_import_9_CheckResult checkProject(ModuleGraph graph, BindingResult binding, 
     return attachModuleRecords(graph, binding, checked);
 }
 
-void ets_init_bootstrap_checker_checker_c354a49e() {
+void ets_init_bootstrap_checker_checker_4b925bc0() {
 }
 
 // Generated module. Do not edit.
@@ -26090,12 +26126,12 @@ FrontendProject analyzeProject(ModuleGraph graph, bool trace) {
     return FrontendProject{}.constructor(expanded, binding, checkProject(expanded, binding, trace));
 }
 
-void ets_init_bootstrap_checker_expansion_5b48ea3d() {
+void ets_init_bootstrap_checker_expansion_6d31a3c6() {
 }
 
 // Generated module. Do not edit.
 
-void ets_init_bootstrap_ir_model_774eb4bb() {
+void ets_init_bootstrap_ir_model_2ab66571() {
 }
 
 // Generated module. Do not edit.
@@ -26177,7 +26213,7 @@ bool irNumericConstant(std::string raw, bool floating) {
     return ((value - value) == 0.0);
 }
 
-void ets_init_bootstrap_ir_type_traits_d9a7fcbe() {
+void ets_init_bootstrap_ir_type_traits_d19a4c59() {
 }
 
 // Generated module. Do not edit.
@@ -26291,7 +26327,7 @@ IrProject finishBorrows(IrProject project) {
     return project;
 }
 
-void ets_init_bootstrap_ir_borrows_58af27bc() {
+void ets_init_bootstrap_ir_borrows_175a8e51() {
 }
 
 // Generated module. Do not edit.
@@ -26350,7 +26386,7 @@ IrProject preserveContracts(const ModuleGraph& graph, const ets_import_9_CheckRe
     return project;
 }
 
-void ets_init_bootstrap_ir_contracts_d1083918() {
+void ets_init_bootstrap_ir_contracts_430bbff0() {
 }
 
 // Generated module. Do not edit.
@@ -26685,7 +26721,7 @@ std::vector<IrIssue> verifyModuleContracts(const IrProject& project) {
     return issues;
 }
 
-void ets_init_bootstrap_ir_verify_contracts_f5e4a2f8() {
+void ets_init_bootstrap_ir_verify_contracts_322fe924() {
 }
 
 // Generated module. Do not edit.
@@ -26848,7 +26884,7 @@ std::vector<IrIssue> verifyOwnershipRoutes(const IrProject& project, const IrFun
     return issues;
 }
 
-void ets_init_bootstrap_ir_verify_ownership_e7778628() {
+void ets_init_bootstrap_ir_verify_ownership_e134f2b1() {
 }
 
 // Generated module. Do not edit.
@@ -27162,7 +27198,7 @@ std::string verifyShapeInstruction(const IrProject& project, const IrFunction& f
     return std::string("Opcode de shape desconocido");
 }
 
-void ets_init_bootstrap_ir_verify_shapes_625a5811() {
+void ets_init_bootstrap_ir_verify_shapes_fb898010() {
 }
 
 // Generated module. Do not edit.
@@ -27199,7 +27235,7 @@ bool irInitialPlace(const IrFunction& f, double place) {
     return ((f.places[static_cast<std::size_t>(root)].parameter || (f.places[static_cast<std::size_t>(root)].global >= 0.0)) || (f.places[static_cast<std::size_t>(root)].kind == std::string("capture")));
 }
 
-void ets_init_bootstrap_ir_verify_memory_3e10e805() {
+void ets_init_bootstrap_ir_verify_memory_f7b0c869() {
 }
 
 // Generated module. Do not edit.
@@ -27349,7 +27385,7 @@ std::vector<IrIssue> verifyBorrowRoutes(const IrProject& project, IrFunction f) 
     return issues;
 }
 
-void ets_init_bootstrap_ir_verify_borrows_1aebe09f() {
+void ets_init_bootstrap_ir_verify_borrows_ef38de22() {
 }
 
 // Generated module. Do not edit.
@@ -27361,7 +27397,7 @@ std::vector<IrIssue> verifyIr(IrProject project) {
     return verifier.run();
 }
 
-void ets_init_bootstrap_ir_verify_d09f62ef() {
+void ets_init_bootstrap_ir_verify_41847ae1() {
 }
 
 // Generated module. Do not edit.
@@ -27409,7 +27445,7 @@ IrProject lowerProject(ModuleGraph graph, BindingResult binding, ets_import_9_Ch
     return lowering.run(trace);
 }
 
-void ets_init_bootstrap_ir_lower_2184539b() {
+void ets_init_bootstrap_ir_lower_504d42e2() {
 }
 
 // Generated module. Do not edit.
@@ -27477,7 +27513,7 @@ std::string formatBinding(BindingResult result, ModuleGraph graph) {
     return ets_join_vec(output, std::string(""));
 }
 
-void ets_init_bootstrap_binder_format_d243f694() {
+void ets_init_bootstrap_binder_format_b59f8b20() {
 }
 
 // Generated module. Do not edit.
@@ -27486,7 +27522,7 @@ std::string formatIrSource(IrSource source) {
     return ets::concat(std::string("{\"moduleId\":"), quoteSource(source.moduleId), std::string(",\"generatedId\":"), quoteSource(source.generatedId), std::string(",\"generatedStart\":"), numberToString(source.generatedStart), std::string(",\"generatedEnd\":"), numberToString(source.generatedEnd), std::string(",\"sourceHash\":"), quoteSource(source.sourceHash), std::string(",\"file\":"), quoteSource(source.file), std::string(",\"node\":"), numberToString(source.node), std::string(",\"start\":"), numberToString(source.start), std::string(",\"end\":"), numberToString(source.end), std::string("}"));
 }
 
-void ets_init_bootstrap_ir_format_source_03178004() {
+void ets_init_bootstrap_ir_format_source_f8a27d8a() {
 }
 
 // Generated module. Do not edit.
@@ -27515,7 +27551,7 @@ std::string formatContracts(const IrProject& project) {
     return ets::concat(std::string("\"effectContracts\":["), ets_join_vec(contracts, std::string(",")), std::string("],\"annotations\":["), ets_join_vec(annotations, std::string(",")), std::string("]"));
 }
 
-void ets_init_bootstrap_ir_format_contracts_1cbcd575() {
+void ets_init_bootstrap_ir_format_contracts_270e346d() {
 }
 
 // Generated module. Do not edit.
@@ -27623,7 +27659,7 @@ std::string formatIr(IrProject project) {
     return ets_join_vec(output, std::string(""));
 }
 
-void ets_init_bootstrap_ir_format_5756b67d() {
+void ets_init_bootstrap_ir_format_86a288c4() {
 }
 
 // Generated module. Do not edit.
@@ -27717,51 +27753,51 @@ static inline void runIr() {
     }
 }
 
-void ets_init_bootstrap_ir_demo_47f3c1ee() {
+void ets_init_bootstrap_ir_demo_5ce06c10() {
     runIr();
 }
 
 int main(int argc, char** argv) {
     ets_argc = argc;
     ets_argv = argv;
-    ets_init_bootstrap_driver_host_5f952991();
-    ets_init_bootstrap_analysis_options_19a75f08();
-    ets_init_bootstrap_progress_progress_cb3e8773();
-    ets_init_bootstrap_parser_ast_schema_1304e857();
-    ets_init_bootstrap_parser_parser_42b9bbf9();
-    ets_init_bootstrap_lexer_lexer_935c1bee();
-    ets_init_bootstrap_frontend_frontend_a7343264();
-    ets_init_bootstrap_modules_platform_562cee50();
-    ets_init_bootstrap_modules_syntax_cache_85567346();
-    ets_init_bootstrap_modules_loader_43fa4e97();
-    ets_init_bootstrap_frontend_builtins_4364c337();
-    ets_init_bootstrap_binder_binder_c1b23e8f();
-    ets_init_bootstrap_checker_types_43cdcefd();
-    ets_init_bootstrap_checker_model_f556179b();
-    ets_init_bootstrap_checker_module_records_2a01df70();
-    ets_init_bootstrap_checker_constant_ee47b975();
-    ets_init_bootstrap_checker_numeric_6ffed12d();
-    ets_init_bootstrap_checker_comptime_453edd1a();
-    ets_init_bootstrap_checker_effects_4dbf2bf9();
-    ets_init_bootstrap_checker_ownership_f220c326();
-    ets_init_bootstrap_checker_safety_8aa4dfdf();
-    ets_init_bootstrap_checker_checker_c354a49e();
-    ets_init_bootstrap_checker_expansion_5b48ea3d();
-    ets_init_bootstrap_ir_model_774eb4bb();
-    ets_init_bootstrap_ir_type_traits_d9a7fcbe();
-    ets_init_bootstrap_ir_borrows_58af27bc();
-    ets_init_bootstrap_ir_contracts_d1083918();
-    ets_init_bootstrap_ir_verify_contracts_f5e4a2f8();
-    ets_init_bootstrap_ir_verify_ownership_e7778628();
-    ets_init_bootstrap_ir_verify_shapes_625a5811();
-    ets_init_bootstrap_ir_verify_memory_3e10e805();
-    ets_init_bootstrap_ir_verify_borrows_1aebe09f();
-    ets_init_bootstrap_ir_verify_d09f62ef();
-    ets_init_bootstrap_ir_lower_2184539b();
-    ets_init_bootstrap_binder_format_d243f694();
-    ets_init_bootstrap_ir_format_source_03178004();
-    ets_init_bootstrap_ir_format_contracts_1cbcd575();
-    ets_init_bootstrap_ir_format_5756b67d();
-    ets_init_bootstrap_ir_demo_47f3c1ee();
+    ets_init_bootstrap_driver_host_b5fb3be4();
+    ets_init_bootstrap_analysis_options_30472a8c();
+    ets_init_bootstrap_progress_progress_6e8dd651();
+    ets_init_bootstrap_parser_ast_schema_7f0a373f();
+    ets_init_bootstrap_parser_parser_4f930fc1();
+    ets_init_bootstrap_lexer_lexer_347006bc();
+    ets_init_bootstrap_frontend_frontend_876772d2();
+    ets_init_bootstrap_modules_platform_38a23446();
+    ets_init_bootstrap_modules_syntax_cache_a2301959();
+    ets_init_bootstrap_modules_loader_d0784388();
+    ets_init_bootstrap_frontend_builtins_2c1278e5();
+    ets_init_bootstrap_binder_binder_a5e8f8bc();
+    ets_init_bootstrap_checker_types_6ca42b67();
+    ets_init_bootstrap_checker_model_a78070bc();
+    ets_init_bootstrap_checker_module_records_3961b602();
+    ets_init_bootstrap_checker_constant_dff64f83();
+    ets_init_bootstrap_checker_numeric_53bb8068();
+    ets_init_bootstrap_checker_comptime_c355f21e();
+    ets_init_bootstrap_checker_effects_0428f9f1();
+    ets_init_bootstrap_checker_ownership_f81ee18c();
+    ets_init_bootstrap_checker_safety_5ec2ffb6();
+    ets_init_bootstrap_checker_checker_4b925bc0();
+    ets_init_bootstrap_checker_expansion_6d31a3c6();
+    ets_init_bootstrap_ir_model_2ab66571();
+    ets_init_bootstrap_ir_type_traits_d19a4c59();
+    ets_init_bootstrap_ir_borrows_175a8e51();
+    ets_init_bootstrap_ir_contracts_430bbff0();
+    ets_init_bootstrap_ir_verify_contracts_322fe924();
+    ets_init_bootstrap_ir_verify_ownership_e134f2b1();
+    ets_init_bootstrap_ir_verify_shapes_fb898010();
+    ets_init_bootstrap_ir_verify_memory_f7b0c869();
+    ets_init_bootstrap_ir_verify_borrows_ef38de22();
+    ets_init_bootstrap_ir_verify_41847ae1();
+    ets_init_bootstrap_ir_lower_504d42e2();
+    ets_init_bootstrap_binder_format_b59f8b20();
+    ets_init_bootstrap_ir_format_source_f8a27d8a();
+    ets_init_bootstrap_ir_format_contracts_270e346d();
+    ets_init_bootstrap_ir_format_86a288c4();
+    ets_init_bootstrap_ir_demo_5ce06c10();
     return 0;
 }
