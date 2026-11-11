@@ -301,7 +301,7 @@ export class IrLowering {
     if (actual < 0) { this.fail(id,"Implementación de interfaz sin método resuelto: "+name); return; }
     const method = this.binding.symbols[actual]; const declaration = this.graph.modules[method.module].cached.result.ast.nodes[method.node];
     let generic: boolean = false; for (const e of declaration.edges) if (e.role == EdgeRole.TypeParameters) generic = true;
-    const callee: number = this.ensureFunction(method.module,method.node,generic ? this.result.types[signature] : this.memberType(this.result.types[from],actual),this.result.types[from]);
+    const callee: number = this.ensureFunction(method.module,method.node,generic ? this.result.types[signature] : this.memberType(this.result.types[from],actual),this.result.types[from],false);
     this.result.dispatches.push(new IrDispatch(to,from,name,signature,callee));
     const required = this.result.typeDefinitions[signature]; const target = this.result.functions[callee];
     this.implementation(target.returns,required.arguments[required.arguments.length-1],id);
@@ -500,11 +500,13 @@ export class IrLowering {
     this.block = join; if (p < 0) return -1;
     this.track(p); return this.emit(this.result.typeDefinitions[typeId].resource ? "move" : "load",typeId,[],p,-1,"",id);
   }
-  ensureFunction(owner: number, id: number, wanted: string, receiver: string = ""): number {
+  ensureFunction(owner: number, id: number, wanted: string, receiver: string = "", constReceiver: boolean = true): number {
     const previousModule: number = this.module; const previousFunction: number = this.currentFunction;
     let signature: string = this.resolved(wanted); this.module = owner;
     const n = this.node(id); const pattern: string = this.checked.files[owner].types[id];
-    const receiverMode: string = receiver != "" && n.get(AttributeKind.Name) != "constructor" && readonlyMethodReceiver(this.binding,this.checked,owner,id) ? "constRef" : "ref";
+    // Un dispatch de interfaz conserva el receptor mutable: la llamada
+    // polimorfica entrega un handle que el runtime resuelve.
+    const receiverMode: string = receiver != "" && constReceiver && n.get(AttributeKind.Name) != "constructor" && readonlyMethodReceiver(this.binding,this.checked,owner,id) ? "constRef" : "ref";
     const receiverText: string = receiver == "" ? "" : receiverMode+"<"+memoryValue(receiver)+">";
     let from: string[] = []; let to: string[] = [];
     if (previousFunction >= 0) { from = this.result.functions[previousFunction].substitutionFrom; to = this.result.functions[previousFunction].substitutionTo; }

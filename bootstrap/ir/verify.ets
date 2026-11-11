@@ -115,16 +115,10 @@ export class IrVerifier {
       if (!this.typeId(i.signature) || this.project.typeDefinitions[i.signature].kind != "function" || i.operands.length == 0 || !this.value(f,i.operands[0])) this.error(i.source,"Dispatch de interfaz sin firma/receptor");
       else {
         const signature = this.project.typeDefinitions[i.signature]; const receiver = this.project.typeDefinitions[f.values[i.operands[0]]];
-        if (!["ref","constRef"].includes(receiver.kind) || receiver.arguments.length != 1 || !this.typeId(receiver.arguments[0]) || !["interface","intersection"].includes(this.project.typeDefinitions[receiver.arguments[0]].kind)) this.error(i.source,"Receptor de interfaz inválido");
+        if (receiver.kind != "ref" || receiver.arguments.length != 1 || !this.typeId(receiver.arguments[0]) || !["interface","intersection"].includes(this.project.typeDefinitions[receiver.arguments[0]].kind)) this.error(i.source,"Receptor de interfaz inválido");
         else for (const concrete of this.project.typeDefinitions[receiver.arguments[0]].variants) {
           let found: boolean = false;
-          for (const d of this.project.dispatches) if (d.interfaceType == receiver.arguments[0] && d.concreteType == concrete && d.name == i.text && d.signature == i.signature) {
-            found = true;
-            if (receiver.kind == "constRef" && d.callee >= 0 && d.callee < this.project.functions.length) {
-              const target: number = this.project.functions[d.callee].receiverType;
-              if (!this.typeId(target) || this.project.typeDefinitions[target].kind != "constRef") this.error(i.source,"Dispatch mutable sobre receptor readonly");
-            }
-          }
+          for (const d of this.project.dispatches) if (d.interfaceType == receiver.arguments[0] && d.concreteType == concrete && d.name == i.text && d.signature == i.signature) found = true;
           if (!found) this.error(i.source,"Dispatch de interfaz incompleto");
         }
         if (signature.arguments.length != i.operands.length || signature.arguments[signature.arguments.length-1] != i.typeId || hasResult != (resultType != "void")) this.error(i.source,"Firma de interfaz incompatible");
@@ -278,7 +272,7 @@ export class IrVerifier {
         const target = this.project.functions[d.callee]; const signature = this.project.typeDefinitions[d.signature];
         if (!["interface","intersection"].includes(this.project.typeDefinitions[d.interfaceType].kind) || !this.project.typeDefinitions[d.interfaceType].variants.includes(d.concreteType) || signature.kind != "function" || target.parameterTypes.length != signature.arguments.length || !this.typeId(target.receiverType) || target.parameterTypes[0] != target.receiverType) this.error(source,"Contrato de dispatch inválido");
         else {
-          if (!["ref","constRef"].includes(this.project.typeDefinitions[target.receiverType].kind) || this.project.typeDefinitions[target.receiverType].arguments[0] != d.concreteType || !irAssignable(this.project,target.returns,signature.arguments[signature.arguments.length-1],0)) this.error(source,"Destino de dispatch incompatible");
+          if (this.project.typeDefinitions[target.receiverType].kind != "ref" || this.project.typeDefinitions[target.receiverType].arguments[0] != d.concreteType || !irAssignable(this.project,target.returns,signature.arguments[signature.arguments.length-1],0)) this.error(source,"Destino de dispatch incompatible");
           for (let at: number = 1; at < target.parameterTypes.length; at = at+1) if (!irAssignable(this.project,signature.arguments[at-1],target.parameterTypes[at],0)) this.error(source,"Parámetro de dispatch incompatible");
         }
       }

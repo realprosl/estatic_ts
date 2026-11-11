@@ -91,7 +91,7 @@ for(const [name,source,expected] of [
  ["readonly delegated getter",'class C{x:number=8;get():number{return this.x;}getAgain():number{return this.get();}}function read(c:constRef<C>):number{return c.getAgain();}const c=new C();print(read(c));',"8\n"],
  ["readonly generic class getter",'class Box<T>{value:T;get():T{return this.value;}}function read(box:constRef<Box<string>>):string{return box.get();}const box=new Box<string>("generic");print(read(box));',"generic\n"],
  ["readonly constPtr getter",'class C{x:number=9;get():number{return this.x;}}const c:constPtr<C> = new C();print(c.get());',"9\n"],
- ["readonly receiver with mutable output",'class C{x:number=4;copy(out:ref<number>):void{out=this.x;}}function read(c:constRef<C>):number{let n=0;c.copy(n);return n;}const c=new C();print(read(c));',"4\n"],
+ ["readonly receiver with mutable output",'class C{x:number=4;copy(target:ref<number>):void{target=this.x;}}function read(c:constRef<C>):number{let n=0;c.copy(n);return n;}const c=new C();print(read(c));',"4\n"],
  ["readonly interface getter dispatch",'interface Named{name():string;}class A{name():string{return "A";}}class B{name():string{return "B";}}function read(value:Named):string{return value.name();}const a:Named=new A();const b:Named=new B();print(read(a));print(read(b));',"A\nB\n"],
  ["exact64",'const a:i64=-9223372036854775808;const b:u64=18446744073709551615;print(a);print(b);',"-9223372036854775808\n18446744073709551615\n"],
  ["integer wrap",'function f(n:i32):i32{const one:i32=1;return n+one;}print(f(2147483647));',"-2147483648\n"],

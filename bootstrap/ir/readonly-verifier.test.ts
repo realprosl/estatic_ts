@@ -64,11 +64,15 @@ function run():void {
   let target = new IrFunction("get","get",0,source); target.receiverType = 4; target.parameterTypes = [4]; p.functions.push(target);
   expect(verifyFunctionContracts(p,target).length == 0,"constRef receiver contract accepted");
   target.parameterTypes = [3]; expect(verifyFunctionContracts(p,target).length > 0,"receiver metadata cannot disagree with first parameter"); target.parameterTypes = [4];
-  p.dispatches.push(new IrDispatch(5,2,"get",8,0));
-  let call = new IrInstruction("interfaceCall",2,0,source); call.signature = 8; call.text = "get"; call.operands = [3];
-  v.instruction(f,call); expect(v.issues.length == 0,"readonly interface call accepted");
-  p.functions[0].receiverType = 3; p.functions[0].parameterTypes = [3];
-  v.instruction(f,call); expect(v.issues.length > 0,"readonly interface cannot dispatch to mutable method");
+  // A dispatch target keeps a mutable receiver: the polymorphic call
+  // resolves the concrete handle at runtime.
+  let dispatched = new IrFunction("get","get",0,source); dispatched.receiverType = 3; dispatched.parameterTypes = [3]; p.functions.push(dispatched);
+  p.dispatches.push(new IrDispatch(5,2,"get",8,p.functions.length-1));
+  f.values = [3,4,0,7,6];
+  let call = new IrInstruction("interfaceCall",2,0,source); call.signature = 8; call.text = "get"; call.operands = [4];
+  v.instruction(f,call); expect(v.issues.length == 0,"interface call with mutable dispatch accepted"); v.issues = [];
+  call.operands = [3];
+  v.instruction(f,call); expect(v.issues.length > 0,"interface call must use a mutable receiver"); v.issues = [];
   print("readonly verifier ok");
 }
 run();
