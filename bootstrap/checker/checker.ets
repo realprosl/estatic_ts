@@ -18,9 +18,14 @@ import { nativeNumericLiteral, nativeUnaryPromotion, nativeBinaryPromotion, nati
 export class NativeChecker {
   graph: ModuleGraph; binding: BindingResult; result: CheckResult; symbolStates: number[]; depth: number; switches: number; compatibilityDepth: number;
   narrowedSymbols: number[]; narrowedTypes: string[]; trace: boolean;
+  // Memoiza que metodo muta su receptor. Los arrays se copian al pasarlos,
+  // asi que la cache vive en la clase y no en un argumento recursivo.
+  // 0 = no muta, 1 = muta, 2 = en curso (ciclo).
+  mutationCache: Map<string,number>;
   constructor(graph: ModuleGraph, binding: BindingResult) {
     this.graph = graph; this.binding = binding; this.result = new CheckResult(); this.symbolStates = []; this.depth = 0; this.switches = 0; this.compatibilityDepth = 0;
     this.narrowedSymbols = []; this.narrowedTypes = []; this.trace = false;
+    this.mutationCache = new Map<string,number>();
   }
   node(module: number, id: number): AstNode { return this.graph.modules[module].cached.result.ast.nodes[id]; }
   report(module: number, id: number, message: string): void {
@@ -862,11 +867,21 @@ export class NativeChecker {
     }
     return -1;
   }
-  methodMutates(sid: number, visited: string[] = []): boolean {
+  methodMutates(sid: number): boolean {
     const s: BindingSymbol = this.binding.symbols[sid]; if ((s.module) < 0 || s.kind != "ClassMethod") return false;
     const key: string = numberToString(s.module) + ":" + numberToString(s.node);
-    if (visited.includes(key)) return false;
-    visited.push(key);
+    const cached: Optional<number> = this.mutationCache.get(key);
+    if (cached.isPresent()) {
+      const state: number = cached.value();
+      if (state == 2) return false;
+      return state == 1;
+    }
+    this.mutationCache.set(key,2);
+    const result: boolean = this.methodMutatesBody(s);
+    this.mutationCache.set(key,result ? 1 : 0);
+    return result;
+  }
+  methodMutatesBody(s: BindingSymbol): boolean {
     let work: number[] = []; for (const declaration of s.declarations) work.push(declaration);
     while (work.length > 0) {
       const nodeId: number = work[work.length-1]; const n: AstNode = this.node(s.module,nodeId); work.pop();
@@ -878,7 +893,7 @@ export class NativeChecker {
         const name: string = n.get(AttributeKind.Method);
         if (receiver.kind == NodeKind.IdentifierExpression && receiver.get(AttributeKind.Name) == "this") {
           const sibling: number = this.siblingMethod(s,name);
-          if (sibling >= 0 && this.methodMutates(sibling,visited)) return true;
+          if (sibling >= 0 && this.methodMutates(sibling)) return true;
         } else if (receiver.kind == NodeKind.MemberExpression) {
           // Un builtin que muta un campo de `this` cambia su estado observable.
           const base: number = bindingChild(receiver,EdgeRole.Object);
