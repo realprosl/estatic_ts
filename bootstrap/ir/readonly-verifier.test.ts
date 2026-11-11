@@ -26,10 +26,15 @@ function run():void {
   p.typeDefinitions[8].arguments = [0]; p.typeDefinitions[9].arguments = [2]; p.typeDefinitions[10].arguments = [2];
   p.typeDefinitions[5].variants = [2];
   const source = new IrSource("test","hash","test.ets",0,0,1);
-  let f = new IrFunction("caller","caller",1,source); f.values = [3,4,0,7];
+  let f = new IrFunction("caller","caller",1,source); f.values = [3,4,0,7,6];
   f.places.push(new IrPlace("loan",4,-1,true,source));
   let deref = new IrPlace("node",2,-1,false,source); deref.kind = "deref"; deref.base = 0; f.places.push(deref);
   let field = new IrPlace("field",0,-1,false,source); field.kind = "field"; field.base = 1; f.places.push(field);
+  // A dispatch target keeps a mutable receiver: the polymorphic call
+  // resolves the concrete handle at runtime. The verifier copies the project,
+  // so the dispatch must exist before it is created.
+  let dispatched = new IrFunction("get","get",0,source); dispatched.receiverType = 3; dispatched.parameterTypes = [3]; p.functions.push(dispatched);
+  p.dispatches.push(new IrDispatch(5,2,"get",8,p.functions.length-1));
   let v = new IrVerifier(p);
   expect(v.readonlyPlace(f,1),"constRef deref must be readonly");
   expect(v.readonlyPlace(f,2),"constRef field projection must be readonly");
@@ -66,9 +71,6 @@ function run():void {
   target.parameterTypes = [3]; expect(verifyFunctionContracts(p,target).length > 0,"receiver metadata cannot disagree with first parameter"); target.parameterTypes = [4];
   // A dispatch target keeps a mutable receiver: the polymorphic call
   // resolves the concrete handle at runtime.
-  let dispatched = new IrFunction("get","get",0,source); dispatched.receiverType = 3; dispatched.parameterTypes = [3]; p.functions.push(dispatched);
-  p.dispatches.push(new IrDispatch(5,2,"get",8,p.functions.length-1));
-  f.values = [3,4,0,7,6];
   let call = new IrInstruction("interfaceCall",2,0,source); call.signature = 8; call.text = "get"; call.operands = [4];
   v.instruction(f,call); expect(v.issues.length == 0,"interface call with mutable dispatch accepted"); v.issues = [];
   call.operands = [3];
