@@ -39,11 +39,11 @@ export class EffectCall {
 export class EffectAnalyzer {
   graph: ModuleGraph; binding: BindingResult; checked: CheckResult;
   offsets: number[]; nodes: number; points: EffectPoint[]; summaries: EffectSummary[]; functionIndices: number[][];
-  edges: EffectEdge[]; calls: EffectCall[]; changed: boolean; owners: number[]; edgeKeys: Map<string,boolean>; trace: boolean;
+  edges: EffectEdge[]; calls: EffectCall[]; changed: boolean; owners: number[]; trace: boolean;
   outgoingHeads: number[]; outgoingNext: number[]; edgeQueued: boolean[]; agenda: EffectAgenda; deferredAgenda: EffectAgenda; propagating: boolean; edgeCursor: number; edgeVisits: number;
   constructor(graph: ModuleGraph, binding: BindingResult, checked: CheckResult) {
     this.graph = graph; this.binding = binding; this.checked = checked; this.offsets = []; this.nodes = 0;
-    this.points = []; this.summaries = []; this.edges = []; this.calls = []; this.changed = false; this.owners = []; this.edgeKeys = new Map<string,boolean>(); this.trace = false; this.functionIndices = [];
+    this.points = []; this.summaries = []; this.edges = []; this.calls = []; this.changed = false; this.owners = []; this.trace = false; this.functionIndices = [];
     this.outgoingHeads = []; this.outgoingNext = []; this.edgeQueued = []; this.agenda = new EffectAgenda(); this.deferredAgenda = new EffectAgenda(); this.propagating = false; this.edgeCursor = -1; this.edgeVisits = 0;
     for (const scope of binding.scopes) this.owners.push(-2);
     for (const m of graph.modules) { this.offsets.push(this.nodes); this.nodes = this.nodes + m.cached.result.ast.nodes.length; let indices: number[] = []; for (let node: number = 0; node < m.cached.result.ast.nodes.length; node = node+1) indices.push(-1); this.functionIndices.push(indices); }
@@ -132,8 +132,9 @@ export class EffectAnalyzer {
   }
   addEdge(source: number, target: number, callable: boolean): void {
     if (source < 0 || target < 0) return;
-    const key: string = numberToString(source)+":"+numberToString(target)+":"+(callable ? "1" : "0");
-    if (this.edgeKeys.has(key)) return; this.edgeKeys.set(key,true);
+    // Deduplicate along the source's outgoing list instead of a global string-keyed Map:
+    // no per-edge key strings, and no read-only Map lookup that lowering loads by value.
+    for (let existing: number = this.outgoingHeads[source]; existing >= 0; existing = this.outgoingNext[existing]) if (this.edges[existing].target == target && this.edges[existing].callable == callable) return;
     const edge: number = this.edges.length;
     this.edges.push(new EffectEdge(source,target,callable));
     this.outgoingNext.push(this.outgoingHeads[source]); this.outgoingHeads[source] = edge;
