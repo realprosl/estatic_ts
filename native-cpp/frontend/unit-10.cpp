@@ -661,5 +661,5 @@ std::vector<std::string> nativeBuiltinTypes() {
     return std::vector<std::string>{std::string("FsEvent"), std::string("FsWatcher"), std::string("HttpClientResponse"), std::string("Promise"), std::string("Request"), std::string("Response"), std::string("Server"), std::string("Timer")};
 }
 
-void ets_init_bootstrap_frontend_builtins_4364c337() {
+void ets_init_bootstrap_frontend_builtins_ab6c0609() {
 }

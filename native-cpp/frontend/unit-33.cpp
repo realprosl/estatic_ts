@@ -44,5 +44,5 @@ IrProject lowerProject(ModuleGraph graph, BindingResult binding, ets_import_9_Ch
     return lowering.run(trace);
 }
 
-void ets_init_bootstrap_ir_lower_2184539b() {
+void ets_init_bootstrap_ir_lower_d645e93b() {
 }

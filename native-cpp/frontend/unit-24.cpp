@@ -78,5 +78,5 @@ bool irNumericConstant(std::string raw, bool floating) {
     return ((value - value) == 0.0);
 }
 
-void ets_init_bootstrap_ir_type_traits_d9a7fcbe() {
+void ets_init_bootstrap_ir_type_traits_ecea0c3b() {
 }

@@ -371,5 +371,5 @@ ConstantValue constantNumeric(ConstantValue left, ConstantValue right, std::stri
     return constantCast(constantNumber(value), name);
 }
 
-void ets_init_bootstrap_checker_constant_ee47b975() {
+void ets_init_bootstrap_checker_constant_4f712795() {
 }

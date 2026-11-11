@@ -104,5 +104,5 @@ std::string formatIr(IrProject project) {
     return ets_join_vec(output, std::string(""));
 }
 
-void ets_init_bootstrap_ir_format_5756b67d() {
+void ets_init_bootstrap_ir_format_60a49266() {
 }

@@ -146,5 +146,5 @@ std::vector<IrIssue> verifyBorrowRoutes(const IrProject& project, IrFunction f) 
     return issues;
 }
 
-void ets_init_bootstrap_ir_verify_borrows_1aebe09f() {
+void ets_init_bootstrap_ir_verify_borrows_978ac375() {
 }

@@ -42,5 +42,5 @@ bool readonlyMethodReceiver(const BindingResult& binding, const ets_import_9_Che
     return false;
 }
 
-void ets_init_bootstrap_checker_model_f556179b() {
+void ets_init_bootstrap_checker_model_80275e1b() {
 }

@@ -310,5 +310,5 @@ std::string verifyShapeInstruction(const IrProject& project, const IrFunction& f
     return std::string("Opcode de shape desconocido");
 }
 
-void ets_init_bootstrap_ir_verify_shapes_625a5811() {
+void ets_init_bootstrap_ir_verify_shapes_14484802() {
 }

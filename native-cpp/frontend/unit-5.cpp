@@ -56,5 +56,5 @@ std::string inspectTokens(std::string source) {
     return ets::concat(output, std::string("]}"));
 }
 
-void ets_init_bootstrap_lexer_lexer_935c1bee() {
+void ets_init_bootstrap_lexer_lexer_df27c6e7() {
 }
