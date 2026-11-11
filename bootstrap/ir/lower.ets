@@ -862,7 +862,9 @@ export class IrLowering {
         const p: number = this.unwrappedPlace(receiver,this.typeId(receiverType,id)); operands.push(this.emit("address",this.typeId("ref<"+receiverType+">",id),[],p,-1,"",id)); effects.push("mutate");
       } else {
         const actual: number = this.typeId(this.checked.files[this.module].types[receiver],receiver);
-        if (this.result.typeDefinitions[actual].resource && [NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.node(receiver).kind)) operands.push(this.emit("borrow",this.typeId("constRef<"+this.result.types[actual]+">",id),[],this.rootPlace(receiver),-1,"constRef",id));
+        // Read-only calls on collection places borrow them too: loading by value copies the whole Map/Set/array per call.
+        const collection: boolean = ["Map","Set"].includes(genericBase(receiverType)) || receiverType.endsWith("[]");
+        if ((this.result.typeDefinitions[actual].resource || collection) && [NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.node(receiver).kind)) operands.push(this.emit("borrow",this.typeId("constRef<"+this.result.types[actual]+">",id),[],this.rootPlace(receiver),-1,"constRef",id));
         else operands.push(this.expression(receiver));
       }
     }
