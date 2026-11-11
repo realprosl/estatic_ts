@@ -30,10 +30,23 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install system dependencies
+      - name: Ensure system dependencies
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
+          set -euo pipefail
+          packages=(g++ libssl-dev libcurl4-openssl-dev libuv1-dev)
+          missing=()
+          for package in "${packages[@]}"; do
+            if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q '^install ok installed$'; then
+              missing+=("$package")
+            fi
+          done
+          if ((${#missing[@]})); then
+            sudo apt-get update
+            sudo apt-get install -y "${missing[@]}"
+          else
+            echo 'Native compiler and runtime dependencies already present on runner.'
+          fi
           # El backend HTTP de drogon es opcional: si el paquete no esta, un
           # unico test falla por entorno y el resto de la suite sigue valida.
           # libjsoncpp-dev aporta las cabeceras `json/json.h` que drogon
@@ -77,10 +90,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      - name: Ensure system dependencies
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y g++ libssl-dev libcurl4-openssl-dev libuv1-dev
+          set -euo pipefail
+          packages=(g++ libssl-dev libcurl4-openssl-dev libuv1-dev)
+          missing=()
+          for package in "${packages[@]}"; do
+            if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q '^install ok installed$'; then
+              missing+=("$package")
+            fi
+          done
+          if ((${#missing[@]})); then
+            sudo apt-get update
+            sudo apt-get install -y "${missing[@]}"
+          else
+            echo 'Native compiler and runtime dependencies already present on runner.'
+          fi
 
       - name: Install from the C++ seed without Node
         shell: bash
