@@ -8002,7 +8002,6 @@ struct EffectAnalyzer {
     std::vector<EffectCall> calls;
     bool changed;
     std::vector<double> owners;
-    ets::Map<std::string, bool> edgeKeys;
     bool trace;
     std::vector<double> outgoingHeads;
     std::vector<double> outgoingNext;
@@ -8025,7 +8024,6 @@ struct EffectAnalyzer {
         ((*this).calls = std::vector<EffectCall>());
         ((*this).changed = false);
         ((*this).owners = std::vector<double>());
-        ((*this).edgeKeys = ets::Map<std::string, bool>{});
         ((*this).trace = false);
         ((*this).functionIndices = std::vector<std::vector<double>>());
         ((*this).outgoingHeads = std::vector<double>());
@@ -8256,11 +8254,11 @@ struct EffectAnalyzer {
         if (((source < 0.0) || (target < 0.0))) {
             return;
         }
-        const std::string key = ets::concat(numberToString(source), std::string(":"), numberToString(target), std::string(":"), (callable ? std::string("1") : std::string("0")));
-        if ((*this).edgeKeys.has(key)) {
-            return;
+        for (double existing = (*this).outgoingHeads[static_cast<std::size_t>(source)]; (existing >= 0.0); (existing = (*this).outgoingNext[static_cast<std::size_t>(existing)])) {
+            if ((((*this).edges[static_cast<std::size_t>(existing)].target == target) && ((*this).edges[static_cast<std::size_t>(existing)].callable == callable))) {
+                return;
+            }
         }
-        (*this).edgeKeys.set(key, true);
         const double edge = (*this).edges.size();
         ets_push_vec<EffectEdge>((*this).edges, EffectEdge{}.constructor(source, target, callable));
         ets_push_vec<double>((*this).outgoingNext, (*this).outgoingHeads[static_cast<std::size_t>(source)]);
@@ -9406,7 +9404,6 @@ struct EffectAnalyzer {
         (*this).calls = std::vector<EffectCall>{};
         (*this).changed = false;
         (*this).owners = std::vector<double>{};
-        (*this).edgeKeys = ets::Map<std::string, bool>{};
         (*this).trace = false;
         (*this).outgoingHeads = std::vector<double>{};
         (*this).outgoingNext = std::vector<double>{};
@@ -19671,6 +19668,17 @@ struct IrLowering {
         return ((value >= 0.0) ? (*this).result.functions[static_cast<std::size_t>((*this).currentFunction)].values[static_cast<std::size_t>(value)] : (-1.0));
     }
 
+    bool purePlace(double id) const {
+        const auto n = (*this).node(id);
+        if ((n.kind == NodeKind::IdentifierExpression)) {
+            return true;
+        }
+        if ((n.kind == NodeKind::MemberExpression)) {
+            return (*this).purePlace(bindingChild(n, EdgeRole::Object));
+        }
+        return false;
+    }
+
     double unwrappedPlace(double id, double expected) {
         double place = (*this).materialize(id);
         double count = 0.0;
@@ -21440,10 +21448,23 @@ struct IrLowering {
                 ets_push_vec<std::string>(effects, std::string("mutate"));
             } else {
                 const double actual = (*this).typeId((*this).checked.files[static_cast<std::size_t>((*this).module)].types[static_cast<std::size_t>(receiver)], receiver);
-                if (((*this).result.typeDefinitions[static_cast<std::size_t>(actual)].resource && ets_includes_vec<NodeKind>(std::vector<NodeKind>{NodeKind::IdentifierExpression, NodeKind::MemberExpression, NodeKind::IndexExpression}, (*this).node(receiver).kind))) {
-                    ets_push_vec<double>(operands, (*this).emit(std::string("borrow"), (*this).typeId(ets::concat(std::string("constRef<"), (*this).result.types[static_cast<std::size_t>(actual)], std::string(">")), id), std::vector<double>(), (*this).rootPlace(receiver), (-1.0), std::string("constRef"), id));
+                const bool collection = (ets_includes_vec<std::string>(std::vector<std::string>{std::string("Map"), std::string("Set")}, genericBase(receiverType)) || ::ets::string_endsWith(receiverType, std::string("[]")));
+                double borrowed = (-1.0);
+                if ((((!(*this).result.typeDefinitions[static_cast<std::size_t>(actual)].resource) && collection) && (*this).purePlace(receiver))) {
+                    const double element = (*this).typeId(receiverType, id);
+                    const double p = (*this).unwrappedPlace(receiver, element);
+                    if (((p >= 0.0) && ((*this).result.functions[static_cast<std::size_t>((*this).currentFunction)].places[static_cast<std::size_t>(p)].typeId == element))) {
+                        (borrowed = (*this).emit(std::string("borrow"), (*this).typeId(ets::concat(std::string("constRef<"), (*this).result.types[static_cast<std::size_t>(element)], std::string(">")), id), std::vector<double>(), p, (-1.0), std::string("constRef"), id));
+                    }
+                }
+                if ((borrowed >= 0.0)) {
+                    ets_push_vec<double>(operands, borrowed);
                 } else {
-                    ets_push_vec<double>(operands, (*this).expression(receiver));
+                    if (((*this).result.typeDefinitions[static_cast<std::size_t>(actual)].resource && ets_includes_vec<NodeKind>(std::vector<NodeKind>{NodeKind::IdentifierExpression, NodeKind::MemberExpression, NodeKind::IndexExpression}, (*this).node(receiver).kind))) {
+                        ets_push_vec<double>(operands, (*this).emit(std::string("borrow"), (*this).typeId(ets::concat(std::string("constRef<"), (*this).result.types[static_cast<std::size_t>(actual)], std::string(">")), id), std::vector<double>(), (*this).rootPlace(receiver), (-1.0), std::string("constRef"), id));
+                    } else {
+                        ets_push_vec<double>(operands, (*this).expression(receiver));
+                    }
                 }
             }
         }
