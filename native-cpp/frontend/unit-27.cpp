@@ -159,6 +159,15 @@ std::vector<IrIssue> verifyIrTables(const IrProject& project) {
 
 std::vector<IrIssue> verifyFunctionContracts(const IrProject& project, const IrFunction& f) {
     std::vector<IrIssue> issues = std::vector<IrIssue>();
+    if ((f.receiverType != (-1.0))) {
+        if (((((f.receiverType < 0.0) || (f.receiverType >= project.types.size())) || (f.parameterTypes.size() == 0.0)) || (f.parameterTypes[static_cast<std::size_t>(0.0)] != f.receiverType))) {
+            ets_push_vec<IrIssue>(issues, IrIssue{}.constructor(std::string("IR_INVALID"), std::string("Tipo/parámetro de receptor incompatible"), f.source));
+        } else {
+            if ((!ets_includes_vec<std::string>(std::vector<std::string>{std::string("ref"), std::string("constRef")}, project.typeDefinitions[static_cast<std::size_t>(f.receiverType)].kind))) {
+                ets_push_vec<IrIssue>(issues, IrIssue{}.constructor(std::string("IR_INVALID"), std::string("Modo de receptor incompatible"), f.source));
+            }
+        }
+    }
     if (((f.captureSymbols.size() != f.captureTypes.size()) || (f.captureModes.size() != f.captureTypes.size()))) {
         ets_push_vec<IrIssue>(issues, IrIssue{}.constructor(std::string("IR_INVALID"), std::string("Tablas de capturas incompatibles"), f.source));
     }
@@ -322,5 +331,5 @@ std::vector<IrIssue> verifyModuleContracts(const IrProject& project) {
     return issues;
 }
 
-void ets_init_bootstrap_ir_verify_contracts_15f5a5a4() {
+void ets_init_bootstrap_ir_verify_contracts_f5e4a2f8() {
 }

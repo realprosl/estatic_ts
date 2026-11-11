@@ -151,5 +151,5 @@ std::string resourceSubstitution(std::string pattern, std::string actual, std::s
     return inferred;
 }
 
-void ets_init_bootstrap_checker_ownership_f6ad3ebb() {
+void ets_init_bootstrap_checker_ownership_f220c326() {
 }

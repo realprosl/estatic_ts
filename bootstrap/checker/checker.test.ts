@@ -2051,6 +2051,15 @@ test('parallel analysis fails closed when a worker directory cannot be created',
  const sequential=spawnSync(binary,[...args,'--jobs','1'],{encoding:'utf8',env});assert.equal(sequential.status,0,sequential.stderr);
  const parallel=spawnSync(binary,[...args,'--jobs','2'],{encoding:'utf8',env});assert.equal(parallel.status,1,parallel.stderr);assert.equal(JSON.parse(parallel.stdout).success,false);assert.ok(JSON.parse(parallel.stdout).diagnostics.some((d:any)=>d.code==='ANALYSIS_WORKER_FAILED'));
 });
+test('readonly receiver permits a getter delegated through another getter',()=>{
+ check('class C{value:number=7;get():number{return this.value;}delegated():number{return this.get();}}function read(c:constRef<C>):number{return c.delegated();}const c=new C();print(read(c));');
+});
+for(const [name,source] of Object.entries({
+ direct:'class C{value:number=0;set():void{this.value=1;}}function read(c:constRef<C>):void{c.set();}const c=new C();read(c);',
+ delegated:'class C{value:number=0;set():void{this.value=1;}delegated():void{this.set();}}function read(c:constRef<C>):void{c.delegated();}const c=new C();read(c);',
+ helper:'function change(c:ref<C>):void{c.value=1;}class C{value:number=0;set():void{change(ref(this));}}function read(c:constRef<C>):void{c.set();}const c=new C();read(c);',
+ array:'class C{values:number[]=[];append():void{this.values.push(1);}}function read(c:constRef<C>):void{c.append();}const c=new C();read(c);',
+}))test(`readonly receiver rejects ${name} mutation`,()=>error(source,/E4300|readonly|préstamo mutable/));
 test('analysis rejects invalid job counts instead of silently disabling checks',()=>{
  const f=fixture('function a():void{}function b():void{}');for(const count of ['0','33','1.5','abc']){const p=spawnSync(binary,[f.entry,'--jobs',count],{encoding:'utf8'});assert.equal(p.status,2,p.stderr);assert.match(p.stderr,/--jobs/);}
  const p=spawnSync(binary,[f.entry],{encoding:'utf8',env:{...process.env,ESTATIC_ANALYSIS_JOBS:'invalid'}});assert.equal(p.status,1,p.stderr);assert.equal(JSON.parse(p.stdout).success,false);

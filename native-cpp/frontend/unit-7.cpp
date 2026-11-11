@@ -31,6 +31,6 @@ std::vector<std::string> readSnapshot(std::string file) {
     return std::vector<std::string>();
 }
 
-void ets_init_bootstrap_modules_platform_5ca8746a() {
+void ets_init_bootstrap_modules_platform_562cee50() {
 
 }

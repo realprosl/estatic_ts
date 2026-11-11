@@ -415,6 +415,7 @@ bool localBinding(std::string kind);
 std::string genericBase(std::string text);
 std::vector<std::string> genericArguments(std::string text);
 double argumentParameter(const ets_import_8_TypedFile& file, double node, double position);
+bool readonlyMethodReceiver(const BindingResult& binding, const ets_import_9_CheckResult& checked, double module, double node);
 static inline std::string framed(std::string text);
 static inline double compareKeys(std::string a, std::string b);
 static inline std::string framedList(std::vector<std::string> values);
@@ -10424,38 +10425,41 @@ struct SafetyAnalyzer {
         if (((target < 0.0) || (targetModule < 0.0))) {
             return false;
         }
-        std::vector<double> work = std::vector<double>{target};
-        while ((work.size() > 0.0)) {
-            const double nodeId = work[static_cast<std::size_t>((work.size() - 1.0))];
-            const AstNode item = (*this).node(targetModule, nodeId);
-            ets_pop_vec<double>(work);
-            double at = (-1.0);
-            if ((((item.kind == NodeKind::AssignmentExpression) || (item.kind == NodeKind::CompoundAssignmentExpression)) || (item.kind == NodeKind::UpdateExpression))) {
-                (at = bindingChild(item, EdgeRole::Target));
-            } else {
-                if ((item.kind == NodeKind::MemberCallExpression)) {
-                    (at = bindingChild(item, EdgeRole::Object));
+        if (((*this).result.effects.size() == 0.0)) {
+            std::vector<double> work = std::vector<double>{target};
+            while ((work.size() > 0.0)) {
+                const double nodeId = work[static_cast<std::size_t>((work.size() - 1.0))];
+                const AstNode item = (*this).node(targetModule, nodeId);
+                ets_pop_vec<double>(work);
+                double at = (-1.0);
+                if ((((item.kind == NodeKind::AssignmentExpression) || (item.kind == NodeKind::CompoundAssignmentExpression)) || (item.kind == NodeKind::UpdateExpression))) {
+                    (at = bindingChild(item, EdgeRole::Target));
                 } else {
-                    if (((*this).helper(targetModule, nodeId) == std::string("move"))) {
-                        (at = bindingChild(item, EdgeRole::Args));
+                    if ((item.kind == NodeKind::MemberCallExpression)) {
+                        (at = bindingChild(item, EdgeRole::Object));
+                    } else {
+                        if (((*this).helper(targetModule, nodeId) == std::string("move"))) {
+                            (at = bindingChild(item, EdgeRole::Args));
+                        }
                     }
                 }
-            }
-            while ((at >= 0.0)) {
-                const AstNode receiver = (*this).node(targetModule, at);
-                if (((receiver.kind == NodeKind::IdentifierExpression) && (receiver.get(AttributeKind::Name) == std::string("this")))) {
-                    return true;
+                while ((at >= 0.0)) {
+                    const AstNode receiver = (*this).node(targetModule, at);
+                    if (((receiver.kind == NodeKind::IdentifierExpression) && (receiver.get(AttributeKind::Name) == std::string("this")))) {
+                        return true;
+                    }
+                    if (((receiver.kind != NodeKind::MemberExpression) && (receiver.kind != NodeKind::IndexExpression))) {
+                        break;
+                    }
+                    (at = bindingChild(receiver, EdgeRole::Object));
                 }
-                if (((receiver.kind != NodeKind::MemberExpression) && (receiver.kind != NodeKind::IndexExpression))) {
-                    break;
+                for (const auto& edge : item.edges) {
+                    ets_push_vec<double>(work, edge.node);
                 }
-                (at = bindingChild(receiver, EdgeRole::Object));
             }
-            for (const auto& edge : item.edges) {
-                ets_push_vec<double>(work, edge.node);
-            }
+            return false;
         }
-        return false;
+        return (!readonlyMethodReceiver((*this).binding, (*this).result, targetModule, target));
     }
 
     bool within(double scope, double ancestor) const {
@@ -12463,6 +12467,7 @@ struct NativeChecker {
     std::vector<double> narrowedSymbols;
     std::vector<std::string> narrowedTypes;
     bool trace;
+    ets::Map<std::string, double> mutationCache;
 
     NativeChecker& constructor(ModuleGraph graph, BindingResult binding) {
         ((*this).graph = graph);
@@ -12475,6 +12480,7 @@ struct NativeChecker {
         ((*this).narrowedSymbols = std::vector<double>());
         ((*this).narrowedTypes = std::vector<std::string>());
         ((*this).trace = false);
+        ((*this).mutationCache = ets::Map<std::string, double>{});
         return *this;
 }
 
@@ -14335,11 +14341,40 @@ struct NativeChecker {
         return (*this).instantiateMember(valueType, (*this).symbolType(sid, module, id));
     }
 
-    bool methodMutates(double sid) const {
+    double siblingMethod(BindingSymbol s, std::string name) const {
+        if ((name == std::string(""))) {
+            return (-1.0);
+        }
+        for (double at = 0.0; (at < (*this).binding.symbols.size()); (at = (at + 1.0))) {
+            const BindingSymbol candidate = (*this).binding.symbols[static_cast<std::size_t>(at)];
+            if (((((candidate.kind == std::string("ClassMethod")) && (candidate.module == s.module)) && (candidate.scope == s.scope)) && (candidate.name == name))) {
+                return at;
+            }
+        }
+        return (-1.0);
+    }
+
+    bool methodMutates(double sid) {
         const BindingSymbol s = (*this).binding.symbols[static_cast<std::size_t>(sid)];
         if (((s.module < 0.0) || (s.kind != std::string("ClassMethod")))) {
             return false;
         }
+        const std::string key = ets::concat(numberToString(s.module), std::string(":"), numberToString(s.node));
+        const ets::Optional<double> cached = ::ets::Optional<double>::of(((*this).mutationCache).get(key));
+        if (cached.isPresent()) {
+            const double state = cached.value();
+            if ((state == 2.0)) {
+                return false;
+            }
+            return (state == 1.0);
+        }
+        (*this).mutationCache.set(key, 2.0);
+        const bool result = (*this).methodMutatesBody(s);
+        (*this).mutationCache.set(key, (result ? 1.0 : 0.0));
+        return result;
+    }
+
+    bool methodMutatesBody(BindingSymbol s) {
         std::vector<double> work = std::vector<double>();
         for (const auto& declaration : s.declarations) {
             ets_push_vec<double>(work, declaration);
@@ -14353,7 +14388,27 @@ struct NativeChecker {
                 (target = bindingChild(n, EdgeRole::Target));
             } else {
                 if ((n.kind == NodeKind::MemberCallExpression)) {
-                    (target = bindingChild(n, EdgeRole::Object));
+                    const double object = bindingChild(n, EdgeRole::Object);
+                    const AstNode receiver = (*this).node(s.module, object);
+                    const std::string name = n.get(AttributeKind::Method);
+                    if (((receiver.kind == NodeKind::IdentifierExpression) && (receiver.get(AttributeKind::Name) == std::string("this")))) {
+                        const double sibling = (*this).siblingMethod(s, name);
+                        if (((sibling >= 0.0) && (*this).methodMutates(sibling))) {
+                            return true;
+                        }
+                    } else {
+                        if ((receiver.kind == NodeKind::MemberExpression)) {
+                            const double base = bindingChild(receiver, EdgeRole::Object);
+                            const AstNode baseNode = (*this).node(s.module, base);
+                            if ((((baseNode.kind == NodeKind::IdentifierExpression) && (baseNode.get(AttributeKind::Name) == std::string("this"))) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("push"), std::string("pop"), std::string("sort"), std::string("set"), std::string("add"), std::string("delete"), std::string("clear")}, name))) {
+                                return true;
+                            }
+                        }
+                    }
+                    for (const auto& edge : n.edges) {
+                        ets_push_vec<double>(work, edge.node);
+                    }
+                    continue;
                 } else {
                     if ((n.kind == NodeKind::CallExpression)) {
                         const double helper = (*this).reference(s.module, nodeId);
@@ -17253,6 +17308,7 @@ struct NativeChecker {
         (*this).narrowedSymbols = std::vector<double>{};
         (*this).narrowedTypes = std::vector<std::string>{};
         (*this).trace = false;
+        (*this).mutationCache = ets::Map<std::string, double>{};
     }
 };
 
@@ -18548,6 +18604,25 @@ struct IrVerifier {
         }
     }
 
+    bool readonlyPlace(const IrFunction& f, double place) const {
+        if ((((place >= 0.0) && (place < f.places.size())) && f.places[static_cast<std::size_t>(place)].readOnly)) {
+            return true;
+        }
+        double remaining = f.places.size();
+        while ((((place >= 0.0) && (place < f.places.size())) && (remaining > 0.0))) {
+            const auto p = f.places[static_cast<std::size_t>(place)];
+            if ((((p.kind == std::string("deref")) && (p.base >= 0.0)) && (p.base < f.places.size()))) {
+                const double baseType = f.places[static_cast<std::size_t>(p.base)].typeId;
+                if (((*this).typeId(baseType) && ets_includes_vec<std::string>(std::vector<std::string>{std::string("constRef"), std::string("constPtr"), std::string("readonly")}, (*this).project.typeDefinitions[static_cast<std::size_t>(baseType)].kind))) {
+                    return true;
+                }
+            }
+            (place = p.base);
+            (remaining = (remaining - 1.0));
+        }
+        return false;
+    }
+
     void instruction(const IrFunction& f, const IrInstruction& i) {
         const bool hasResult = (i.result >= 0.0);
         if ((hasResult && ((((!(*this).value(f, i.result)) || (!(*this).typeId(i.typeId))) || (f.values[static_cast<std::size_t>(i.result)] != i.typeId)) || ((*this).project.types[static_cast<std::size_t>(i.typeId)] == std::string("void"))))) {
@@ -18560,6 +18635,10 @@ struct IrVerifier {
             if (((i.place < 0.0) || (i.place >= f.places.size()))) {
                 (*this).error(i.source, std::string("Place inexistente"));
                 return;
+            }
+            const bool mutableBorrow = ((i.op == std::string("address")) || (((i.op == std::string("borrow")) && (*this).typeId(i.typeId)) && ((*this).project.typeDefinitions[static_cast<std::size_t>(i.typeId)].kind == std::string("ref"))));
+            if (((mutableBorrow || ets_includes_vec<std::string>(std::vector<std::string>{std::string("store"), std::string("move"), std::string("dropRemaining")}, i.op)) && (*this).readonlyPlace(f, i.place))) {
+                (*this).error(i.source, std::string("Mutación/préstamo mutable a través de un place readonly"));
             }
             if (((i.op == std::string("move")) && (((i.operands.size() != 0.0) || (!hasResult)) || (i.typeId != f.places[static_cast<std::size_t>(i.place)].typeId)))) {
                 (*this).error(i.source, std::string("Move incompatible"));
@@ -18702,7 +18781,7 @@ struct IrVerifier {
                                                                 } else {
                                                                     const auto signature = (*this).project.typeDefinitions[static_cast<std::size_t>(i.signature)];
                                                                     const auto receiver = (*this).project.typeDefinitions[static_cast<std::size_t>(f.values[static_cast<std::size_t>(i.operands[static_cast<std::size_t>(0.0)])])];
-                                                                    if ((((receiver.kind != std::string("ref")) || (receiver.arguments.size() != 1.0)) || (!ets_includes_vec<std::string>(std::vector<std::string>{std::string("interface"), std::string("intersection")}, (*this).project.typeDefinitions[static_cast<std::size_t>(receiver.arguments[static_cast<std::size_t>(0.0)])].kind)))) {
+                                                                    if (((((receiver.kind != std::string("ref")) || (receiver.arguments.size() != 1.0)) || (!(*this).typeId(receiver.arguments[static_cast<std::size_t>(0.0)]))) || (!ets_includes_vec<std::string>(std::vector<std::string>{std::string("interface"), std::string("intersection")}, (*this).project.typeDefinitions[static_cast<std::size_t>(receiver.arguments[static_cast<std::size_t>(0.0)])].kind)))) {
                                                                         (*this).error(i.source, std::string("Receptor de interfaz inválido"));
                                                                     } else {
                                                                         for (const auto& concrete : (*this).project.typeDefinitions[static_cast<std::size_t>(receiver.arguments[static_cast<std::size_t>(0.0)])].variants) {
@@ -19163,7 +19242,7 @@ struct IrVerifier {
             } else {
                 const auto target = (*this).project.functions[static_cast<std::size_t>(d.callee)];
                 const auto signature = (*this).project.typeDefinitions[static_cast<std::size_t>(d.signature)];
-                if ((((((!ets_includes_vec<std::string>(std::vector<std::string>{std::string("interface"), std::string("intersection")}, (*this).project.typeDefinitions[static_cast<std::size_t>(d.interfaceType)].kind)) || (!ets_includes_vec<double>((*this).project.typeDefinitions[static_cast<std::size_t>(d.interfaceType)].variants, d.concreteType))) || (signature.kind != std::string("function"))) || (target.parameterTypes.size() != signature.arguments.size())) || (target.receiverType < 0.0))) {
+                if (((((((!ets_includes_vec<std::string>(std::vector<std::string>{std::string("interface"), std::string("intersection")}, (*this).project.typeDefinitions[static_cast<std::size_t>(d.interfaceType)].kind)) || (!ets_includes_vec<double>((*this).project.typeDefinitions[static_cast<std::size_t>(d.interfaceType)].variants, d.concreteType))) || (signature.kind != std::string("function"))) || (target.parameterTypes.size() != signature.arguments.size())) || (!(*this).typeId(target.receiverType))) || (target.parameterTypes[static_cast<std::size_t>(0.0)] != target.receiverType))) {
                     (*this).error(source, std::string("Contrato de dispatch inválido"));
                 } else {
                     if (((((*this).project.typeDefinitions[static_cast<std::size_t>(target.receiverType)].kind != std::string("ref")) || ((*this).project.typeDefinitions[static_cast<std::size_t>(target.receiverType)].arguments[static_cast<std::size_t>(0.0)] != d.concreteType)) || (!irAssignable((*this).project, target.returns, signature.arguments[static_cast<std::size_t>((signature.arguments.size() - 1.0))], 0.0)))) {
@@ -20028,7 +20107,7 @@ struct IrLowering {
                 (generic = true);
             }
         }
-        const double callee = (*this).ensureFunction(method.module, method.node, (generic ? (*this).result.types[static_cast<std::size_t>(signature)] : (*this).memberType((*this).result.types[static_cast<std::size_t>(from)], actual)), (*this).result.types[static_cast<std::size_t>(from)]);
+        const double callee = (*this).ensureFunction(method.module, method.node, (generic ? (*this).result.types[static_cast<std::size_t>(signature)] : (*this).memberType((*this).result.types[static_cast<std::size_t>(from)], actual)), (*this).result.types[static_cast<std::size_t>(from)], false);
         ets_push_vec<IrDispatch>((*this).result.dispatches, IrDispatch{}.constructor(to, from, name, signature, callee));
         const auto required = (*this).result.typeDefinitions[static_cast<std::size_t>(signature)];
         const auto target = (*this).result.functions[static_cast<std::size_t>(callee)];
@@ -20490,13 +20569,15 @@ struct IrLowering {
         return (*this).emit(((*this).result.typeDefinitions[static_cast<std::size_t>(typeId)].resource ? std::string("move") : std::string("load")), typeId, std::vector<double>(), p, (-1.0), std::string(""), id);
     }
 
-    double ensureFunction(double owner, double id, std::string wanted, std::string receiver = std::string("")) {
+    double ensureFunction(double owner, double id, std::string wanted, std::string receiver = std::string(""), bool constReceiver = true) {
         const double previousModule = (*this).module;
         const double previousFunction = (*this).currentFunction;
         std::string signature = (*this).resolved(wanted);
         ((*this).module = owner);
         const auto n = (*this).node(id);
         const std::string pattern = (*this).checked.files[static_cast<std::size_t>(owner)].types[static_cast<std::size_t>(id)];
+        const std::string receiverMode = (((((receiver != std::string("")) && constReceiver) && (n.get(AttributeKind::Name) != std::string("constructor"))) && readonlyMethodReceiver((*this).binding, (*this).checked, owner, id)) ? std::string("constRef") : std::string("ref"));
+        const std::string receiverText = ((receiver == std::string("")) ? std::string("") : ets::concat(receiverMode, std::string("<"), ets_import_7_memoryValue(receiver), std::string(">")));
         std::vector<std::string> from = std::vector<std::string>();
         std::vector<std::string> to = std::vector<std::string>();
         if ((previousFunction >= 0.0)) {
@@ -20556,7 +20637,7 @@ struct IrLowering {
             }
         }
         for (double f = 0.0; (f < (*this).functionNodes.size()); (f = (f + 1.0))) {
-            if ((((((((*this).functionNodes[static_cast<std::size_t>(f)] == id) && ((*this).functionModules[static_cast<std::size_t>(f)] == owner)) && ((*this).result.functions[static_cast<std::size_t>(f)].signature == signature)) && (ets_join_vec((*this).result.functions[static_cast<std::size_t>(f)].substitutionFrom, std::string(",")) == ets_join_vec(from, std::string(",")))) && (ets_join_vec((*this).result.functions[static_cast<std::size_t>(f)].substitutionTo, std::string(",")) == ets_join_vec(to, std::string(",")))) && ((receiver == std::string("")) ? ((*this).result.functions[static_cast<std::size_t>(f)].receiverType == (-1.0)) : (((*this).result.functions[static_cast<std::size_t>(f)].receiverType >= 0.0) && ((*this).result.types[static_cast<std::size_t>((*this).result.functions[static_cast<std::size_t>(f)].receiverType)] == ets::concat(std::string("ref<"), ets_import_7_memoryValue(receiver), std::string(">"))))))) {
+            if ((((((((*this).functionNodes[static_cast<std::size_t>(f)] == id) && ((*this).functionModules[static_cast<std::size_t>(f)] == owner)) && ((*this).result.functions[static_cast<std::size_t>(f)].signature == signature)) && (ets_join_vec((*this).result.functions[static_cast<std::size_t>(f)].substitutionFrom, std::string(",")) == ets_join_vec(from, std::string(",")))) && (ets_join_vec((*this).result.functions[static_cast<std::size_t>(f)].substitutionTo, std::string(",")) == ets_join_vec(to, std::string(",")))) && ((receiver == std::string("")) ? ((*this).result.functions[static_cast<std::size_t>(f)].receiverType == (-1.0)) : (((*this).result.functions[static_cast<std::size_t>(f)].receiverType >= 0.0) && ((*this).result.types[static_cast<std::size_t>((*this).result.functions[static_cast<std::size_t>(f)].receiverType)] == receiverText))))) {
                 ((*this).module = previousModule);
                 return f;
             }
@@ -20588,7 +20669,7 @@ struct IrLowering {
             }
         }
         if ((receiver != std::string(""))) {
-            ((*this).result.functions[static_cast<std::size_t>(ets_local_index)].receiverType = (*this).typeId(ets::concat(std::string("ref<"), ets_import_7_memoryValue(receiver), std::string(">")), id));
+            ((*this).result.functions[static_cast<std::size_t>(ets_local_index)].receiverType = (*this).typeId(receiverText, id));
             ((*this).result.functions[static_cast<std::size_t>(ets_local_index)].parameterTypes = ets_concat_vec<double>({std::vector<double>{(*this).result.functions[static_cast<std::size_t>(ets_local_index)].receiverType}, (*this).result.functions[static_cast<std::size_t>(ets_local_index)].parameterTypes}));
         }
         for (const auto& capture : (*this).checked.captures) {
@@ -20825,7 +20906,9 @@ struct IrLowering {
             (operands = ordered);
         }
         if (((callee >= 0.0) && ((*this).result.functions[static_cast<std::size_t>(callee)].receiverType >= 0.0))) {
-            (operands = ets_concat_vec<double>({std::vector<double>{(*this).emit(std::string("address"), (*this).result.functions[static_cast<std::size_t>(callee)].receiverType, std::vector<double>(), receiver, (-1.0), std::string(""), id)}, operands}));
+            const double receiverType = (*this).result.functions[static_cast<std::size_t>(callee)].receiverType;
+            const std::string mode = (*this).result.typeDefinitions[static_cast<std::size_t>(receiverType)].kind;
+            (operands = ets_concat_vec<double>({std::vector<double>{(*this).emit(((mode == std::string("constRef")) ? std::string("borrow") : std::string("address")), receiverType, std::vector<double>(), receiver, (-1.0), ((mode == std::string("constRef")) ? std::string("constRef") : std::string("")), id)}, operands}));
         }
         if (((callee >= 0.0) && ((*this).result.functions[static_cast<std::size_t>(callee)].captureTypes.size() > 0.0))) {
             (callable = (*this).closureValue(owner, selected, signature, id));
@@ -22109,42 +22192,42 @@ struct IrLowering {
     }
 };
 
-void ets_init_bootstrap_driver_host_5cdd6c7b();
-void ets_init_bootstrap_analysis_options_876b7c37();
-void ets_init_bootstrap_progress_progress_0809dea3();
-void ets_init_bootstrap_parser_ast_schema_c87a5319();
-void ets_init_bootstrap_parser_parser_c7f03350();
-void ets_init_bootstrap_lexer_lexer_139a0aad();
-void ets_init_bootstrap_frontend_frontend_71598122();
-void ets_init_bootstrap_modules_platform_5ca8746a();
-void ets_init_bootstrap_modules_syntax_cache_b49b13e5();
-void ets_init_bootstrap_modules_loader_2e111b50();
-void ets_init_bootstrap_frontend_builtins_a4273184();
-void ets_init_bootstrap_binder_binder_1367c37e();
-void ets_init_bootstrap_checker_types_f1a5f64a();
-void ets_init_bootstrap_checker_model_d9eb2c5e();
-void ets_init_bootstrap_checker_module_records_e828114e();
-void ets_init_bootstrap_checker_constant_10a3e67c();
-void ets_init_bootstrap_checker_numeric_99db9de7();
-void ets_init_bootstrap_checker_comptime_14465de6();
-void ets_init_bootstrap_checker_effects_26f81858();
-void ets_init_bootstrap_checker_ownership_f6ad3ebb();
-void ets_init_bootstrap_checker_safety_88c3403a();
-void ets_init_bootstrap_checker_checker_b1f45756();
-void ets_init_bootstrap_checker_expansion_c15c8aed();
-void ets_init_bootstrap_ir_model_e1b1176c();
-void ets_init_bootstrap_ir_type_traits_55205947();
-void ets_init_bootstrap_ir_borrows_34b30c88();
-void ets_init_bootstrap_ir_contracts_946405c8();
-void ets_init_bootstrap_ir_verify_contracts_15f5a5a4();
-void ets_init_bootstrap_ir_verify_ownership_b1da2c6e();
-void ets_init_bootstrap_ir_verify_shapes_a43248b9();
-void ets_init_bootstrap_ir_verify_memory_9a5f20b0();
-void ets_init_bootstrap_ir_verify_borrows_7094b439();
-void ets_init_bootstrap_ir_verify_093cf4d0();
-void ets_init_bootstrap_ir_lower_45e87b9b();
-void ets_init_bootstrap_binder_format_2b22398f();
-void ets_init_bootstrap_ir_format_source_bf72ebe4();
-void ets_init_bootstrap_ir_format_contracts_3e2a3d6a();
-void ets_init_bootstrap_ir_format_40e08632();
-void ets_init_bootstrap_ir_demo_b3577aad();
+void ets_init_bootstrap_driver_host_5f952991();
+void ets_init_bootstrap_analysis_options_19a75f08();
+void ets_init_bootstrap_progress_progress_cb3e8773();
+void ets_init_bootstrap_parser_ast_schema_1304e857();
+void ets_init_bootstrap_parser_parser_42b9bbf9();
+void ets_init_bootstrap_lexer_lexer_935c1bee();
+void ets_init_bootstrap_frontend_frontend_a7343264();
+void ets_init_bootstrap_modules_platform_562cee50();
+void ets_init_bootstrap_modules_syntax_cache_85567346();
+void ets_init_bootstrap_modules_loader_43fa4e97();
+void ets_init_bootstrap_frontend_builtins_4364c337();
+void ets_init_bootstrap_binder_binder_c1b23e8f();
+void ets_init_bootstrap_checker_types_43cdcefd();
+void ets_init_bootstrap_checker_model_f556179b();
+void ets_init_bootstrap_checker_module_records_2a01df70();
+void ets_init_bootstrap_checker_constant_ee47b975();
+void ets_init_bootstrap_checker_numeric_6ffed12d();
+void ets_init_bootstrap_checker_comptime_453edd1a();
+void ets_init_bootstrap_checker_effects_4dbf2bf9();
+void ets_init_bootstrap_checker_ownership_f220c326();
+void ets_init_bootstrap_checker_safety_8aa4dfdf();
+void ets_init_bootstrap_checker_checker_c354a49e();
+void ets_init_bootstrap_checker_expansion_5b48ea3d();
+void ets_init_bootstrap_ir_model_774eb4bb();
+void ets_init_bootstrap_ir_type_traits_d9a7fcbe();
+void ets_init_bootstrap_ir_borrows_58af27bc();
+void ets_init_bootstrap_ir_contracts_d1083918();
+void ets_init_bootstrap_ir_verify_contracts_f5e4a2f8();
+void ets_init_bootstrap_ir_verify_ownership_e7778628();
+void ets_init_bootstrap_ir_verify_shapes_625a5811();
+void ets_init_bootstrap_ir_verify_memory_3e10e805();
+void ets_init_bootstrap_ir_verify_borrows_1aebe09f();
+void ets_init_bootstrap_ir_verify_d09f62ef();
+void ets_init_bootstrap_ir_lower_2184539b();
+void ets_init_bootstrap_binder_format_d243f694();
+void ets_init_bootstrap_ir_format_source_03178004();
+void ets_init_bootstrap_ir_format_contracts_1cbcd575();
+void ets_init_bootstrap_ir_format_5756b67d();
+void ets_init_bootstrap_ir_demo_47f3c1ee();

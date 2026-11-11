@@ -33,6 +33,6 @@ void progressSummary(std::string cpp, std::string binary) {
     progress.summary(cpp, binary);
 }
 
-void ets_init_bootstrap_progress_progress_0809dea3() {
+void ets_init_bootstrap_progress_progress_cb3e8773() {
     progress = Progress{}.constructor();
 }

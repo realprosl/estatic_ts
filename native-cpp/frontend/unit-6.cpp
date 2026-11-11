@@ -104,5 +104,5 @@ std::string inspectSource(std::string source, std::string file) {
     return formatSource(result);
 }
 
-void ets_init_bootstrap_frontend_frontend_71598122() {
+void ets_init_bootstrap_frontend_frontend_a7343264() {
 }

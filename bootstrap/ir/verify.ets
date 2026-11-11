@@ -36,6 +36,21 @@ export class IrVerifier {
     if (definition == block) { if (this.positions[value] >= position) this.error(source,"Uso antes de definición"); }
     else if (this.facts[block].reachable && !this.facts[block].dominators[definition]) this.error(source,"Definición no domina el uso");
   }
+  readonlyPlace(f: constRef<IrFunction>, place: number): boolean {
+    // Field readonly is shallow; const views restrict all inline projections.
+    // Do not classify the local holding a constRef as immutable storage itself.
+    if (place >= 0 && place < f.places.length && f.places[place].readOnly) return true;
+    let remaining: number = f.places.length;
+    while (place >= 0 && place < f.places.length && remaining > 0) {
+      const p = f.places[place];
+      if (p.kind == "deref" && p.base >= 0 && p.base < f.places.length) {
+        const baseType: number = f.places[p.base].typeId;
+        if (this.typeId(baseType) && ["constRef","constPtr","readonly"].includes(this.project.typeDefinitions[baseType].kind)) return true;
+      }
+      place = p.base; remaining = remaining-1;
+    }
+    return false;
+  }
   instruction(f: constRef<IrFunction>, i: constRef<IrInstruction>): void {
     const hasResult: boolean = i.result >= 0;
     if (hasResult && (!this.value(f,i.result) || !this.typeId(i.typeId) || f.values[i.result] != i.typeId || this.project.types[i.typeId] == "void")) this.error(i.source,"Resultado/tipo inválido");
@@ -44,6 +59,8 @@ export class IrVerifier {
     const b: string = i.operands.length > 1 ? this.operandType(f,i.operands[1]) : "";
     if (["store","load","address","move","borrow","dropRemaining"].includes(i.op)) {
       if ((i.place) < 0 || i.place >= f.places.length) { this.error(i.source,"Place inexistente"); return; }
+      const mutableBorrow: boolean = i.op == "address" || (i.op == "borrow" && this.typeId(i.typeId) && this.project.typeDefinitions[i.typeId].kind == "ref");
+      if ((mutableBorrow || ["store","move","dropRemaining"].includes(i.op)) && this.readonlyPlace(f,i.place)) this.error(i.source,"Mutación/préstamo mutable a través de un place readonly");
       if (i.op == "move" && (i.operands.length != 0 || !hasResult || i.typeId != f.places[i.place].typeId)) this.error(i.source,"Move incompatible");
       if (i.op == "borrow" && (i.operands.length != 0 || !hasResult || !["ref","constRef"].includes(this.project.typeDefinitions[i.typeId].kind) || this.project.typeDefinitions[i.typeId].arguments[0] != f.places[i.place].typeId)) this.error(i.source,"Borrow incompatible");
       if (i.op == "dropRemaining" && (i.operands.length != 0 || hasResult || i.typeId != -1 || !this.project.typeDefinitions[f.places[i.place].typeId].resource)) this.error(i.source,"Drop incompatible");
@@ -98,8 +115,12 @@ export class IrVerifier {
       if (!this.typeId(i.signature) || this.project.typeDefinitions[i.signature].kind != "function" || i.operands.length == 0 || !this.value(f,i.operands[0])) this.error(i.source,"Dispatch de interfaz sin firma/receptor");
       else {
         const signature = this.project.typeDefinitions[i.signature]; const receiver = this.project.typeDefinitions[f.values[i.operands[0]]];
-        if (receiver.kind != "ref" || receiver.arguments.length != 1 || !["interface","intersection"].includes(this.project.typeDefinitions[receiver.arguments[0]].kind)) this.error(i.source,"Receptor de interfaz inválido");
-        else for (const concrete of this.project.typeDefinitions[receiver.arguments[0]].variants) { let found: boolean = false; for (const d of this.project.dispatches) if (d.interfaceType == receiver.arguments[0] && d.concreteType == concrete && d.name == i.text && d.signature == i.signature) found = true; if (!found) this.error(i.source,"Dispatch de interfaz incompleto"); }
+        if (receiver.kind != "ref" || receiver.arguments.length != 1 || !this.typeId(receiver.arguments[0]) || !["interface","intersection"].includes(this.project.typeDefinitions[receiver.arguments[0]].kind)) this.error(i.source,"Receptor de interfaz inválido");
+        else for (const concrete of this.project.typeDefinitions[receiver.arguments[0]].variants) {
+          let found: boolean = false;
+          for (const d of this.project.dispatches) if (d.interfaceType == receiver.arguments[0] && d.concreteType == concrete && d.name == i.text && d.signature == i.signature) found = true;
+          if (!found) this.error(i.source,"Dispatch de interfaz incompleto");
+        }
         if (signature.arguments.length != i.operands.length || signature.arguments[signature.arguments.length-1] != i.typeId || hasResult != (resultType != "void")) this.error(i.source,"Firma de interfaz incompatible");
         for (let at: number = 1; at < i.operands.length && at < signature.arguments.length; at = at+1) if (!this.value(f,i.operands[at]) || f.values[i.operands[at]] != signature.arguments[at-1]) this.error(i.source,"Argumento de interfaz incompatible");
       }
@@ -249,7 +270,7 @@ export class IrVerifier {
       if (!this.typeId(d.interfaceType) || !this.typeId(d.concreteType) || !this.typeId(d.signature) || (d.callee) < 0 || d.callee >= this.project.functions.length) this.error(source,"Identidad de dispatch inválida");
       else {
         const target = this.project.functions[d.callee]; const signature = this.project.typeDefinitions[d.signature];
-        if (!["interface","intersection"].includes(this.project.typeDefinitions[d.interfaceType].kind) || !this.project.typeDefinitions[d.interfaceType].variants.includes(d.concreteType) || signature.kind != "function" || target.parameterTypes.length != signature.arguments.length || (target.receiverType) < 0) this.error(source,"Contrato de dispatch inválido");
+        if (!["interface","intersection"].includes(this.project.typeDefinitions[d.interfaceType].kind) || !this.project.typeDefinitions[d.interfaceType].variants.includes(d.concreteType) || signature.kind != "function" || target.parameterTypes.length != signature.arguments.length || !this.typeId(target.receiverType) || target.parameterTypes[0] != target.receiverType) this.error(source,"Contrato de dispatch inválido");
         else {
           if (this.project.typeDefinitions[target.receiverType].kind != "ref" || this.project.typeDefinitions[target.receiverType].arguments[0] != d.concreteType || !irAssignable(this.project,target.returns,signature.arguments[signature.arguments.length-1],0)) this.error(source,"Destino de dispatch incompatible");
           for (let at: number = 1; at < target.parameterTypes.length; at = at+1) if (!irAssignable(this.project,signature.arguments[at-1],target.parameterTypes[at],0)) this.error(source,"Parámetro de dispatch incompatible");

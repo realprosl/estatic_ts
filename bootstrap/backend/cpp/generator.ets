@@ -515,7 +515,7 @@ const concrete:number=_cppLoop2Input[k];
           const d=this.dispatch(receiver,concrete,i.text,i.signature);
           if(d.callee<0)this.fail("Dispatch de interfaz incompleto",i.source);
           const target=this.project.functions[d.callee];
-          // El receptor implícito es un `ref<T>` → llega a la firma como `T&`.
+          // El receptor prestado llega como `T&` o `const T&`; box.get() preserva const.
           let args=[`box.get()`];
           for(let n=1;n<i.operands.length;n=n+1){
             const formal=target.parameterTypes[n];

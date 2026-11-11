@@ -1,4 +1,5 @@
 import { SourceDiagnostic } from "../frontend/frontend";
+import { BindingResult } from "../binder/binder";
 
 export class TypedFile {
   matchCoverage: string[]; receivers: string[]; types: string[]; members: number[]; selected: number[]; selectedModules: number[]; signatures: string[]; states: number[];
@@ -52,6 +53,35 @@ export class NativeModuleRecord {
   dependencies: string[]; bodyDependencies: string[]; requiresBody: boolean;
   constructor(file: string, id: string, sourceHash: string) { this.file = file; this.id = id; this.sourceHash = sourceHash; this.interfaceHash = ""; this.implementationHash = ""; this.semanticKey = ""; this.dependencies = []; this.bodyDependencies = []; this.requiresBody = false; }
 }
+// Receiver capability is intrinsic to the method, not the first caller's
+// mutability. Use the transitive body summary rather than treating every
+// this.otherMethod() as a write. Unknown/symbolic effects stay conservative.
+export function readonlyMethodReceiver(binding: constRef<BindingResult>, checked: constRef<CheckResult>, module: number, node: number): boolean {
+  // Borrow the containing record: stage zero cannot index constRef<T[]>.
+  // Reference captures currently carry mutable receiver handles in the IR.
+  // Do not silently reinterpret such a closure as a readonly capture.
+  for (let at: number = 0; at < checked.captures.length; at = at+1) {
+    const symbol = binding.symbols[checked.captures[at].symbol];
+    if (symbol.kind == "receiver" && symbol.module == module && symbol.scope >= 0 && binding.scopes[symbol.scope].node == node) return false;
+  }
+  for (let at: number = 0; at < checked.effects.length; at = at+1) {
+    const summary = checked.effects[at];
+    if (summary.module != module || summary.node != node || summary.phase != "body") continue;
+    // Unknown, external or callback-driven effects keep the receiver mutable.
+    if (summary.unknown || summary.external || summary.invokes.length > 0) return false;
+    // Retained values and mutable borrows can outlive the caller's view.
+    if (summary.retains.length > 0) return false;
+    for (const borrow of summary.borrows) if (borrow.mode == "ref") return false;
+    for (const sid of summary.writes.concat(summary.moves)) {
+      if (sid < 0 || sid >= binding.symbols.length) return false;
+      const symbol = binding.symbols[sid];
+      if (symbol.kind == "receiver" && symbol.module == module && symbol.scope >= 0 && binding.scopes[symbol.scope].node == node) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
 export class CheckResult {
   moduleRecords: NativeModuleRecord[]; symbolIds: string[]; queries: NativeTypeQuery[]; decorators: NativeDecorator[]; files: TypedFile[]; symbolTypes: string[]; captures: NativeCapture[]; borrows: BorrowLease[]; effects: EffectSummary[]; diagnostics: SourceDiagnostic[]; success: boolean;
   constructor() { this.moduleRecords = []; this.symbolIds = []; this.queries = []; this.decorators = []; this.files = []; this.symbolTypes = []; this.captures = []; this.borrows = []; this.effects = []; this.diagnostics = []; this.success = false; }

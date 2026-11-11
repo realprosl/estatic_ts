@@ -86,6 +86,13 @@ for(const [name,source,expected] of [
  ["map",'let m=new Map<string,number>();m.set("a",1);m.set("b",2);let n=0;for(const pair of m)n+=pair[1];print(n);',"3\n"],
  ["array callbacks",'const a=[1,2,3];const b=a.map((n:number):number=>n*2);print(b.reduce(0,(a:number,b:number):number=>a+b));',"12\n"],
  ["owner callback",'class C{x:number=1;}const xs:ptr<C>[]=[new C()];xs.forEach((x:constRef<C>):void=>print(x.x));',"1\n"],
+ ["readonly simple getter",'class C{x:number=7;get():number{return this.x;}}function read(c:constRef<C>):number{return c.get();}const c=new C();print(read(c));',"7\n"],
+ ["readonly getter closure snapshot",'class C{x:number=1;get():number{return this.x;}}function make():()=>number{const c=new C();return ():number=>c.get();}const callback=make();print(callback());',"1\n"],
+ ["readonly delegated getter",'class C{x:number=8;get():number{return this.x;}getAgain():number{return this.get();}}function read(c:constRef<C>):number{return c.getAgain();}const c=new C();print(read(c));',"8\n"],
+ ["readonly generic class getter",'class Box<T>{value:T;get():T{return this.value;}}function read(box:constRef<Box<string>>):string{return box.get();}const box=new Box<string>("generic");print(read(box));',"generic\n"],
+ ["readonly constPtr getter",'class C{x:number=9;get():number{return this.x;}}const c:constPtr<C> = new C();print(c.get());',"9\n"],
+ ["readonly receiver with mutable output",'class C{x:number=4;copy(target:ref<number>):void{target=this.x;}}function read(c:constRef<C>):number{let n=0;c.copy(n);return n;}const c=new C();print(read(c));',"4\n"],
+ ["readonly interface getter dispatch",'interface Named{name():string;}class A{name():string{return "A";}}class B{name():string{return "B";}}function read(value:Named):string{return value.name();}const a:Named=new A();const b:Named=new B();print(read(a));print(read(b));',"A\nB\n"],
  ["exact64",'const a:i64=-9223372036854775808;const b:u64=18446744073709551615;print(a);print(b);',"-9223372036854775808\n18446744073709551615\n"],
  ["integer wrap",'function f(n:i32):i32{const one:i32=1;return n+one;}print(f(2147483647));',"-2147483648\n"],
  ["comptime",'const a=comptime(():number[]=>[2,3]);print(a[1]);',"3\n"],
@@ -109,6 +116,31 @@ for(const [name,source,expected] of [
  ["detached task drain",'async function f():Promise<void>{await sleep(1);print("done");}spawn(f());',"done\n"],
  ["Result",'function f():Result<number>{return ok(4);}const r=f();if(r.isOk())print(r.value());',"4\n"],
 ] as const)test(`IR C++ executes ${name}`,()=>assert.equal(execute(source),expected));
+test("IR C++ executes readonly Node owner-array visit callbacks",()=>{
+ const source=`class Node {
+  private children:ptr<Node>[];
+  constructor(private title:string,private className:string,private page:i16){this.children=[];}
+  add(child:ptr<Node>):void{this.children.push(move(child));}
+  getClass():string{return this.className;}
+  getTitle():string{return this.title;}
+  getPage():i16{return this.page;}
+  visit(callback:(node:constRef<Node>)=>void):void{
+   callback(this);
+   this.children.forEach((child:constRef<Node>):void=>callback(child));
+  }
+ }
+ function make():ptr<Node>{
+  let root:ptr<Node> = new Node("Documento","Node",1);
+  let child:ptr<Node> = new Node("Seccion","Node",2);
+  root.add(move(child));
+  return move(root);
+ }
+ let document:ptr<Node> = make();
+ document.visit((node:constRef<Node>):void=>{
+  if(node.getClass()=="Node"&&node.getPage()>0)print(node.getTitle());
+ });`;
+ assert.equal(execute(source),"Documento\nSeccion\n");
+});
 test("IR C++ native aggregate fast paths survive seed synchronization",{skip:!process.env.ESTATIC_NATIVE_CODEGEN},()=>{
  const project=ir('function count(xs:number[]):number{return xs.length;}function forward(xs:number[]):number{return count(xs);}let xs=[1,2];const n=forward(xs);print(n);print(xs.length);');
  const {cpp}=generateCppFromIr(project);

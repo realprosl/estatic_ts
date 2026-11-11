@@ -47,5 +47,5 @@ void profileEnd(std::string name, std::vector<double> before, std::string counts
     printError(ets::concat(std::string("frontend: profile "), name, std::string(" wall_ms="), numberToString((after[static_cast<std::size_t>(0.0)] - before[static_cast<std::size_t>(0.0)])), std::string(" cpu_ms="), numberToString((after[static_cast<std::size_t>(1.0)] - before[static_cast<std::size_t>(1.0)])), std::string(" self_peak_rss_kib="), numberToString(after[static_cast<std::size_t>(2.0)]), std::string(" worker_peak_rss_kib="), numberToString(after[static_cast<std::size_t>(3.0)]), ((counts == std::string("")) ? std::string("") : ets::concat(std::string(" "), counts))));
 }
 
-void ets_init_bootstrap_analysis_options_876b7c37() {
+void ets_init_bootstrap_analysis_options_19a75f08() {
 }

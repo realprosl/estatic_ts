@@ -65,6 +65,10 @@ export function verifyIrTables(project: constRef<IrProject>): IrIssue[] {
 // but cannot omit the values/roots whose lifetime the IR promises to preserve.
 export function verifyFunctionContracts(project: constRef<IrProject>, f: constRef<IrFunction>): IrIssue[] {
   let issues: IrIssue[] = [];
+  if (f.receiverType != -1) {
+    if (f.receiverType < 0 || f.receiverType >= project.types.length || f.parameterTypes.length == 0 || f.parameterTypes[0] != f.receiverType) issues.push(new IrIssue("IR_INVALID","Tipo/parámetro de receptor incompatible",f.source));
+    else if (!["ref","constRef"].includes(project.typeDefinitions[f.receiverType].kind)) issues.push(new IrIssue("IR_INVALID","Modo de receptor incompatible",f.source));
+  }
   if (f.captureSymbols.length != f.captureTypes.length || f.captureModes.length != f.captureTypes.length) issues.push(new IrIssue("IR_INVALID","Tablas de capturas incompatibles",f.source));
   for (let at: number = 0; at < f.captureTypes.length; at = at+1) {
     if ((f.captureTypes[at]) < 0 || f.captureTypes[at] >= project.types.length) issues.push(new IrIssue("IR_INVALID","Tipo de captura inexistente",f.source));

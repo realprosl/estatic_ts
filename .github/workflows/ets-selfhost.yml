@@ -28,6 +28,8 @@ jobs:
         run: cmp src/codegen/ir/native/generator.cpp native-cpp/src/codegen/ir/native/generator.cpp
       - name: Verify aggregate fast paths and value semantics
         run: node --experimental-strip-types --test --test-name-pattern='native aggregate fast paths|temporary argument value semantics|temporary constructor value semantics|length snapshot semantics|length mutation ordering' bootstrap/ir/native.test.ts
+      - name: Verify readonly receivers and malformed IR rejection
+        run: node --experimental-strip-types --test --test-concurrency=1 --test-name-pattern='readonly' bootstrap/checker/checker.test.ts bootstrap/ir/readonly-verifier.test.ts bootstrap/ir/native.test.ts
   selfhost:
     needs: native-copy-regressions
     strategy:

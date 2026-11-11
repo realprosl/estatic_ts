@@ -10,6 +10,9 @@ bool irAssignable(const IrProject& project, double from, double to, double depth
     }
     const auto a = project.typeDefinitions[static_cast<std::size_t>(from)];
     const auto b = project.typeDefinitions[static_cast<std::size_t>(to)];
+    if (ets_includes_vec<std::string>(std::vector<std::string>{std::string("ref"), std::string("constRef")}, b.kind)) {
+        return (((((a.kind == std::string("ref")) && (b.kind == std::string("constRef"))) && (a.arguments.size() == 1.0)) && (b.arguments.size() == 1.0)) && (a.arguments[static_cast<std::size_t>(0.0)] == b.arguments[static_cast<std::size_t>(0.0)]));
+    }
     if ((numericType(project.types[static_cast<std::size_t>(from)]) && numericType(project.types[static_cast<std::size_t>(to)]))) {
         return true;
     }
@@ -307,5 +310,5 @@ std::string verifyShapeInstruction(const IrProject& project, const IrFunction& f
     return std::string("Opcode de shape desconocido");
 }
 
-void ets_init_bootstrap_ir_verify_shapes_a43248b9() {
+void ets_init_bootstrap_ir_verify_shapes_625a5811() {
 }
