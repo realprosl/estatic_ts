@@ -55,7 +55,7 @@ jobs:
           sha256sum -c "$RUNNER_TEMP/templates.sha256"
           test -s native-cpp/compiler/unity.cpp
           test ! -e native-cpp/prebuilt || { echo "::error::native-cpp/prebuilt must be removed"; exit 1; }
-          for item in runtime bootstrap src types; do
+          for item in runtime compiler src types; do
             if [ -e "native-cpp/$item" ]; then echo "::error::native-cpp/$item must not exist"; exit 1; fi
           done
           bad="$(find native-cpp -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.dylib' -o -name '*.exe' \) -not -path 'native-cpp/native/*' -print)"

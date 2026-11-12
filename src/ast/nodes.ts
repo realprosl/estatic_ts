@@ -16,7 +16,7 @@ export interface VariableDeclaration { kind: "VariableDeclaration"; exported?: b
 // `using name = expr;` declara un binding inmutable con las reglas de
 // ownership del tipo. El backend actual usa RAII ordinario de C++ al salir
 // del ámbito; no llama automáticamente a un método llamado `dispose`.
-// El contrato de limpieza del futuro IR se documenta en bootstrap/PENDING.md.
+// El contrato de limpieza del futuro IR se documenta en compiler/PENDING.md.
 export interface UsingDeclaration { kind: "UsingDeclaration"; exported?: boolean; name: string; declaredType?: TypeName; initializer: Expression; span: Span }
 export interface ExportDefaultDeclaration { kind: "ExportDefaultDeclaration"; declaration: Statement | Expression; span: Span }
 export interface ExportSpecifier { kind: "ExportSpecifier"; name: string; alias?: string; span: Span }

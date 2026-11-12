@@ -133,7 +133,7 @@ Iba a compilar una herramienta `ets-ast-dump` reutilizando los `.o` de
 ### `check-ref-parity.ts`
 
 Verifica que el **contrato de paso de objetos** sea el mismo en stage 0
-(`src/`) y en el frontend nativo (`bootstrap/ir`): `ref<T>` → `T&`,
+(`src/`) y en el frontend nativo (`compiler/ir`): `ref<T>` → `T&`,
 `constRef<T>` → `const T&`, `out T` → `T&`, `ptr<T>` → `std::unique_ptr<T>`,
 `constPtr<T>` → `std::unique_ptr<const T>` y `T` → copia.
 
@@ -147,6 +147,6 @@ node --experimental-strip-types scripts/check-ref-parity.ts
 Exit 0 si los contratos coinciden; exit 1 + lista de divergencias si no.
 
 > **Es transitoria y por eso no está en `npm test`.** `src/` existe hoy
-> únicamente para compilar `bootstrap/`: cuando el compilador nativo sea el
+> únicamente para compilar `compiler/`: cuando el compilador nativo sea el
 > único que evoluciona, la paridad dejará de ser un invariante y este script
 > debe dejar de usarse. Ejecútala a mano mientras ambos pipelines conviven.

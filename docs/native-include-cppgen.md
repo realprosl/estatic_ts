@@ -6,7 +6,7 @@ función mediante módulo, nodo, archivo y offset de `target`, nunca mediante su
 Los places de parámetros conservan además `name`, necesario para la frontera
 con C++ opaco. El resto del backend sigue usando los índices IR.
 
-`@include("bootstrap/modules/platform.hpp")` en una cabecera de módulo emite
+`@include("compiler/modules/platform.hpp")` en una cabecera de módulo emite
 un include entre comillas antes de las declaraciones. Los includes se ordenan
 y deduplican. Las rutas son relativas a las raíces de inclusión del compilador:
 solo admiten letras ASCII, números, `_`, `-`, `.`, `/`, sin componentes vacíos,

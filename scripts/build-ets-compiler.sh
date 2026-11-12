@@ -2,8 +2,8 @@
 set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
-source "$root/bootstrap/native/progress.sh"
-ETSC_CLI_SCOPE=bootstrap
+source "$root/compiler/native/progress.sh"
+ETSC_CLI_SCOPE=compiler
 trace=()
 if ! etsc_color || [[ ${ESTATIC_BUILD_VERBOSE:-0} == 1 ]]; then trace=(--verbose); fi
 export ESTC_ROOT="$root"
@@ -28,13 +28,13 @@ if [[ ! -x native-cpp/native/etsc || native-cpp/compiler/unity.cpp -nt native-cp
 fi
 # The seed is a complete ETS compiler (native-cpp/compiler/unity.cpp). Analysis
 # and C++ compilation run as separate steps so they are never in memory together.
-ETSC_LOG_FILE="$output/stage1-analysis.log" measure seed-analysis etsc_spin "Generación 1 · analizar fuentes ETS" native-cpp/native/etsc bootstrap/driver/main.ets --check \
+ETSC_LOG_FILE="$output/stage1-analysis.log" measure seed-analysis etsc_spin "Generación 1 · analizar fuentes ETS" native-cpp/native/etsc compiler/driver/main.ets --check \
   --emit-ir "$output/stage1.ir.json" "${trace[@]}"
 measure stage1-build etsc_step "Generación 1 · construir ejecutable" native-cpp/native/etsc --from-ir "$output/stage1.ir.json" --build \
   -o "$output/stage1.cpp" --binary "$output/etsc" --cxx-flag "$optimization" "${trace[@]}"
 if [[ "$stage" == stage2 ]]; then
   # This generation performs analysis, lowering, emission and orchestration in ETS.
-  ETSC_LOG_FILE="$output/stage2-analysis.log" measure stage2-analysis etsc_spin "Generación 2 · analizar con el compilador ETS" "$output/etsc" bootstrap/driver/main.ets --check \
+  ETSC_LOG_FILE="$output/stage2-analysis.log" measure stage2-analysis etsc_spin "Generación 2 · analizar con el compilador ETS" "$output/etsc" compiler/driver/main.ets --check \
     --emit-ir "$output/stage2.ir.json" \
     "${trace[@]}"
   measure stage2-build etsc_step "Generación 2 · construir ejecutable" "$output/etsc" --from-ir "$output/stage2.ir.json" --build \

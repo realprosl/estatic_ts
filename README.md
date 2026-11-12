@@ -101,10 +101,10 @@ desde la raíz del repositorio. `--help` muestra la ayuda de los que la tienen.
 |---|---|---|
 | `./install.sh` | Instala `etsc` en `<prefix>/bin`. Descarga y usa la semilla y el compilador precompilados si coinciden con las fuentes; si no, los compila. No usa Node. | `--prefix DIR`, `--cxx CXX`, `--seed BIN` (reutiliza una semilla ya compilada), `--seed-only` (publica la semilla, sin compilar bootstrap), `--force-seed` (recompila la semilla), `--force-compiler` / `--force-compile` (recompila el compilador de bootstrap), `--force` (las dos), `--help` |
 | `native-cpp/build-all.sh` | Construye la **semilla** (`native/etsc`, un compilador completo) desde `native-cpp/compiler/unity.cpp`, o copia la precompilada si coincide. | `--out DIR`, `--cxx CXX`, `--static`, `--force`, `--update-prebuilt` (CI), `--help` |
-| `native-cpp/build-compiler.sh` | Construye el **compilador de `bootstrap/`** (generación 2, el `etsc` que se instala) con la semilla, o copia el precompilado si coincide. | `--seed DIR`, `--out BIN`, `--static`, `--force`, `--update-prebuilt` (CI), `--help` |
+| `native-cpp/build-compiler.sh` | Construye el **compilador de `compiler/`** (generación 2, el `etsc` que se instala) con la semilla, o copia el precompilado si coincide. | `--seed DIR`, `--out BIN`, `--static`, `--force`, `--update-prebuilt` (CI), `--help` |
 | `native-cpp/fetch-prebuilt.sh` | Descarga los precompilados de la rama `prebuilt` (clon `--depth 1` en un temporal) en `native-cpp/prebuilt/`. Nunca falla: sin red o sin rama, se compila. | `--remote NOMBRE\|URL`, `--branch RAMA`, `--help` |
 | `native-cpp/regenerate.sh` | **Regenera la semilla** con el propio compilador: itera hasta que dos rondas emiten el mismo IR y C++ (punto fijo) y reescribe `native-cpp/compiler/unity.cpp`. Sin Node. | `--compiler ETSC`, `--cxx CXX`, `--max-rounds N`, `--help` |
-| `bootstrap/native/progress.sh` | Utilidad de presentación (spinner, tiempos) que cargan los demás scripts. No se ejecuta sola. | — |
+| `compiler/native/progress.sh` | Utilidad de presentación (spinner, tiempos) que cargan los demás scripts. No se ejecuta sola. | — |
 
 ### Compilador ETS (desarrollo del self-hosting)
 
@@ -1075,7 +1075,7 @@ constante manual en este README.
 
 ## Autoalojamiento
 
-El frontend nativo de [`bootstrap/`](./bootstrap/README.md) ya ejecuta lexer,
+El frontend nativo de [`compiler/`](./compiler/README.md) ya ejecuta lexer,
 parser, resolución de módulos, expansión @etsgen, binder, tipos,
 seguridad/efectos, comptime y procedencia por archivo. `src/` sigue siendo stage 0:
 construye los ejecutables nativos y conserva el CLI/codegen actual. El binario
@@ -1090,7 +1090,7 @@ npm run audit:bootstrap:syntax
 npm run audit:bootstrap:self
 ```
 
-La [revisión reproducible de 2026-10-24](./bootstrap/audit/FRONTEND-REVIEW.md)
+La [revisión reproducible de 2026-10-24](./compiler/audit/FRONTEND-REVIEW.md)
 pasa **2182/2182** pruebas del frontend, **83/83** obligaciones de referencia y
 **75/75** contratos de sintaxis. Ambos pipelines parsean **132/132** archivos del
 corpus; el checker acepta 131 y rechaza el ejemplo privado inválido esperado.
@@ -1100,12 +1100,12 @@ Estas muestras no certifican por sí solas cierre completo ni equivalencia forma
 La salida actual contiene un AST por archivo y tablas semánticas laterales.
 Los enums internos del AST conservan nombres legibles en JSON. Los tipos del
 checker siguen siendo strings canónicos; la caché persistente nativa almacena
-sintaxis, no resultados semánticos. El [IR nativo `ets-ir-2`](./bootstrap/ir/README.md)
+sintaxis, no resultados semánticos. El [IR nativo `ets-ir-2`](./compiler/ir/README.md)
 consume estas tablas y añade lowering/verificación de agregados, clases,
 genéricos, closures, variantes, recursos, préstamos y async. El backend C++ del IR tiene una entrada separada; siguen pendientes scheduler
 concurrente y compilación completa del compilador por sí mismo.
 
-El [CLI general de bootstrap](./bootstrap/CLI.md) conecta el frontend nativo,
+El [CLI general de bootstrap](./compiler/CLI.md) conecta el frontend nativo,
 el IR verificado y C++, reutilizando el runtime existente:
 
 ```sh
@@ -1118,11 +1118,11 @@ cliente libcurl. La selección `@cpp_drogon` y los wrappers son los existentes.
 El backend C++20 del IR ya está disponible mediante `npm run bootstrap:ir:cpp --
 examples/hello.ets --run`. Consume las tablas verificadas de `ets-ir-2` y
 reutiliza el runtime de `src/`, con capacidades y límites documentados en
-[`bootstrap/ir/CPP.md`](./bootstrap/ir/CPP.md). El CLI histórico permanece
+[`compiler/ir/CPP.md`](./compiler/ir/CPP.md). El CLI histórico permanece
 separado durante la validación de este recorrido.
 
-El [inventario vigente](./bootstrap/PENDING.md) separa implementación ejercitada,
-restricciones explícitas y obligaciones y límites del [IR común](./bootstrap/checker/IR.md).
+El [inventario vigente](./compiler/PENDING.md) separa implementación ejercitada,
+restricciones explícitas y obligaciones y límites del [IR común](./compiler/checker/IR.md).
 Los checkpoints anteriores están archivados; los límites de stage 0 no se
 atribuyen automáticamente al frontend ETS. La arena actual del parser puede
 alimentar el IR sin un rediseño previo del almacenamiento de nodos.

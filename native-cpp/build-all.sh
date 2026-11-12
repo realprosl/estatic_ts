@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Construye la semilla: <out>/etsc, un compilador ETS completo compilado desde
-# native-cpp/compiler/unity.cpp (el C++ que el compilador de bootstrap/ genera de
+# native-cpp/compiler/unity.cpp (el C++ que el compilador de compiler/ genera de
 # sí mismo; lo produce native-cpp/regenerate.sh). Es el ÚNICO sitio que compila
 # la semilla; lo usan install.sh, el CI y los desarrolladores.
 #
 # El resto del C++ se comparte con el repositorio y se usa desde su sitio:
 #   runtime/                 runtime C++ único
-#   bootstrap/modules/*.hpp  cabeceras de frontera nativa
+#   compiler/modules/*.hpp  cabeceras de frontera nativa
 # Los precompilados llegan a prebuilt/ (ignorado por git) con fetch-prebuilt.sh,
 # desde la rama `prebuilt`.
 #
@@ -28,7 +28,7 @@
 set -euo pipefail
 seed="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$seed/.." && pwd)"
-source "$root/bootstrap/native/progress.sh"
+source "$root/compiler/native/progress.sh"
 ETSC_CLI_SCOPE=${ETSC_CLI_SCOPE:-seed}
 
 out="$seed/native" static=0 use_prebuilt=1 update_prebuilt=0
@@ -52,7 +52,7 @@ prebuilt="$seed/prebuilt/$platform"
 # Huella de TODO lo que entra en el binario. Cambia si cambia cualquiera.
 sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
 seed_inputs() {
-  (cd "$root" && find native-cpp/compiler/unity.cpp bootstrap/modules runtime \
+  (cd "$root" && find native-cpp/compiler/unity.cpp compiler/modules runtime \
       -type f \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) \
       | LC_ALL=C sort | while IFS= read -r f; do sha256 "$f"; done) | sha256 | cut -d' ' -f1
 }

@@ -1,6 +1,6 @@
-# Auditoría del paso de objetos en `bootstrap/`
+# Auditoría del paso de objetos en `compiler/`
 
-**Alcance:** el compilador nativo escrito en Estatic (`bootstrap/**.ets`, 45 ficheros, 9.192 call sites).
+**Alcance:** el compilador nativo escrito en Estatic (`compiler/**.ets`, 45 ficheros, 9.192 call sites).
 **Pregunta:** ¿el compilador reutiliza `ref<T>` / `constRef<T>` cuando debe, o lo pasa todo por copia?
 **Método:** análisis estático sobre el AST real (lexer + parser de stage 0), clasificando cada
 parámetro formal por su modo real de paso en C++ y cruzando la firma con el cuerpo del callee.
@@ -12,7 +12,7 @@ Verificado contra el C++ generado (`src/cli.ts` → `g++`).
 
 ## 1. Veredicto
 
-**No. El compilador pasa prácticamente todo por copia.** El uso de préstamos en `bootstrap/`
+**No. El compilador pasa prácticamente todo por copia.** El uso de préstamos en `compiler/`
 es testimonial y está concentrado en un solo módulo.
 
 | Modo de paso en C++ | Parámetros | % |
@@ -37,13 +37,13 @@ caller le pasó por valor esperando que el cambio se vea. La semántica de owner
 el problema es puramente de **rendimiento**.
 
 **Lo malo:** `ref<T>` (préstamo mutable) **no se usa ni una vez** en todo el compilador, y
-`constRef<T>` se usa solo en `bootstrap/checker/`, `bootstrap/ir/` y `bootstrap/modules/`.
+`constRef<T>` se usa solo en `compiler/checker/`, `compiler/ir/` y `compiler/modules/`.
 
 ---
 
 ## 2. El caso caliente: `AstNode`
 
-`AstNode` (`bootstrap/parser/parser.ets:22`) es el tipo que más se copia del compilador:
+`AstNode` (`compiler/parser/parser.ets:22`) es el tipo que más se copia del compilador:
 
 ```ts
 export class AstNode {
@@ -60,7 +60,7 @@ vector: **≈6 asignaciones de heap por copia**.
 ### 2.1 `bindingChild` — 307 copias por compilación
 
 ```ts
-// bootstrap/binder/binder.ets:47
+// compiler/binder/binder.ets:47
 export function bindingChild(node: AstNode, role: EdgeRole): number {
   for (const edge of node.edges) { if (edge.role == role) return edge.node; } return -1;
 }
@@ -83,12 +83,12 @@ Los accesores que devuelven un nodo del AST lo devuelven **por valor**:
 
 | Método | Fichero | Call sites |
 |---|---|---:|
-| `NativeChecker.node()` | `bootstrap/checker/checker.ets:24` | 194 |
-| `SafetyAnalyzer.node()` | `bootstrap/checker/safety.ets:58` | 122 |
-| `IrLowering.node()` | `bootstrap/ir/lower.ets:46` | 70 |
-| `EffectAnalyzer.node()` | `bootstrap/checker/effects.ets:29` | 57 |
-| `NativeComptime.node()` | `bootstrap/checker/comptime.ets:35` | 51 |
-| `Parser.node()` | `bootstrap/parser/parser.ets:126` | 39 |
+| `NativeChecker.node()` | `compiler/checker/checker.ets:24` | 194 |
+| `SafetyAnalyzer.node()` | `compiler/checker/safety.ets:58` | 122 |
+| `IrLowering.node()` | `compiler/ir/lower.ets:46` | 70 |
+| `EffectAnalyzer.node()` | `compiler/checker/effects.ets:29` | 57 |
+| `NativeComptime.node()` | `compiler/checker/comptime.ets:35` | 51 |
+| `Parser.node()` | `compiler/parser/parser.ets:126` | 39 |
 
 ```ts
 node(module: number, id: number): AstNode { return this.graph.modules[module].cached.result.ast.nodes[id]; }
@@ -118,10 +118,10 @@ lvalue** (`const n = this.node(id);`) — ahí hay copia o movimiento completo d
 Detalle de dos casos típicos:
 
 ```ts
-// bootstrap/ir/verify.ets:18  — IrSource se copia DOS veces: al entrar y al construir IrIssue
+// compiler/ir/verify.ets:18  — IrSource se copia DOS veces: al entrar y al construir IrIssue
 error(source: IrSource, message: string): void { this.issues.push(new IrIssue("IR_INVALID", message, source)); }
 
-// bootstrap/parser/parser.ets:123 — cada ParserToken copiado trae 2 std::string (2 heap) cada uno
+// compiler/parser/parser.ets:123 — cada ParserToken copiado trae 2 std::string (2 heap) cada uno
 add(kind: NodeKind, start: ParserToken, end: ParserToken): number {
   this.nodes.push(new AstNode(kind, start, end)); return this.nodes.length - 1;
 }
@@ -142,17 +142,17 @@ Y las funciones que **devuelven** colecciones por valor, copiando el vector en c
 No todo está mal. Estas firmas ya evitan la copia y sirven de referencia del estilo deseado:
 
 ```ts
-// bootstrap/checker/ownership.ets:10  — el grafo, el binding y el resultado por CONST REF
+// compiler/checker/ownership.ets:10  — el grafo, el binding y el resultado por CONST REF
 export function resourceType(graph: constRef<ModuleGraph>, binding: constRef<BindingResult>,
                               checked: constRef<CheckResult>, text: string, history: string[]): boolean
 
-// bootstrap/ir/verify-shapes.ets:3
+// compiler/ir/verify-shapes.ets:3
 export function irAssignable(project: constRef<IrProject>, from: number, to: number, depth: number): boolean
 
-// bootstrap/ir/verify-borrows.ets:4
+// compiler/ir/verify-borrows.ets:4
 export function verifyBorrowRoutes(project: constRef<IrProject>, f: IrFunction): IrIssue[]
 
-// bootstrap/checker/safety.ets:1172  — el resultado se escribe con `out`, que ya es T&
+// compiler/checker/safety.ets:1172  — el resultado se escribe con `out`, que ya es T&
 export function validateSafety(graph: ModuleGraph, binding: BindingResult, out result: CheckResult, trace: boolean = false): void
 ```
 
@@ -170,12 +170,12 @@ El dialecto **no** convierte implícitamente `T` en `const T&` (V22, "T signific
 eso está bien: es una decisión explícita de diseño. Pero el compilador no ofrece todavía una
 forma de **detectar** el abuso, así que el coste se paga en silencio:
 
-- `bootstrap/checker/SAFETY.md:56-68` describe las reglas de préstamo, pero no hay ningún
+- `compiler/checker/SAFETY.md:56-68` describe las reglas de préstamo, pero no hay ningún
   diagnóstico que diga "este parámetro por valor es un objeto grande que solo se lee".
 - Las aserciones de `T&`/`const T&` que existían (`test/unit/codegen.test.ts:392-414`) cubrían
   **solo stage 0**; el pipeline nativo no tenía ninguna aserción sobre el texto del C++ emitido.
   La comprobación que faltaba vive ahora en `scripts/check-ref-parity.ts`, **fuera de `npm test`**
-  a propósito: `src/` solo existe hoy para compilar `bootstrap/`, así que la paridad entre ambos
+  a propósito: `src/` solo existe hoy para compilar `compiler/`, así que la paridad entre ambos
   pipelines es un invariante transitorio y no algo que deba imposto a la suite para siempre.
 
 ### Corregido en esta rama: el contrato de paso ya es el mismo en los dos pipelines
@@ -208,7 +208,7 @@ punteros para el interior del IR. El slot del parámetro guarda el puntero al re
 | `out T` | `T&` | `T*` | **`T&`** |
 
 Los parámetros `out` también se alinean: el checker nativo reescribe `out T` a `ref<T>`
-(`bootstrap/checker/checker.ets:437`), así que antes emitían `T*` cuando stage 0 emite `T&`.
+(`compiler/checker/checker.ets:437`), así que antes emitían `T*` cuando stage 0 emite `T&`.
 
 El contrato llega también a los **callbacks**: el shape `function` del IR construye el
 `std::function` de una lambda, y ese tipo es observable. Un callback `(x: constRef<T>) => void`
@@ -222,7 +222,7 @@ y se añadió `scripts/check-ref-parity.ts`, que comprueba el contrato de los se
 (`ref`, `constRef`, `ptr`, `constPtr`, valor y `out`) en los dos pipelines.
 
 Esa comprobación **no forma parte de `npm test`**: es manual a propósito. `src/` existe hoy
-únicamente para compilar `bootstrap/`, así que la igualdad entre ambos pipelines es transitoria:
+únicamente para compilar `compiler/`, así que la igualdad entre ambos pipelines es transitoria:
 cuando el compilador nativo sea el único que evoluciona, el script debe dejar de usarse.
 
 ---
@@ -256,7 +256,7 @@ con el mismo contrato observable.
 node --experimental-strip-types /workspace/audit/audit-object-passing.ts bootstrap
 ```
 
-El script no modifica nada: parsea `bootstrap/**.ets` con el lexer/parser de stage 0, clasifica
+El script no modifica nada: parsea `compiler/**.ets` con el lexer/parser de stage 0, clasifica
 cada parámetro por su modo de paso, y cruza las firmas con los cuerpos para detectar copias
 y mutaciones perdidas. Informe completo en `report-bootstrap.txt`.
 

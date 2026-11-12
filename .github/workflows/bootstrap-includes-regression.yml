@@ -5,7 +5,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/bootstrap-includes-regression.yml'
-      - 'bootstrap/**'
+      - 'compiler/**'
       - 'native-cpp/**'
       - 'runtime/**'
       - 'src/codegen/ir/native/**'

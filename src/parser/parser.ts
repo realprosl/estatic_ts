@@ -10,7 +10,7 @@ import { arrayType, functionType, genericType, literalType, readonlyType, tupleT
 // Precedencia de operadores. Los bitwise siguen el orden de TypeScript:
 // `|` es el mas bajo, luego `^`, luego `&`, y por ultimo el desplazamiento.
 // `a | b & c` es `a | (b & c)`, no `(a | b) & c`.
-// La tabla esta duplicada en `bootstrap/parser/parser.ets`; ambas deben
+// La tabla esta duplicada en `compiler/parser/parser.ets`; ambas deben
 // mantenerse en sincronia.
 const PRECEDENCE: Partial<Record<TokenKind, number>> = { "??": 1, "||": 2, "&&": 3, "==": 4, "!=": 4, "<": 5, "<=": 5, ">": 5, ">=": 5, "instanceof": 5, "|": 6, "^": 7, "&": 8, "<<": 9, ">>": 9, "+": 10, "-": 10, "*": 11, "/": 11, "%": 11 };
 

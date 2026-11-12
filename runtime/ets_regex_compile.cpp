@@ -5,7 +5,7 @@
 // ese modo: un patron invalido de `std::regex` termina el proceso con
 // SIGABRT sin possibility de diagnostico.
 //
-// Este TU se compila aparte con `-fexceptions` (ver `bootstrap/driver/main.ets`
+// Este TU se compila aparte con `-fexceptions` (ver `compiler/driver/main.ets`
 // y `install.sh`, que ya hacen lo mismo para el backend Drogon). Aqui si hay
 // propagation de excepciones, asi que el `regex_error` se captura y se
 // devuelve como error de texto.

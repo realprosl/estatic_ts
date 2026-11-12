@@ -20,14 +20,14 @@ Hay dos implementaciones del dialecto y este documento las distingue:
   ejecutables C++20 del frontend nativo y del runtime; el análisis del proyecto
   solicitado lo hace el frontend nativo. Su CLI histórico y su caché incremental
   se conservan, pero no son el camino de producción.
-- **frontend nativo (`bootstrap/`)** — lexer, parser, cargador, binder, checker,
+- **frontend nativo (`compiler/`)** — lexer, parser, cargador, binder, checker,
   seguridad, efectos y comptime reescritos en el propio dialecto Estatic. **Es la
   implementación de referencia** del dialecto.
 
 Las secciones generales de CLI/emisión y evaluador principal describen stage 0
 (`src/`), salvo indicación contraria. El frontend ETS tiene su propio
-[inventario auditado](./bootstrap/PENDING.md) y
-[revisión reproducible](./bootstrap/audit/FRONTEND-REVIEW.md): incluye switch,
+[inventario auditado](./compiler/PENDING.md) y
+[revisión reproducible](./compiler/audit/FRONTEND-REVIEW.md): incluye switch,
 consultas typeof cualificadas, expansión higiénica y un único evaluador nativo
 para comptime/@etsgen. No se deduce la cobertura ETS de los límites del backend TS.
 
@@ -36,8 +36,8 @@ verificador, y un backend C++20 que consume ese IR y produce ejecutables. Esa
 cadena **está implementada**; lo que no lo está son el autoalojamiento del
 backend, el cierre global del lenguaje y algunas capacidades concretas, todas
 enumeradas en la sección «Estado del frontend nativo». Ver
-[`bootstrap/ir/README.md`](./bootstrap/ir/README.md) y
-[`bootstrap/ir/CPP.md`](./bootstrap/ir/CPP.md).
+[`compiler/ir/README.md`](./compiler/ir/README.md) y
+[`compiler/ir/CPP.md`](./compiler/ir/CPP.md).
 
 > **Las diferencias entre ambos pipelines son esperadas, no errores.** Stage 0 no
 > tiene que alcanzar la cobertura del frontend nativo: su trabajo termina en
@@ -50,7 +50,7 @@ Este documento está dividido en cuatro secciones:
 - **✅ Implementado** — features de TS soportadas. Para uso y ejemplos ver `README.md`.
 - **❌ Rechazado por diseño** — features que el dialecto NUNCA tendrá (con motivo).
 - **🟡 Pendiente / TS no cubierto** — features en TS que aún no están en el dialecto.
-- **🧱 Estado del frontend nativo** — alcance, límites y rechazos propios de `bootstrap/`.
+- **🧱 Estado del frontend nativo** — alcance, límites y rechazos propios de `compiler/`.
 
 > Este doc se sincroniza con el código vía `scripts/check-docs-sync.ts`. Si
 > encuentras una feature implementada que no aparece en "Implementado", o una
@@ -120,7 +120,7 @@ Lista no exhaustiva — ver `README.md`, `examples/` y los nodos AST en
 - `switch / case / default` sobre enums, strings y números — **solo en el
   frontend nativo**. El parser de stage 0 **no** acepta `switch`: su lexer lo
   reconoce como keyword y el AST declara `SwitchStatement`, pero su parser no
-  lo produce. Ver [`bootstrap/SYNTAX-PARITY.md`](./bootstrap/SYNTAX-PARITY.md).
+  lo produce. Ver [`compiler/SYNTAX-PARITY.md`](./compiler/SYNTAX-PARITY.md).
 - `delete` sobre propiedades dinámicas de Map/Set.
 - `await` y `async function` (compilados a corutinas C++20).
 - `for await (const x of Promise<T>[])` para iterar arrays de promesas.
@@ -330,7 +330,7 @@ Siguen pendientes:
 > identifica exposición de tipos privados; no se agrupa E4400–E4406 como una
 > familia común de APIs legacy. `out` conserva en el frontend nativo su contrato
 > vigente de referencia mutable de entrada/salida, descrito en
-> [checker/README.md](./bootstrap/checker/README.md).
+> [checker/README.md](./compiler/checker/README.md).
 
 ### Módulos y tooling
 
@@ -481,11 +481,11 @@ no porque falte implementarlas. No son features de TypeScript pendientes:
 
 ## 🧱 Estado del frontend nativo
 
-El frontend nativo (`bootstrap/`) cubre todas las capas del dialecto —lexer,
+El frontend nativo (`compiler/`) cubre todas las capas del dialecto —lexer,
 parser, cargador, expansión, binder, checker, seguridad, efectos, comptime y
 procedencia— y entrega `ets-checked-2`. No es un prototipo, pero tampoco es el
 cierre del lenguaje: su inventario vigente está en
-[`bootstrap/PENDING.md`](./bootstrap/PENDING.md), con 72 filas clasificadas en
+[`compiler/PENDING.md`](./compiler/PENDING.md), con 72 filas clasificadas en
 **29 implementadas, 13 restringidas y 30 obligaciones pendientes**. Lo que sigue
 son los límites que el frontend nativo impone y que este documento no describe
 en las secciones de stage 0.
@@ -496,7 +496,7 @@ El parser nativo acepta siete formas que el parser de stage 0 rechaza: tipos
 agrupados, consultas `typeof` cualificadas, `typeof` con sufijos, `typeof`
 estático, `switch`, `enum` con salto de línea y separador final en unions. La
 comparación reproducible, caso a caso, está en
-[`bootstrap/SYNTAX-PARITY.md`](./bootstrap/SYNTAX-PARITY.md).
+[`compiler/SYNTAX-PARITY.md`](./compiler/SYNTAX-PARITY.md).
 
 ### Límites propios del frontend nativo
 
@@ -523,8 +523,8 @@ comparación reproducible, caso a caso, está en
 
 Cada fila cita los casos representativos del diagnóstico, no su catálogo
 completo: `E4101` tiene 14 variantes, `E4204` ocho y `E4300` siete. El conjunto
-exacto de mensajes está en `bootstrap/checker/checker.ets` y
-`bootstrap/checker/safety.ets`.
+exacto de mensajes está en `compiler/checker/checker.ets` y
+`compiler/checker/safety.ets`.
 
 `COMPTIME_OVERLOAD_UNRESOLVED` y `MODULE_SYMBOL_COLLISION` pertenecen a stage 0
 (`src/codegen/comptime-functions.ts` y `src/modules/module-symbols.ts`): no los
@@ -538,7 +538,7 @@ valores no literales, coincidencias de `match` sin cubrir y miembros o
 contenedores inválidos; `ETSGEN_*` cubre los límites de expansión, generación
 y recursión, la higiene, el parseo del texto generado y el contexto o
 generador inválidos. El nombre exacto de cada código aparece en
-`bootstrap/checker/comptime.ets` y `bootstrap/checker/expansion.ets`.
+`compiler/checker/comptime.ets` y `compiler/checker/expansion.ets`.
 
 El frontend nativo también rechaza, con un contrato conservado, la extracción
 genérica sin llamada que instancie los argumentos, los literales de objeto sin
@@ -548,14 +548,14 @@ cifra de pruebas.
 
 ### IR y backend C++
 
-El IR `ets-ir-2` está implementado en ETS dentro de `bootstrap/ir/`, con
+El IR `ets-ir-2` está implementado en ETS dentro de `compiler/ir/`, con
 lowering desde el grafo de módulos y el `CheckResult`, y un verificador
 (`verifyIr`) que comprueba tablas, shapes, promociones, firmas, proyecciones,
 dominancia, inicialización por punto fijo, rutas de ownership y duración de
 préstamos. El emisor `src/codegen/ir/cpp-generator.ts` consume **exclusivamente**
 IR nativo verificado: no reconstruye un AST ni llama al codegen histórico. La
 implementación nativa está en `src/codegen/ir/native/` y el driver en
-`bootstrap/native/`; `install.sh` instala `etsc`, que recorre
+`compiler/native/`; `install.sh` instala `etsc`, que recorre
 `.ets → IR → C++ → binario` sin Node en tiempo de uso.
 
 Un productor debe exigir `success: true`: un proyecto fallido puede contener IR
@@ -612,7 +612,7 @@ como rechazado.
 
 Sobre la sección de pendientes el contraste es **explícito y acotado**: el
 script mantiene una lista corta de features que el frontend nativo ya
-implementa (cada entrada cita su fila en `bootstrap/PENDING.md`) y avisa si
+implementa (cada entrada cita su fila en `compiler/PENDING.md`) y avisa si
 alguna vuelve a declararse pendiente sin acotarse a stage 0. No se cruza el
 inventario completo de forma automática porque la sección es prosa que puede
 mencionar una feature implementada para contrastarla, y un cruce por palabras
@@ -623,11 +623,11 @@ El resto sigue siendo responsabilidad de la revisión humana y de las pruebas,
 que son la fuente principal de verdad.
 
 Para las afirmaciones sobre el frontend nativo, las fuentes de verdad son
-[`bootstrap/PENDING.md`](./bootstrap/PENDING.md) (inventario de 72 filas),
-[`bootstrap/SYNTAX-PARITY.md`](./bootstrap/SYNTAX-PARITY.md) (paridad de
-sintaxis), [`bootstrap/ir/README.md`](./bootstrap/ir/README.md) y
-[`bootstrap/ir/CPP.md`](./bootstrap/ir/CPP.md) (IR y backend). Un doc fechado
-como [`bootstrap/audit/FRONTEND-REVIEW.md`](./bootstrap/audit/FRONTEND-REVIEW.md)
+[`compiler/PENDING.md`](./compiler/PENDING.md) (inventario de 72 filas),
+[`compiler/SYNTAX-PARITY.md`](./compiler/SYNTAX-PARITY.md) (paridad de
+sintaxis), [`compiler/ir/README.md`](./compiler/ir/README.md) y
+[`compiler/ir/CPP.md`](./compiler/ir/CPP.md) (IR y backend). Un doc fechado
+como [`compiler/audit/FRONTEND-REVIEW.md`](./compiler/audit/FRONTEND-REVIEW.md)
 es una fotografía de la revisión del **2026-10-24**, anterior al IR: describe
 el estado de ese día y no el actual.
 

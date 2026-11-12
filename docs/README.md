@@ -6,9 +6,9 @@ Esta carpeta contiene la documentación técnica de Ts2cpp.
 
 | Doc | Para qué |
 |---|---|
-| [`../bootstrap/audit/FRONTEND-REVIEW.md`](../bootstrap/audit/FRONTEND-REVIEW.md) | Auditoría reproducible del frontend nativo y diferencias con stage 0. |
-| [`../bootstrap/ir/README.md`](../bootstrap/ir/README.md) | IR escalar nativo: contrato, lowering, verificador y CLI. |
-| [`../bootstrap/PENDING.md`](../bootstrap/PENDING.md) | Inventario vigente antes del IR: implementación, restricciones y obligaciones. |
+| [`../compiler/audit/FRONTEND-REVIEW.md`](../compiler/audit/FRONTEND-REVIEW.md) | Auditoría reproducible del frontend nativo y diferencias con stage 0. |
+| [`../compiler/ir/README.md`](../compiler/ir/README.md) | IR escalar nativo: contrato, lowering, verificador y CLI. |
+| [`../compiler/PENDING.md`](../compiler/PENDING.md) | Inventario vigente antes del IR: implementación, restricciones y obligaciones. |
 | [`../status.md`](../status.md) | Estado verificable, riesgos y prioridades actuales. |
 | [`../PROJECT.md`](../PROJECT.md) | Guía de arquitectura, desarrollo y pruebas. |
 | [`../LIMITATIONS.md`](../LIMITATIONS.md) | Matriz de soporte y límites conocidos. |
@@ -18,7 +18,7 @@ Esta carpeta contiene la documentación técnica de Ts2cpp.
 | [`http-limits.md`](./http-limits.md) | Límites de recursos HTTP, configuración y regresiones por backend. |
 | [`comptime-scopes.md`](./comptime-scopes.md) | Ámbitos léxicos del evaluador, regresiones y límites pendientes. |
 | [`memory-model.md`](./memory-model.md) | Ownership, préstamos, punteros V22. Verificado contra `src/semantic/type-checker.ts`. |
-| [`audit-object-passing.md`](./audit-object-passing.md) | Auditoría del paso de objetos en `bootstrap/`: cuántas copias evita `ref<T>`/`constRef<T>` y cuáles quedan. |
+| [`audit-object-passing.md`](./audit-object-passing.md) | Auditoría del paso de objetos en `compiler/`: cuántas copias evita `ref<T>`/`constRef<T>` y cuáles quedan. |
 | [`match-syntax.md`](./match-syntax.md) | Sintaxis V23 única de `match` (V30.5.1+). |
 | [`TUTORIAL.md`](./TUTORIAL.md) | Tutorial del dialecto. Cada ejemplo es un test e2e real (`test/e2e/<bucket>/<name>/`). |
 | [`vision.md`](./vision.md) | Visión a largo plazo. Aspiracional, no refleja el estado actual. |
