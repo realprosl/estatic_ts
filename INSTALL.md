@@ -51,14 +51,22 @@ La distribución incluye `bootstrap/modules/platform.hpp`, necesaria para
 compilar los fuentes de bootstrap con el compilador instalado. La cabecera
 mantiene su ruta de inclusión también al mover la instalación.
 
-### Semilla precompilada
+### Semilla precompilada (por defecto)
 
-Si `native-cpp/prebuilt/<plataforma>/` (Linux x86_64 o macOS arm64) coincide con
-las fuentes del checkout, `install.sh` la usa y se ahorra compilar la semilla;
-si no, la compila (frontend y coordinador en paralelo). Son binarios
-autocontenidos: estáticos en Linux y, en macOS, sin más dependencias que las del
-sistema. `--no-prebuilt` fuerza la compilación. Detalles en
-[`native-cpp/README.md`](native-cpp/README.md).
+Por defecto `install.sh` **usa la semilla precompilada** de
+`native-cpp/prebuilt/<plataforma>/` (Linux x86_64 o macOS arm64) y se ahorra
+compilarla. Son binarios autocontenidos: estáticos en Linux y, en macOS, sin más
+dependencias que las del sistema. Solo se usan si su huella coincide con las
+fuentes del checkout; si no hay semilla para la plataforma o está desfasada, se
+compila automáticamente (frontend y coordinador en paralelo).
+
+Para forzar la recompilación desde las fuentes:
+
+```sh
+./install.sh --force
+```
+
+Detalles en [`native-cpp/README.md`](native-cpp/README.md).
 
 Node sólo hace falta para **regenerar la semilla** cuando cambian las fuentes de
 `bootstrap/*.ets`:

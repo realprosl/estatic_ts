@@ -112,7 +112,7 @@ jobs:
       - name: Build compiler from downloaded snapshot (no Node or TS)
         run: |
           set -euo pipefail
-          bash native-cpp/build-all.sh --no-prebuilt
+          bash native-cpp/build-all.sh --force
           test -x native-cpp/native/frontend
           test -x native-cpp/native/etsc
           native-cpp/native/etsc --version

@@ -27,7 +27,7 @@ ar_tool="${AR:-ar}"
 
 usage() {
   cat <<'EOF'
-Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario] [--seed-only] [--no-prebuilt]
+Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario] [--seed-only] [--force]
 
 Compila la semilla C++ de native-cpp/ y con ella compila bootstrap/, y
 publica el ejecutable resultante como el compilador nativo etsc.
@@ -36,9 +36,13 @@ publica el ejecutable resultante como el compilador nativo etsc.
   --cxx COMPILADOR compilador C++20 (por defecto g++, o $CXX)
   --frontend BIN   usar un frontend ya construido en vez de compilar la semilla
   --seed-only      publicar la semilla sin la generacion 2 (compilador rapido)
-  --no-prebuilt    compilar la semilla aunque haya una precompilada valida
-                   en native-cpp/prebuilt/<plataforma>
+  --force          recompilar la semilla desde las fuentes aunque haya una
+                   precompilada valida (alias: --no-prebuilt)
   --help           esta ayuda
+
+Por defecto se usa la semilla precompilada de native-cpp/prebuilt/<plataforma>
+(Linux x86_64, macOS arm64) si coincide con las fuentes; si no hay o esta
+desfasada, se compila automaticamente.
 
 No requiere Node.js. Requisitos: un compilador C++20, `ar` y las cabeceras de
 desarrollo de OpenSSL (libssl-dev). El runtime se precompila durante la
@@ -54,7 +58,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
     --seed-only) seed_only=1; shift ;;
-    --no-prebuilt) no_prebuilt=1; shift ;;
+    --force|--no-prebuilt) no_prebuilt=1; shift ;;
     --prefix|--cxx|--frontend)
       [ $# -ge 2 ] || fail "Opcion sin valor: $1"
       case "$1" in
@@ -129,12 +133,13 @@ fi
 
 etsc_info "Construyendo la semilla C++20"
 mkdir -p "$work/native"
-# native-cpp/build-all.sh es el unico sitio que construye la semilla: usa la
-# precompilada de native-cpp/prebuilt/<plataforma> si coincide con las fuentes
-# y, si no, compila frontend y coordinador en paralelo.
+# native-cpp/build-all.sh es el unico sitio que construye la semilla: por
+# defecto usa la precompilada de native-cpp/prebuilt/<plataforma> si coincide
+# con las fuentes y, si no (o con --force), compila frontend y coordinador en
+# paralelo.
 seed_args=(--out "$work/native" --cxx "$cxx")
 [ -n "$frontend" ] && seed_args+=(--frontend "$frontend")
-[ "$no_prebuilt" -eq 1 ] && seed_args+=(--no-prebuilt)
+[ "$no_prebuilt" -eq 1 ] && seed_args+=(--force)
 ETSC_CLI_SCOPE=install bash "$seed_dir/build-all.sh" "${seed_args[@]}"
 
 # --- Generacion 2: la semilla compila bootstrap/ ------------------------------

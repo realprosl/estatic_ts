@@ -43,12 +43,14 @@ vuelve a procesar las cabeceras del runtime.
 
 ```bash
 bash native-cpp/build-all.sh          # usa la precompilada si vale; si no, compila
+bash native-cpp/build-all.sh --force  # recompila siempre desde las fuentes
 export ESTC_ROOT="$(pwd)"             # raíz del repositorio: runtime/ está aquí
 native-cpp/native/etsc build /ruta/proyecto/main.ets --no-progress
 ```
 
 Opciones: `--out DIR`, `--cxx CXX`, `--frontend BIN` (reutiliza un frontend),
-`--static` (enlace autocontenido), `--no-prebuilt` (compila siempre) y
+`--static` (enlace autocontenido), `--force` (ignora la precompilada y compila
+siempre; alias `--no-prebuilt`) y
 `--update-prebuilt` (compila estático y guarda la semilla precompilada).
 
 `native/frontend` analiza fuentes Estatic y emite IR verificado.
