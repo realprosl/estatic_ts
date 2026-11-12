@@ -1,4 +1,11 @@
-# `runtime/` — runtime C++ consumido por el código generado
+# `runtime/` — runtime C++ único
+
+Es el **único** runtime C++ del repositorio: lo usan la semilla (`native-cpp/`),
+el compilador de `bootstrap/`, `install.sh` (que lo publica tal cual en la
+instalación) y todos los programas generados. No existen copias: la semilla se
+compila con `-I<repo>` y resuelve `runtime/...` aquí mismo. Cualquier cambio se
+hace en este directorio y no requiere regenerar la semilla, salvo que rompa
+la API que usa el frontend generado (p. ej. `ets_compiler_host.hpp`).
 
 Cabeceras `inline` (`namespace ets`) sin enlace separado: el código generado las
 incluye directamente. Compilan con `-std=c++20 -pthread -fno-exceptions`. Linux
@@ -25,7 +32,7 @@ y macOS; no hay backend Windows/IOCP.
 
 El compilador bootstrap incorpora `runtime/ets_child_process.hpp` solo cuando el
 programa usa `process.stdin/stdout/stderr` o `child_process.spawn`; `install.sh`
-publica su snapshot desde `native-cpp/runtime/`. El runtime de procesos se apoya
+publica este mismo directorio. El runtime de procesos se apoya
 en la instancia compartida de libuv.
 
 `CppGenerator.includes()` (`src/codegen/cpp-generator.ts:47-49`) decide según el

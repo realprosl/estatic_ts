@@ -2,10 +2,12 @@
 #
 # install.sh — instala el compilador nativo `etsc` a partir de la semilla C++.
 #
-# La semilla es `native-cpp/`: el C++ ya generado desde `bootstrap/` (el
-# frontend completo, el driver, el backend IR y el runtime). Este script la
-# compila con el compilador C++20 del sistema y publica el resultado en
-# <prefix>/bin/etsc.
+# La semilla es `native-cpp/`: el C++ del frontend ya generado desde
+# `bootstrap/`. El resto de piezas C++ se comparten con todo el repositorio y se
+# usan desde su sitio canónico: el runtime (`runtime/`), el coordinador nativo
+# (`bootstrap/native/`), las cabeceras de frontera (`bootstrap/modules/*.hpp`) y
+# el emisor IR (`src/codegen/ir/native/`). Este script lo compila con el
+# compilador C++20 del sistema y publica el resultado en <prefix>/bin/etsc.
 #
 # No requiere Node.js ni TypeScript: todo lo que se instala procede de la
 # semilla. Node sólo hace falta para REGENERAR la semilla cuando cambian las
@@ -66,7 +68,7 @@ case "$prefix" in /*) ;; *) prefix="$PWD/$prefix" ;; esac
 command -v "$cxx" >/dev/null 2>&1 || fail "No se encuentra el compilador '$cxx'. Instala g++ o usa --cxx."
 command -v "$ar_tool" >/dev/null 2>&1 || fail "No se encuentra '$ar_tool'. Forma parte de binutils."
 [ -d "$seed_dir" ] || fail "Falta la semilla C++ en $seed_dir. Clona el repositorio completo."
-source "$repo_dir/native-cpp/bootstrap/native/progress.sh"
+source "$repo_dir/bootstrap/native/progress.sh"
 
 if command -v sha256sum >/dev/null 2>&1; then
   hash_file() { sha256sum "$1" | cut -d" " -f1; }
@@ -131,16 +133,16 @@ if [ -n "$frontend" ]; then
 else
   echo "    frontend (analizador) -> native/frontend"
   etsc_spin "Semilla · frontend" "$cxx" -std=c++20 -O1 -pthread -fno-exceptions \
-    -I"$seed_dir" -I"$seed_dir/frontend" \
+    -I"$repo_dir" -I"$seed_dir" -I"$seed_dir/frontend" \
     '-DESTATIC_FRONTEND_ID="portable"' \
     "$seed_dir/frontend/unity.cpp" -o "$work/native/frontend"
 fi
 
 echo "    driver y emisor IR -> native/etsc"
 etsc_spin "Semilla · coordinador y emisor" "$cxx" -std=c++20 -O2 \
-  -I"$seed_dir" -I"$seed_dir/build/bootstrap/etsc" \
-  "$seed_dir/bootstrap/native/driver.cpp" \
-  "$seed_dir/src/codegen/ir/native/generator.cpp" \
+  -I"$repo_dir" -I"$seed_dir/build/bootstrap/etsc" \
+  "$repo_dir/bootstrap/native/driver.cpp" \
+  "$repo_dir/src/codegen/ir/native/generator.cpp" \
   -lcrypto -o "$work/native/etsc"
 
 # --- Generacion 2: la semilla compila bootstrap/ ------------------------------
@@ -177,18 +179,17 @@ etsc_info "Publicando en $prefix"
 stage="$library/.install-$$"
 mkdir -p "$stage/native" "$stage/templates"
 
-cp -R "$seed_dir/runtime" "$stage/runtime"
+# Runtime unico del repositorio: el mismo que usan la semilla y bootstrap/.
+cp -R "$repo_dir/runtime" "$stage/runtime"
 # Generated bootstrap C++ includes these native boundary headers by this path.
 # Ship only headers, without the ETS/TS compiler sources or native driver.
 mkdir -p "$stage/bootstrap/modules"
-find "$seed_dir/bootstrap/modules" -maxdepth 1 -type f \
+find "$repo_dir/bootstrap/modules" -maxdepth 1 -type f \
   \( -name '*.hpp' -o -name '*.h' \) -exec cp {} "$stage/bootstrap/modules/" \;
-cp -R "$seed_dir/types" "$stage/types"
+cp -R "$repo_dir/types" "$stage/types"
 cp -R "$seed_dir/templates/." "$stage/templates/"
-# Las declaraciones canonicas son la unica fuente de verdad: si el checkout las
-# tiene mas actualizadas que la semilla, mandan ellas.
-[ -f "$repo_dir/types/estatic.d.ts" ] && cp "$repo_dir/types/estatic.d.ts" "$stage/templates/types/estatic.d.ts"
-[ -f "$repo_dir/types/estatic.d.ts" ] && cp "$repo_dir/types/estatic.d.ts" "$stage/types/estatic.d.ts"
+# Las declaraciones canonicas son la unica fuente de verdad.
+cp "$repo_dir/types/estatic.d.ts" "$stage/templates/types/estatic.d.ts"
 
 cp "$work/native/frontend" "$stage/native/frontend"
 chmod +x "$stage/native/frontend"

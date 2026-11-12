@@ -152,7 +152,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export ESTC_ROOT="$GITHUB_WORKSPACE/native-cpp"
+          export ESTC_ROOT="$GITHUB_WORKSPACE"
           mkdir -p /tmp/estatic-includes
           compile_case() {
             local name="$1" expected="$2" source="$3"
