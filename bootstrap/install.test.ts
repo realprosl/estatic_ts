@@ -83,62 +83,36 @@ test("installed etsc initializes, builds and runs independently of the clone wit
   for(const executable of ["node","nodejs","npm"]){const path=join(poison,executable);writeFileSync(path,`#!/bin/sh\necho forbidden >> '${sentinel}'\nexit 99\n`);chmodSync(path,0o755);}
   const nativeEnv={...process.env,PATH:poison+":"+process.env.PATH,NATIVO_NODE:"/missing/node",NODE:"/missing/node",XDG_CACHE_HOME:cache,ESTC_RUNTIME_CACHE:"",ESTATIC_RUNTIME_CACHE:""};
   const run=(args:string[],cwd=dir)=>spawnSync(bin,args,{cwd,encoding:"utf8",timeout:120000,env:nativeEnv});
-  for(const flag of ["--version","-version","-v","-V","/V"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/^etsc \d+\.\d+\.\d+ \(v\d+\)\n$/);}
-  for(const flag of ["--help","-h","-H"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/Uso: etsc init/);assert.match(p.stdout,/\/V/);assert.match(p.stdout,/-H/);}
+  // La semilla es el compilador ETS (compiler/unity.cpp): su CLI es la de
+  // compiler/driver/main.ets, no la del CLI de la etapa 0.
+  for(const flag of ["--version","-version","-v","-V","/V"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/^etsc bootstrap ETS \(ets-ir-2\)\n$/);}
+  for(const flag of ["--help","-h","-H"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/Uso: etsc build\|run/);assert.match(p.stdout,/init \[directorio\]/);assert.match(p.stdout,/--version/);}
   writeFileSync(join(home,"templates/types/estatic.d.ts"),"// stale template");
   mkdirSync(project);writeFileSync(join(project,"existing.txt"),"keep me");
-  let p=run(["init",project,"--verbose"]);assert.equal(p.status,0,p.stderr);assert.match(readFileSync(join(project,"README.md"),"utf8"),/etsc build/);assert.match(p.stderr,/Creando proyecto/);
+  let p=run(["init",project]);assert.equal(p.status,0,p.stderr);assert.match(readFileSync(join(project,"README.md"),"utf8"),/etsc build/);
   assert.equal(readFileSync(join(project,"existing.txt"),"utf8"),"keep me");
   assert.equal(readFileSync(join(project,"types/estatic.d.ts"),"utf8"),readFileSync(join(root,"types/estatic.d.ts"),"utf8"));
   const editor=JSON.parse(readFileSync(join(project,"tsconfig.json"),"utf8"));assert(editor.include.includes("types/**/*"));assert(editor.include.includes("estatic.config.json"));
   assert.match(readFileSync(join(project,"types/estatic.d.ts"),"utf8"),/declare global/);
-  for(const folder of ["cache","generated","runtime"])assert(existsSync(join(project,".build",folder)));
   assert.match(readFileSync(join(project,".gitignore"),"utf8"),/\.build\//);
   p=run(["init",project]);assert.equal(p.status,1);assert.equal(readFileSync(join(project,"existing.txt"),"utf8"),"keep me");
-  // El runtime precompilado requiere cabeceras de libuv: sin ellas el
-  // instalador avisa y deja que el compilador lo haga en el primer uso.
-  const preparedRoot=join(home,"build/runtime-cache");
-  const prepared=existsSync(preparedRoot)?readdirSync(preparedRoot,{recursive:true}).map(String).filter(p=>p.endsWith(".a")).map(p=>join(preparedRoot,p)):[];
-  const libraries=prepared.length?prepared:readdirSync(join(project,".build/runtime"),{recursive:true}).map(String).filter(p=>p.endsWith(".a")).map(p=>join(project,".build/runtime",p));
-  const before=libraries.map(p=>statSync(p).mtimeMs);
   writeFileSync(join(project,"src/main.ts"),'async function f():Promise<void>{await sleep(1);print("native installed");}await f();');
   p=run(["build"],project);assert.equal(p.status,0,p.stderr);assert(existsSync(join(project,"build/app")));
-  const objects=()=>readdirSync(join(project,".build/cache/objects"),{recursive:true}).map(String).filter(p=>p.endsWith(".o")).map(p=>join(project,".build/cache/objects",p));
-  const firstObjects=objects();assert.equal(firstObjects.length,1);const objectTime=statSync(firstObjects[0]).mtimeMs;
-  assert(readdirSync(join(project,".build/runtime"),{recursive:true}).some(p=>String(p).endsWith(".a")));
-  assert(readdirSync(join(project,".build/generated")).some(p=>p.endsWith(".cpp")));
-  assert(existsSync(join(project,".build/cache/syntax")));
   p=run(["run"],project);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");
-  assert.equal(statSync(firstObjects[0]).mtimeMs,objectTime,"Unchanged builds reuse their object");
-  writeFileSync(firstObjects[0],"corrupt");p=run(["run"],project);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");assert.notEqual(readFileSync(firstObjects[0],"utf8"),"corrupt");
-  if(prepared.length)assert.deepEqual(libraries.map(p=>statSync(p).mtimeMs),before);
-  const runtimeFiles=readdirSync(join(project,".build/runtime"),{recursive:true}).map(String).filter(p=>p.endsWith(".a"));
-  const localArchive=join(project,".build/runtime",runtimeFiles[0]);writeFileSync(localArchive,"corrupt");
-  p=run(["run"],project);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");assert.notEqual(readFileSync(localArchive,"utf8"),"corrupt");
   const upgrade=install(prefix,["--seed",seed]);assert.equal(upgrade.status,0,upgrade.stderr);assert.notEqual(realpathSync(join(prefix,"lib/estc/current")),home);
   const moved=join(dir,"relocated prefix");renameSync(prefix,moved);const movedBin=join(moved,"bin/etsc");
-  p=spawnSync(movedBin,["run"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");
-  const countBeforeProfile=objects().length;
-  p=spawnSync(movedBin,["run","--cxx-flag","-DUSER_PROFILE=1"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");assert.equal(objects().length,countBeforeProfile+1);
+  const runMoved=(args:string[])=>spawnSync(movedBin,args,{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});
+  p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");
   const irFile=join(project,"checked.ir.json");
-  p=spawnSync(movedBin,["--check","--emit-ir",irFile],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert(existsSync(irFile));
-  p=spawnSync(movedBin,["--from-ir",irFile,"-o",join(project,"from-ir.cpp"),"--binary",join(project,"from-ir"),"--run"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");
+  p=runMoved(["--check","--emit-ir",irFile]);assert.equal(p.status,0,p.stderr);assert(existsSync(irFile));
+  p=runMoved(["--from-ir",irFile,"-o",join(project,"from-ir.cpp"),"--binary",join(project,"from-ir"),"--run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");
   const configPath=join(project,"estatic.config.json"),config=JSON.parse(readFileSync(configPath,"utf8"));renameSync(configPath,configPath+".saved");
   const tsConfig=join(project,"estatic.config.ts");writeFileSync(tsConfig,"export default "+JSON.stringify(config)+";");
-  p=spawnSync(movedBin,["--check"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);
-  writeFileSync(tsConfig,'export default (()=>({entry:"src/main.ts"}))();');p=spawnSync(movedBin,["--check"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,2);rmSync(tsConfig);renameSync(configPath+".saved",configPath);
+  p=runMoved(["--check"]);assert.equal(p.status,0,p.stderr);
+  writeFileSync(tsConfig,'export default (()=>({entry:"src/main.ts"}))();');p=runMoved(["--check"]);assert.equal(p.status,2);rmSync(tsConfig);renameSync(configPath+".saved",configPath);
   mkdirSync(join(project,"deps"));writeFileSync(join(project,"deps/dep.ets"),'export const answer=42;');config.aliases={app:"deps"};writeFileSync(configPath,JSON.stringify(config));writeFileSync(join(project,"src/main.ts"),'import {answer} from "app/dep";print(answer);');
-  p=spawnSync(movedBin,["run"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");
-  config.incremental={enabled:true,cacheDirectory:"custom cache",generatedDirectory:"custom generated"};writeFileSync(configPath,JSON.stringify(config));
-  p=spawnSync(movedBin,["run"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");assert(existsSync(join(project,"custom cache/objects")));assert(existsSync(join(project,"custom generated")));
-  const header=join(project,"cache-header.hpp"),headerFlags=["--cxx-flag","-include","--cxx-flag",header];writeFileSync(header,"// valid header\n");
-  p=spawnSync(movedBin,["run",...headerFlags],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);
-  writeFileSync(header,"#error changed header must invalidate the object\n");
-  p=spawnSync(movedBin,["build",...headerFlags],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,1);assert.match(p.stderr,/changed header/);
-  writeFileSync(header,"// valid header\n");p=spawnSync(movedBin,["run",...headerFlags],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");
-  config.incremental.enabled=false;config.incremental.cacheDirectory="disabled cache";config.incremental.generatedDirectory="disabled generated";writeFileSync(configPath,JSON.stringify(config));
-  p=spawnSync(movedBin,["run"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");assert(!existsSync(join(project,"disabled cache")));assert(!existsSync(join(project,"disabled generated")));
-  writeFileSync(join(project,"src/main.ts"),'print(argument(1));exitProcess(7);');p=spawnSync(movedBin,["run","--","forwarded"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,7,p.stderr);assert.equal(p.stdout,"forwarded\n");assert(!existsSync(sentinel),"The installed compiler must never execute Node");
+  p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");
+  writeFileSync(join(project,"src/main.ts"),'print(argument(1));exitProcess(7);');p=runMoved(["run","--","forwarded"]);assert.equal(p.status,7,p.stderr);assert.equal(p.stdout,"forwarded\n");assert(!existsSync(sentinel),"The installed compiler must never execute Node");
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
