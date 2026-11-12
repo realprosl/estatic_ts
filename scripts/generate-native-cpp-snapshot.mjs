@@ -63,5 +63,4 @@ writeFileSync(join(templates, "README.md"), readme);
 const ignore = readFileSync(join(templates, ".gitignore"), "utf8");
 writeFileSync(join(templates, ".gitignore"), ignore.endsWith("\n") ? `${ignore}.build/\n` : `${ignore}\n.build/\n`);
 console.log(`Generated ${result.modules.length} C++ frontend units in ${frontend}`);
-console.log(`Synced runtime snapshot in ${runtimeTarget}`);
 console.log(`Generated project templates in ${templates}`);
