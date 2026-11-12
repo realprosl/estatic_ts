@@ -57,14 +57,13 @@ El coordinador ETS compila/enlaza directamente y todavía no reutiliza los objet
 o archivos de runtime del coordinador C++ anterior. Tampoco incluye su opción
 `--frontend`: el frontend está integrado en el mismo ejecutable.
 
-Para exportar una nueva semilla C++ del compilador entero, después de verificar
-ambas generaciones:
+Para regenerar la semilla C++ (el C++ del compilador entero, emitido por él
+mismo):
 
 ```sh
-bash scripts/regenerate-ets-native.sh
+bash native-cpp/regenerate.sh
 ```
 
-El snapshot generado queda en `native-cpp/compiler/unity.cpp`. La orden construye
-`native-cpp/native/etsc-ets` usando únicamente C++ y el soporte de `native-cpp/`. No
-copia fuentes ETS a ese directorio ni sobrescribe la semilla anterior. El snapshot se
-genera de forma explícita; no se incluye como un segundo árbol de fuentes manuales.
+El resultado queda en `native-cpp/compiler/unity.cpp` y solo se escribe cuando dos
+rondas seguidas emiten el mismo IR y el mismo C++ (punto fijo). Detalles en
+[`native-cpp/README.md`](../../native-cpp/README.md).

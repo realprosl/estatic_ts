@@ -43,6 +43,6 @@ target="$seed_dir/prebuilt"
 rm -rf "$target"; mkdir -p "$target"
 # La rama tiene en su raíz un directorio por plataforma (linux-x86_64, ...).
 (cd "$tmp/clone" && tar -c --exclude=.git .) | tar -x -C "$target"
-find "$target" -type f \( -name etsc -o -name frontend \) -exec chmod +x {} +
+find "$target" -type f -name etsc -exec chmod +x {} +
 note "precompilados: rama '$branch' ($(git -C "$tmp/clone" rev-parse --short HEAD)) en native-cpp/prebuilt/"
 exit 0

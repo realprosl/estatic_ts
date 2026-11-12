@@ -99,11 +99,11 @@ desde la raíz del repositorio. `--help` muestra la ayuda de los que la tienen.
 
 | Script | Qué hace | Opciones |
 |---|---|---|
-| `./install.sh` | Instala `etsc` en `<prefix>/bin`. Descarga y usa la semilla y el compilador precompilados si coinciden con las fuentes; si no, los compila. No usa Node. | `--prefix DIR`, `--cxx CXX`, `--frontend BIN`, `--seed-only` (publica la semilla, sin compilar bootstrap), `--force-seed` (recompila la semilla), `--force-compiler` / `--force-compile` (recompila el compilador de bootstrap), `--force` (las dos), `--help` |
-| `native-cpp/build-all.sh` | Construye la **semilla** (`native/frontend` y `native/etsc`): frontend y coordinador en paralelo, o copia la precompilada si coincide. | `--out DIR`, `--cxx CXX`, `--frontend BIN`, `--static`, `--force`, `--update-prebuilt` (CI), `--help` |
+| `./install.sh` | Instala `etsc` en `<prefix>/bin`. Descarga y usa la semilla y el compilador precompilados si coinciden con las fuentes; si no, los compila. No usa Node. | `--prefix DIR`, `--cxx CXX`, `--seed BIN` (reutiliza una semilla ya compilada), `--seed-only` (publica la semilla, sin compilar bootstrap), `--force-seed` (recompila la semilla), `--force-compiler` / `--force-compile` (recompila el compilador de bootstrap), `--force` (las dos), `--help` |
+| `native-cpp/build-all.sh` | Construye la **semilla** (`native/etsc`, un compilador completo) desde `native-cpp/compiler/unity.cpp`, o copia la precompilada si coincide. | `--out DIR`, `--cxx CXX`, `--static`, `--force`, `--update-prebuilt` (CI), `--help` |
 | `native-cpp/build-compiler.sh` | Construye el **compilador de `bootstrap/`** (generación 2, el `etsc` que se instala) con la semilla, o copia el precompilado si coincide. | `--seed DIR`, `--out BIN`, `--static`, `--force`, `--update-prebuilt` (CI), `--help` |
 | `native-cpp/fetch-prebuilt.sh` | Descarga los precompilados de la rama `prebuilt` (clon `--depth 1` en un temporal) en `native-cpp/prebuilt/`. Nunca falla: sin red o sin rama, se compila. | `--remote NOMBRE\|URL`, `--branch RAMA`, `--help` |
-| `node --experimental-strip-types scripts/generate-native-cpp-snapshot.mjs` | **Regenera la semilla** desde `bootstrap/` con `src/` (stage 0). Solo reescribe lo generado (`frontend/`, `build/`, `templates/`, `files.txt`) y retira `prebuilt/`. Necesita Node. | — |
+| `native-cpp/regenerate.sh` | **Regenera la semilla** con el propio compilador: itera hasta que dos rondas emiten el mismo IR y C++ (punto fijo) y reescribe `native-cpp/compiler/unity.cpp`. Sin Node. | `--compiler ETSC`, `--cxx CXX`, `--max-rounds N`, `--help` |
 | `bootstrap/native/progress.sh` | Utilidad de presentación (spinner, tiempos) que cargan los demás scripts. No se ejecuta sola. | — |
 
 ### Compilador ETS (desarrollo del self-hosting)
@@ -112,7 +112,6 @@ desde la raíz del repositorio. `--help` muestra la ayuda de los que la tienen.
 |---|---|---|
 | `scripts/build-ets-compiler.sh` | Compila el compilador ETS: `stage1` con la semilla (`build/ets-compiler/etsc`) o `stage1`+`stage2` (`etsc-stage2`), con tiempos en `timings.tsv`. | `stage1` \| `stage2`; entorno `ESTATIC_ETS_OPTIMIZATION=-O1\|-O2\|-O3`, `ESTATIC_ETS_BUILD_DIR` |
 | `scripts/check-ets-compiler.sh` | Prueba de humo de un compilador: compila y ejecuta un programa mínimo. | `[COMPILADOR]` (por defecto `build/ets-compiler/etsc`) |
-| `scripts/regenerate-ets-native.sh` | Construye `stage2`, prueba las dos generaciones, compara sus IR y copia `stage2.cpp` a `native-cpp/compiler/unity.cpp` (flujo heredado). | — |
 | `scripts/selfhost-ir-frontend.sh` | Adaptador que usa el CI: expone el compilador autoalojado con el protocolo fuente→IR JSON de los fixtures. | entorno `ESTATIC_SELFHOST_COMPILER` |
 
 ### Dependencias nativas (en `build/libs/` y `build/tools/`)

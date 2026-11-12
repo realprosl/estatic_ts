@@ -2,18 +2,16 @@
 #
 # install.sh — instala el compilador nativo `etsc` a partir de la semilla C++.
 #
-# La semilla es `native-cpp/`: el C++ del frontend ya generado desde
-# `bootstrap/`. El resto de piezas C++ se comparten con todo el repositorio y se
-# usan desde su sitio canónico: el runtime (`runtime/`), el coordinador nativo
-# (`bootstrap/native/`), las cabeceras de frontera (`bootstrap/modules/*.hpp`) y
-# el emisor IR (`src/codegen/ir/native/`). Este script lo compila con el
-# compilador C++20 del sistema y publica el resultado en <prefix>/bin/etsc.
+# La semilla es `native-cpp/compiler/unity.cpp`: el C++ que el compilador de
+# `bootstrap/` genera de sí mismo. Compilada, es un `etsc` completo que compila
+# `bootstrap/` (generación 2); ese es el `etsc` que se publica en <prefix>/bin.
+# El runtime (`runtime/`) y las cabeceras de frontera (`bootstrap/modules/`) se
+# usan desde su sitio canónico.
 #
-# No requiere Node.js ni TypeScript: todo lo que se instala procede de la
-# semilla. Node sólo hace falta para REGENERAR la semilla cuando cambian las
-# fuentes de `bootstrap/*.ets` (scripts/generate-native-cpp-snapshot.mjs).
+# No requiere Node.js ni TypeScript, ni para instalar ni para regenerar la
+# semilla (native-cpp/regenerate.sh).
 #
-# Uso:  ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario]
+# Uso:  ./install.sh [--prefix /usr/local] [--cxx g++]
 #
 set -euo pipefail
 
@@ -22,19 +20,18 @@ ETSC_CLI_SCOPE=install
 seed_dir="$repo_dir/native-cpp"
 prefix="/usr/local"
 cxx="${CXX:-g++}"
-frontend=""
 ar_tool="${AR:-ar}"
 
 usage() {
   cat <<'EOF'
-Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario] [--seed-only] [--force-seed] [--force-compiler]
+Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--seed BIN] [--seed-only] [--force-seed] [--force-compiler]
 
 Compila la semilla C++ de native-cpp/ y con ella compila bootstrap/, y
 publica el ejecutable resultante como el compilador nativo etsc.
 
   --prefix DIR     donde instalar (por defecto /usr/local)
   --cxx COMPILADOR compilador C++20 (por defecto g++, o $CXX)
-  --frontend BIN   usar un frontend ya construido en vez de compilar la semilla
+  --seed BIN       usar ese etsc (semilla ya compilada) en vez de construirla
   --seed-only      publicar la semilla sin la generacion 2 (compilador rapido)
   --force-seed     recompilar la semilla aunque haya una precompilada valida
   --force-compiler recompilar el compilador de bootstrap/ aunque haya uno
@@ -56,6 +53,7 @@ EOF
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
 seed_only=0
+seed_bin=""
 force_seed=0
 force_compiler=0
 while [ $# -gt 0 ]; do
@@ -65,12 +63,12 @@ while [ $# -gt 0 ]; do
     --force-seed|--no-prebuilt) force_seed=1; shift ;;
     --force-compiler|--force-compile) force_compiler=1; shift ;;
     --force) force_seed=1; force_compiler=1; shift ;;
-    --prefix|--cxx|--frontend)
+    --prefix|--cxx|--seed)
       [ $# -ge 2 ] || fail "Opcion sin valor: $1"
       case "$1" in
         --prefix) prefix="$2" ;;
         --cxx) cxx="$2" ;;
-        --frontend) frontend="$2" ;;
+        --seed) seed_bin="$2" ;;
       esac
       shift 2 ;;
     *) fail "Opcion invalida: $1" ;;
@@ -146,16 +144,20 @@ etsc_info "Construyendo la semilla C++20"
 mkdir -p "$work/native"
 # native-cpp/build-all.sh es el unico sitio que construye la semilla: por
 # defecto usa la precompilada de native-cpp/prebuilt/<plataforma> si coincide
-# con las fuentes y, si no (o con --force-seed), compila frontend y
-# coordinador en paralelo.
+# con las fuentes y, si no (o con --force-seed), la compila.
 seed_args=(--out "$work/native" --cxx "$cxx")
-[ -n "$frontend" ] && seed_args+=(--frontend "$frontend")
 [ "$force_seed" -eq 1 ] && seed_args+=(--force)
-ETSC_CLI_SCOPE=install bash "$seed_dir/build-all.sh" "${seed_args[@]}"
+if [ -n "$seed_bin" ]; then
+  [ -x "$seed_bin" ] || fail "Semilla inexistente: $seed_bin"
+  cp "$seed_bin" "$work/native/etsc"; chmod +x "$work/native/etsc"
+  echo "    usando la semilla proporcionada: $seed_bin"
+else
+  ETSC_CLI_SCOPE=install bash "$seed_dir/build-all.sh" "${seed_args[@]}"
+fi
 
 # --- Generacion 2: la semilla compila bootstrap/ ------------------------------
-# La semilla es el generador: con ella se compila el frontend ETS de
-# `bootstrap/` y el ejecutable resultante es el compilador que se instala. Asi
+# La semilla es el generador: con ella se compila `bootstrap/` y el ejecutable
+# resultante es el compilador que se instala. Asi
 # el `etsc` publicado refleja siempre el codigo actual de `bootstrap/`, y no el
 # snapshot C++ de la semilla, que puede quedar desfasado.
 #
@@ -194,7 +196,21 @@ cp -R "$seed_dir/templates/." "$stage/templates/"
 # Las declaraciones canonicas son la unica fuente de verdad.
 cp "$repo_dir/types/estatic.d.ts" "$stage/templates/types/estatic.d.ts"
 
-cp "$work/native/frontend" "$stage/native/frontend"
+# native/frontend: adaptador del protocolo fuente->IR (JSON por stdout) que usan
+# las herramientas de bootstrap/*.ts, sobre el etsc instalado.
+cat > "$stage/native/frontend" <<'FRONTEND'
+#!/usr/bin/env bash
+set -euo pipefail
+home="$(cd "$(dirname "$0")/.." && pwd)"
+work="$(mktemp -d "${TMPDIR:-/tmp}/etsc-frontend.XXXXXX")"
+trap 'rm -rf "$work"' EXIT
+# <prefijo>/lib/estc/{current,releases/ID} -> <prefijo>/bin/etsc. Se recorta la
+# ruta en vez de subir con ../ (current es un enlace simbólico) y así el prefijo
+# se puede mover.
+prefix="${home%/lib/estc/*}"
+ESTC_ROOT="${ESTC_ROOT:-$home}" "$prefix/bin/etsc" "$@" --check --emit-ir "$work/project.ir.json" --no-progress
+cat "$work/project.ir.json"
+FRONTEND
 chmod +x "$stage/native/frontend"
 cp "$repo_dir/package.json" "$stage/package.json"
 

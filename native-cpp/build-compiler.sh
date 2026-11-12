@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Construye el compilador de bootstrap/ (generación 2): la semilla analiza
-# bootstrap/driver/main.ets y compila el C++ resultante. Es el ÚNICO sitio que
+# Construye el compilador de bootstrap/ (generación 2): la semilla (un etsc
+# completo) analiza bootstrap/driver/main.ets y compila el C++ resultante. Es el ÚNICO sitio que
 # lo construye; lo usan install.sh y el CI.
 #
 # Uso: native-cpp/build-compiler.sh --seed DIR --out BINARIO
 #                                   [--force] [--static] [--update-prebuilt]
 #
-#   --seed DIR         semilla ya construida (DIR/frontend y DIR/etsc)
+#   --seed DIR         semilla ya construida (DIR/etsc)
 #   --out BINARIO      dónde dejar el compilador
 #   --force            ignora el compilador precompilado y lo compila
 #   --static           enlace autocontenido (Linux estático; macOS solo con
@@ -45,8 +45,7 @@ sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$@"; else sh
 # Todo lo que determina el binario: la semilla que lo genera, las fuentes ETS y
 # nativas de bootstrap/ y el runtime que incluye.
 compiler_inputs() {
-  (cd "$root" && find native-cpp/frontend/unity.cpp native-cpp/build/bootstrap/etsc \
-      src/codegen/ir/native runtime bootstrap \
+  (cd "$root" && find native-cpp/compiler/unity.cpp runtime bootstrap \
       -type f \( -name '*.ets' -o -name '*.hpp' -o -name '*.h' -o -name '*.cpp' -o -name '*.c' \) \
       | LC_ALL=C sort | while IFS= read -r f; do sha256 "$f"; done) | sha256 | cut -d' ' -f1
 }
@@ -62,7 +61,7 @@ if ((!force)) && [[ -f $prebuilt/inputs.sha256 ]]; then
   etsc_info "El compilador precompilado ($platform) no coincide con las fuentes; se compila"
 fi
 
-[[ -x $seed/frontend && -x $seed/etsc ]] || { echo "Falta la semilla en $seed (--seed)" >&2; exit 1; }
+[[ -x $seed/etsc ]] || { echo "Falta la semilla en $seed (--seed)" >&2; exit 1; }
 work="$(mktemp -d "${TMPDIR:-/tmp}/etsc-compiler.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 flags=(--cxx-flag "$opt" --cxx-flag "-I$root")
@@ -70,8 +69,12 @@ if ((static)); then
   if [[ $os == linux ]]; then flags+=(--cxx-flag -static)
   else export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-13.3}"; fi
 fi
-etsc_spin "Semilla · analizar bootstrap/" "$seed/frontend" "$root/bootstrap/driver/main.ets" >"$work/driver.ir.json"
-ESTC_ROOT="${ESTC_ROOT:-$root}" etsc_spin "Semilla · construir el compilador" "$seed/etsc" \
+export ESTC_ROOT="${ESTC_ROOT:-$root}"
+# Análisis y compilación C++ en pasos separados: así no están los dos en memoria
+# a la vez (el análisis de bootstrap/ ocupa varios GB).
+etsc_spin "Semilla · analizar bootstrap/" "$seed/etsc" "$root/bootstrap/driver/main.ets" \
+  --check --emit-ir "$work/driver.ir.json" --no-progress
+etsc_spin "Semilla · construir el compilador" "$seed/etsc" \
   --from-ir "$work/driver.ir.json" --build -o "$work/etsc.cpp" --binary "$work/etsc" \
   "${flags[@]}" --no-progress
 [[ -x $work/etsc ]] || { echo "La generación 2 no produjo un ejecutable." >&2; exit 1; }
