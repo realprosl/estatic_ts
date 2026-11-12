@@ -79,6 +79,9 @@ inline std::vector<std::string> files(std::string path){
 }
 inline bool directories(std::string path){error.clear();std::error_code ec;std::filesystem::create_directories(path,ec);if(ec)error=ec.message();return !ec;}
 inline bool remove(std::string path){error.clear();std::error_code ec;std::filesystem::remove(path,ec);if(ec)error=ec.message();return !ec;}
+// rename(2) es atómico dentro del mismo sistema de ficheros: publica un objeto
+// de la caché completo o nada.
+inline bool rename(std::string from,std::string to){error.clear();std::error_code ec;std::filesystem::rename(from,to,ec);if(ec)error=ec.message();return !ec;}
 inline double launch(std::vector<std::string> args,std::string output,std::string errors){
  error.clear();if(args.empty()){error="Comando vacío";return -2;}
  auto pid=fork();if(pid<0){error="No se puede crear proceso";return -2;}
