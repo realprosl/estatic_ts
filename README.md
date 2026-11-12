@@ -69,6 +69,18 @@ etsc build
 etsc run
 ```
 
+`init` nunca sobrescribe: si alguno de los archivos que crearía ya existe, no
+crea nada. Para convertir en proyecto una carpeta que ya tiene su código en
+`src/`, usa `--no-src`. Crea la configuración, `tsconfig.json`, `types/`,
+`.gitignore` y `README.md`, y deja `src/` como está:
+
+```bash
+cd ~/mi-codigo
+etsc init --no-src
+```
+
+La entrada por defecto es `src/main.ts` (`"entry"` en `estatic.config.json`).
+
 El archivo canónico [`types/estatic.d.ts`](./types/estatic.d.ts) contiene las
 declaraciones que usa el editor para los builtins registrados. Para actualizar
 un proyecto creado con una versión anterior:

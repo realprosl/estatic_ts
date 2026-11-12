@@ -18,7 +18,8 @@ etsc --from-ir build/main.ir.json --run
 
 `etsc --help` enumera las opciones. El driver reutiliza la configuración de
 entry, aliases, raíces, outputs, compilador, flags y bibliotecas. `init` genera
-`estatic.config.json`; se admiten configuraciones TS de objeto declarativo,
+`estatic.config.json` (con `--no-src` no crea `src/`, para una carpeta que ya
+tiene su código; nunca sobrescribe archivos existentes); se admiten configuraciones TS de objeto declarativo,
 pero no ejecución de configuraciones JavaScript dinámicas. `--root`, `--alias`
 y `--cache` llegan al cargador nativo. `--cache` es de sintaxis, no una caché
 semántica persistente. El perfil instalado puede ser de sólo lectura.
