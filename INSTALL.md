@@ -51,14 +51,32 @@ La distribución incluye `bootstrap/modules/platform.hpp`, necesaria para
 compilar los fuentes de bootstrap con el compilador instalado. La cabecera
 mantiene su ruta de inclusión también al mover la instalación.
 
-### Semilla precompilada
+### Precompilados por defecto
 
-Si `native-cpp/prebuilt/<plataforma>/` (Linux x86_64 o macOS arm64) coincide con
-las fuentes del checkout, `install.sh` la usa y se ahorra compilar la semilla;
-si no, la compila (frontend y coordinador en paralelo). Son binarios
-autocontenidos: estáticos en Linux y, en macOS, sin más dependencias que las del
-sistema. `--no-prebuilt` fuerza la compilación. Detalles en
-[`native-cpp/README.md`](native-cpp/README.md).
+`install.sh` construye dos piezas y, **por defecto, usa la versión precompilada
+de cada una** (Linux x86_64 o macOS arm64). Los precompilados no están en
+`main`: viven en la rama `prebuilt`, que el CI sobrescribe con un único commit
+para no acumular binarios en el historial, e `install.sh` la descarga
+(`git clone --depth 1`) en `native-cpp/prebuilt/` (ignorado por git):
+
+| Pieza | Precompilado | Para recompilarla |
+|---|---|---|
+| Semilla (`frontend` + `etsc` de `native-cpp/`) | `prebuilt/<plataforma>/` | `--force-seed` |
+| Compilador de `bootstrap/` (generación 2, el `etsc` que se instala) | `prebuilt/<plataforma>/compiler/` | `--force-compiler` |
+
+`--force` fuerza las dos. Cada precompilado solo se usa si su huella (sha256 de
+sus fuentes) coincide con el checkout; si no hay para la plataforma o está
+desfasado, se compila automáticamente. Son binarios autocontenidos: estáticos
+en Linux y, en macOS, sin más dependencias que las del sistema.
+
+```sh
+./install.sh                    # usa los precompilados
+./install.sh --force-seed       # recompila solo la semilla
+./install.sh --force-compiler   # recompila solo el compilador de bootstrap/
+./install.sh --help             # todas las opciones
+```
+
+Detalles en [`native-cpp/README.md`](native-cpp/README.md).
 
 Node sólo hace falta para **regenerar la semilla** cuando cambian las fuentes de
 `bootstrap/*.ets`:

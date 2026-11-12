@@ -10,3 +10,6 @@ build-*-audit-*/
 # snapshot"), asi que los ejecutables que produce `native-cpp/build-all.sh`
 # no se versionan.
 native-cpp/native/
+# Precompilados: viven en la rama `prebuilt` (nunca en main, para no acumular
+# binarios en el historial); native-cpp/fetch-prebuilt.sh los descarga aquí.
+native-cpp/prebuilt/

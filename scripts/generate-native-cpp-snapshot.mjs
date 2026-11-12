@@ -6,7 +6,7 @@
 // templates that `etsc init` writes. The runtime, the native coordinator and
 // the IR backend are shared with the rest of the repository (see below).
 // `install.sh` consumes this tree plus those shared sources without Node.js.
-import { mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, rmSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { compileFile } from "../src/modules/module-loader.ts";
@@ -15,6 +15,14 @@ import { getTs2cppVersionLabel } from "../src/core/ts2cpp-version.ts";
 import { initializeProject } from "../src/project/init-project.ts";
 
 const directory = "native-cpp";
+// Only GENERATED content is deleted and rewritten: frontend/, build/ and
+// templates/. The precompiled binaries (prebuilt/) are deleted too, because they
+// no longer match the new sources; seed-prebuilt.yml rebuilds them on every OS
+// once the regeneration reaches main. Hand-written files (build-all.sh,
+// build-compiler.sh, README.md) are never touched.
+for (const generated of ["frontend", "build", "templates", "prebuilt"]) {
+  rmSync(join(directory, generated), { recursive: true, force: true });
+}
 const frontend = join(directory, "frontend");
 mkdirSync(frontend, { recursive: true });
 const result = await compileFile("bootstrap/ir/demo.ets", { baseDirectory: process.cwd() });
@@ -46,7 +54,6 @@ writeFileSync(join(nativeHeaders, "install_config.hpp"),
 // JSON (the installed compiler reads JSON, not TypeScript) and it points at
 // the `.build` directories the driver uses.
 const templates = join(directory, "templates");
-rmSync(templates, { recursive: true, force: true });
 await initializeProject(templates, { command: "etsc", native: true, compiler: "g++" });
 const config = (await import(pathToFileURL(join(templates, "estatic.config.ts")).href)).default;
 config.incremental.cacheDirectory = ".build/cache";
@@ -64,3 +71,15 @@ const ignore = readFileSync(join(templates, ".gitignore"), "utf8");
 writeFileSync(join(templates, ".gitignore"), ignore.endsWith("\n") ? `${ignore}.build/\n` : `${ignore}\n.build/\n`);
 console.log(`Generated ${result.modules.length} C++ frontend units in ${frontend}`);
 console.log(`Generated project templates in ${templates}`);
+
+// Manifest of every tracked file in the seed (native/ is local build output and
+// prebuilt/ a download from the `prebuilt` branch; neither is in git).
+const listFiles = (dir, prefix = ".") => readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+  const relative = `${prefix}/${entry.name}`;
+  if (entry.isDirectory()) return relative === "./native" || relative === "./prebuilt" ? [] : listFiles(join(dir, entry.name), relative);
+  return [relative];
+});
+const manifest = [...listFiles(directory).filter(file => file !== "./files.txt"), "./files.txt"]
+  .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+writeFileSync(join(directory, "files.txt"), manifest.join("\n") + "\n");
+console.log(`Wrote ${manifest.length} entries to ${join(directory, "files.txt")}`);

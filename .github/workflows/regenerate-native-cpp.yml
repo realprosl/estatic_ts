@@ -7,6 +7,7 @@ on:
       - .github/workflows/regenerate-native-cpp.yml
       - scripts/generate-native-cpp-snapshot.mjs
       - native-cpp/build-all.sh
+      - native-cpp/build-compiler.sh
 
 permissions:
   contents: write
@@ -27,18 +28,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Save original native-cpp layout and existing build helpers
+      - name: Check hand-written seed files exist
         run: |
           set -euo pipefail
-          for item in frontend templates build build-all.sh README.md files.txt; do
-            test -e "native-cpp/$item" || { echo "::error::Missing $item"; exit 1; }
+          # The generator rewrites only frontend/, build/, templates/, files.txt and
+          # deletes prebuilt/; these hand-written files must stay untouched.
+          for item in build-all.sh build-compiler.sh README.md; do
+            test -f "native-cpp/$item" || { echo "::error::Missing $item"; exit 1; }
           done
-          find native-cpp -mindepth 1 -maxdepth 1 -printf '%f %y\n' | LC_ALL=C sort > "$RUNNER_TEMP/layout.before"
-          cp native-cpp/build-all.sh "$RUNNER_TEMP/build-all.sh"
-          cp native-cpp/README.md "$RUNNER_TEMP/README.md"
-          # The precompiled seeds are not generated here (seed-prebuilt.yml builds
-          # them on each OS); keep them so the layout survives the regeneration.
-          if [ -d native-cpp/prebuilt ]; then cp -a native-cpp/prebuilt "$RUNNER_TEMP/prebuilt"; fi
+          sha256sum native-cpp/build-all.sh native-cpp/build-compiler.sh native-cpp/README.md > "$RUNNER_TEMP/handwritten.sha256"
       - name: Install C++ dependencies
         run: |
           sudo apt-get update
@@ -46,26 +44,14 @@ jobs:
       - name: Generate C++ from bootstrap using src stage 0
         run: |
           set -euo pipefail
-          rm -rf native-cpp
           node --experimental-strip-types scripts/generate-native-cpp-snapshot.mjs
-      - name: Assemble source-only C++ compiler package
-        run: |
-          set -euo pipefail
-          d=native-cpp
-          # Only generated sources live here. runtime/, bootstrap/native/,
-          # bootstrap/modules/*.hpp, src/codegen/ir/native/ and types/ are shared
-          # with the whole repository and are never copied into the seed.
-          cp "$RUNNER_TEMP/build-all.sh" "$d/build-all.sh"
-          chmod +x "$d/build-all.sh"
-          cp "$RUNNER_TEMP/README.md" "$d/README.md"
-          sed -i 's/native-cpp-bootstrap.yml/regenerate-native-cpp.yml/g' "$d/README.md"
-          if [ -d "$RUNNER_TEMP/prebuilt" ]; then cp -a "$RUNNER_TEMP/prebuilt" "$d/prebuilt"; fi
-          (cd "$d" && find . -type f | LC_ALL=C sort > files.txt)
+      - name: Hand-written files untouched by the generator
+        run: sha256sum -c "$RUNNER_TEMP/handwritten.sha256"
 
       - name: Validate complete snapshot, structure and source-only policy
         run: |
           set -euo pipefail
-          for item in frontend/unity.cpp frontend/estatic_common.hpp build/bootstrap/etsc/install_config.hpp build/bootstrap/etsc/native-tables.hpp build-all.sh README.md files.txt templates/estatic.config.json templates/src/main.ts; do
+          for item in frontend/unity.cpp frontend/estatic_common.hpp build/bootstrap/etsc/install_config.hpp build/bootstrap/etsc/native-tables.hpp build-all.sh build-compiler.sh README.md files.txt templates/estatic.config.json templates/src/main.ts; do
             test -f "native-cpp/$item" || { echo "::error::Missing generated file: $item"; exit 1; }
           done
           for item in frontend templates build; do
@@ -75,8 +61,8 @@ jobs:
             if [ -e "native-cpp/$item" ]; then echo "::error::native-cpp/$item must not exist: shared sources live at the repository root"; exit 1; fi
           done
           test -n "$(find native-cpp/frontend -name 'unit-*.cpp' -print -quit)"
-          find native-cpp -mindepth 1 -maxdepth 1 -printf '%f %y\n' | LC_ALL=C sort > "$RUNNER_TEMP/layout.after"
-          diff -u "$RUNNER_TEMP/layout.before" "$RUNNER_TEMP/layout.after"
+          # Stale precompiled binaries are removed; seed-prebuilt.yml rebuilds them on main.
+          test ! -e native-cpp/prebuilt || { echo "::error::native-cpp/prebuilt must be removed by the regeneration"; exit 1; }
           # Templates under templates/ may contain ETS/TS; compiler sources may not.
           bad_sources="$(find native-cpp -type f \( -name '*.ets' -o \( -name '*.ts' ! -name '*.d.ts' \) \) ! -path 'native-cpp/templates/*' -print)"
           if [ -n "$bad_sources" ]; then
@@ -84,7 +70,6 @@ jobs:
             printf '%s\n' "$bad_sources"
             exit 1
           fi
-          # Executables are only allowed as precompiled seeds in native-cpp/prebuilt/.
           bad_objects="$(find native-cpp -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.dylib' -o -name '*.exe' \) -print)"
           if [ -n "$bad_objects" ] || [ -d native-cpp/native ]; then
             echo "::error::Prebuilt binaries in source-only snapshot"
@@ -112,7 +97,7 @@ jobs:
       - name: Build compiler from downloaded snapshot (no Node or TS)
         run: |
           set -euo pipefail
-          bash native-cpp/build-all.sh --no-prebuilt
+          bash native-cpp/build-all.sh --force
           test -x native-cpp/native/frontend
           test -x native-cpp/native/etsc
           native-cpp/native/etsc --version

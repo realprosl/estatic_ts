@@ -27,7 +27,7 @@ ar_tool="${AR:-ar}"
 
 usage() {
   cat <<'EOF'
-Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario] [--seed-only] [--no-prebuilt]
+Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario] [--seed-only] [--force-seed] [--force-compiler]
 
 Compila la semilla C++ de native-cpp/ y con ella compila bootstrap/, y
 publica el ejecutable resultante como el compilador nativo etsc.
@@ -36,9 +36,16 @@ publica el ejecutable resultante como el compilador nativo etsc.
   --cxx COMPILADOR compilador C++20 (por defecto g++, o $CXX)
   --frontend BIN   usar un frontend ya construido en vez de compilar la semilla
   --seed-only      publicar la semilla sin la generacion 2 (compilador rapido)
-  --no-prebuilt    compilar la semilla aunque haya una precompilada valida
-                   en native-cpp/prebuilt/<plataforma>
-  --help           esta ayuda
+  --force-seed     recompilar la semilla aunque haya una precompilada valida
+  --force-compiler recompilar el compilador de bootstrap/ aunque haya uno
+                   precompilado valido (alias: --force-compile)
+  --force          las dos cosas: --force-seed y --force-compiler
+  --help           esta ayuda (lista todas las opciones)
+
+Por defecto se descargan (rama `prebuilt`, native-cpp/fetch-prebuilt.sh) y usan
+las versiones precompiladas de native-cpp/prebuilt/<plataforma>
+(Linux x86_64, macOS arm64) de la semilla y del compilador, cada una solo si su
+huella coincide con las fuentes; si no hay o esta desfasada, se compila.
 
 No requiere Node.js. Requisitos: un compilador C++20, `ar` y las cabeceras de
 desarrollo de OpenSSL (libssl-dev). El runtime se precompila durante la
@@ -49,12 +56,15 @@ EOF
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
 seed_only=0
-no_prebuilt=0
+force_seed=0
+force_compiler=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --help|-h) usage; exit 0 ;;
+    --help) usage; exit 0 ;;
     --seed-only) seed_only=1; shift ;;
-    --no-prebuilt) no_prebuilt=1; shift ;;
+    --force-seed|--no-prebuilt) force_seed=1; shift ;;
+    --force-compiler|--force-compile) force_compiler=1; shift ;;
+    --force) force_seed=1; force_compiler=1; shift ;;
     --prefix|--cxx|--frontend)
       [ $# -ge 2 ] || fail "Opcion sin valor: $1"
       case "$1" in
@@ -127,14 +137,20 @@ if [ -e "$destination" ]; then
   [ "$owned" -eq 1 ] || fail "No se sobrescribe un comando ajeno: $destination; usa otro --prefix"
 fi
 
+# Los precompilados se descargan de la rama `prebuilt` (no estan en main).
+if [ "$force_seed" -eq 0 ] || [ "$force_compiler" -eq 0 ]; then
+  bash "$seed_dir/fetch-prebuilt.sh"
+fi
+
 etsc_info "Construyendo la semilla C++20"
 mkdir -p "$work/native"
-# native-cpp/build-all.sh es el unico sitio que construye la semilla: usa la
-# precompilada de native-cpp/prebuilt/<plataforma> si coincide con las fuentes
-# y, si no, compila frontend y coordinador en paralelo.
+# native-cpp/build-all.sh es el unico sitio que construye la semilla: por
+# defecto usa la precompilada de native-cpp/prebuilt/<plataforma> si coincide
+# con las fuentes y, si no (o con --force-seed), compila frontend y
+# coordinador en paralelo.
 seed_args=(--out "$work/native" --cxx "$cxx")
 [ -n "$frontend" ] && seed_args+=(--frontend "$frontend")
-[ "$no_prebuilt" -eq 1 ] && seed_args+=(--no-prebuilt)
+[ "$force_seed" -eq 1 ] && seed_args+=(--force)
 ETSC_CLI_SCOPE=install bash "$seed_dir/build-all.sh" "${seed_args[@]}"
 
 # --- Generacion 2: la semilla compila bootstrap/ ------------------------------
@@ -146,21 +162,16 @@ ETSC_CLI_SCOPE=install bash "$seed_dir/build-all.sh" "${seed_args[@]}"
 # Con --seed-only se conserva el comportamiento anterior (publicar la
 # semilla) para quien solo quiere el compilador rapido sin Node.
 if [ "$seed_only" -eq 0 ]; then
-  etsc_info "Generacion 2 · compilando bootstrap/ con la semilla"
-  generation="$work/generation"
-  mkdir -p "$generation"
-  etsc_spin "Semilla · analizar bootstrap/" "$work/native/frontend" \
-    "$repo_dir/bootstrap/driver/main.ets" >"$generation/driver.ir.json"
-  etsc_spin "Semilla · construir el compilador" "$work/native/etsc" \
-    --from-ir "$generation/driver.ir.json" --build \
-    -o "$generation/etsc.cpp" --binary "$generation/etsc" \
-    --cxx-flag -O1 --cxx-flag "-I$repo_dir" --no-progress
-  if [ ! -x "$generation/etsc" ]; then
-    fail "La generacion 2 no produjo un ejecutable."
-  fi
+  etsc_info "Generacion 2 · compilador de bootstrap/"
+  # native-cpp/build-compiler.sh: por defecto usa el compilador precompilado de
+  # native-cpp/prebuilt/<plataforma>/compiler si coincide con las fuentes; si no
+  # (o con --force-compiler), lo compila con la semilla.
+  compiler_args=(--seed "$work/native" --out "$work/generation/etsc")
+  [ "$force_compiler" -eq 1 ] && compiler_args+=(--force)
+  ETSC_CLI_SCOPE=install ESTC_ROOT="$repo_dir" CXX="$cxx" bash "$seed_dir/build-compiler.sh" "${compiler_args[@]}"
   # El ejecutable de la generacion 2 sustituye a la semilla como comando
   # publicado: es el que implementa el codigo actual de bootstrap/.
-  cp "$generation/etsc" "$work/native/etsc"
+  cp "$work/generation/etsc" "$work/native/etsc"
   chmod +x "$work/native/etsc"
 fi
 
