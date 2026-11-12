@@ -29,7 +29,7 @@ const nativeHeaders = join(directory, "build/bootstrap/etsc");
 mkdirSync(nativeHeaders, { recursive: true });
 nativeTables(join(nativeHeaders, "native-tables.hpp"));
 writeFileSync(join(nativeHeaders, "install_config.hpp"),
-  `#define ESTC_PLATFORM "linux"\n#define ESTC_ARCH "portable"\n#define ESTC_VERSION ${JSON.stringify(getTs2cppVersionLabel().replace(/^estatic/, "etsc"))}\n`);
+  `#if defined(__APPLE__)\n#define ESTC_PLATFORM "darwin"\n#else\n#define ESTC_PLATFORM "linux"\n#endif\n#define ESTC_ARCH "portable"\n#define ESTC_VERSION ${JSON.stringify(getTs2cppVersionLabel().replace(/^estatic/, "etsc"))}\n`);
 
 // Shared C++ sources. The seed carries ONLY what is generated from
 // `bootstrap/`: the frontend (frontend/), its native tables (build/bootstrap/etsc/)

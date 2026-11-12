@@ -27,7 +27,7 @@ ar_tool="${AR:-ar}"
 
 usage() {
   cat <<'EOF'
-Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario] [--seed-only]
+Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--frontend binario] [--seed-only] [--no-prebuilt]
 
 Compila la semilla C++ de native-cpp/ y con ella compila bootstrap/, y
 publica el ejecutable resultante como el compilador nativo etsc.
@@ -36,6 +36,8 @@ publica el ejecutable resultante como el compilador nativo etsc.
   --cxx COMPILADOR compilador C++20 (por defecto g++, o $CXX)
   --frontend BIN   usar un frontend ya construido en vez de compilar la semilla
   --seed-only      publicar la semilla sin la generacion 2 (compilador rapido)
+  --no-prebuilt    compilar la semilla aunque haya una precompilada valida
+                   en native-cpp/prebuilt/<plataforma>
   --help           esta ayuda
 
 No requiere Node.js. Requisitos: un compilador C++20, `ar` y las cabeceras de
@@ -47,10 +49,12 @@ EOF
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
 seed_only=0
+no_prebuilt=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
     --seed-only) seed_only=1; shift ;;
+    --no-prebuilt) no_prebuilt=1; shift ;;
     --prefix|--cxx|--frontend)
       [ $# -ge 2 ] || fail "Opcion sin valor: $1"
       case "$1" in
@@ -125,25 +129,13 @@ fi
 
 etsc_info "Construyendo la semilla C++20"
 mkdir -p "$work/native"
-
-if [ -n "$frontend" ]; then
-  [ -x "$frontend" ] || fail "Frontend inexistente: $frontend"
-  cp "$frontend" "$work/native/frontend"
-  echo "    usando el frontend proporcionado: $frontend"
-else
-  echo "    frontend (analizador) -> native/frontend"
-  etsc_spin "Semilla · frontend" "$cxx" -std=c++20 -O1 -pthread -fno-exceptions \
-    -I"$repo_dir" -I"$seed_dir" -I"$seed_dir/frontend" \
-    '-DESTATIC_FRONTEND_ID="portable"' \
-    "$seed_dir/frontend/unity.cpp" -o "$work/native/frontend"
-fi
-
-echo "    driver y emisor IR -> native/etsc"
-etsc_spin "Semilla · coordinador y emisor" "$cxx" -std=c++20 -O2 \
-  -I"$repo_dir" -I"$seed_dir/build/bootstrap/etsc" \
-  "$repo_dir/bootstrap/native/driver.cpp" \
-  "$repo_dir/src/codegen/ir/native/generator.cpp" \
-  -lcrypto -o "$work/native/etsc"
+# native-cpp/build-all.sh es el unico sitio que construye la semilla: usa la
+# precompilada de native-cpp/prebuilt/<plataforma> si coincide con las fuentes
+# y, si no, compila frontend y coordinador en paralelo.
+seed_args=(--out "$work/native" --cxx "$cxx")
+[ -n "$frontend" ] && seed_args+=(--frontend "$frontend")
+[ "$no_prebuilt" -eq 1 ] && seed_args+=(--no-prebuilt)
+ETSC_CLI_SCOPE=install bash "$seed_dir/build-all.sh" "${seed_args[@]}"
 
 # --- Generacion 2: la semilla compila bootstrap/ ------------------------------
 # La semilla es el generador: con ella se compila el frontend ETS de

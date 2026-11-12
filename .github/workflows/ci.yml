@@ -147,7 +147,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build current C++ snapshot
-        run: bash native-cpp/build-all.sh
+        run: bash native-cpp/build-all.sh --no-prebuilt  # siempre comprueba que las fuentes de la semilla compilan
       - name: Compile short includes programs (positive and negative)
         shell: bash
         run: |
