@@ -9,7 +9,9 @@
 #include <climits>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
+#include <iostream>
 #include <functional>
 #include <memory>
 #include <string>
@@ -33,6 +35,7 @@ inline ssize_t nativeFileWrite(int fd, const void* data, std::size_t size) { ret
 #endif
 } }
 
+#include "runtime/ets_core.hpp"
 #include "runtime/ets_async.hpp"
 #include "runtime/ets_event_loop.hpp"
 
@@ -294,6 +297,10 @@ inline std::shared_ptr<WritableState> openProcessWritable(int fd) {
 #else
             ::close(duplicate);
 #endif
+        } else {
+            // Como Node en POSIX: stdout/stderr escriben de forma síncrona, así
+            // `process.exit()` no pierde lo ya escrito.
+            uv_stream_set_blocking(state->stream, 1);
         }
         return state;
     }
@@ -319,6 +326,8 @@ inline std::shared_ptr<WritableState> openProcessWritable(int fd) {
         ::close(duplicate);
 #endif
         state->close();
+    } else {
+        uv_stream_set_blocking(state->stream, 1);
     }
     return state;
 }
@@ -488,6 +497,19 @@ struct ProcessStdio {
 
 inline ChildProcessModule child_process{};
 inline ProcessStdio processStdio{};
+
+namespace child_process_detail {
+// `process.exit()` termina en el acto, como en Node: vacía los buffers de C y
+// C++ y sale con _Exit. Así no se ejecutan los destructores estáticos, que
+// volverían a correr el bucle de libuv y esperarían a que `process.stdin` (o el
+// pipe de un hijo) recibiera más datos. stdout/stderr ya escriben de forma
+// síncrona (uv_stream_set_blocking), así que su salida no se pierde.
+[[noreturn]] inline void exitNow(int code) noexcept {
+    std::cout.flush(); std::cerr.flush(); std::fflush(nullptr);
+    std::_Exit(code);
+}
+inline const bool exitHookInstalled = (ets_exit_now = &exitNow, true);
+} // namespace child_process_detail
 
 // Pump the shared libuv loop while process IO sources remain. UV_RUN_DEFAULT
 // cannot be used because the event-loop wake handle stays active for program life.
