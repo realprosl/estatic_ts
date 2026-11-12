@@ -17,8 +17,37 @@
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 namespace ets_compiler_host {
-inline std::string compilerRoot(){return std::filesystem::path(__FILE__).parent_path().parent_path().string();}
+// Ruta real del ejecutable en marcha (vacía si no se puede saber).
+inline std::filesystem::path executablePath(){
+    std::error_code ec;
+#if defined(__APPLE__)
+    uint32_t size=0; _NSGetExecutablePath(nullptr,&size);
+    std::string buffer(size,'\0');
+    if(_NSGetExecutablePath(buffer.data(),&size)!=0) return {};
+    auto path=std::filesystem::weakly_canonical(buffer.c_str(),ec);
+#else
+    auto path=std::filesystem::read_symlink("/proc/self/exe",ec);
+#endif
+    return ec?std::filesystem::path{}:path;
+}
+// Raíz del compilador (runtime/, templates/...). Un compilador instalado vive en
+// <prefijo>/bin y su raíz es <prefijo>/lib/estc/current: se deduce del
+// ejecutable para que un binario precompilado funcione en cualquier máquina.
+// Si no es una instalación (compilador de desarrollo), se usa el árbol de
+// fuentes con el que se compiló (__FILE__). ESTC_ROOT, si existe, manda.
+inline std::string compilerRoot(){
+    auto executable=executablePath();
+    if(!executable.empty()){
+        std::error_code ec;
+        auto installed=executable.parent_path().parent_path()/"lib/estc/current";
+        if(std::filesystem::exists(installed/"runtime/ets_runtime.hpp",ec)) return installed.string();
+    }
+    return std::filesystem::path(__FILE__).parent_path().parent_path().string();
+}
 inline thread_local std::string error;
 inline std::string lastError(){return error;}
 inline std::string environment(std::string name){auto p=std::getenv(name.c_str());return p?p:"";}
