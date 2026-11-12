@@ -93,10 +93,11 @@ jobs:
           "$dir/frontend" examples/hello.ets > "$RUNNER_TEMP/hello.ir.json"
           test -s "$RUNNER_TEMP/hello.ir.json"
           # build-all.sh must now pick the precompiled seed (inputs match).
-          bash native-cpp/build-all.sh --out "$RUNNER_TEMP/picked" 2>&1 | tee "$RUNNER_TEMP/picked.log"
+          bash native-cpp/build-all.sh --out "$RUNNER_TEMP/picked/native" 2>&1 | tee "$RUNNER_TEMP/picked.log"
           grep -q 'Semilla precompilada' "$RUNNER_TEMP/picked.log"
           if [ "$RUNNER_OS" = Linux ]; then
-            ESTC_ROOT="$GITHUB_WORKSPACE" "$dir/etsc" build examples/hello.ets \
+            # Same layout as the seed: <dir>/native/{etsc,frontend}.
+            ESTC_ROOT="$GITHUB_WORKSPACE" "$RUNNER_TEMP/picked/native/etsc" build examples/hello.ets \
               -o "$RUNNER_TEMP/hello.cpp" --binary "$RUNNER_TEMP/hello" --no-progress
             "$RUNNER_TEMP/hello" | grep -q 'Hola, mundo'
           fi
