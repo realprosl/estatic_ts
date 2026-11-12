@@ -105,6 +105,18 @@ test("installed etsc initializes, builds and runs independently of the clone wit
   writeFileSync(join(project,"src/main.ts"),'async function f():Promise<void>{await sleep(1);print("native installed");}await f();');
   p=run(["build"],project);assert.equal(p.status,0,p.stderr);assert(existsSync(join(project,"build/app")));
   p=run(["run"],project);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");
+  // #149: el runtime viene compilado en la instalacion y un build sin cambios no
+  // compila nada; si el C++ generado no cambia, se reutiliza el objeto del programa.
+  assert(readdirSync(join(home,"build/objects")).some(file=>file.endsWith(".o")));
+  assert(existsSync(join(project,".build/cache/build-fingerprint")));
+  const builtAt=statSync(join(project,"build/app")).mtimeMs;
+  p=run(["build"],project);assert.equal(p.status,0,p.stderr);assert.equal(statSync(join(project,"build/app")).mtimeMs,builtAt,"Un build sin cambios no vuelve a enlazar");
+  const programObjects=()=>readdirSync(join(project,".build/cache/objects")).filter(file=>file.startsWith("program-"));
+  const programObject=programObjects();assert.equal(programObject.length,1);
+  writeFileSync(join(project,"src/main.ts"),readFileSync(join(project,"src/main.ts"),"utf8")+"\n// comentario\n");
+  p=run(["run"],project);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");assert.deepEqual(programObjects(),programObject);
+  // La cabecera precompilada de esta combinacion queda en la cache del usuario.
+  if(process.platform==="linux")assert(readdirSync(join(cache,"estc/pch"),{recursive:true}).some(file=>String(file).endsWith(".gch")));
   const upgrade=install(prefix,["--seed",seed]);assert.equal(upgrade.status,0,upgrade.stderr);assert.notEqual(realpathSync(join(prefix,"lib/estc/current")),home);
   const moved=join(dir,"relocated prefix");renameSync(prefix,moved);const movedBin=join(moved,"bin/etsc");
   const runMoved=(args:string[])=>spawnSync(movedBin,args,{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});
