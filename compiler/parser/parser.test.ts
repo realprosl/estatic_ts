@@ -403,6 +403,24 @@ for (const source of [
 ] as const) test(`bootstrap parser parameter property diagnostics: ${source}`, () => {
   const result = native(source); assert.ok(result.diagnostics.length > 0 && result.diagnostics.length <= 100);
 });
+test("bootstrap parser C++-style memory types lower to ref/constRef/ptr/constPtr", () => {
+  const attr = (node: NativeNode, name: string) => node.attributes.find(a => a.name === name)?.value;
+  const result = native("function f(a:const string&,b:Foo&,c:Foo*,d:const Foo*,e:Map<string,Foo&>,f:Foo[]&,g:Foo*&):const Foo&{return a;}");
+  assert.deepEqual(result.diagnostics, []);
+  const fn = result.nodes[result.nodes[result.root].edges[0].node];
+  const params = fn.edges.filter(e => e.role === "params").map(e => result.nodes[e.node]);
+  assert.deepEqual(params.map(p => attr(p,"type")), ["constRef<string>","ref<Foo>","ptr<Foo>","constPtr<Foo>","Map<string,ref<Foo>>","ref<Foo[]>","ref<ptr<Foo>>"]);
+  assert.equal(attr(fn,"returnType"), "constRef<Foo>");
+  // `&` seguido de un tipo sigue siendo interseccion y `*` seguido de un operando, multiplicacion.
+  const types = (source: string) => { const r = native(source); assert.deepEqual(r.diagnostics, [], source); return r.nodes.flatMap(n => n.attributes.filter(a => a.name === "declaredType" || a.name === "targetType" || a.name === "type").map(a => a.value)); };
+  assert.deepEqual(types("let x:A & B = y;"), ["A & B"]);
+  assert.deepEqual(types("let x:Foo& = y;"), ["ref<Foo>"]);
+  assert.deepEqual(types("const n = x as number * 2;"), ["number"]);
+  assert.equal(native("const n = x as number * 2;").nodes.some(n => n.kind === "BinaryExpression"), true);
+  assert.deepEqual(types("let x:A | B* = y;"), ["A | ptr<B>"]);
+  // `const` sin `&` ni `*` no es un tipo valido.
+  assert.match(native("function f(a:const string):void{}").diagnostics.map(d => d.message).join("\n"), /'const' en un tipo requiere/);
+});
 test("bootstrap parser parameter properties preserve modifiers without synthesizing fields", () => {
   const result = native("class User{constructor(public name:string='guest',private readonly id:number=7,age:number=18){}}");
   assert.deepEqual(result.diagnostics, []);
