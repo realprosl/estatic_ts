@@ -96,6 +96,12 @@ test("installed etsc initializes, builds and runs independently of the clone wit
   assert.match(readFileSync(join(project,"types/estatic.d.ts"),"utf8"),/declare global/);
   assert.match(readFileSync(join(project,".gitignore"),"utf8"),/\.build\//);
   p=run(["init",project]);assert.equal(p.status,1);assert.equal(readFileSync(join(project,"existing.txt"),"utf8"),"keep me");
+  // init --no-src convierte en proyecto una carpeta que ya tiene su codigo.
+  const existing=join(dir,"existing code");mkdirSync(join(existing,"src"),{recursive:true});writeFileSync(join(existing,"src/main.ts"),'print("mine");');
+  p=run(["init",existing]);assert.equal(p.status,1);assert(!existsSync(join(existing,"estatic.config.json")));
+  p=run(["init",existing,"--no-src"]);assert.equal(p.status,0,p.stderr);assert.equal(readFileSync(join(existing,"src/main.ts"),"utf8"),'print("mine");');
+  for(const file of ["estatic.config.json","tsconfig.json",".gitignore","README.md","types/estatic.d.ts"])assert(existsSync(join(existing,file)),file);
+  p=run(["update-types",existing,"--no-src"]);assert.equal(p.status,2);
   writeFileSync(join(project,"src/main.ts"),'async function f():Promise<void>{await sleep(1);print("native installed");}await f();');
   p=run(["build"],project);assert.equal(p.status,0,p.stderr);assert(existsSync(join(project,"build/app")));
   p=run(["run"],project);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");
