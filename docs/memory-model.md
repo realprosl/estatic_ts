@@ -23,6 +23,36 @@ operaciones están permitidas, y qué errores reporta el type-checker.
 | Smart ptr shared (legacy) | `Unq<T>` | `std::unique_ptr<T>` | sí | Equivalente a `ptr<T>`, evitar |
 | Shared con cycle break | `weak<T>` | **NO IMPLEMENTADO** | — | Mencionado en E4404 pero no existe aún |
 
+### Sintaxis estilo C++
+
+El parser de `compiler/` acepta también la forma de C++ y la convierte en el
+tipo de la tabla, así que el resultado (IR y C++) es idéntico:
+
+| Escribes | Equivale a |
+|---|---|
+| `T&` | `ref<T>` |
+| `const T&` | `constRef<T>` |
+| `T*` | `ptr<T>` |
+| `const T*` | `constPtr<T>` |
+
+```ts
+function mover(p: Punto&, dx: number): void { p.x = p.x + dx; }
+function leer(p: const Punto&): number { return p.x + p.y; }
+function crear(x: number): Punto* { return new Punto(x, 0); }
+```
+
+- Se puede usar en cualquier tipo: parámetros, retornos, variables y
+  argumentos de tipo (`Map<string, Foo&>` → `Map<string, ref<Foo>>`).
+- Se combinan de dentro afuera: `Foo[]&` → `ref<Foo[]>`, `Foo*&` →
+  `ref<ptr<Foo>>`.
+- Un `&` seguido de otro tipo sigue siendo una intersección (`A & B`), y un `*`
+  seguido de un operando sigue siendo una multiplicación (`x as number * 2`).
+- `const` sin `&` ni `*` (`const string`) es un error del parser.
+- Las reglas de la tabla no cambian: `Foo&` sigue siendo solo para
+  parámetros, igual que `ref<Foo>`.
+- `T*` es `ptr<T>`, es decir, ownership (`std::unique_ptr<T>`), no un puntero
+  crudo de C++.
+
 ## Reglas (verificadas contra `src/semantic/type-checker.ts`)
 
 ### 1. `T` significa copia

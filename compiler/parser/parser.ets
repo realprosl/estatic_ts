@@ -63,9 +63,12 @@ export class ParseResult {
 export class Parser {
   tokens: ParserToken[]; current: number; nodes: AstNode[]; diagnostics: ParserDiagnostic[];
   nesting: number; exhausted: boolean;
+  // `const T&` / `const T*`: el `const` inicial espera al primer `&` o `*`
+  // del mismo tipo (ver typeSuffix). typeName lo aisla de los tipos anidados.
+  constMemory: boolean;
   constructor(tokens: ParserToken[]) {
     this.tokens = tokens; this.current = 0; this.nodes = []; this.diagnostics = [];
-    this.nesting = 0; this.exhausted = false;
+    this.nesting = 0; this.exhausted = false; this.constMemory = false;
     if (tokens.length == 0) {
       this.tokens.push(new ParserToken("eof", "", 0, 1, 1, 0, 1, 1));
       this.report("La entrada de tokens necesita un eof final");
@@ -879,7 +882,8 @@ export class Parser {
   }
   typeName(): string {
     if (!this.enter()) return "<error>";
-    const result: string = this.typeInner(); this.leave(); return result;
+    const outerConst: boolean = this.constMemory; this.constMemory = false;
+    const result: string = this.typeInner(); this.constMemory = outerConst; this.leave(); return result;
   }
   // Un literal usado como tipo se codifica con el prefijo `$lit:` seguido
   // del tipo y el valor separados por `=`. El prefijo no puede colisionar con
@@ -894,6 +898,14 @@ export class Parser {
   }
   typeInner(): string {
     if (this.accept("readonly")) return "readonly<" + this.typeName() + ">";
+    // Sintaxis estilo C++ de los modificadores de memoria:
+    //   const T& -> constRef<T>   const T* -> constPtr<T>
+    if (this.check("const")) {
+      const keyword: ParserToken = this.take(); this.constMemory = true;
+      const constant: string = this.typeInner();
+      if (this.constMemory) { this.constMemory = false; this.reportAt(keyword, "'const' en un tipo requiere '&' (constRef) o '*' (constPtr)"); }
+      return constant;
+    }
     if (this.accept("typeof")) {
       let query: string = "$typeof$" + this.expect("identifier").lexeme;
       while (this.accept(".")) query = query + "." + (this.check("default") ? this.take().lexeme : this.expect("identifier").lexeme);
@@ -936,9 +948,23 @@ export class Parser {
       if (!this.check("]")) { if (this.check("number") || this.check("identifier")) size = this.take().lexeme; else this.report("Tamaño de array no válido"); }
       this.expect("]"); result = result + "[" + size + "]";
     }
+    //   T& -> ref<T>   T* -> ptr<T>   (con const delante: constRef / constPtr)
+    // Un `&` seguido de otro tipo sigue siendo una interseccion (`A & B`), y un
+    // `*` seguido de un operando sigue siendo una multiplicacion (`x as n * 2`).
+    while ((this.check("&") || this.check("*")) && this.memoryModifierEnd(this.peek(1).kind)) {
+      const pointer: boolean = this.take().kind == "*";
+      if (this.constMemory) { this.constMemory = false; result = (pointer ? "constPtr<" : "constRef<") + result + ">"; }
+      else result = (pointer ? "ptr<" : "ref<") + result + ">";
+    }
     while (this.accept("|")) result = result + " | " + this.typeName();
     while (this.accept("&")) result = result + " & " + this.typeName();
     return result;
+  }
+  // Tokens que pueden seguir a un `&`/`*` usado como modificador de memoria.
+  memoryModifierEnd(kind: string): boolean {
+    return kind == ")" || kind == "," || kind == ">" || kind == "=" || kind == ";" || kind == "]" || kind == "|"
+      || kind == "&" || kind == "*" || kind == "{" || kind == "}" || kind == "newline" || kind == "eof" || kind == "=>"
+      || kind == "?" || kind == ":";
   }
   expression(): number {
     const token: ParserToken = this.peek(0);
