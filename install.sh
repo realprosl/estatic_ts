@@ -3,9 +3,9 @@
 # install.sh — instala el compilador nativo `etsc` a partir de la semilla C++.
 #
 # La semilla es `native-cpp/compiler/unity.cpp`: el C++ que el compilador de
-# `bootstrap/` genera de sí mismo. Compilada, es un `etsc` completo que compila
-# `bootstrap/` (generación 2); ese es el `etsc` que se publica en <prefix>/bin.
-# El runtime (`runtime/`) y las cabeceras de frontera (`bootstrap/modules/`) se
+# `compiler/` genera de sí mismo. Compilada, es un `etsc` completo que compila
+# `compiler/` (generación 2); ese es el `etsc` que se publica en <prefix>/bin.
+# El runtime (`runtime/`) y las cabeceras de frontera (`compiler/modules/`) se
 # usan desde su sitio canónico.
 #
 # No requiere Node.js ni TypeScript, ni para instalar ni para regenerar la
@@ -26,7 +26,7 @@ usage() {
   cat <<'EOF'
 Uso: ./install.sh [--prefix /usr/local] [--cxx g++] [--seed BIN] [--seed-only] [--force-seed] [--force-compiler]
 
-Compila la semilla C++ de native-cpp/ y con ella compila bootstrap/, y
+Compila la semilla C++ de native-cpp/ y con ella compila compiler/, y
 publica el ejecutable resultante como el compilador nativo etsc.
 
   --prefix DIR     donde instalar (por defecto /usr/local)
@@ -34,7 +34,7 @@ publica el ejecutable resultante como el compilador nativo etsc.
   --seed BIN       usar ese etsc (semilla ya compilada) en vez de construirla
   --seed-only      publicar la semilla sin la generacion 2 (compilador rapido)
   --force-seed     recompilar la semilla aunque haya una precompilada valida
-  --force-compiler recompilar el compilador de bootstrap/ aunque haya uno
+  --force-compiler recompilar el compilador de compiler/ aunque haya uno
                    precompilado valido (alias: --force-compile)
   --force          las dos cosas: --force-seed y --force-compiler
   --help           esta ayuda (lista todas las opciones)
@@ -80,7 +80,7 @@ case "$prefix" in /*) ;; *) prefix="$PWD/$prefix" ;; esac
 command -v "$cxx" >/dev/null 2>&1 || fail "No se encuentra el compilador '$cxx'. Instala g++ o usa --cxx."
 command -v "$ar_tool" >/dev/null 2>&1 || fail "No se encuentra '$ar_tool'. Forma parte de binutils."
 [ -d "$seed_dir" ] || fail "Falta la semilla C++ en $seed_dir. Clona el repositorio completo."
-source "$repo_dir/bootstrap/native/progress.sh"
+source "$repo_dir/compiler/native/progress.sh"
 
 if command -v sha256sum >/dev/null 2>&1; then
   hash_file() { sha256sum "$1" | cut -d" " -f1; }
@@ -155,16 +155,16 @@ else
   ETSC_CLI_SCOPE=install bash "$seed_dir/build-all.sh" "${seed_args[@]}"
 fi
 
-# --- Generacion 2: la semilla compila bootstrap/ ------------------------------
-# La semilla es el generador: con ella se compila `bootstrap/` y el ejecutable
+# --- Generacion 2: la semilla compila compiler/ ------------------------------
+# La semilla es el generador: con ella se compila `compiler/` y el ejecutable
 # resultante es el compilador que se instala. Asi
-# el `etsc` publicado refleja siempre el codigo actual de `bootstrap/`, y no el
+# el `etsc` publicado refleja siempre el codigo actual de `compiler/`, y no el
 # snapshot C++ de la semilla, que puede quedar desfasado.
 #
 # Con --seed-only se conserva el comportamiento anterior (publicar la
 # semilla) para quien solo quiere el compilador rapido sin Node.
 if [ "$seed_only" -eq 0 ]; then
-  etsc_info "Generacion 2 · compilador de bootstrap/"
+  etsc_info "Generacion 2 · compilador de compiler/"
   # native-cpp/build-compiler.sh: por defecto usa el compilador precompilado de
   # native-cpp/prebuilt/<plataforma>/compiler si coincide con las fuentes; si no
   # (o con --force-compiler), lo compila con la semilla.
@@ -172,7 +172,7 @@ if [ "$seed_only" -eq 0 ]; then
   [ "$force_compiler" -eq 1 ] && compiler_args+=(--force)
   ETSC_CLI_SCOPE=install ESTC_ROOT="$repo_dir" CXX="$cxx" bash "$seed_dir/build-compiler.sh" "${compiler_args[@]}"
   # El ejecutable de la generacion 2 sustituye a la semilla como comando
-  # publicado: es el que implementa el codigo actual de bootstrap/.
+  # publicado: es el que implementa el codigo actual de compiler/.
   cp "$work/generation/etsc" "$work/native/etsc"
   chmod +x "$work/native/etsc"
 fi
@@ -184,20 +184,20 @@ etsc_info "Publicando en $prefix"
 stage="$library/.install-$$"
 mkdir -p "$stage/native" "$stage/templates"
 
-# Runtime unico del repositorio: el mismo que usan la semilla y bootstrap/.
+# Runtime unico del repositorio: el mismo que usan la semilla y compiler/.
 cp -R "$repo_dir/runtime" "$stage/runtime"
 # Generated bootstrap C++ includes these native boundary headers by this path.
 # Ship only headers, without the ETS/TS compiler sources or native driver.
-mkdir -p "$stage/bootstrap/modules"
-find "$repo_dir/bootstrap/modules" -maxdepth 1 -type f \
-  \( -name '*.hpp' -o -name '*.h' \) -exec cp {} "$stage/bootstrap/modules/" \;
+mkdir -p "$stage/compiler/modules"
+find "$repo_dir/compiler/modules" -maxdepth 1 -type f \
+  \( -name '*.hpp' -o -name '*.h' \) -exec cp {} "$stage/compiler/modules/" \;
 cp -R "$repo_dir/types" "$stage/types"
 cp -R "$seed_dir/templates/." "$stage/templates/"
 # Las declaraciones canonicas son la unica fuente de verdad.
 cp "$repo_dir/types/estatic.d.ts" "$stage/templates/types/estatic.d.ts"
 
 # native/frontend: adaptador del protocolo fuente->IR (JSON por stdout) que usan
-# las herramientas de bootstrap/*.ts, sobre el etsc instalado.
+# las herramientas de compiler/*.ts, sobre el etsc instalado.
 cat > "$stage/native/frontend" <<'FRONTEND'
 #!/usr/bin/env bash
 set -euo pipefail

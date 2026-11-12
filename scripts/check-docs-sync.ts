@@ -88,7 +88,7 @@ const issues: Issue[] = [];
 // Regla (d): feature implementada por el frontend nativo que LIMITATIONS.md
 // declara pendiente sin acotarlo a stage 0.
 //
-// Las filas I de bootstrap/PENDING.md son el inventario de lo que el frontend
+// Las filas I de compiler/PENDING.md son el inventario de lo que el frontend
 // nativo ya soporta. No se cruzan aqui de forma automatica: la seccion
 // "Pendiente" es prosa que puede mencionar una feature implementada para
 // contrastarla, y un cruce por palabras produciría falsos positivos (por

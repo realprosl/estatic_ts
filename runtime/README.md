@@ -1,7 +1,7 @@
 # `runtime/` — runtime C++ único
 
 Es el **único** runtime C++ del repositorio: lo usan la semilla (`native-cpp/`),
-el compilador de `bootstrap/`, `install.sh` (que lo publica tal cual en la
+el compilador de `compiler/`, `install.sh` (que lo publica tal cual en la
 instalación) y todos los programas generados. No existen copias: la semilla se
 compila con `-I<repo>` y resuelve `runtime/...` aquí mismo. Cualquier cambio se
 hace en este directorio y no requiere regenerar la semilla, salvo que rompa

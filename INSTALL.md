@@ -22,8 +22,8 @@ export PATH="$HOME/.local/bin:$PATH"
 ## Bootstrap y ejecución nativa
 
 La instalación **no usa Node.js**. La semilla (`native-cpp/compiler/unity.cpp`)
-es el C++ que el compilador de `bootstrap/` genera de sí mismo; compilada con el
-compilador C++20 del sistema es un `etsc` completo, que compila `bootstrap/`
+es el C++ que el compilador de `compiler/` genera de sí mismo; compilada con el
+compilador C++20 del sistema es un `etsc` completo, que compila `compiler/`
 (generación 2). Ese segundo `etsc` es el que se instala. Todo el compilador
 —análisis, lowering, backend y coordinador— está escrito en ETS y es
 autoalojado.
@@ -32,11 +32,11 @@ autoalojado.
 
 `native-cpp/` contiene la semilla generada (`compiler/unity.cpp`), las
 plantillas y sus scripts. El C++ escrito a mano tiene una única ubicación y lo
-comparten la semilla, el compilador de `bootstrap/`, `install.sh`, el CI y los
+comparten la semilla, el compilador de `compiler/`, `install.sh`, el CI y los
 programas generados:
 
 - `runtime/`: el runtime C++ (el que se publica en la instalación).
-- `bootstrap/modules/*.hpp`: cabeceras de frontera nativa.
+- `compiler/modules/*.hpp`: cabeceras de frontera nativa.
 - `types/`: las declaraciones canónicas.
 
 `native-cpp/build-all.sh` e `install.sh` compilan con `-I<repo>`, así que no
@@ -44,7 +44,7 @@ hay copias que puedan desincronizarse. Un cambio en el runtime no requiere
 regenerar la semilla, salvo que rompa la API que usa el compilador generado. Para usar la semilla sin instalar, `ESTC_ROOT` apunta a la
 raíz del repositorio.
 
-La distribución incluye `bootstrap/modules/platform.hpp`, necesaria para
+La distribución incluye `compiler/modules/platform.hpp`, necesaria para
 compilar los fuentes de bootstrap con el compilador instalado. La cabecera
 mantiene su ruta de inclusión también al mover la instalación.
 
@@ -59,7 +59,7 @@ para no acumular binarios en el historial, e `install.sh` la descarga
 | Pieza | Precompilado | Para recompilarla |
 |---|---|---|
 | Semilla (`frontend` + `etsc` de `native-cpp/`) | `prebuilt/<plataforma>/` | `--force-seed` |
-| Compilador de `bootstrap/` (generación 2, el `etsc` que se instala) | `prebuilt/<plataforma>/compiler/` | `--force-compiler` |
+| Compilador de `compiler/` (generación 2, el `etsc` que se instala) | `prebuilt/<plataforma>/compiler/` | `--force-compiler` |
 
 `--force` fuerza las dos. Cada precompilado solo se usa si su huella (sha256 de
 sus fuentes) coincide con el checkout; si no hay para la plataforma o está
@@ -69,14 +69,14 @@ en Linux y, en macOS, sin más dependencias que las del sistema.
 ```sh
 ./install.sh                    # usa los precompilados
 ./install.sh --force-seed       # recompila solo la semilla
-./install.sh --force-compiler   # recompila solo el compilador de bootstrap/
+./install.sh --force-compiler   # recompila solo el compilador de compiler/
 ./install.sh --help             # todas las opciones
 ```
 
 Detalles en [`native-cpp/README.md`](native-cpp/README.md).
 
 Para **regenerar la semilla** (cuando cambia el lowering o el backend de
-`bootstrap/`) basta el propio compilador, sin Node:
+`compiler/`) basta el propio compilador, sin Node:
 
 ```sh
 bash native-cpp/regenerate.sh
@@ -186,6 +186,6 @@ También se comprueba que no se instalan `src/` ni el driver TypeScript.
 
 Validación: **75/75** pruebas del backend, **4/4** de instalación/caché y
 migración de nombre, **19/19** regresiones de proyectos, versión y documentación.
-El [audit nativo](bootstrap/ir/audit-native.ts) compila **126/131 ejemplos válidos**
+El [audit nativo](compiler/ir/audit-native.ts) compila **126/131 ejemplos válidos**
 (los mismos cinco rechazos explícitos de capacidades pendientes), sin ejecutar
 servidores ni operaciones de red. No se anuncia un total global nuevo.

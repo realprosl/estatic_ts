@@ -1,5 +1,5 @@
 // check-ref-parity.ts — verifica que el CONTRATO DE PASO DE OBJETOS sea el
-// mismo en stage 0 (`src/`) y en el frontend nativo (`bootstrap/ir`).
+// mismo en stage 0 (`src/`) y en el frontend nativo (`compiler/ir`).
 //
 // El dialecto promete una sola semántica de paso, dé el pipeline que se use:
 //
@@ -20,7 +20,7 @@
 // Salida: exit 0 si los contratos coinciden; exit 1 + lista si divergen.
 //
 // OJO — esta comprobación es TRANSITORIA y por eso NO está en `npm test`.
-// `src/` existe hoy únicamente para compilar `bootstrap/`: cuando el
+// `src/` existe hoy únicamente para compilar `compiler/`: cuando el
 // compilador nativo sea el único que evoluciona, la paridad dejará de ser un
 // invariante y este script debe dejar de usarse. Es una comprobación manual
 // mientras ambos pipelines conviven.
@@ -28,7 +28,7 @@
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { nativeIr, buildIrFrontend } from "../bootstrap/ir/cpp.ts";
+import { nativeIr, buildIrFrontend } from "../compiler/ir/cpp.ts";
 import { generateCppFromIr } from "../src/codegen/ir/cpp-generator.ts";
 import { compile } from "../src/compiler.ts";
 
@@ -80,10 +80,10 @@ async function main(): Promise<void> {
     const entry = join(directory, "main.ets");
     writeFileSync(entry, SOURCE);
 
-    // Stage 0: el compilador de referencia que hoy compila `bootstrap/`.
+    // Stage 0: el compilador de referencia que hoy compila `compiler/`.
     const stage0 = compile(SOURCE).cpp;
 
-    // Nativo: el frontend de `bootstrap/ir` lowered a C++.
+    // Nativo: el frontend de `compiler/ir` lowered a C++.
     const project = nativeIr(await buildIrFrontend(), entry);
     const native = generateCppFromIr(project).cpp;
 

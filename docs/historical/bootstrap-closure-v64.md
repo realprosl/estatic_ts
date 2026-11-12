@@ -1,10 +1,10 @@
 # HISTÓRICO: inventario de cierre de bootstrap anterior a la revisión de 2026-10-24
 
-Este documento conserva el contenido anterior de `bootstrap/PENDING.md`, incluido
+Este documento conserva el contenido anterior de `compiler/PENDING.md`, incluido
 su inventario y sus resultados de distintas revisiones. **No describe el estado
 actual ni constituye evidencia de esta ejecución.** El registro vigente está en
-[bootstrap/PENDING.md](../../bootstrap/PENDING.md) y su revisión reproducible en
-[FRONTEND-REVIEW.md](../../bootstrap/audit/FRONTEND-REVIEW.md).
+[compiler/PENDING.md](../../compiler/PENDING.md) y su revisión reproducible en
+[FRONTEND-REVIEW.md](../../compiler/audit/FRONTEND-REVIEW.md).
 
 ---
 
@@ -81,7 +81,7 @@ por cada símbolo propagado. La revisión posterior pasa **1373/1373** pruebas d
 checker, incluida una regresión de 18 niveles de métodos sobre un receptor out.
 El cierre de rendimiento no cierra automáticamente las demás filas del inventario.
 
-La comparación de gramática está en [SYNTAX-PARITY.md](../../bootstrap/SYNTAX-PARITY.md):
+La comparación de gramática está en [SYNTAX-PARITY.md](../../compiler/SYNTAX-PARITY.md):
 **75/75** contratos y **131/131** archivos parseados por ambos pipelines,
 sin formas eliminadas en esas muestras. Se conserva además la forma histórica
 `union<T> Nombre` con sus parámetros, que stage 0 descartaba. El informe enumera
@@ -152,7 +152,7 @@ Se añaden casts numéricos intrínsecos, enteros exactos de 64 bits y redondeo 
 Se corrigen las conversiones de comparaciones y la adaptación de callbacks con
 argumentos de tipo explícitos en map/flatMap/reduce. Hay 99 regresiones nuevas.
 Los decoradores comptime/deprecated/sealed e include/link conservan metadatos
-validados. Ver [checker/COMPTIME.md](../../bootstrap/checker/COMPTIME.md) para el contrato y
+validados. Ver [checker/COMPTIME.md](../../compiler/checker/COMPTIME.md) para el contrato y
 los límites: clases, memoria, expansiones y ABI siguen sin cierre.
 
 El soporte async no cierra A01/A02: siguen pendientes obligaciones
@@ -273,7 +273,7 @@ subcaso de T08; el cierre completo de casts/readonly sigue abierto.
 
 ## Contradicciones y límites que requieren resolución explícita
 
-1. `LIMITATIONS.md` anuncia switch; `bootstrap/parser/README.md` y el código
+1. `LIMITATIONS.md` anuncia switch; `compiler/parser/README.md` y el código
    de stage 0 confirman que no tiene parser/codegen operativo. Se mantiene C02.
 2. La compatibilidad estructural básica está implementada en `compatibleInner`.
    Queda cerrar composición de métodos/campos opcionales, intersecciones y ciclos

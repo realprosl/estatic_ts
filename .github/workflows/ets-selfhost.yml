@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - bootstrap/**
+      - compiler/**
       - native-cpp/**
       - runtime/**
       - src/codegen/ir/native/**
@@ -43,16 +43,16 @@ jobs:
             echo 'Native compiler and runtime dependencies already present on runner.'
           fi
       - name: Verify the seed carries no copies of shared C++ sources
-        # runtime/, bootstrap/native/, bootstrap/modules/, src/codegen/ir/native/ and
+        # runtime/, compiler/native/, compiler/modules/, src/codegen/ir/native/ and
         # types/ have a single canonical location; the seed compiles them from there.
         run: |
           for item in runtime bootstrap src types; do
             if [ -e "native-cpp/$item" ]; then echo "::error::native-cpp/$item must not exist"; exit 1; fi
           done
       - name: Verify aggregate fast paths and value semantics
-        run: node --experimental-strip-types --test --test-name-pattern='native aggregate fast paths|temporary argument value semantics|temporary constructor value semantics|length snapshot semantics|length mutation ordering' bootstrap/ir/native.test.ts
+        run: node --experimental-strip-types --test --test-name-pattern='native aggregate fast paths|temporary argument value semantics|temporary constructor value semantics|length snapshot semantics|length mutation ordering' compiler/ir/native.test.ts
       - name: Verify readonly receivers and malformed IR rejection
-        run: node --experimental-strip-types --test --test-concurrency=1 --test-name-pattern='readonly' bootstrap/checker/checker.test.ts bootstrap/ir/readonly-verifier.test.ts bootstrap/ir/native.test.ts
+        run: node --experimental-strip-types --test --test-concurrency=1 --test-name-pattern='readonly' compiler/checker/checker.test.ts compiler/ir/readonly-verifier.test.ts compiler/ir/native.test.ts
   selfhost:
     needs: native-copy-regressions
     strategy:
@@ -98,10 +98,10 @@ jobs:
           ESTC_ROOT: ${{ github.workspace }}
         run: |
           /usr/bin/time -o build/ets-compiler/sequential-time.tsv -f 'sequential-analysis\t%e\t%U\t%S\t%M' \
-            build/ets-compiler/etsc bootstrap/driver/main.ets --check --jobs 1 --no-progress \
+            build/ets-compiler/etsc compiler/driver/main.ets --check --jobs 1 --no-progress \
             --emit-ir build/ets-compiler/sequential.ir.json 2> build/ets-compiler/sequential-analysis.log
           /usr/bin/time -o build/ets-compiler/parallel-time.tsv -f 'parallel-analysis\t%e\t%U\t%S\t%M' \
-            build/ets-compiler/etsc bootstrap/driver/main.ets --check --jobs 2 --no-progress \
+            build/ets-compiler/etsc compiler/driver/main.ets --check --jobs 2 --no-progress \
             --emit-ir build/ets-compiler/parallel.ir.json 2> build/ets-compiler/parallel-analysis.log
           cmp build/ets-compiler/sequential.ir.json build/ets-compiler/parallel.ir.json
           cmp build/ets-compiler/sequential.ir.json build/ets-compiler/stage2.ir.json
@@ -136,13 +136,13 @@ jobs:
           ESTATIC_SELFHOST_COMPILER: ${{ github.workspace }}/build/ets-compiler/etsc-stage2
           ESTATIC_NATIVE_CODEGEN: ${{ github.workspace }}/build/ets-compiler/etsc-stage2
           ESTATIC_NATIVE_BUILD: ${{ github.workspace }}/build/ets-compiler/etsc-stage2
-        run: node --experimental-strip-types --test --test-name-pattern='IR C\+\+ (executes|preserves escaped|initializes imported)' bootstrap/ir/cpp.test.ts
+        run: node --experimental-strip-types --test --test-name-pattern='IR C\+\+ (executes|preserves escaped|initializes imported)' compiler/ir/cpp.test.ts
       - name: Verify native annotations through the ETS compiler
         env:
           ESTATIC_IR_BINARY: ${{ github.workspace }}/scripts/selfhost-ir-frontend.sh
           ESTATIC_SELFHOST_COMPILER: ${{ github.workspace }}/build/ets-compiler/etsc-stage2
           ESTATIC_NATIVE_COMPILER: ${{ github.workspace }}/build/ets-compiler/etsc-stage2
-        run: node --experimental-strip-types --test bootstrap/ir/native-annotations.test.ts
+        run: node --experimental-strip-types --test compiler/ir/native-annotations.test.ts
       - name: Verify stage 1
         run: bash scripts/check-ets-compiler.sh build/ets-compiler/etsc
       - name: Verify stage 2 without Node

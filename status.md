@@ -6,11 +6,11 @@ del repositorio, no un historial de sesiones. El historial vive en
 
 ## Resumen
 
-Bootstrap ya dispone de un [IR nativo `ets-ir-2`](./bootstrap/ir/README.md)
+Bootstrap ya dispone de un [IR nativo `ets-ir-2`](./compiler/ir/README.md)
 con lowering de agregados, clases, genéricos, closures, variantes y async,
 verificación de ownership y préstamos por CFG, y contratos de runtime/efectos.
-El [backend C++ del IR](./bootstrap/ir/CPP.md) ya genera, compila y ejecuta
-programas reutilizando el runtime existente. El [CLI de bootstrap](./bootstrap/CLI.md)
+El [backend C++ del IR](./compiler/ir/CPP.md) ya genera, compila y ejecuta
+programas reutilizando el runtime existente. El [CLI de bootstrap](./compiler/CLI.md)
 conecta frontend nativo, IR y C++, con configuración, build y ejecución.
 `install.sh` instala `etsc`: frontend ETS compilado y driver/emisor C++20,
 sin dependencia de Node durante el uso instalado. Node queda en el bootstrap.
@@ -18,8 +18,8 @@ La ampliación de interfaces y HTTP pasa 75 pruebas del backend y compila
 126/131 fuentes válidos del corpus; las rutas HTTP se prueban con httplib
 y Drogon reales, y el cliente con libcurl.
 Su cobertura sigue siendo parcial: los límites se rechazan explícitamente.
-[`bootstrap/PENDING.md`](./bootstrap/PENDING.md) registra el trabajo abierto y
-sus criterios de cierre. La [revisión reproducible](./bootstrap/audit/FRONTEND-REVIEW.md)
+[`compiler/PENDING.md`](./compiler/PENDING.md) registra el trabajo abierto y
+sus criterios de cierre. La [revisión reproducible](./compiler/audit/FRONTEND-REVIEW.md)
 actualiza las 49 filas y separa implementación, restricciones y obligaciones.
 La matriz `audit:bootstrap` pasa 83/83 muestras; no sustituye la suite estable
 ni certifica por sí sola cierre o paridad semántica.
@@ -67,13 +67,13 @@ tipados y cero diagnósticos**; 216 contratos de builtins están sincronizados.
 
 `npm test` global no se repitió en esta revisión. Los comandos, la carencia de
 comptime con parámetros prestados y los límites de la evidencia están en
-[FRONTEND-REVIEW.md](./bootstrap/audit/FRONTEND-REVIEW.md). No se marca el frontend
+[FRONTEND-REVIEW.md](./compiler/audit/FRONTEND-REVIEW.md). No se marca el frontend
 como cerrado ni se introduce IR por actualizar documentos.
 
 ## Verificación histórica por revisión
 
 Las cifras y pendientes siguientes pertenecen a sus checkpoints. No describen
-la última ejecución; para el estado de las filas se usa `bootstrap/PENDING.md`.
+la última ejecución; para el estado de las filas se usa `compiler/PENDING.md`.
 
 - Tras PR #25 se añaden consultas typeof cualificadas con identidades originales,
   metadatos por ruta y precedencia correcta en arrays de unions/callables.
@@ -87,7 +87,7 @@ la última ejecución; para el estado de las filas se usa `bootstrap/PENDING.md`
   enteros exactos, callbacks, ámbitos y límites por raíz; 99 regresiones nuevas
   pasan. El audit pasa **80/80** y exige materialización de constantes y
   metadatos de decoradores. Esto no cierra el lenguaje: expansiones, ABI,
-  memoria y otras composiciones siguen en `bootstrap/PENDING.md`.
+  memoria y otras composiciones siguen en `compiler/PENDING.md`.
   npm test pasa **3101/3101**, con ejemplos/libuv incluidos, sin fallos,
   cancelaciones ni skips. Los resultados anteriores que siguen corresponden
   a sus revisiones respectivas.
@@ -104,33 +104,33 @@ la última ejecución; para el estado de las filas se usa `bootstrap/PENDING.md`
   de ejemplos con libuv, sin fallos ni skips. Las comprobaciones posteriores
   de composición pasan dentro de una ejecución focalizada de **86/86**.
   El audit nativo pasa **74/80**; los seis casos pendientes y las obligaciones
-  adicionales de composición siguen en [`bootstrap/PENDING.md`](./bootstrap/PENDING.md).
+  adicionales de composición siguen en [`compiler/PENDING.md`](./compiler/PENDING.md).
   Se implementan packs de funciones y owners en agregados con movimientos
   parciales. Esto no certifica el cierre del lenguaje ni autoriza comenzar IR.
 
-- v64 incorpora [resúmenes de efectos nativos](./bootstrap/checker/EFFECTS.md):
+- v64 incorpora [resúmenes de efectos nativos](./compiler/checker/EFFECTS.md):
   lecturas/escrituras/moves transitivos, destinos conservadores de callables,
   callbacks invocados/retenidos y obligaciones de préstamos por función.
   Permite consumidores locales demostrados y recursión con efectos conocidos;
   conserva rechazos de llamadas opacas. 348 pruebas del checker. El
-  [IR común para los backends](./bootstrap/checker/IR.md) está diseñado, pendiente
+  [IR común para los backends](./compiler/checker/IR.md) está diseñado, pendiente
   de implementación; el codegen principal conserva su cadena.
 
-- v63 añade [seguridad semántica nativa](./bootstrap/checker/SAFETY.md): flujo de
+- v63 añade [seguridad semántica nativa](./compiler/checker/SAFETY.md): flujo de
   inicialización/ownership con ramas y bucles, préstamos/readonly, capturas y
   procedencia de escapes, y tipos privados en superficies públicas. Añade tablas
   de capturas/préstamos sin modificar AST/binding. 300 pruebas del checker,
   incluidas 137 regresiones adicionales; las reglas conservadoras y los límites
   de efectos/lifetimes generales están documentados. No conecta aún codegen.
 
-- v62 añade [`bootstrap/checker/`](./bootstrap/checker/README.md): núcleo nativo
+- v62 añade [`compiler/checker/`](./compiler/checker/README.md): núcleo nativo
   inicial de inferencia y compatibilidad, llamadas/sobrecargas, genéricos simples,
   clases/interfaces y tipos entre módulos. Tipos y firmas seleccionadas en tablas
   separadas. Sus 163 pruebas pasan, incluidas comparaciones con stage 0 y cuatro
   diferencias explícitas. No certifica aún memoria/flujo/escapes ni API públicas;
   la paridad completa y el codegen desde esas tablas siguen pendientes.
 
-- v61 añade [`bootstrap/binder/`](./bootstrap/binder/README.md): ámbitos, símbolos,
+- v61 añade [`compiler/binder/`](./compiler/binder/README.md): ámbitos, símbolos,
   referencias léxicas y de tipos, imports/exports y namespaces. Tablas separadas
   del AST, grupos de sobrecargas y miembros ordinarios diferidos al checker.
   Sus 63 pruebas nativas pasan, incluidas las de su propio proyecto ETS y
@@ -138,7 +138,7 @@ la última ejecución; para el estado de las filas se usa `bootstrap/PENDING.md`
   selecciona firmas. La caché de sintaxis permanece sin anotaciones semánticas.
 
 
-- v60 incorpora [`bootstrap/modules/`](./bootstrap/modules/README.md): resolución
+- v60 incorpora [`compiler/modules/`](./compiler/modules/README.md): resolución
   de imports/reexports con aliases/raíces, identidad canónica, ciclos y ausencias.
   Registro atómico por archivo con tamaño, mtime/ctime nanosegundo, identidad
   filesystem, SHA-256, dependencias y tokens/AST hidratados sin nuevo parseo.
@@ -150,12 +150,12 @@ la última ejecución; para el estado de las filas se usa `bootstrap/PENDING.md`
 - La verificación del conjunto unitario estable realizada durante esta revisión
   pasó **2352/2352 pruebas**: 1236 unitarias de stage 0 y 1116 de bootstrap,
   ejecutadas por bloques. No incluye `test/runner.ts` ni la suite E2E/libuv.
-- El lexer de `bootstrap/lexer/` pasa **64/64** pruebas nativas, incluidas
+- El lexer de `compiler/lexer/` pasa **64/64** pruebas nativas, incluidas
   comparaciones con stage 0, su propio código ETS y aislamiento del módulo.
-  Ver [`bootstrap/README.md`](./bootstrap/README.md) para ejecutarlo por separado.
+  Ver [`compiler/README.md`](./compiler/README.md) para ejecutarlo por separado.
 - El parser aislado pasa **542/542** pruebas (incluido el adaptador léxico),
   incluido el análisis de su propio fuente y del lexer, sin importar otros
-  módulos ETS. La cobertura y las formas excluidas están en `bootstrap/parser/README.md`.
+  módulos ETS. La cobertura y las formas excluidas están en `compiler/parser/README.md`.
 - v59 añade el puente nativo por archivo con **57/57** pruebas: lexer ETS,
   expansión léxica de templates, conversión de tokens y parser ETS, sin preparar
   tokens en Node. Se comparan tokens/spans y arenas completas con las referencias

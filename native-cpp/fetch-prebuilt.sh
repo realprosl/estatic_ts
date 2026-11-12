@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Descarga los precompilados (semilla y compilador de bootstrap/) de la rama
+# Descarga los precompilados (semilla y compilador de compiler/) de la rama
 # `prebuilt` del repositorio en native-cpp/prebuilt/, que git ignora.
 #
 # La rama `prebuilt` NO se fusiona nunca con main: seed-prebuilt.yml la

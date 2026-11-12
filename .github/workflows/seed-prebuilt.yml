@@ -2,7 +2,7 @@ name: Seed and compiler prebuilt (Linux + macOS)
 
 # Compila en cada plataforma, con enlace autocontenido:
 #   - la semilla C++ (native-cpp/build-all.sh --update-prebuilt) y
-#   - el compilador de bootstrap/ (native-cpp/build-compiler.sh --update-prebuilt),
+#   - el compilador de compiler/ (native-cpp/build-compiler.sh --update-prebuilt),
 # comprueba que no dependen de librerías dinámicas de terceros, los prueba y,
 # en main, los publica en la rama `prebuilt` (un único commit, force-push; nunca
 # se fusiona con main) con la huella de sus fuentes. install.sh la descarga con
@@ -14,7 +14,7 @@ on:
     paths:
       - native-cpp/compiler/**
       - native-cpp/build-all.sh
-      - bootstrap/**
+      - compiler/**
       - native-cpp/build-compiler.sh
       - src/codegen/ir/native/**
       - runtime/**
@@ -24,7 +24,7 @@ on:
     paths:
       - native-cpp/compiler/**
       - native-cpp/build-all.sh
-      - bootstrap/**
+      - compiler/**
       - native-cpp/build-compiler.sh
       - src/codegen/ir/native/**
       - runtime/**

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Regenera la semilla: native-cpp/compiler/unity.cpp pasa a ser el C++ que el
-# propio compilador de bootstrap/ genera de sí mismo. No necesita Node ni src/.
+# propio compilador de compiler/ genera de sí mismo. No necesita Node ni src/.
 #
 # Uso: native-cpp/regenerate.sh [--compiler ETSC] [--cxx CXX] [--max-rounds N]
 #
@@ -9,7 +9,7 @@
 #   --cxx CXX        compilador C++ (por defecto $CXX o g++; clang++ en macOS)
 #   --max-rounds N   iteraciones máximas hasta el punto fijo (por defecto 3)
 #
-# Cada ronda: el compilador actual analiza bootstrap/driver/main.ets, emite su
+# Cada ronda: el compilador actual analiza compiler/driver/main.ets, emite su
 # IR y su C++, y ese C++ se compila para obtener el compilador de la ronda
 # siguiente. Solo se publica cuando dos rondas seguidas emiten EXACTAMENTE el
 # mismo IR y el mismo C++ (punto fijo del self-hosting). Análisis y compilación
@@ -20,7 +20,7 @@
 set -euo pipefail
 seed_dir="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$seed_dir/.." && pwd)"
-source "$root/bootstrap/native/progress.sh"
+source "$root/compiler/native/progress.sh"
 ETSC_CLI_SCOPE=${ETSC_CLI_SCOPE:-regenerate}
 
 compiler="" max_rounds=3
@@ -46,7 +46,7 @@ fi
 
 current="$compiler" previous=""
 for ((round = 1; round <= max_rounds; round++)); do
-  etsc_spin "Ronda $round · analizar bootstrap/" "$current" "$root/bootstrap/driver/main.ets" \
+  etsc_spin "Ronda $round · analizar compiler/" "$current" "$root/compiler/driver/main.ets" \
     --check --emit-ir "$work/round$round.ir.json" --no-progress
   etsc_spin "Ronda $round · emitir C++" "$current" --from-ir "$work/round$round.ir.json" \
     -o "$work/round$round.cpp" --no-progress

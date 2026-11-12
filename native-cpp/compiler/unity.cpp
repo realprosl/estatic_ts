@@ -5,7 +5,7 @@
 #include <iterator>
 #include <variant>
 #include "runtime/ets_runtime.hpp"
-#include "bootstrap/modules/platform.hpp"
+#include "compiler/modules/platform.hpp"
 #include "runtime/ets_collections.hpp"
 #include "runtime/ets_compiler_host.hpp"
 #include "runtime/ets_ir.hpp"
