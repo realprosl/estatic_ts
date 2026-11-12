@@ -115,6 +115,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
       - uses: actions/download-artifact@v4
         with:
           pattern: seed-*
@@ -136,11 +138,19 @@ jobs:
           git add -A native-cpp/prebuilt native-cpp/files.txt
           if git diff --cached --quiet; then echo 'Seeds unchanged.' >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
           git commit -m "build(native-cpp): semillas precompiladas para ${GITHUB_SHA::7}"
-          if ! git push origin HEAD:main; then
-            branch="build/seed-prebuilt-${{ github.run_id }}"
-            git push origin "HEAD:$branch"
-            gh pr create --base main --head "$branch" \
-              --title "build(native-cpp): semillas precompiladas" \
-              --body "Linux x86_64 y macOS arm64, enlace autocontenido, generadas por seed-prebuilt.yml." \
-              || echo "::warning::Rama $branch subida; crea la PR a mano."
-          fi
+          # main puede avanzar mientras se compila (p. ej. el commit de versión de
+          # auto-version.yml): se rebasa y se reintenta. Solo cambian prebuilt/ y
+          # files.txt, así que el rebase no choca con commits ajenos.
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:main; then exit 0; fi
+            echo "main avanzó; reintento $attempt"
+            sleep $((attempt * 5))
+            git fetch --depth=50 origin main
+            git rebase origin/main
+          done
+          branch="build/seed-prebuilt-${{ github.run_id }}"
+          git push origin "HEAD:$branch"
+          gh pr create --base main --head "$branch" \
+            --title "build(native-cpp): semillas precompiladas" \
+            --body "Linux x86_64 y macOS arm64, enlace autocontenido, generadas por seed-prebuilt.yml." \
+            || echo "::warning::Rama $branch subida; crea la PR a mano."

@@ -2,7 +2,8 @@ name: Version bump on merge
 
 # Cada PR fusionada en main sube la versión en el acto, con un commit directo
 # en main: +1 minor en package.json "version" y +1 en "estaticRevision".
-# No hay PR intermedia que fusionar a mano.
+# No hay PR intermedia que fusionar a mano. Las PRs de semillas precompiladas
+# (build/seed-prebuilt-*) no cuentan: solo traen binarios generados.
 #
 # - Idempotente: el commit lleva el trailer "Version-Bump-Source-PR: #N"; si ya
 #   está en main, no se vuelve a subir.
@@ -26,7 +27,8 @@ jobs:
   bump:
     if: >-
       github.event.pull_request.merged == true &&
-      !startsWith(github.event.pull_request.head.ref, 'automation/version-bump-')
+      !startsWith(github.event.pull_request.head.ref, 'automation/version-bump-') &&
+      !startsWith(github.event.pull_request.head.ref, 'build/seed-prebuilt-')
     runs-on: ubuntu-latest
     env:
       SOURCE_PR: ${{ github.event.pull_request.number }}
