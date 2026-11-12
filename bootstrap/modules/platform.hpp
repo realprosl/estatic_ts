@@ -55,8 +55,13 @@ inline std::string canonical(const std::string& file) {
 inline std::string metadata(const std::string& file) {
     struct stat s{}; if(::stat(file.c_str(),&s)!=0||!S_ISREG(s.st_mode)) return "";
     // Integers remain strings: nanosecond epochs and inode numbers exceed 2^53.
-    return std::to_string(s.st_size)+"|"+std::to_string(s.st_mtim.tv_sec)+":"+std::to_string(s.st_mtim.tv_nsec)
-        +"|"+std::to_string(s.st_ctim.tv_sec)+":"+std::to_string(s.st_ctim.tv_nsec)
+#if defined(__APPLE__)
+    const struct timespec& modified = s.st_mtimespec; const struct timespec& changed = s.st_ctimespec;
+#else
+    const struct timespec& modified = s.st_mtim; const struct timespec& changed = s.st_ctim;
+#endif
+    return std::to_string(s.st_size)+"|"+std::to_string(modified.tv_sec)+":"+std::to_string(modified.tv_nsec)
+        +"|"+std::to_string(changed.tv_sec)+":"+std::to_string(changed.tv_nsec)
         +"|"+std::to_string(s.st_dev)+"|"+std::to_string(s.st_ino);
 }
 inline std::vector<std::string> readSnapshot(const std::string& file) {

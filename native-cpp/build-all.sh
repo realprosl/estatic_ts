@@ -85,7 +85,8 @@ if ((static)); then
     ssl="${OPENSSL_PREFIX:-$(brew --prefix openssl@3 2>/dev/null || true)}"
     [[ -f $ssl/lib/libcrypto.a ]] || { echo "No se encuentra libcrypto.a (OPENSSL_PREFIX o brew openssl@3)" >&2; exit 1; }
     crypto_include=(-I"$ssl/include") etsc_link=("$ssl/lib/libcrypto.a")
-    export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-11.0}"
+    # std::to_chars(double) en libc++ exige macOS 13.3.
+    export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-13.3}"
   fi
 elif [[ $os == darwin ]]; then
   ssl="${OPENSSL_PREFIX:-$(brew --prefix openssl@3 2>/dev/null || true)}"
