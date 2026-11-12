@@ -4,8 +4,9 @@ name: Seed and compiler prebuilt (Linux + macOS)
 #   - la semilla C++ (native-cpp/build-all.sh --update-prebuilt) y
 #   - el compilador de bootstrap/ (native-cpp/build-compiler.sh --update-prebuilt),
 # comprueba que no dependen de librerías dinámicas de terceros, los prueba y,
-# en main, los guarda en native-cpp/prebuilt/<plataforma>/ con la huella de sus
-# fuentes. install.sh solo los usa si esa huella coincide con el checkout.
+# en main, los publica en la rama `prebuilt` (un único commit, force-push; nunca
+# se fusiona con main) con la huella de sus fuentes. install.sh la descarga con
+# native-cpp/fetch-prebuilt.sh y solo los usa si esa huella coincide.
 
 on:
   workflow_dispatch:
@@ -133,48 +134,51 @@ jobs:
           retention-days: 14
 
   publish:
+    # Los binarios NO van a main: se publican en la rama `prebuilt`, que se
+    # sobrescribe con un único commit (force-push) para no acumular historial.
+    # native-cpp/fetch-prebuilt.sh la descarga con --depth 1.
     needs: build
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 50
       - uses: actions/download-artifact@v4
         with:
           pattern: seed-*
           path: ${{ runner.temp }}/seeds
-      - name: Commit precompiled seeds
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Publish to the prebuilt branch (single commit, force-push)
         run: |
           set -euo pipefail
+          tree="$RUNNER_TEMP/prebuilt-tree"
+          mkdir -p "$tree"
+          # Conserva las plataformas que esta ejecución no haya producido.
+          if git fetch --depth 1 origin refs/heads/prebuilt 2>/dev/null; then
+            git archive FETCH_HEAD | tar -x -C "$tree"
+          fi
           for d in "$RUNNER_TEMP"/seeds/seed-*; do
             platform="${d##*/seed-}"
-            mkdir -p "native-cpp/prebuilt/$platform"
-            cp -R "$d"/. "native-cpp/prebuilt/$platform/"
-            chmod +x "native-cpp/prebuilt/$platform/frontend" "native-cpp/prebuilt/$platform/etsc"
-            [ -f "native-cpp/prebuilt/$platform/compiler/etsc" ] && chmod +x "native-cpp/prebuilt/$platform/compiler/etsc"
+            rm -rf "$tree/$platform"
+            mkdir -p "$tree/$platform"
+            cp -R "$d"/. "$tree/$platform/"
           done
-          (cd native-cpp && find . -type f -not -path './native/*' | LC_ALL=C sort > files.txt)
+          rm -f "$tree/README.md"
+          {
+            echo "# Precompilados de etsc"
+            echo
+            echo "Rama generada por \`seed-prebuilt.yml\` desde main@${GITHUB_SHA::7}."
+            echo "No se fusiona con main: se sobrescribe con un único commit en cada actualización."
+            echo "\`native-cpp/fetch-prebuilt.sh\` (llamado por \`install.sh\`) la descarga."
+            echo
+            for p in "$tree"/*/; do p="$(basename "$p")"; echo "- \`$p\`: $(ls "$tree/$p" | tr '\n' ' ')"; done
+          } > "$tree/README.md"
+          find "$tree" -type f \( -name etsc -o -name frontend \) -exec chmod +x {} +
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A native-cpp/prebuilt native-cpp/files.txt
-          if git diff --cached --quiet; then echo 'Seeds unchanged.' >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
-          git commit -m "build(native-cpp): semillas y compiladores precompilados para ${GITHUB_SHA::7}"
-          # main puede avanzar mientras se compila (p. ej. el commit de versión de
-          # auto-version.yml): se rebasa y se reintenta. Solo cambian prebuilt/ y
-          # files.txt, así que el rebase no choca con commits ajenos.
-          for attempt in 1 2 3 4 5; do
-            if git push origin HEAD:main; then exit 0; fi
-            echo "main avanzó; reintento $attempt"
-            sleep $((attempt * 5))
-            git fetch --depth=50 origin main
-            git rebase origin/main
-          done
-          branch="build/seed-prebuilt-${{ github.run_id }}"
-          git push origin "HEAD:$branch"
-          gh pr create --base main --head "$branch" \
-            --title "build(native-cpp): semillas y compiladores precompilados" \
-            --body "Linux x86_64 y macOS arm64, enlace autocontenido, generadas por seed-prebuilt.yml." \
-            || echo "::warning::Rama $branch subida; crea la PR a mano."
+          git checkout --orphan prebuilt-publish
+          git rm -rfq --cached .
+          git clean -fdxq
+          cp -R "$tree"/. .
+          git add -A .
+          git commit -q -m "prebuilt: semilla y compilador para main@${GITHUB_SHA::7}"
+          git push --force origin HEAD:refs/heads/prebuilt
+          echo "Rama prebuilt actualizada para main@${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"

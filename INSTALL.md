@@ -54,8 +54,10 @@ mantiene su ruta de inclusión también al mover la instalación.
 ### Precompilados por defecto
 
 `install.sh` construye dos piezas y, **por defecto, usa la versión precompilada
-de cada una** de `native-cpp/prebuilt/<plataforma>/` (Linux x86_64 o macOS
-arm64):
+de cada una** (Linux x86_64 o macOS arm64). Los precompilados no están en
+`main`: viven en la rama `prebuilt`, que el CI sobrescribe con un único commit
+para no acumular binarios en el historial, e `install.sh` la descarga
+(`git clone --depth 1`) en `native-cpp/prebuilt/` (ignorado por git):
 
 | Pieza | Precompilado | Para recompilarla |
 |---|---|---|

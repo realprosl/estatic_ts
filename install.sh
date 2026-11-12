@@ -42,7 +42,8 @@ publica el ejecutable resultante como el compilador nativo etsc.
   --force          las dos cosas: --force-seed y --force-compiler
   --help           esta ayuda (lista todas las opciones)
 
-Por defecto se usan las versiones precompiladas de native-cpp/prebuilt/<plataforma>
+Por defecto se descargan (rama `prebuilt`, native-cpp/fetch-prebuilt.sh) y usan
+las versiones precompiladas de native-cpp/prebuilt/<plataforma>
 (Linux x86_64, macOS arm64) de la semilla y del compilador, cada una solo si su
 huella coincide con las fuentes; si no hay o esta desfasada, se compila.
 
@@ -134,6 +135,11 @@ if [ -e "$destination" ]; then
     [ "$target" = "$repo_dir/src/cli.ts" ] && owned=1
   fi
   [ "$owned" -eq 1 ] || fail "No se sobrescribe un comando ajeno: $destination; usa otro --prefix"
+fi
+
+# Los precompilados se descargan de la rama `prebuilt` (no estan en main).
+if [ "$force_seed" -eq 0 ] || [ "$force_compiler" -eq 0 ]; then
+  bash "$seed_dir/fetch-prebuilt.sh"
 fi
 
 etsc_info "Construyendo la semilla C++20"

@@ -4,7 +4,8 @@
 # install.sh, el CI y los desarrolladores.
 #
 # native-cpp/ solo contiene lo GENERADO desde bootstrap/ (frontend/, tablas en
-# build/bootstrap/etsc/ y templates/) más la semilla precompilada (prebuilt/).
+# build/bootstrap/etsc/ y templates/). Los precompilados llegan a prebuilt/
+# (ignorado por git) con fetch-prebuilt.sh, desde la rama `prebuilt`.
 # Todo lo demás se comparte con el resto del repositorio:
 #   runtime/                 runtime C++ único (semilla, bootstrap y programas)
 #   bootstrap/native/        coordinador nativo (driver.cpp, platform.hpp, progress.*)

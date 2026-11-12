@@ -3,6 +3,7 @@
 ./build-compiler.sh
 ./build/bootstrap/etsc/install_config.hpp
 ./build/bootstrap/etsc/native-tables.hpp
+./fetch-prebuilt.sh
 ./files.txt
 ./frontend/estatic_common.hpp
 ./frontend/unit-0.cpp
@@ -45,12 +46,6 @@
 ./frontend/unit-8.cpp
 ./frontend/unit-9.cpp
 ./frontend/unity.cpp
-./prebuilt/darwin-arm64/etsc
-./prebuilt/darwin-arm64/frontend
-./prebuilt/darwin-arm64/inputs.sha256
-./prebuilt/linux-x86_64/etsc
-./prebuilt/linux-x86_64/frontend
-./prebuilt/linux-x86_64/inputs.sha256
 ./templates/.gitignore
 ./templates/README.md
 ./templates/estatic.config.json

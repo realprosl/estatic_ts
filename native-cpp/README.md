@@ -15,7 +15,8 @@ Aquí solo vive lo que se genera desde `bootstrap/`:
 | `templates/` | Plantillas de proyecto que escribe `etsc init` |
 | `build-all.sh`, `files.txt` | Construcción de la semilla y manifiesto de ficheros |
 | `build-compiler.sh` | Construcción del compilador de `bootstrap/` (generación 2) con la semilla |
-| `prebuilt/<plataforma>/` | Semilla ya compilada (Linux y macOS) y, en `compiler/`, el compilador de `bootstrap/`, con la huella de sus fuentes; los genera el CI |
+| `fetch-prebuilt.sh` | Descarga los precompilados de la rama `prebuilt` en `prebuilt/` |
+| `prebuilt/<plataforma>/` | **No está en git** (lo descarga `fetch-prebuilt.sh`): semilla ya compilada (Linux y macOS) y, en `compiler/`, el compilador de `bootstrap/`, con la huella de sus fuentes |
 
 Las piezas C++ escritas a mano **no se copian aquí**. Tienen una única ubicación
 en el repositorio y las usan por igual la semilla, `bootstrap/`, `install.sh`,
@@ -60,6 +61,13 @@ No hace falta Node para construirlos ni para usarlos.
 
 ## Semilla precompilada (`prebuilt/`)
 
+Los precompilados **no se guardan en `main`**, para no acumular binarios en el
+historial de git: viven en la rama `prebuilt`, que `seed-prebuilt.yml`
+sobrescribe con un único commit en cada actualización y que nunca se fusiona.
+`fetch-prebuilt.sh` (lo llama `install.sh`) la clona con `--depth 1` en un
+directorio temporal —sin tocar el repositorio— y la copia en `prebuilt/`, que
+git ignora. Sin git, sin red o sin esa rama, no pasa nada: se compila.
+
 `prebuilt/<plataforma>/` (`linux-x86_64`, `darwin-arm64`) guarda `frontend` y
 `etsc` ya compilados y `inputs.sha256`, la huella de todas sus fuentes
 (`frontend/unity.cpp`, `build/bootstrap/etsc/`, `bootstrap/native/`,
@@ -86,7 +94,7 @@ coincide (semilla + `bootstrap/` + `runtime/`); `--force` lo recompila y
 
 La Action `seed-prebuilt.yml` las compila en Ubuntu y en macOS cuando cambia
 alguna de esas fuentes (también el compilador de `bootstrap/`), comprueba con `file`/`otool -L` que no dependen de
-librerías dinámicas de terceros, las prueba y las sube a main. Siguen haciendo
+librerías dinámicas de terceros, las prueba y las publica en la rama `prebuilt`. Siguen haciendo
 falta un compilador C++ en la máquina: la semilla lo invoca para construir
 `bootstrap/`.
 
@@ -97,13 +105,13 @@ node --experimental-strip-types scripts/generate-native-cpp-snapshot.mjs
 ```
 
 La regeneración **solo borra y reescribe lo generado**: `frontend/`, `build/`,
-`templates/` y `files.txt`. También borra `prebuilt/`, porque esos binarios ya
-no corresponden a las fuentes nuevas. Los ficheros escritos a mano
+`templates/` y `files.txt`. También borra la copia local de `prebuilt/`, porque
+esos binarios ya no corresponden a las fuentes nuevas. Los ficheros escritos a mano
 (`build-all.sh`, `build-compiler.sh`, `README.md`) no se tocan nunca.
 
 Cuando la regeneración llega a main, `seed-prebuilt.yml` vuelve a compilar la
-semilla y el compilador en Linux y macOS y sube los nuevos precompilados, que
-quedan así listos para la siguiente versión.
+semilla y el compilador en Linux y macOS y publica los nuevos precompilados en la
+rama `prebuilt`, que quedan así listos para la siguiente versión.
 
 La Action `regenerate-native-cpp.yml` hace lo mismo: comprueba que los ficheros
 escritos a mano no cambian, que aquí no aparecen copias de `runtime/`,

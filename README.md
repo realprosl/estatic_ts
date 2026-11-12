@@ -90,6 +90,62 @@ g++ -std=c++20 -fno-exceptions -pthread -I. /tmp/hello.cpp -o /tmp/hello
 
 Para más detalles del flujo de build, ver [`docs/build-system.md`](./docs/build-system.md).
 
+## Scripts y comandos
+
+Todos los scripts del repositorio, qué hace cada uno y sus opciones. Se ejecutan
+desde la raíz del repositorio. `--help` muestra la ayuda de los que la tienen.
+
+### Instalación y semilla
+
+| Script | Qué hace | Opciones |
+|---|---|---|
+| `./install.sh` | Instala `etsc` en `<prefix>/bin`. Descarga y usa la semilla y el compilador precompilados si coinciden con las fuentes; si no, los compila. No usa Node. | `--prefix DIR`, `--cxx CXX`, `--frontend BIN`, `--seed-only` (publica la semilla, sin compilar bootstrap), `--force-seed` (recompila la semilla), `--force-compiler` / `--force-compile` (recompila el compilador de bootstrap), `--force` (las dos), `--help` |
+| `native-cpp/build-all.sh` | Construye la **semilla** (`native/frontend` y `native/etsc`): frontend y coordinador en paralelo, o copia la precompilada si coincide. | `--out DIR`, `--cxx CXX`, `--frontend BIN`, `--static`, `--force`, `--update-prebuilt` (CI), `--help` |
+| `native-cpp/build-compiler.sh` | Construye el **compilador de `bootstrap/`** (generación 2, el `etsc` que se instala) con la semilla, o copia el precompilado si coincide. | `--seed DIR`, `--out BIN`, `--static`, `--force`, `--update-prebuilt` (CI), `--help` |
+| `native-cpp/fetch-prebuilt.sh` | Descarga los precompilados de la rama `prebuilt` (clon `--depth 1` en un temporal) en `native-cpp/prebuilt/`. Nunca falla: sin red o sin rama, se compila. | `--remote NOMBRE\|URL`, `--branch RAMA`, `--help` |
+| `node --experimental-strip-types scripts/generate-native-cpp-snapshot.mjs` | **Regenera la semilla** desde `bootstrap/` con `src/` (stage 0). Solo reescribe lo generado (`frontend/`, `build/`, `templates/`, `files.txt`) y retira `prebuilt/`. Necesita Node. | — |
+| `bootstrap/native/progress.sh` | Utilidad de presentación (spinner, tiempos) que cargan los demás scripts. No se ejecuta sola. | — |
+
+### Compilador ETS (desarrollo del self-hosting)
+
+| Script | Qué hace | Opciones |
+|---|---|---|
+| `scripts/build-ets-compiler.sh` | Compila el compilador ETS: `stage1` con la semilla (`build/ets-compiler/etsc`) o `stage1`+`stage2` (`etsc-stage2`), con tiempos en `timings.tsv`. | `stage1` \| `stage2`; entorno `ESTATIC_ETS_OPTIMIZATION=-O1\|-O2\|-O3`, `ESTATIC_ETS_BUILD_DIR` |
+| `scripts/check-ets-compiler.sh` | Prueba de humo de un compilador: compila y ejecuta un programa mínimo. | `[COMPILADOR]` (por defecto `build/ets-compiler/etsc`) |
+| `scripts/regenerate-ets-native.sh` | Construye `stage2`, prueba las dos generaciones, compara sus IR y copia `stage2.cpp` a `native-cpp/compiler/unity.cpp` (flujo heredado). | — |
+| `scripts/selfhost-ir-frontend.sh` | Adaptador que usa el CI: expone el compilador autoalojado con el protocolo fuente→IR JSON de los fixtures. | entorno `ESTATIC_SELFHOST_COMPILER` |
+
+### Dependencias nativas (en `build/libs/` y `build/tools/`)
+
+| Script | Qué hace | Opciones |
+|---|---|---|
+| `scripts/build-libuv.sh` | Compila libuv en estático desde `third_party/libuv/`. | `[VERSION]` (por defecto `v1.48.0`) |
+| `scripts/build-boringssl.sh` | Compila BoringSSL en estático desde `third_party/boringssl/`. | — |
+| `scripts/build-curl.sh` | Compila libcurl en estático contra la BoringSSL vendorizada. | — |
+| `scripts/build-tree-sitter.sh` | Compila los objetos C de Tree-sitter (runtime y gramática), sin CMake. | `[DIR_SALIDA] [CXX]` |
+| `scripts/build-runtime.sh` | Precompila el runtime (`runtime/runtime_ets_*.cpp`) a `.o` cacheados. | — |
+| `scripts/build-ast-dump.sh` | Construye `build/tools/ets-ast-dump`, para inspeccionar el AST de un fichero. | `[DIR_SALIDA] [CXX]` |
+| `scripts/regenerate-tree-sitter.sh` | Regenera la gramática Tree-sitter de los editores desde la vendorizada. | — |
+| `scripts/postinstall.sh` | Se ejecuta tras `npm install`: comprueba que están las librerías del sistema que usa el runtime. | — |
+
+### Pruebas, ejemplos y benchmarks
+
+| Script | Qué hace | Opciones |
+|---|---|---|
+| `scripts/check-http-limits.sh` | Regresión de límites HTTP del runtime. | argumentos del test |
+| `scripts/check-http-routing.sh` | Regresión del enrutado HTTP del runtime. | — |
+| `scripts/check-memory.sh` | Auditoría de memoria del runtime con ASan/UBSan (sin libuv ni Drogon). | — |
+| `test/strong/run.sh` | Compila y ejecuta los proyectos de `test/strong/` y compara su salida. | — |
+| `test/apps/todo/run.sh` | Prueba del CLI `todo` de ejemplo (varios procesos). | — |
+| `examples/notification-app/run.sh` | Compila y ejecuta el ejemplo y compara con `expected.txt`. | entorno `ETSC` (compilador) |
+| `examples/todo-project/run.sh` | Compila el ejemplo multi-módulo con `src/` y lo ejecuta. | — |
+| `benchmarks/all/run-benchmarks.sh`, `benchmarks/match/run-benchmarks.sh` | Comparan el C++ generado con C++ escrito a mano (`hyperfine`). | — |
+| `runtime/libuv/tests/tls/generate_test_certs.sh` | Genera certificados autofirmados para las pruebas TLS. | `[DIR_SALIDA]` |
+| `scripts/merge-block-c.sh` | Automatización heredada de la fusión de un bloque de PRs antiguo. | — |
+
+Más detalle de los scripts de `scripts/` en [`scripts/README.md`](scripts/README.md) y
+de la semilla en [`native-cpp/README.md`](native-cpp/README.md).
+
 ## Configuración del proyecto
 
 `estatic.config.ts` centraliza la entrada, roots y aliases de módulos, salidas y compilación nativa directa. No utiliza CMake.

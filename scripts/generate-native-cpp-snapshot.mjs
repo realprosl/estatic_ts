@@ -72,10 +72,11 @@ writeFileSync(join(templates, ".gitignore"), ignore.endsWith("\n") ? `${ignore}.
 console.log(`Generated ${result.modules.length} C++ frontend units in ${frontend}`);
 console.log(`Generated project templates in ${templates}`);
 
-// Manifest of every file in the seed (excluding local build output in native/).
+// Manifest of every tracked file in the seed (native/ is local build output and
+// prebuilt/ a download from the `prebuilt` branch; neither is in git).
 const listFiles = (dir, prefix = ".") => readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
   const relative = `${prefix}/${entry.name}`;
-  if (entry.isDirectory()) return relative === "./native" ? [] : listFiles(join(dir, entry.name), relative);
+  if (entry.isDirectory()) return relative === "./native" || relative === "./prebuilt" ? [] : listFiles(join(dir, entry.name), relative);
   return [relative];
 });
 const manifest = [...listFiles(directory).filter(file => file !== "./files.txt"), "./files.txt"]
