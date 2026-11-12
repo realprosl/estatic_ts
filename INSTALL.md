@@ -21,30 +21,27 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ## Bootstrap y ejecución nativa
 
-La instalación **no usa Node.js**: compila la semilla C++ de `native-cpp/` —el
-C++ ya generado desde `bootstrap/`— con el compilador C++20 del sistema. De ahí
-salen el frontend nativo (`native/frontend`) y el driver (`etsc`). Después,
-`etsc` ejecuta el frontend nativo y emite, compila y enlaza C++ sin Node, npm,
-intérprete JavaScript ni las fuentes TypeScript de stage 0. El frontend es ETS
-compilado; el driver y el backend son C++20. Esto no afirma que todo el
-compilador esté escrito en ETS o sea autoalojado.
+La instalación **no usa Node.js**. La semilla (`native-cpp/compiler/unity.cpp`)
+es el C++ que el compilador de `bootstrap/` genera de sí mismo; compilada con el
+compilador C++20 del sistema es un `etsc` completo, que compila `bootstrap/`
+(generación 2). Ese segundo `etsc` es el que se instala. Todo el compilador
+—análisis, lowering, backend y coordinador— está escrito en ETS y es
+autoalojado.
 
 ### Una sola copia de cada pieza C++
 
-`native-cpp/` contiene únicamente lo generado desde `bootstrap/` (el frontend en
-C++, sus tablas y las plantillas). El resto del C++ tiene una única ubicación y
-lo comparten la semilla, el compilador de `bootstrap/`, `install.sh`, el CI y
-los programas generados:
+`native-cpp/` contiene la semilla generada (`compiler/unity.cpp`), las
+plantillas y sus scripts. El C++ escrito a mano tiene una única ubicación y lo
+comparten la semilla, el compilador de `bootstrap/`, `install.sh`, el CI y los
+programas generados:
 
 - `runtime/`: el runtime C++ (el que se publica en la instalación).
-- `bootstrap/native/`: el coordinador nativo (`driver.cpp`, `platform.hpp`).
 - `bootstrap/modules/*.hpp`: cabeceras de frontera nativa.
-- `src/codegen/ir/native/`: el emisor IR → C++.
 - `types/`: las declaraciones canónicas.
 
 `native-cpp/build-all.sh` e `install.sh` compilan con `-I<repo>`, así que no
 hay copias que puedan desincronizarse. Un cambio en el runtime no requiere
-regenerar la semilla, salvo que rompa la API que usa el frontend generado. Para usar la semilla sin instalar, `ESTC_ROOT` apunta a la
+regenerar la semilla, salvo que rompa la API que usa el compilador generado. Para usar la semilla sin instalar, `ESTC_ROOT` apunta a la
 raíz del repositorio.
 
 La distribución incluye `bootstrap/modules/platform.hpp`, necesaria para
@@ -78,16 +75,18 @@ en Linux y, en macOS, sin más dependencias que las del sistema.
 
 Detalles en [`native-cpp/README.md`](native-cpp/README.md).
 
-Node sólo hace falta para **regenerar la semilla** cuando cambian las fuentes de
-`bootstrap/*.ets`:
+Para **regenerar la semilla** (cuando cambia el lowering o el backend de
+`bootstrap/`) basta el propio compilador, sin Node:
 
 ```sh
-node --experimental-strip-types scripts/generate-native-cpp-snapshot.mjs
+bash native-cpp/regenerate.sh
 ```
 
-Ese paso es de desarrollo, no de despliegue: `install.sh` nunca lo invoca.
+Solo se publica cuando dos rondas seguidas emiten el mismo IR y el mismo C++
+(punto fijo). Es un paso de desarrollo: `install.sh` nunca lo invoca.
 
-El ejecutable instalado es `etsc`. La distribución contiene el frontend nativo,
+El ejecutable instalado es `etsc`. La distribución contiene el adaptador
+`native/frontend` (protocolo fuente→IR de las herramientas de desarrollo),
 plantillas, tipos del editor, cabeceras y runtime precompilado; no instala el
 antiguo launcher que ejecutaba Node. Al actualizar una instalación anterior,
 se retiran `estc` y `nativo` sólo si sus hashes prueban que pertenecen a esa
@@ -102,8 +101,8 @@ bibliotecas cuando se selecciona `@cpp_drogon`. No se descargan dependencias
 ni se modifican paquetes del sistema implícitamente. Node sólo hace falta para
 regenerar la semilla y para las herramientas de desarrollo.
 
-`--cxx clang++`, `CXX` y `AR` seleccionan herramientas. `--frontend ruta`
-permite reutilizar un frontend ya construido en vez de compilar la semilla.
+`--cxx clang++`, `CXX` y `AR` seleccionan herramientas. `--seed BIN` reutiliza
+una semilla (`etsc`) ya construida en vez de construirla.
 Una actualización prepara una distribución nueva antes de publicar el comando.
 
 ## Proyectos y configuración

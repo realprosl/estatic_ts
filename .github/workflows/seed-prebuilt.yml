@@ -12,8 +12,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - native-cpp/frontend/**
-      - native-cpp/build/**
+      - native-cpp/compiler/**
       - native-cpp/build-all.sh
       - bootstrap/**
       - native-cpp/build-compiler.sh
@@ -23,8 +22,7 @@ on:
   push:
     branches: [main]
     paths:
-      - native-cpp/frontend/**
-      - native-cpp/build/**
+      - native-cpp/compiler/**
       - native-cpp/build-all.sh
       - bootstrap/**
       - native-cpp/build-compiler.sh
@@ -84,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           dir="native-cpp/prebuilt/${{ matrix.platform }}"
-          bins=("$dir/frontend" "$dir/etsc")
+          bins=("$dir/etsc")
           [ -x "$dir/compiler/etsc" ] && bins+=("$dir/compiler/etsc")
           for bin in "${bins[@]}"; do
             if [ "$RUNNER_OS" = Linux ]; then
@@ -103,13 +101,12 @@ jobs:
           set -euo pipefail
           dir="native-cpp/prebuilt/${{ matrix.platform }}"
           "$dir/etsc" --version
-          "$dir/frontend" examples/hello.ets > "$RUNNER_TEMP/hello.ir.json"
+          ESTC_ROOT="$GITHUB_WORKSPACE" "$dir/etsc" examples/hello.ets --check --emit-ir "$RUNNER_TEMP/hello.ir.json" --no-progress
           test -s "$RUNNER_TEMP/hello.ir.json"
           # build-all.sh must now pick the precompiled seed (inputs match).
           bash native-cpp/build-all.sh --out "$RUNNER_TEMP/picked/native" 2>&1 | tee "$RUNNER_TEMP/picked.log"
           grep -q 'Semilla precompilada' "$RUNNER_TEMP/picked.log"
           if [ "$RUNNER_OS" = Linux ]; then
-            # Same layout as the seed: <dir>/native/{etsc,frontend}.
             ESTC_ROOT="$GITHUB_WORKSPACE" "$RUNNER_TEMP/picked/native/etsc" build examples/hello.ets \
               -o "$RUNNER_TEMP/hello.cpp" --binary "$RUNNER_TEMP/hello" --no-progress
             "$RUNNER_TEMP/hello" | grep -q 'Hola, mundo'
@@ -171,7 +168,7 @@ jobs:
             echo
             for p in "$tree"/*/; do p="$(basename "$p")"; echo "- \`$p\`: $(ls "$tree/$p" | tr '\n' ' ')"; done
           } > "$tree/README.md"
-          find "$tree" -type f \( -name etsc -o -name frontend \) -exec chmod +x {} +
+          find "$tree" -type f -name etsc -exec chmod +x {} +
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git checkout --orphan prebuilt-publish

@@ -9,7 +9,7 @@ on:
       - src/codegen/ir/native/**
       - scripts/build-ets-compiler.sh
       - scripts/check-ets-compiler.sh
-      - scripts/regenerate-ets-native.sh
+      - native-cpp/regenerate.sh
       - .github/workflows/ets-selfhost.yml
 permissions:
   contents: read

@@ -6,7 +6,6 @@ import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { root } from "./root.ts";
-import { buildIrFrontend } from "./ir/cpp.ts";
 
 const temporary=()=>{mkdirSync(join(root,"build/test-tmp"),{recursive:true});return mkdtempSync(join(root,"build/test-tmp/install-"));};
 // El instalador es un script de shell: no usa Node. Se invoca con bash y con
@@ -15,6 +14,16 @@ const temporary=()=>{mkdirSync(join(root,"build/test-tmp"),{recursive:true});ret
 // Por defecto se instala solo la semilla (`--seed-only`): la generacion 2
 // (compilar bootstrap/ con la semilla) cuesta varios minutos por
 // instalacion y hay un test dedicado que la cubre.
+// La semilla (un etsc completo compilado desde native-cpp/compiler/unity.cpp) se
+// construye una sola vez y se reutiliza con `install.sh --seed`.
+let builtSeed="";
+const testSeed=()=>{
+  if(builtSeed)return builtSeed;
+  const out=join(root,"build/test-seed");
+  const p=spawnSync("bash",[join(root,"native-cpp/build-all.sh"),"--out",out],{cwd:root,encoding:"utf8",timeout:1800000});
+  assert.equal(p.status,0,p.stderr+p.stdout);
+  return builtSeed=join(out,"etsc");
+};
 const install=(prefix:string,extra:string[]=[])=>spawnSync("bash",[join(root,"install.sh"),"--prefix",prefix,"--seed-only",...extra],{cwd:root,encoding:"utf8",timeout:600000});
 
 test("runtime cache invalidates headers and ABI flags and recovers corrupted archives",async()=>{
@@ -42,8 +51,8 @@ test("install protects an unrelated command before modifying its prefix",()=>{
 test("installed etsc compiles bootstrap native headers outside the checkout",async()=>{
  const dir=temporary(),prefix=join(dir,"prefix");
  try{
-  const frontend=process.env.ESTATIC_IR_BINARY??await buildIrFrontend();
-  const installed=install(prefix,["--frontend",frontend]);
+  const seed=testSeed();
+  const installed=install(prefix,["--seed",seed]);
   assert.equal(installed.status,0,installed.stderr+installed.stdout);
   const moved=join(dir,"moved-prefix");renameSync(prefix,moved);
   const boundary=join(dir,"platform.ets"),probe=join(dir,"bootstrap-header.ets");
@@ -59,11 +68,11 @@ test("installed etsc compiles bootstrap native headers outside the checkout",asy
 test("installed etsc initializes, builds and runs independently of the clone with precompiled runtime",async()=>{
  const dir=temporary(),prefix=join(dir,"prefix"),project=join(dir,"project with spaces"),cache=join(dir,"user-cache");
  try{
-  const frontend=process.env.ESTATIC_IR_BINARY??await buildIrFrontend();
+  const seed=testSeed();
   // An npm-linked stage-0 launcher from this checkout is safe to replace.
   mkdirSync(join(prefix,"bin"),{recursive:true});symlinkSync(join(root,"src/cli.ts"),join(prefix,"bin/etsc"));
   const sourceBefore=readFileSync(join(root,"src/cli.ts"),"utf8");
-  const installed=install(prefix,["--frontend",frontend]);
+  const installed=install(prefix,["--seed",seed]);
   assert.equal(readFileSync(join(root,"src/cli.ts"),"utf8"),sourceBefore);assert.equal(installed.status,0,installed.stderr+installed.stdout);
   const bin=join(prefix,"bin/etsc"),home=realpathSync(join(prefix,"lib/estc/current"));if(process.platform==="linux")assert.equal(readFileSync(bin).subarray(0,4).toString(),"\x7fELF");
   // Installed use must not import the stage-0 compiler or build its frontend.
@@ -106,7 +115,7 @@ test("installed etsc initializes, builds and runs independently of the clone wit
   const runtimeFiles=readdirSync(join(project,".build/runtime"),{recursive:true}).map(String).filter(p=>p.endsWith(".a"));
   const localArchive=join(project,".build/runtime",runtimeFiles[0]);writeFileSync(localArchive,"corrupt");
   p=run(["run"],project);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");assert.notEqual(readFileSync(localArchive,"utf8"),"corrupt");
-  const upgrade=install(prefix,["--frontend",frontend]);assert.equal(upgrade.status,0,upgrade.stderr);assert.notEqual(realpathSync(join(prefix,"lib/estc/current")),home);
+  const upgrade=install(prefix,["--seed",seed]);assert.equal(upgrade.status,0,upgrade.stderr);assert.notEqual(realpathSync(join(prefix,"lib/estc/current")),home);
   const moved=join(dir,"relocated prefix");renameSync(prefix,moved);const movedBin=join(moved,"bin/etsc");
   p=spawnSync(movedBin,["run"],{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");
   const countBeforeProfile=objects().length;
@@ -136,7 +145,7 @@ test("installed etsc initializes, builds and runs independently of the clone wit
 test("install compiles the C++ seed without Node",async()=>{
  const dir=temporary(),prefix=join(dir,"prefix");
  try{
-  // Sin --frontend: el instalador compila la semilla de native-cpp/ con el
+  // Sin --seed: el instalador compila la semilla de native-cpp/ con el
   // compilador C++20 del sistema. Node no interviene.
   const poison=join(dir,"without-node"),sentinel=join(dir,"node-was-used");mkdirSync(poison);
   for(const executable of ["node","nodejs","npm"]){const path=join(poison,executable);writeFileSync(path,`#!/bin/sh\necho forbidden >> '${sentinel}'\nexit 99\n`);chmodSync(path,0o755);}
@@ -162,7 +171,7 @@ test("install migrates an owned nativo command to etsc",async()=>{
  const dir=temporary();try{
   mkdirSync(join(dir,"bin"));mkdirSync(join(dir,"lib/nativo/current"),{recursive:true});const old=join(dir,"bin/nativo");writeFileSync(old,"old driver");
   writeFileSync(join(dir,"lib/nativo/current/installation.json"),JSON.stringify({format:"nativo-install-1",commandHash:createHash("sha256").update(readFileSync(old)).digest("hex")}));
-  const frontend=process.env.ESTATIC_IR_BINARY??await buildIrFrontend();const p=install(dir,["--frontend",frontend]);assert.equal(p.status,0,p.stderr);assert(!existsSync(old));assert(existsSync(join(dir,"bin/etsc")));
+  const seed=testSeed();const p=install(dir,["--seed",seed]);assert.equal(p.status,0,p.stderr);assert(!existsSync(old));assert(existsSync(join(dir,"bin/etsc")));
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
@@ -172,8 +181,8 @@ for(const owned of [true,false])test(`install migrates estc and preserves unrela
   symlinkSync("releases/old",join(dir,"lib/estc/current"));
   const legacy=join(dir,"bin/estc");writeFileSync(legacy,"old native driver");
   writeFileSync(join(release,"installation.json"),JSON.stringify({format:"estc-install-1",commandHash:createHash("sha256").update(owned?"old native driver":"another driver").digest("hex")}));
-  const frontend=process.env.ESTATIC_IR_BINARY??await buildIrFrontend();
-  const p=install(dir,["--frontend",frontend]);assert.equal(p.status,0,p.stderr+p.stdout);
+  const seed=testSeed();
+  const p=install(dir,["--seed",seed]);assert.equal(p.status,0,p.stderr+p.stdout);
   assert(existsSync(join(dir,"bin/etsc")));assert.equal(existsSync(legacy),!owned);
   if(!owned)assert.equal(readFileSync(legacy,"utf8"),"old native driver");
   const version=spawnSync(join(dir,"bin/etsc"),["--version"],{encoding:"utf8"});assert.equal(version.status,0,version.stderr);assert.match(version.stdout,/^etsc /);

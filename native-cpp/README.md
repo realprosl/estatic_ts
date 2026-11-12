@@ -1,47 +1,29 @@
 # native-cpp — semilla C++ del compilador Estatic
 
-Instantánea **generada** compilando `bootstrap/ir/demo.ets` y sus dependencias
-con el compilador de referencia `src/` (stage 0). Su único trabajo es construir
-el primer compilador, que después compila `bootstrap/`.
+La semilla es **el C++ que el propio compilador de `bootstrap/` genera de sí
+mismo**: `compiler/unity.cpp`. Compilada con cualquier compilador C++20 es un
+`etsc` completo, y su único trabajo es compilar `bootstrap/` para obtener el
+compilador que se instala. No hace falta Node ni `src/` (stage 0) para
+construirla, usarla ni regenerarla.
 
-## Qué contiene (y qué no)
-
-Aquí solo vive lo que se genera desde `bootstrap/`:
+## Qué contiene
 
 | Ruta | Contenido |
 |---|---|
-| `frontend/` | Frontend ETS traducido a C++ (`unit-*.cpp`, `unity.cpp`, `estatic_common.hpp`) |
-| `build/bootstrap/etsc/` | Tablas nativas y configuración de instalación generadas |
+| `compiler/unity.cpp` | **Generado**: el C++ del compilador de `bootstrap/`, emitido por él mismo en su punto fijo |
 | `templates/` | Plantillas de proyecto que escribe `etsc init` |
-| `build-all.sh`, `files.txt` | Construcción de la semilla y manifiesto de ficheros |
-| `build-compiler.sh` | Construcción del compilador de `bootstrap/` (generación 2) con la semilla |
+| `build-all.sh` | Construye la semilla (`native/etsc`) o copia la precompilada |
+| `build-compiler.sh` | Construye el compilador de `bootstrap/` (generación 2) con la semilla, o copia el precompilado |
+| `regenerate.sh` | Regenera `compiler/unity.cpp` con el propio compilador, hasta el punto fijo |
 | `fetch-prebuilt.sh` | Descarga los precompilados de la rama `prebuilt` en `prebuilt/` |
-| `prebuilt/<plataforma>/` | **No está en git** (lo descarga `fetch-prebuilt.sh`): semilla ya compilada (Linux y macOS) y, en `compiler/`, el compilador de `bootstrap/`, con la huella de sus fuentes |
+| `files.txt` | Manifiesto de ficheros |
+| `prebuilt/<plataforma>/` | **No está en git** (lo descarga `fetch-prebuilt.sh`): semilla y, en `compiler/`, el compilador de `bootstrap/`, con la huella de sus fuentes |
 
-Las piezas C++ escritas a mano **no se copian aquí**. Tienen una única ubicación
-en el repositorio y las usan por igual la semilla, `bootstrap/`, `install.sh`,
-el CI y los programas generados:
-
-| Ruta canónica | Contenido |
-|---|---|
-| `runtime/` | Runtime C++ único |
-| `bootstrap/native/` | Coordinador nativo (`driver.cpp`, `platform.hpp`, `progress.*`) |
-| `bootstrap/modules/*.hpp` | Cabeceras de frontera nativa |
-| `src/codegen/ir/native/` | Emisor IR → C++ |
-| `types/` | Declaraciones canónicas (`estatic.d.ts`) |
-
-Por eso un cambio en el runtime o en el coordinador **no** obliga a regenerar la
-semilla: basta con editar el fichero canónico (siempre que no rompa la API que
-usa el frontend generado, como `runtime/ets_compiler_host.hpp`). Solo hay que regenerarla cuando
-cambian las fuentes `bootstrap/*.ets` que forman el frontend.
+El C++ escrito a mano **no se copia aquí**: `runtime/` (runtime único) y
+`bootstrap/modules/*.hpp` (cabeceras de frontera) se usan desde su sitio con
+`-I<repo>`.
 
 ## Construir
-
-`build-all.sh` es el **único** sitio que construye la semilla; `install.sh` y el
-CI lo llaman. Compila a la vez el frontend y el coordinador/emisor (son
-independientes). El frontend se compila como un único `unity.cpp` a propósito:
-compilar las 39 unidades por separado cuesta ~7 veces más CPU, porque cada una
-vuelve a procesar las cabeceras del runtime.
 
 ```bash
 bash native-cpp/build-all.sh          # usa la precompilada si vale; si no, compila
@@ -50,16 +32,19 @@ export ESTC_ROOT="$(pwd)"             # raíz del repositorio: runtime/ está aq
 native-cpp/native/etsc build /ruta/proyecto/main.ets --no-progress
 ```
 
-Opciones: `--out DIR`, `--cxx CXX`, `--frontend BIN` (reutiliza un frontend),
-`--static` (enlace autocontenido), `--force` (ignora la precompilada y compila
-siempre; alias `--no-prebuilt`) y
-`--update-prebuilt` (compila estático y guarda la semilla precompilada).
+Opciones de `build-all.sh`: `--out DIR`, `--cxx CXX`, `--static` (enlace
+autocontenido), `--force` (ignora la precompilada; alias `--no-prebuilt`),
+`--update-prebuilt` (compila estático y guarda la semilla precompilada) y
+`--help`.
 
-`native/frontend` analiza fuentes Estatic y emite IR verificado.
-`native/etsc` es el coordinador/backend C++ que genera y compila programas.
-No hace falta Node para construirlos ni para usarlos.
+`build-compiler.sh --seed DIR --out BIN` construye el compilador de
+`bootstrap/`: la semilla analiza `bootstrap/driver/main.ets` y después compila
+el C++, en dos pasos para que el análisis (varios GB) y la compilación C++ no
+estén en memoria a la vez. Opciones: `--static`, `--force`, `--update-prebuilt`
+(estático, `-O2`) y `--help`. `install.sh` lo invoca; `--force-compiler` le
+pasa `--force`.
 
-## Semilla precompilada (`prebuilt/`)
+## Precompilados (`prebuilt/`)
 
 Los precompilados **no se guardan en `main`**, para no acumular binarios en el
 historial de git: viven en la rama `prebuilt`, que `seed-prebuilt.yml`
@@ -68,53 +53,48 @@ sobrescribe con un único commit en cada actualización y que nunca se fusiona.
 directorio temporal —sin tocar el repositorio— y la copia en `prebuilt/`, que
 git ignora. Sin git, sin red o sin esa rama, no pasa nada: se compila.
 
-`prebuilt/<plataforma>/` (`linux-x86_64`, `darwin-arm64`) guarda `frontend` y
-`etsc` ya compilados y `inputs.sha256`, la huella de todas sus fuentes
-(`frontend/unity.cpp`, `build/bootstrap/etsc/`, `bootstrap/native/`,
-`src/codegen/ir/native/` y `runtime/`). `build-all.sh` (y por tanto
-`install.sh`) los copia en vez de compilar **solo si la huella coincide** con el
-checkout y el binario arranca; si no, compila desde las fuentes. Una semilla
-precompilada desfasada nunca se usa.
+`prebuilt/<plataforma>/` (`linux-x86_64`, `darwin-arm64`) guarda la semilla
+(`etsc`) con `inputs.sha256` y, en `compiler/`, el compilador de `bootstrap/`
+con la suya. `build-all.sh` y `build-compiler.sh` los copian en vez de compilar
+**solo si la huella coincide** con el checkout y el binario arranca; si no,
+compilan. Un precompilado desfasado nunca se usa.
 
-Son autocontenidas y solo llevan lo que la semilla necesita: libcrypto, la
-librería estándar de C++ y pthread (nada de libuv, curl ni TLS):
+Son autocontenidos y solo llevan la librería estándar de C++ y pthread (nada de
+libuv, curl ni TLS):
 
 - **Linux:** binarios totalmente estáticos (`ldd`: *not a dynamic executable*).
-- **macOS:** libcrypto estática dentro; solo quedan `libSystem` y `libc++`, que
-  forman parte del sistema (Apple no admite binarios 100 % estáticos).
+- **macOS:** solo `libSystem` y `libc++`, que forman parte del sistema (Apple no
+  admite binarios 100 % estáticos). Requieren macOS 13.3 o posterior.
 
-### Compilador precompilado (`prebuilt/<plataforma>/compiler/`)
+La Action `seed-prebuilt.yml` los compila en Ubuntu y en macOS cuando cambian
+sus fuentes, comprueba con `file`/`otool -L` que no dependen de librerías
+dinámicas de terceros, los prueba y los publica en la rama `prebuilt`. Sigue
+haciendo falta un compilador C++ en la máquina: el compilador lo invoca para
+construir cualquier programa.
 
-`build-compiler.sh --seed DIR --out BIN` construye el compilador de `bootstrap/`
-(la semilla analiza `bootstrap/driver/main.ets` y compila el C++). Igual que la
-semilla, por defecto copia `prebuilt/<plataforma>/compiler/etsc` si su huella
-coincide (semilla + `bootstrap/` + `runtime/`); `--force` lo recompila y
-`--update-prebuilt` lo regenera (estático, `-O2`). `install.sh` lo invoca;
-`--force-compiler` le pasa `--force`.
-
-La Action `seed-prebuilt.yml` las compila en Ubuntu y en macOS cuando cambia
-alguna de esas fuentes (también el compilador de `bootstrap/`), comprueba con `file`/`otool -L` que no dependen de
-librerías dinámicas de terceros, las prueba y las publica en la rama `prebuilt`. Siguen haciendo
-falta un compilador C++ en la máquina: la semilla lo invoca para construir
-`bootstrap/`.
-
-## Regenerar
+## Regenerar la semilla
 
 ```bash
-node --experimental-strip-types scripts/generate-native-cpp-snapshot.mjs
+bash native-cpp/regenerate.sh                 # parte de la semilla actual
+bash native-cpp/regenerate.sh --compiler ETSC # parte de otro compilador
 ```
 
-La regeneración **solo borra y reescribe lo generado**: `frontend/`, `build/`,
-`templates/` y `files.txt`. También borra la copia local de `prebuilt/`, porque
-esos binarios ya no corresponden a las fuentes nuevas. Los ficheros escritos a mano
-(`build-all.sh`, `build-compiler.sh`, `README.md`) no se tocan nunca.
+Cada ronda: el compilador actual analiza `bootstrap/driver/main.ets`, emite su
+IR y su C++, y ese C++ se compila para la ronda siguiente. **Solo se publica
+cuando dos rondas seguidas emiten exactamente el mismo IR y el mismo C++**
+(punto fijo del self-hosting); si no se alcanza en `--max-rounds` (3), la
+semilla no se toca.
 
-Cuando la regeneración llega a main, `seed-prebuilt.yml` vuelve a compilar la
-semilla y el compilador en Linux y macOS y publica los nuevos precompilados en la
-rama `prebuilt`, que quedan así listos para la siguiente versión.
+La regeneración solo reescribe lo generado (`compiler/unity.cpp` y `files.txt`)
+y borra la copia local de `prebuilt/`, que deja de corresponder a las fuentes.
+Cuando la regeneración llega a main, `seed-prebuilt.yml` recompila la semilla y
+el compilador en Linux y macOS y publica los nuevos precompilados.
 
-La Action `regenerate-native-cpp.yml` hace lo mismo: comprueba que los ficheros
-escritos a mano no cambian, que aquí no aparecen copias de `runtime/`,
-`bootstrap/`, `src/` ni `types/` y que `prebuilt/` se ha retirado, reconstruye
-la semilla desde el artefacto descargado, la prueba y solo entonces publica la
-instantánea.
+Hay que regenerarla cuando cambia el lowering o el backend de `bootstrap/` de
+forma que el IR que emite la semilla deja de coincidir con el del compilador
+nuevo: lo detecta el `cmp stage1.ir.json stage2.ir.json` de `selfhost-O2`.
+
+La Action `regenerate-native-cpp.yml` ejecuta `regenerate.sh`, comprueba que los
+scripts y las plantillas no cambian y que aquí no aparecen copias de `runtime/`,
+`bootstrap/`, `src/` ni `types/`, reconstruye la semilla, la prueba con
+`hello.ets` y, si se lanzó a mano, abre una PR.
