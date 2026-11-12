@@ -1,5 +1,6 @@
 ./README.md
 ./build-all.sh
+./build-compiler.sh
 ./build/bootstrap/etsc/install_config.hpp
 ./build/bootstrap/etsc/native-tables.hpp
 ./files.txt

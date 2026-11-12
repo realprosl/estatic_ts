@@ -51,19 +51,27 @@ La distribución incluye `bootstrap/modules/platform.hpp`, necesaria para
 compilar los fuentes de bootstrap con el compilador instalado. La cabecera
 mantiene su ruta de inclusión también al mover la instalación.
 
-### Semilla precompilada (por defecto)
+### Precompilados por defecto
 
-Por defecto `install.sh` **usa la semilla precompilada** de
-`native-cpp/prebuilt/<plataforma>/` (Linux x86_64 o macOS arm64) y se ahorra
-compilarla. Son binarios autocontenidos: estáticos en Linux y, en macOS, sin más
-dependencias que las del sistema. Solo se usan si su huella coincide con las
-fuentes del checkout; si no hay semilla para la plataforma o está desfasada, se
-compila automáticamente (frontend y coordinador en paralelo).
+`install.sh` construye dos piezas y, **por defecto, usa la versión precompilada
+de cada una** de `native-cpp/prebuilt/<plataforma>/` (Linux x86_64 o macOS
+arm64):
 
-Para forzar la recompilación desde las fuentes:
+| Pieza | Precompilado | Para recompilarla |
+|---|---|---|
+| Semilla (`frontend` + `etsc` de `native-cpp/`) | `prebuilt/<plataforma>/` | `--force-seed` |
+| Compilador de `bootstrap/` (generación 2, el `etsc` que se instala) | `prebuilt/<plataforma>/compiler/` | `--force-compiler` |
+
+`--force` fuerza las dos. Cada precompilado solo se usa si su huella (sha256 de
+sus fuentes) coincide con el checkout; si no hay para la plataforma o está
+desfasado, se compila automáticamente. Son binarios autocontenidos: estáticos
+en Linux y, en macOS, sin más dependencias que las del sistema.
 
 ```sh
-./install.sh --force
+./install.sh                    # usa los precompilados
+./install.sh --force-seed       # recompila solo la semilla
+./install.sh --force-compiler   # recompila solo el compilador de bootstrap/
+./install.sh --help             # todas las opciones
 ```
 
 Detalles en [`native-cpp/README.md`](native-cpp/README.md).

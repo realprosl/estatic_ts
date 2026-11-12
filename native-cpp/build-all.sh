@@ -45,7 +45,7 @@ while (($#)); do
     --static) static=1; shift ;;
     --force|--no-prebuilt) use_prebuilt=0; shift ;;
     --update-prebuilt) update_prebuilt=1; static=1; use_prebuilt=0; shift ;;
-    -h|--help) sed -n '2,31p' "$0"; exit 0 ;;
+    --help) sed -n '2,31p' "$0"; exit 0 ;;
     *) echo "Opción desconocida: $1" >&2; exit 2 ;;
   esac
 done
@@ -68,7 +68,7 @@ if ((use_prebuilt)) && [[ -z $frontend_bin && -f $prebuilt/inputs.sha256 ]]; the
      && "$prebuilt/etsc" --version >/dev/null 2>&1; then
     cp "$prebuilt/frontend" "$out/frontend"; cp "$prebuilt/etsc" "$out/etsc"
     chmod +x "$out/frontend" "$out/etsc"
-    etsc_info "✓ Semilla precompilada ($platform) · --force para recompilarla"
+    etsc_info "✓ Semilla precompilada ($platform) · --force-seed para recompilarla"
     exit 0
   fi
   etsc_info "La semilla precompilada ($platform) no coincide con las fuentes; se compila"
