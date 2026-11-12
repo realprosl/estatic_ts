@@ -23,7 +23,7 @@ if [[ "$stage" != stage1 && "$stage" != stage2 ]]; then
   echo 'Usage: scripts/build-ets-compiler.sh [stage1|stage2]' >&2
   exit 2
 fi
-if [[ ! -x native-cpp/native/frontend || ! -x native-cpp/native/etsc || native-cpp/src/codegen/ir/native/generator.cpp -nt native-cpp/native/etsc ]]; then
+if [[ ! -x native-cpp/native/frontend || ! -x native-cpp/native/etsc || src/codegen/ir/native/generator.cpp -nt native-cpp/native/etsc || bootstrap/native/driver.cpp -nt native-cpp/native/etsc || bootstrap/native/platform.hpp -nt native-cpp/native/etsc ]]; then
   measure seed-build etsc_step "Semilla · construir compilador C++" bash native-cpp/build-all.sh
 fi
 # The seed assembles the first complete ETS compiler. Its conservative length

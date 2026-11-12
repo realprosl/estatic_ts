@@ -68,7 +68,7 @@ test("installed etsc initializes, builds and runs independently of the clone wit
   const bin=join(prefix,"bin/etsc"),home=realpathSync(join(prefix,"lib/estc/current"));if(process.platform==="linux")assert.equal(readFileSync(bin).subarray(0,4).toString(),"\x7fELF");
   // Installed use must not import the stage-0 compiler or build its frontend.
   assert(!existsSync(join(home,"src")));
-  assert.equal(readFileSync(join(home,"bootstrap/modules/platform.hpp"),"utf8"),readFileSync(join(root,"native-cpp/bootstrap/modules/platform.hpp"),"utf8"));
+  assert.equal(readFileSync(join(home,"bootstrap/modules/platform.hpp"),"utf8"),readFileSync(join(root,"bootstrap/modules/platform.hpp"),"utf8"));
   assert(readdirSync(join(home,"bootstrap"),{recursive:true}).filter(path=>statSync(join(home,"bootstrap",path)).isFile()).every(path=>/\.(hpp|h)$/.test(path)));
   const poison=join(dir,"without-node"),sentinel=join(dir,"node-was-used");mkdirSync(poison);
   for(const executable of ["node","nodejs","npm"]){const path=join(poison,executable);writeFileSync(path,`#!/bin/sh\necho forbidden >> '${sentinel}'\nexit 99\n`);chmodSync(path,0o755);}
@@ -152,7 +152,7 @@ test("install compiles the C++ seed without Node",async()=>{
   assert(existsSync(join(home,"templates/estatic.config.json")));
   // La instalacion no arrastra el compilador de stage 0.
   assert(!existsSync(join(home,"src")));
-  assert.equal(readFileSync(join(home,"bootstrap/modules/platform.hpp"),"utf8"),readFileSync(join(root,"native-cpp/bootstrap/modules/platform.hpp"),"utf8"));
+  assert.equal(readFileSync(join(home,"bootstrap/modules/platform.hpp"),"utf8"),readFileSync(join(root,"bootstrap/modules/platform.hpp"),"utf8"));
   assert(readdirSync(join(home,"bootstrap"),{recursive:true}).filter(path=>statSync(join(home,"bootstrap",path)).isFile()).every(path=>/\.(hpp|h)$/.test(path)));
   const version=spawnSync(bin,["--version"],{encoding:"utf8",env:{...env,ESTC_ROOT:home}});assert.equal(version.status,0,version.stderr);assert.match(version.stdout,/^etsc /);
  }finally{rmSync(dir,{recursive:true,force:true});}

@@ -29,6 +29,24 @@ intérprete JavaScript ni las fuentes TypeScript de stage 0. El frontend es ETS
 compilado; el driver y el backend son C++20. Esto no afirma que todo el
 compilador esté escrito en ETS o sea autoalojado.
 
+### Una sola copia de cada pieza C++
+
+`native-cpp/` contiene únicamente lo generado desde `bootstrap/` (el frontend en
+C++, sus tablas y las plantillas). El resto del C++ tiene una única ubicación y
+lo comparten la semilla, el compilador de `bootstrap/`, `install.sh`, el CI y
+los programas generados:
+
+- `runtime/`: el runtime C++ (el que se publica en la instalación).
+- `bootstrap/native/`: el coordinador nativo (`driver.cpp`, `platform.hpp`).
+- `bootstrap/modules/*.hpp`: cabeceras de frontera nativa.
+- `src/codegen/ir/native/`: el emisor IR → C++.
+- `types/`: las declaraciones canónicas.
+
+`native-cpp/build-all.sh` e `install.sh` compilan con `-I<repo>`, así que no
+hay copias que puedan desincronizarse. Un cambio en el runtime no requiere
+regenerar la semilla, salvo que rompa la API que usa el frontend generado. Para usar la semilla sin instalar, `ESTC_ROOT` apunta a la
+raíz del repositorio.
+
 La distribución incluye `bootstrap/modules/platform.hpp`, necesaria para
 compilar los fuentes de bootstrap con el compilador instalado. La cabecera
 mantiene su ruta de inclusión también al mover la instalación.

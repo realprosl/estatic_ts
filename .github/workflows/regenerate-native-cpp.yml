@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/regenerate-native-cpp.yml
       - scripts/generate-native-cpp-snapshot.mjs
+      - native-cpp/build-all.sh
 
 permissions:
   contents: write
@@ -29,7 +30,7 @@ jobs:
       - name: Save original native-cpp layout and existing build helpers
         run: |
           set -euo pipefail
-          for item in frontend bootstrap src runtime types templates build build-all.sh README.md files.txt; do
+          for item in frontend templates build build-all.sh README.md files.txt; do
             test -e "native-cpp/$item" || { echo "::error::Missing $item"; exit 1; }
           done
           find native-cpp -mindepth 1 -maxdepth 1 -printf '%f %y\n' | LC_ALL=C sort > "$RUNNER_TEMP/layout.before"
@@ -48,13 +49,9 @@ jobs:
         run: |
           set -euo pipefail
           d=native-cpp
-          mkdir -p "$d/src/codegen/ir" "$d/bootstrap/modules"
-          cp -a src/codegen/ir/native "$d/src/codegen/ir/"
-          cp -a bootstrap/native "$d/bootstrap/"
-          find bootstrap/modules -maxdepth 1 -type f \( -name '*.hpp' -o -name '*.h' \) -exec cp {} "$d/bootstrap/modules/" \;
-          cp -a runtime "$d/"
-          cp -a types "$d/"
-          # Retain the JSON-native templates produced by the generator.
+          # Only generated sources live here. runtime/, bootstrap/native/,
+          # bootstrap/modules/*.hpp, src/codegen/ir/native/ and types/ are shared
+          # with the whole repository and are never copied into the seed.
           cp "$RUNNER_TEMP/build-all.sh" "$d/build-all.sh"
           chmod +x "$d/build-all.sh"
           cp "$RUNNER_TEMP/README.md" "$d/README.md"
@@ -64,11 +61,14 @@ jobs:
       - name: Validate complete snapshot, structure and source-only policy
         run: |
           set -euo pipefail
-          for item in frontend/unity.cpp frontend/estatic_common.hpp bootstrap/native/driver.cpp src/codegen/ir/native/generator.cpp build/bootstrap/etsc/install_config.hpp build/bootstrap/etsc/native-tables.hpp build-all.sh README.md files.txt templates/estatic.config.json templates/src/main.ts; do
+          for item in frontend/unity.cpp frontend/estatic_common.hpp build/bootstrap/etsc/install_config.hpp build/bootstrap/etsc/native-tables.hpp build-all.sh README.md files.txt templates/estatic.config.json templates/src/main.ts; do
             test -f "native-cpp/$item" || { echo "::error::Missing generated file: $item"; exit 1; }
           done
-          for item in frontend bootstrap src runtime types templates build; do
+          for item in frontend templates build; do
             test -d "native-cpp/$item" || { echo "::error::Missing directory: $item"; exit 1; }
+          done
+          for item in runtime bootstrap src types; do
+            if [ -e "native-cpp/$item" ]; then echo "::error::native-cpp/$item must not exist: shared sources live at the repository root"; exit 1; fi
           done
           test -n "$(find native-cpp/frontend -name 'unit-*.cpp' -print -quit)"
           find native-cpp -mindepth 1 -maxdepth 1 -printf '%f %y\n' | LC_ALL=C sort > "$RUNNER_TEMP/layout.after"
@@ -96,27 +96,28 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
-      - name: Download source snapshot to isolated verification directory
+      - name: Replace the seed with the downloaded snapshot
+        run: rm -rf native-cpp
+      - name: Download source snapshot into native-cpp
         uses: actions/download-artifact@v4
         with:
           name: native-cpp-regenerated-sources
-          path: verify/native-cpp
+          path: native-cpp
 
       - name: Build compiler from downloaded snapshot (no Node or TS)
         run: |
           set -euo pipefail
-          cd verify/native-cpp
-          bash build-all.sh
-          test -x native/frontend
-          test -x native/etsc
-          ./native/etsc --version
+          bash native-cpp/build-all.sh
+          test -x native-cpp/native/frontend
+          test -x native-cpp/native/etsc
+          native-cpp/native/etsc --version
 
       - name: Compile and run standalone ETS smoke test
         run: |
           set -euo pipefail
-          export ESTC_ROOT="$GITHUB_WORKSPACE/verify/native-cpp"
+          export ESTC_ROOT="$GITHUB_WORKSPACE"
           mkdir -p "$RUNNER_TEMP/native-smoke"
-          verify/native-cpp/native/etsc build examples/hello.ets \
+          native-cpp/native/etsc build examples/hello.ets \
             -o "$RUNNER_TEMP/native-smoke/hello.cpp" \
             --binary "$RUNNER_TEMP/native-smoke/hello" --no-progress
           test -s "$RUNNER_TEMP/native-smoke/hello.cpp"
@@ -131,7 +132,7 @@ jobs:
           set -euo pipefail
           # Exercise the downloaded frontend against the full current compiler,
           # including the nested one-argument includes calls in checker.ets.
-          verify/native-cpp/native/frontend bootstrap/ir/demo.ets --verbose \
+          native-cpp/native/frontend bootstrap/ir/demo.ets --verbose \
             > "$RUNNER_TEMP/bootstrap-self-ir.json"
           node --input-type=module - "$RUNNER_TEMP/bootstrap-self-ir.json" <<'JS'
           import assert from "node:assert/strict";
@@ -150,6 +151,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -rf native-cpp/native
           git add -A native-cpp
           if git diff --cached --quiet; then
             echo 'Regenerated source snapshot is identical; no PR needed.' >> "$GITHUB_STEP_SUMMARY"

@@ -6,8 +6,11 @@ proceso no ejecuta Node, `src/`, el frontend auxiliar ni el generador C++ anteri
 Invoca el compilador C++ del sistema para construir el programa final.
 
 Las fuentes canónicas permanecen en `bootstrap/`. `native-cpp/` es la semilla C++
-y contiene únicamente fuentes/soporte del destino C++; no alberga una segunda
-copia de los módulos ETS. `src/` se conserva como implementación de referencia.
+y contiene únicamente el C++ generado (frontend, tablas y plantillas); no alberga
+una segunda copia de los módulos ETS ni del runtime. El runtime (`runtime/`), el
+coordinador (`bootstrap/native/`) y el emisor IR (`src/codegen/ir/native/`) se
+comparten desde su ubicación canónica. `src/` se conserva como implementación de
+referencia.
 
 Desde la raíz del repositorio:
 

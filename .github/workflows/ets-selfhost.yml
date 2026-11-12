@@ -5,7 +5,8 @@ on:
     paths:
       - bootstrap/**
       - native-cpp/**
-      - runtime/ets_compiler_host.hpp
+      - runtime/**
+      - src/codegen/ir/native/**
       - scripts/build-ets-compiler.sh
       - scripts/check-ets-compiler.sh
       - scripts/regenerate-ets-native.sh
@@ -41,8 +42,13 @@ jobs:
           else
             echo 'Native compiler and runtime dependencies already present on runner.'
           fi
-      - name: Verify canonical and seed backends remain identical
-        run: cmp src/codegen/ir/native/generator.cpp native-cpp/src/codegen/ir/native/generator.cpp
+      - name: Verify the seed carries no copies of shared C++ sources
+        # runtime/, bootstrap/native/, bootstrap/modules/, src/codegen/ir/native/ and
+        # types/ have a single canonical location; the seed compiles them from there.
+        run: |
+          for item in runtime bootstrap src types; do
+            if [ -e "native-cpp/$item" ]; then echo "::error::native-cpp/$item must not exist"; exit 1; fi
+          done
       - name: Verify aggregate fast paths and value semantics
         run: node --experimental-strip-types --test --test-name-pattern='native aggregate fast paths|temporary argument value semantics|temporary constructor value semantics|length snapshot semantics|length mutation ordering' bootstrap/ir/native.test.ts
       - name: Verify readonly receivers and malformed IR rejection
