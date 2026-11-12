@@ -1,4 +1,14 @@
-name: Propose minor version bump
+name: Version bump on merge
+
+# Cada PR fusionada en main sube la versión en el acto, con un commit directo
+# en main: +1 minor en package.json "version" y +1 en "estaticRevision".
+# No hay PR intermedia que fusionar a mano.
+#
+# - Idempotente: el commit lleva el trailer "Version-Bump-Source-PR: #N"; si ya
+#   está en main, no se vuelve a subir.
+# - Serializado (concurrency) y con reintentos: si main avanza entre medias
+#   (otra fusión, seed-prebuilt.yml...), rehace el incremento sobre el main nuevo.
+# - Un push con GITHUB_TOKEN no dispara otros workflows, así que no hay bucles.
 
 on:
   pull_request:
@@ -7,51 +17,40 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 concurrency:
-  group: propose-version-main
+  group: version-bump-main
   cancel-in-progress: false
 
 jobs:
-  propose:
+  bump:
     if: >-
       github.event.pull_request.merged == true &&
       !startsWith(github.event.pull_request.head.ref, 'automation/version-bump-')
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ github.token }}
-      BRANCH: automation/version-bump-next
       SOURCE_PR: ${{ github.event.pull_request.number }}
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
         with:
           ref: main
-          fetch-depth: 0
+          fetch-depth: 50
 
-      - name: Accumulate one bump for this merged PR
-        id: bump
+      - name: Bump version on main
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          open_pr="$(gh pr list --state open --base main --head "$BRANCH" --json number --jq '.[0].number // empty')"
-          if [[ -n "$open_pr" ]]; then
-            git fetch origin "$BRANCH"
-            git checkout -B "$BRANCH" "origin/$BRANCH"
-            if git log --format=%B "origin/main..HEAD" | grep -Fxq "Version-Bump-Source-PR: #$SOURCE_PR"; then
-              echo "Already counted PR #$SOURCE_PR"
-              echo "skip=true" >> "$GITHUB_OUTPUT"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git checkout -B main origin/main
+            if git log -n 200 --format=%B origin/main | grep -Fxq "Version-Bump-Source-PR: #$SOURCE_PR"; then
+              echo "PR #$SOURCE_PR ya tiene su incremento en main." >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
-            git rebase origin/main
-          else
-            git checkout -B "$BRANCH" origin/main
-          fi
-          node <<'NODE'
+            version="$(node <<'NODE'
           const fs = require('node:fs');
           const file = 'package.json';
           const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -61,26 +60,18 @@ jobs:
           pkg.version = `${match[1]}.${Number(match[2]) + 1}.0`;
           pkg.estaticRevision += 1;
           fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n');
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${pkg.version}\n`);
+          process.stdout.write(`${pkg.version} (v${pkg.estaticRevision})`);
           NODE
-          git add package.json
-          git commit -m "chore(release): bump for merged PR #$SOURCE_PR" -m "Version-Bump-Source-PR: #$SOURCE_PR"
-          if [[ -n "$open_pr" ]]; then
-            git push --force-with-lease origin "HEAD:refs/heads/$BRANCH"
-          else
-            git push origin "+HEAD:refs/heads/$BRANCH"
-          fi
-
-      - name: Open or update release PR
-        if: steps.bump.outputs.skip != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          existing="$(gh pr list --state open --base main --head "$BRANCH" --json number --jq '.[0].number // empty')"
-          if [[ -z "$existing" ]]; then
-            gh pr create --base main --head "$BRANCH" \
-              --title "chore(release): v${{ steps.bump.outputs.version }}" \
-              --body "Acumula un incremento minor y uno de estaticRevision por cada PR normal fusionada en main. Requiere merge manual; no hace push a main ni crea tags."
-          else
-            gh pr edit "$existing" --title "chore(release): v${{ steps.bump.outputs.version }}"
-          fi
+            )"
+            git add package.json
+            git commit -q -m "chore(release): v${version%% *} for merged PR #$SOURCE_PR" \
+              -m "Version-Bump-Source-PR: #$SOURCE_PR"
+            if git push origin HEAD:main; then
+              echo "PR #$SOURCE_PR → $version" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "main avanzó; reintento $attempt"
+            sleep $((attempt * 5))
+          done
+          echo "::error::No se pudo subir el incremento de versión a main"
+          exit 1
