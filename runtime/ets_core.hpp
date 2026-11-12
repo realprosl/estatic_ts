@@ -29,6 +29,11 @@ inline char** ets_argv = nullptr;
 inline double argumentCount();
 [[noreturn]] inline void exitProcess(double code) noexcept;
 
+// La E/S de libuv (`ets_child_process.hpp`) registra aquí cómo salir sin
+// volver a arrancar el bucle de eventos: si `process.stdin` u otro stream sigue
+// leyendo, los destructores estáticos de `std::exit` esperarían otra lectura.
+inline void (*ets_exit_now)(int code) noexcept = nullptr;
+
 // `typeof T` estilo TypeScript. Vive en el namespace `ets::` para que el
 // codegen pueda llamarlo como `ets::typeofOf<T>()` desde cualquier punto
 // sin necesidad de un `using`.
@@ -63,6 +68,7 @@ inline bool ensureParentDirectory(const std::string& path, std::string& error) n
 inline double argumentCount() { return static_cast<double>(ets_argc); }
 
 [[noreturn]] inline void exitProcess(double code) noexcept {
+    if (auto exitNow = ets_exit_now) { ets_exit_now = nullptr; exitNow(static_cast<int>(code)); }
     std::exit(static_cast<int>(code));
 }
 

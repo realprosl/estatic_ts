@@ -2,7 +2,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, openSync, closeSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { buildLoader, root } from "../modules/build.ts";
 const directory = mkdtempSync(join(root, "build-ir-test-"));
 let binary: string;
@@ -40,6 +40,44 @@ int main(int argc, char** argv) {
   const outputFd=openSync(outputFile,"w"),inputFd=openSync(inputFile,"r");
   const redirected=spawnSync(binary,["file-input"],{encoding:"utf8",timeout:15000,stdio:[inputFd,outputFd,"pipe"]});closeSync(inputFd);closeSync(outputFd);
   assert.ifError(redirected.error);assert.equal(redirected.status,0,redirected.stderr);assert.equal(readFileSync(outputFile,"utf8"),"parent:file-input");
+});
+test("process.exit inside a stdin listener exits at once without losing stdout", { skip: process.platform === "win32" }, async () => {
+  // Regresion: std::exit ejecutaba ~LibuvEventLoop, que volvia a correr el bucle
+  // con process.stdin leyendo y esperaba otra linea (habia que pulsar Enter dos
+  // veces y el listener se ejecutaba de nuevo). Tambien: 4 MiB hacia un lector
+  // lento deben llegar completos antes de salir.
+  const source = join(directory, "process-exit-stdin.cpp"), binary = join(directory, "process-exit-stdin");
+  writeFileSync(source, `#include "runtime/ets_runtime_full.hpp"
+#include "runtime/ets_child_process.hpp"
+#include <string>
+int main(int argc, char** argv) {
+  ets_argc=argc; ets_argv=argv;
+  ets::processStdio.stdin.on("data", [](std::string chunk) {
+    ets::processStdio.stdout.stream().write("has escrito: " + chunk);
+    if (chunk == "big\\n") { const std::string block(1 << 20, 'x'); for (int i = 0; i < 4; ++i) ets::processStdio.stdout.stream().write(block); }
+    print("fin");
+    process.exit(3);
+  });
+  ets::runProcessIo();
+  return 0;
+}
+`);
+  const built=spawnSync("g++",["-std=c++20","-pthread","-fno-exceptions",`-I${root}`,source,join(root,"runtime/runtime_ets_libuv.cpp"),join(root,"runtime/runtime_ets_net_libuv.cpp"),"-luv","-o",binary],{encoding:"utf8",timeout:120000});
+  assert.ifError(built.error); assert.equal(built.status,0,built.stderr);
+  const exitWith=(input:string,slowReader:boolean)=>new Promise<{code:number|null,out:string}>((resolve,reject)=>{
+    // stdin queda abierto: si el proceso no sale solo, el temporizador falla.
+    const child=spawn(binary,[],{stdio:["pipe","pipe","inherit"]});let out="";
+    const timer=setTimeout(()=>{child.kill();reject(new Error("process.exit no termino; salida: "+JSON.stringify(out.slice(0,200))));},10000);
+    child.stdout.setEncoding("utf8");
+    if(slowReader){child.stdout.pause();setTimeout(()=>child.stdout.resume(),1000);}
+    child.stdout.on("data",(chunk:string)=>{out+=chunk;});
+    child.on("close",code=>{clearTimeout(timer);child.stdin.destroy();resolve({code,out});});
+    child.stdin.write(input);
+  });
+  const small=await exitWith("adios\n",false);
+  assert.equal(small.code,3); assert.equal(small.out,"has escrito: adios\nfin\n");
+  const big=await exitWith("big\n",true);
+  assert.equal(big.code,3); assert.equal(big.out.length,"has escrito: big\n".length+(4<<20)+"fin\n".length); assert(big.out.endsWith("xfin\n"));
 });
 function run(source: string, files: Record<string,string> = {}, mode = "", status = 0) {
   const dir = mkdtempSync(join(directory, "fixture-"));
