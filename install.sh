@@ -12,10 +12,36 @@
 # semilla (native-cpp/regenerate.sh).
 #
 # Uso:  ./install.sh [--prefix /usr/local] [--cxx g++]
+#  o, sin clonar el repositorio:
+#   curl -fsSL https://raw.githubusercontent.com/realprosl/estatic_ts/main/install.sh | bash
 #
 set -euo pipefail
 
-repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# --- Instalacion remota: curl -fsSL .../install.sh | bash ---------------------
+# Sin el repositorio al lado (script leido de stdin o copiado suelto), se clona
+# lo minimo en un directorio temporal, se instala desde ahi y se borra. La
+# instalacion usa los precompilados de la rama `prebuilt` como siempre.
+script_dir=""
+[ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ] && script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -z "$script_dir" ] || [ ! -f "$script_dir/native-cpp/build-all.sh" ]; then
+  for arg in "$@"; do [ "$arg" = "--help" ] && { echo "Uso: curl -fsSL https://raw.githubusercontent.com/realprosl/estatic_ts/main/install.sh | bash -s -- [opciones]"; echo "Las opciones son las de ./install.sh --help."; exit 0; }; done
+  command -v git >/dev/null 2>&1 || { echo "ERROR: hace falta git para descargar estatic_ts." >&2; exit 1; }
+  remote="${ESTC_REPO:-https://github.com/realprosl/estatic_ts.git}"
+  ref="${ESTC_REF:-main}"
+  checkout="$(mktemp -d "${TMPDIR:-/tmp}/estatic-install.XXXXXX")"
+  echo "Descargando estatic_ts ($ref) en $checkout"
+  status=0
+  if git clone -q --depth 1 --single-branch --branch "$ref" "$remote" "$checkout/estatic_ts"; then
+    # stdin desde /dev/null: con `curl | bash` el resto del script sigue en el pipe.
+    bash "$checkout/estatic_ts/install.sh" "$@" </dev/null || status=$?
+  else
+    echo "ERROR: no se pudo clonar $remote ($ref)" >&2; status=1
+  fi
+  rm -rf "$checkout"
+  exit "$status"
+fi
+
+repo_dir="$script_dir"
 ETSC_CLI_SCOPE=install
 seed_dir="$repo_dir/native-cpp"
 prefix="/usr/local"
