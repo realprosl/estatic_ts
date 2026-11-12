@@ -1,5 +1,20 @@
 # Instalación y trabajo con etsc
 
+Sin clonar el repositorio:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/realprosl/estatic_ts/main/install.sh | sudo bash
+# o, en tu usuario:
+curl -fsSL https://raw.githubusercontent.com/realprosl/estatic_ts/main/install.sh | bash -s -- --prefix "$HOME/.local"
+```
+
+El script clona lo mínimo (`git clone --depth 1`) en una carpeta temporal,
+ejecuta desde ahí el `install.sh` normal con las opciones que le pases y la
+borra al acabar. `ESTC_REF=<rama>` instala otra rama y `ESTC_REPO=<url>`, otro
+repositorio.
+
+Desde un clon:
+
 ```sh
 git clone https://github.com/realprosl/estatic_ts.git
 cd estatic_ts

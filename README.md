@@ -27,11 +27,32 @@ Compilador de Estatic, con sintaxis inspirada en TypeScript, tipado estático y 
 
 ## Uso rápido
 
-Node >=22.6 se usa para el bootstrap y la instalación. El compilador instalado
-`etsc` funciona sin Node y necesita el toolchain C++20 y las bibliotecas de
-runtime utilizadas. Ver [INSTALL.md](./INSTALL.md).
+La instalación no usa Node. El compilador instalado `etsc` necesita `git`, el
+toolchain C++20 y las bibliotecas de runtime que use tu programa (libuv,
+OpenSSL…). Ver [INSTALL.md](./INSTALL.md).
 
 ### Instalar el compilador (una vez)
+
+Sin clonar el repositorio, con una sola línea:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/realprosl/estatic_ts/main/install.sh | sudo bash
+```
+
+Descarga lo mínimo en una carpeta temporal, instala con el compilador
+precompilado (Linux x86_64 y macOS arm64; tarda unos segundos) y la borra.
+Las opciones de `install.sh` van después de `bash -s --`, por ejemplo para
+instalar en tu usuario, sin `sudo`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/realprosl/estatic_ts/main/install.sh | bash -s -- --prefix "$HOME/.local"
+```
+
+Para actualizar, se vuelve a ejecutar el mismo comando. Después conviene
+ejecutar `etsc update-types` en cada proyecto para refrescar
+`types/estatic.d.ts`.
+
+Desde un clon del repositorio (para desarrollar el compilador):
 
 ```bash
 git clone https://github.com/realprosl/estatic_ts.git
@@ -99,7 +120,7 @@ desde la raíz del repositorio. `--help` muestra la ayuda de los que la tienen.
 
 | Script | Qué hace | Opciones |
 |---|---|---|
-| `./install.sh` | Instala `etsc` en `<prefix>/bin`. Descarga y usa la semilla y el compilador precompilados si coinciden con las fuentes; si no, los compila. No usa Node. | `--prefix DIR`, `--cxx CXX`, `--seed BIN` (reutiliza una semilla ya compilada), `--seed-only` (publica la semilla, sin compilar bootstrap), `--force-seed` (recompila la semilla), `--force-compiler` / `--force-compile` (recompila el compilador de bootstrap), `--force` (las dos), `--help` |
+| `./install.sh` | Instala `etsc` en `<prefix>/bin`. También se puede ejecutar sin clonar: `curl -fsSL https://raw.githubusercontent.com/realprosl/estatic_ts/main/install.sh \| bash -s -- [opciones]`. Descarga y usa la semilla y el compilador precompilados si coinciden con las fuentes; si no, los compila. No usa Node. | `--prefix DIR`, `--cxx CXX`, `--seed BIN` (reutiliza una semilla ya compilada), `--seed-only` (publica la semilla, sin compilar `compiler/`), `--force-seed` (recompila la semilla), `--force-compiler` / `--force-compile` (recompila el compilador de `compiler/`), `--force` (las dos), `--help` |
 | `native-cpp/build-all.sh` | Construye la **semilla** (`native/etsc`, un compilador completo) desde `native-cpp/compiler/unity.cpp`, o copia la precompilada si coincide. | `--out DIR`, `--cxx CXX`, `--static`, `--force`, `--update-prebuilt` (CI), `--help` |
 | `native-cpp/build-compiler.sh` | Construye el **compilador de `compiler/`** (generación 2, el `etsc` que se instala) con la semilla, o copia el precompilado si coincide. | `--seed DIR`, `--out BIN`, `--static`, `--force`, `--update-prebuilt` (CI), `--help` |
 | `native-cpp/fetch-prebuilt.sh` | Descarga los precompilados de la rama `prebuilt` (clon `--depth 1` en un temporal) en `native-cpp/prebuilt/`. Nunca falla: sin red o sin rama, se compila. | `--remote NOMBRE\|URL`, `--branch RAMA`, `--help` |
