@@ -163,7 +163,7 @@ struct ir_t120{ets::ir::Slot<bool> f0;ets::ir::Slot<bool> f1;ets::ir::Slot<bool>
 struct ir_t119{ets::ir::Slot<std::string> f0;ets::ir::Slot<std::vector<std::string>> f1;ets::ir::Slot<ir_t120> f2;ets::ir::Slot<std::vector<std::string>> f3;bool operator==(const ir_t119&)const=default;};
 struct ir_t125{ets::ir::Slot<std::vector<double>> f0;bool operator==(const ir_t125&)const=default;};
 struct ir_t127{ets::ir::Slot<double> f0;ets::ir::Slot<double> f1;bool operator==(const ir_t127&)const=default;};
-struct ir_t138{ets::ir::Slot<std::vector<ir_t12>> f0;ets::ir::Slot<double> f1;ets::ir::Slot<std::vector<ir_t11>> f2;ets::ir::Slot<std::vector<ir_t20>> f3;ets::ir::Slot<double> f4;ets::ir::Slot<bool> f5;bool operator==(const ir_t138&)const=default;};
+struct ir_t138{ets::ir::Slot<std::vector<ir_t12>> f0;ets::ir::Slot<double> f1;ets::ir::Slot<std::vector<ir_t11>> f2;ets::ir::Slot<std::vector<ir_t20>> f3;ets::ir::Slot<double> f4;ets::ir::Slot<bool> f5;ets::ir::Slot<bool> f6;bool operator==(const ir_t138&)const=default;};
 struct ir_t140{ets::ir::Slot<std::string> f0;ets::ir::Slot<double> f1;ets::ir::Slot<double> f2;ets::ir::Slot<double> f3;ets::ir::Slot<double> f4;ets::ir::Slot<double> f5;ets::ir::Slot<std::vector<ir_t24>> f6;ets::ir::Slot<std::vector<ir_t26>> f7;ets::ir::Slot<bool> f8;bool operator==(const ir_t140&)const=default;};
 struct ir_t166{ets::ir::Slot<ir_t41> f0;ets::ir::Slot<ir_t48> f1;bool operator==(const ir_t166&)const=default;};
 struct ir_t171{ets::ir::Slot<ir_t41> f0;ets::ir::Slot<ir_t48> f1;ets::ir::Slot<ir_t64> f2;ets::ir::Slot<std::vector<std::string>> f3;bool operator==(const ir_t171&)const=default;};
@@ -498,7 +498,7 @@ std::string ir_f291(std::string a0);
 double ir_f292(std::vector<std::string> a0,std::string a1,std::string a2);
 std::string ir_f293();
 ir_t88 ir_f294(std::string a0,ir_t32 a1,bool a2);
-void ir_f295(std::string a0,std::string a1,bool a2);
+void ir_f295(std::string a0,std::string a1,bool a2,bool a3);
 void ir_f296(const ir_t119& a0,std::string a1,std::string a2,std::string a3,std::string a4,std::vector<std::string> a5,std::vector<std::string> a6);
 void ir_f297();
 void ir_f298();
@@ -1219,29 +1219,30 @@ void ir_f1012(ir_t255& a0,double a1,double a2,double a3,double a4,double a5);
 double ir_f1013(ir_t138& a0);
 double ir_f1014(const ir_t138& a0,std::string a1);
 std::string ir_f1015(const ir_t138& a0);
-double ir_f1016(const ir_t176& a0,double a1,double a2);
-double ir_f1017(ir_t176& a0,double a1,double a2,double a3,double a4);
-void ir_f1018(ir_t176& a0,double a1,double a2,double a3);
-void ir_f1019(ir_t176& a0,double a1,double a2,double a3,std::string a4);
-double ir_f1020(ir_t184& a0,double a1,double a2,double a3,double a4);
-double ir_f1021(const ir_t184& a0,double a1,double a2,double a3,double a4);
-void ir_f1022(ir_t196& a0,double a1,double a2,double a3,double a4);
-std::string ir_f1023(const ir_t184& a0,double a1);
-void ir_f1024(const ir_t184& a0,ir_t203& a1,const ir_t203& a2,double a3);
-bool ir_f1025(ir_t184& a0,double a1,std::string a2);
-bool ir_f1026(ir_t184& a0,double a1);
-std::vector<std::string> ir_f1027(const ir_t209& a0,double a1,std::vector<double> a2,std::vector<std::string> a3,std::vector<double> a4,double a5);
-double ir_f1028(const ir_t209& a0,ir_t52 a1,std::string a2);
-double ir_f1029(ir_t138& a0,double a1,ir_t12 a2,bool a3);
-double ir_f1030(ir_t138& a0);
-void ir_f1031(ir_t176& a0,double a1,double a2,double a3);
-void ir_f1032(ir_t176& a0,double a1,double a2,double a3,std::string a4);
-std::string ir_f1033(const ir_t185& a0,double a1);
-double ir_f1034(ir_t138& a0);
-std::string ir_f1035(const ir_t138& a0);
-void ir_f1036(ir_t138& a0,double a1);
-std::string ir_f1037(const ir_t138& a0);
-double ir_f1038(ir_t138& a0,ir_t12 a1);
+bool ir_f1016(const ir_t138& a0,std::string a1);
+double ir_f1017(const ir_t176& a0,double a1,double a2);
+double ir_f1018(ir_t176& a0,double a1,double a2,double a3,double a4);
+void ir_f1019(ir_t176& a0,double a1,double a2,double a3);
+void ir_f1020(ir_t176& a0,double a1,double a2,double a3,std::string a4);
+double ir_f1021(ir_t184& a0,double a1,double a2,double a3,double a4);
+double ir_f1022(const ir_t184& a0,double a1,double a2,double a3,double a4);
+void ir_f1023(ir_t196& a0,double a1,double a2,double a3,double a4);
+std::string ir_f1024(const ir_t184& a0,double a1);
+void ir_f1025(const ir_t184& a0,ir_t203& a1,const ir_t203& a2,double a3);
+bool ir_f1026(ir_t184& a0,double a1,std::string a2);
+bool ir_f1027(ir_t184& a0,double a1);
+std::vector<std::string> ir_f1028(const ir_t209& a0,double a1,std::vector<double> a2,std::vector<std::string> a3,std::vector<double> a4,double a5);
+double ir_f1029(const ir_t209& a0,ir_t52 a1,std::string a2);
+double ir_f1030(ir_t138& a0,double a1,ir_t12 a2,bool a3);
+double ir_f1031(ir_t138& a0);
+void ir_f1032(ir_t176& a0,double a1,double a2,double a3);
+void ir_f1033(ir_t176& a0,double a1,double a2,double a3,std::string a4);
+std::string ir_f1034(const ir_t185& a0,double a1);
+double ir_f1035(ir_t138& a0);
+std::string ir_f1036(const ir_t138& a0);
+void ir_f1037(ir_t138& a0,double a1);
+std::string ir_f1038(const ir_t138& a0);
+double ir_f1039(ir_t138& a0,ir_t12 a1);
 std::string ir_f0(std::string a0) {
 ets::ir::Slot<std::string> p0;
 ets::ir::Slot<std::string> v0;
@@ -53886,7 +53887,7 @@ std::string ir_f293() {
 ets::ir::Slot<std::string> v0;
 goto b0;
 b0:
-v0.set(std::string("Uso: etsc build|run [entrada.ets] [opciones]\n  --check                  Verificar sin generar\n  -o archivo.cpp           Ruta C++\n  --binary archivo         Ruta ejecutable (con build)\n  --from-ir archivo        Generar desde ets-ir-2 verificado\n  --emit-ir archivo        Guardar IR\n  --config archivo         JSON u objeto declarativo\n  --root ruta | --alias nombre ruta | --cache ruta\n  --cxx compilador | --cxx-flag flag | --link-flag flag\n  --jobs N                 Procesos de análisis (1..32; por defecto 1)\n  --profile-analysis       Tiempos, CPU y RSS por fase en stderr\n  --verbose | --no-progress\n  init [directorio] | update-types [directorio]\n  --help | --version\n",678));
+v0.set(std::string("Uso: etsc build|run [entrada.ets] [opciones]\n  --check                  Verificar sin generar\n  -o archivo.cpp           Ruta C++\n  --binary archivo         Ruta ejecutable (con build)\n  --from-ir archivo        Generar desde ets-ir-2 verificado\n  --emit-ir archivo        Guardar IR\n  --config archivo         JSON u objeto declarativo\n  --root ruta | --alias nombre ruta | --cache ruta\n  --cxx compilador | --cxx-flag flag | --link-flag flag\n  --jobs N                 Procesos de análisis (1..32; por defecto 1)\n  --profile-analysis       Tiempos, CPU y RSS por fase en stderr\n  --verbose | --no-progress\n  init [directorio] [--no-src] | update-types [directorio]\n  --no-src                 (init) no crear src/: para una carpeta que ya tiene código\n  --help | --version\n",776));
 return v0.get();
 }
 ir_t88 ir_f294(std::string a0,ir_t32 a1,bool a2) {
@@ -54232,17 +54233,21 @@ v104.set(static_cast<double>(1.0));
 ir_f286(v103.take(),v104.take());
 goto b27;
 }
-void ir_f295(std::string a0,std::string a1,bool a2) {
+void ir_f295(std::string a0,std::string a1,bool a2,bool a3) {
 ets::ir::Slot<std::string> p0;
 ets::ir::Slot<std::string> p1;
 ets::ir::Slot<bool> p2;
-ets::ir::Slot<std::string> p3;
+ets::ir::Slot<bool> p3;
 ets::ir::Slot<std::string> p4;
 ets::ir::Slot<std::string> p5;
 ets::ir::Slot<std::string> p6;
-ets::ir::Slot<std::vector<std::string>> p7;
-ets::ir::Slot<std::string> p8;
-ets::ir::Slot<std::string> p9;
+ets::ir::Slot<std::string> p7;
+ets::ir::Slot<std::vector<std::string>> p8;
+ets::ir::Slot<std::vector<std::string>> p9;
+ets::ir::Slot<std::string> p10;
+ets::ir::Slot<bool> p11;
+ets::ir::Slot<std::string> p12;
+ets::ir::Slot<std::string> p13;
 ets::ir::Slot<std::string> v0;
 ets::ir::Slot<std::string> v1;
 ets::ir::Slot<std::string> v2;
@@ -54288,68 +54293,81 @@ ets::ir::Slot<bool> v41;
 ets::ir::Slot<bool> v42;
 ets::ir::Slot<std::string> v43;
 ets::ir::Slot<double> v44;
-ets::ir::Slot<std::string> v45;
-ets::ir::Slot<std::vector<std::string>> v46;
-ets::ir::Slot<std::string> v47;
-ets::ir::Slot<bool> v48;
-ets::ir::Slot<std::string> v49;
+ets::ir::Slot<std::vector<std::string>> v45;
+ets::ir::Slot<std::string> v46;
+ets::ir::Slot<std::vector<std::string>> v47;
+ets::ir::Slot<std::size_t> v48;
+ets::ir::Slot<bool> v49;
 ets::ir::Slot<std::string> v50;
-ets::ir::Slot<std::string> v51;
-ets::ir::Slot<double> v52;
-ets::ir::Slot<std::size_t> v53;
+ets::ir::Slot<bool> v51;
+ets::ir::Slot<std::string> v52;
+ets::ir::Slot<std::string> v53;
 ets::ir::Slot<bool> v54;
-ets::ir::Slot<std::string> v55;
-ets::ir::Slot<std::string> v56;
-ets::ir::Slot<std::string> v57;
+ets::ir::Slot<bool> v55;
+ets::ir::Slot<bool> v56;
+ets::ir::Slot<std::vector<std::string>*> v57;
 ets::ir::Slot<std::string> v58;
 ets::ir::Slot<std::string> v59;
-ets::ir::Slot<std::string> v60;
-ets::ir::Slot<bool> v61;
+ets::ir::Slot<bool> v60;
+ets::ir::Slot<std::string> v61;
 ets::ir::Slot<std::string> v62;
 ets::ir::Slot<std::string> v63;
-ets::ir::Slot<std::string> v64;
-ets::ir::Slot<std::string> v65;
-ets::ir::Slot<std::string> v66;
+ets::ir::Slot<double> v64;
+ets::ir::Slot<std::size_t> v65;
+ets::ir::Slot<bool> v66;
 ets::ir::Slot<std::string> v67;
 ets::ir::Slot<std::string> v68;
-ets::ir::Slot<double> v69;
-ets::ir::Slot<std::size_t> v70;
-ets::ir::Slot<bool> v71;
+ets::ir::Slot<std::string> v69;
+ets::ir::Slot<std::string> v70;
+ets::ir::Slot<std::string> v71;
 ets::ir::Slot<std::string> v72;
-ets::ir::Slot<std::string> v73;
+ets::ir::Slot<bool> v73;
 ets::ir::Slot<std::string> v74;
-ets::ir::Slot<bool> v75;
+ets::ir::Slot<std::string> v75;
 ets::ir::Slot<std::string> v76;
 ets::ir::Slot<std::string> v77;
 ets::ir::Slot<std::string> v78;
 ets::ir::Slot<std::string> v79;
 ets::ir::Slot<std::string> v80;
-ets::ir::Slot<std::string> v81;
-ets::ir::Slot<std::string> v82;
-ets::ir::Slot<std::string> v83;
+ets::ir::Slot<double> v81;
+ets::ir::Slot<std::size_t> v82;
+ets::ir::Slot<bool> v83;
 ets::ir::Slot<std::string> v84;
 ets::ir::Slot<std::string> v85;
 ets::ir::Slot<std::string> v86;
-ets::ir::Slot<std::string> v87;
+ets::ir::Slot<bool> v87;
 ets::ir::Slot<std::string> v88;
+ets::ir::Slot<std::string> v89;
+ets::ir::Slot<std::string> v90;
+ets::ir::Slot<std::string> v91;
+ets::ir::Slot<std::string> v92;
+ets::ir::Slot<std::string> v93;
+ets::ir::Slot<std::string> v94;
+ets::ir::Slot<std::string> v95;
+ets::ir::Slot<std::string> v96;
+ets::ir::Slot<std::string> v97;
+ets::ir::Slot<std::string> v98;
+ets::ir::Slot<std::string> v99;
+ets::ir::Slot<std::string> v100;
 p0.set(std::move(a0));
 p1.set(std::move(a1));
 p2.set(std::move(a2));
+p3.set(std::move(a3));
 goto b0;
 b0:
 v0.set(p1.get());
 v1.set(std::string("/types/estatic.d.ts",19));
 v2.set((v0.get() + v1.get()));
-p3.set(v2.take());
+p4.set(v2.take());
 v3.set(p0.get());
 v4.set(std::string("/types/estatic.d.ts",19));
 v5.set((v3.get() + v4.get()));
 v6.set(ir_f288(v5.take()));
-p4.set(v6.take());
+p5.set(v6.take());
 v7.set(p2.get());
 if(v7.get())goto b1;else goto b2;
 b1:
-v8.set(p3.get());
+v8.set(p4.get());
 v9.set(ir_f10(v8.take()));
 if(v9.get())goto b4;else goto b5;
 b2:
@@ -54358,24 +54376,24 @@ b3:
 v31.set(p0.get());
 v32.set(std::string("/templates",10));
 v33.set((v31.get() + v32.get()));
-p6.set(v33.take());
-v34.set(p6.get());
+p7.set(v33.take());
+v34.set(p7.get());
 v35.set(ir_f10(v34.take()));
 v36.set((!v35.get()));
 if(v36.get())goto b13;else goto b14;
 b4:
-v10.set(p3.get());
+v10.set(p4.get());
 v11.set(ir_f288(v10.take()));
-p5.set(v11.take());
-v12.set(p5.get());
-v13.set(p4.get());
+p6.set(v11.take());
+v12.set(p6.get());
+v13.set(p5.get());
 v14.set((v12.get() == v13.get()));
 if(v14.get())goto b7;else goto b8;
 b5:
 goto b6;
 b6:
-v29.set(p3.get());
-v30.set(p4.get());
+v29.set(p4.get());
+v30.set(p5.get());
 ir_f287(v29.take(),v30.take());
 return;
 b7:
@@ -54383,14 +54401,14 @@ return;
 b8:
 goto b9;
 b9:
-v15.set(p3.get());
+v15.set(p4.get());
 v16.set(std::string(".bak",4));
 v17.set((v15.get() + v16.get()));
 v18.set(ir_f10(v17.take()));
 if(v18.get())goto b10;else goto b11;
 b10:
 v19.set(std::string("Ya existe ",10));
-v20.set(p3.get());
+v20.set(p4.get());
 v21.set((v19.get() + v20.get()));
 v22.set(std::string(".bak",4));
 v23.set((v21.get() + v22.get()));
@@ -54400,22 +54418,22 @@ goto b12;
 b11:
 goto b12;
 b12:
-v25.set(p3.get());
+v25.set(p4.get());
 v26.set(std::string(".bak",4));
 v27.set((v25.get() + v26.get()));
-v28.set(p5.get());
+v28.set(p6.get());
 ir_f287(v27.take(),v28.take());
 goto b6;
 b13:
 v37.set(p0.get());
 v38.set(std::string("/native-cpp/templates",21));
 v39.set((v37.get() + v38.get()));
-p6.set(v39.take());
+p7.set(v39.take());
 goto b15;
 b14:
 goto b15;
 b15:
-v40.set(p6.get());
+v40.set(p7.get());
 v41.set(ir_f10(v40.take()));
 v42.set((!v41.get()));
 if(v42.get())goto b16;else goto b17;
@@ -54427,88 +54445,124 @@ goto b18;
 b17:
 goto b18;
 b18:
-v45.set(p6.get());
-v46.set(ir_f14(v45.take()));
-p7.set(v46.take());
-v47.set(p3.get());
-v48.set(ir_f10(v47.take()));
-if(v48.get())goto b19;else goto b20;
+v45.set(([&](){std::vector<std::string> out;return out;}()));
+p8.set(v45.take());
+v46.set(p7.get());
+v47.set(ir_f14(v46.take()));
+p9.set(v47.take());
+v48.set(std::size_t{0});
+goto b19;
 b19:
-v49.set(std::string("No se sobrescribe ",18));
-v50.set(p3.get());
-v51.set((v49.get() + v50.get()));
-v52.set(static_cast<double>(1.0));
-ir_f286(v51.take(),v52.take());
-goto b21;
+v49.set(v48.get()<(p9.get()).size());
+if(v49.get())goto b20;else goto b21;
 b20:
-goto b21;
+v50.set((p9.get()).at(v48.get()++));
+p10.set(v50.take());
+v51.set(p3.get());
+if(v51.get())goto b22;else goto b23;
 b21:
-v53.set(std::size_t{0});
-goto b22;
+v59.set(p4.get());
+v60.set(ir_f10(v59.take()));
+if(v60.get())goto b28;else goto b29;
 b22:
-v54.set(v53.get()<(p7.get()).size());
-if(v54.get())goto b23;else goto b24;
+p11.set(v51.get());
+goto b24;
 b23:
-v55.set((p7.get()).at(v53.get()++));
-p8.set(v55.take());
-v56.set(p1.get());
-v57.set(std::string("/",1));
-v58.set((v56.get() + v57.get()));
-v59.set(p8.get());
-v60.set((v58.get() + v59.get()));
-v61.set(ir_f10(v60.take()));
-if(v61.get())goto b25;else goto b26;
+v52.set(p10.get());
+v53.set(std::string("src/",4));
+v54.set(ets::string_startsWith(v52.get(),v53.get()));
+v55.set((!v54.get()));
+p11.set(v55.take());
+goto b24;
 b24:
-v70.set(std::size_t{0});
-goto b28;
+v56.set(p11.get());
+if(v56.get())goto b25;else goto b26;
 b25:
-v62.set(std::string("No se sobrescribe ",18));
-v63.set(p1.get());
-v64.set((v62.get() + v63.get()));
-v65.set(std::string("/",1));
-v66.set((v64.get() + v65.get()));
-v67.set(p8.get());
-v68.set((v66.get() + v67.get()));
-v69.set(static_cast<double>(1.0));
-ir_f286(v68.take(),v69.take());
+v57.set(std::addressof(p8.get()));
+v58.set(p10.get());
+ets_push_vec<std::string>((*(v57.get())),v58.get());
+// end lease 0; statically verified, no runtime ownership
 goto b27;
 b26:
 goto b27;
 b27:
-goto b22;
+goto b19;
 b28:
-v71.set(v70.get()<(p7.get()).size());
-if(v71.get())goto b29;else goto b30;
+v61.set(std::string("No se sobrescribe ",18));
+v62.set(p4.get());
+v63.set((v61.get() + v62.get()));
+v64.set(static_cast<double>(1.0));
+ir_f286(v63.take(),v64.take());
+goto b30;
 b29:
-v72.set((p7.get()).at(v70.get()++));
-p9.set(v72.take());
-v73.set(p9.get());
-v74.set(std::string("types/estatic.d.ts",18));
-v75.set((v73.get() != v74.get()));
-if(v75.get())goto b31;else goto b32;
+goto b30;
 b30:
-v87.set(p3.get());
-v88.set(p4.get());
-ir_f287(v87.take(),v88.take());
-return;
+v65.set(std::size_t{0});
+goto b31;
 b31:
-v76.set(p1.get());
+v66.set(v65.get()<(p8.get()).size());
+if(v66.get())goto b32;else goto b33;
+b32:
+v67.set((p8.get()).at(v65.get()++));
+p12.set(v67.take());
+v68.set(p1.get());
+v69.set(std::string("/",1));
+v70.set((v68.get() + v69.get()));
+v71.set(p12.get());
+v72.set((v70.get() + v71.get()));
+v73.set(ir_f10(v72.take()));
+if(v73.get())goto b34;else goto b35;
+b33:
+v82.set(std::size_t{0});
+goto b37;
+b34:
+v74.set(std::string("No se sobrescribe ",18));
+v75.set(p1.get());
+v76.set((v74.get() + v75.get()));
 v77.set(std::string("/",1));
 v78.set((v76.get() + v77.get()));
-v79.set(p9.get());
+v79.set(p12.get());
 v80.set((v78.get() + v79.get()));
-v81.set(p6.get());
-v82.set(std::string("/",1));
-v83.set((v81.get() + v82.get()));
-v84.set(p9.get());
-v85.set((v83.get() + v84.get()));
-v86.set(ir_f288(v85.take()));
-ir_f287(v80.take(),v86.take());
-goto b33;
-b32:
-goto b33;
-b33:
-goto b28;
+v81.set(static_cast<double>(1.0));
+ir_f286(v80.take(),v81.take());
+goto b36;
+b35:
+goto b36;
+b36:
+goto b31;
+b37:
+v83.set(v82.get()<(p8.get()).size());
+if(v83.get())goto b38;else goto b39;
+b38:
+v84.set((p8.get()).at(v82.get()++));
+p13.set(v84.take());
+v85.set(p13.get());
+v86.set(std::string("types/estatic.d.ts",18));
+v87.set((v85.get() != v86.get()));
+if(v87.get())goto b40;else goto b41;
+b39:
+v99.set(p4.get());
+v100.set(p5.get());
+ir_f287(v99.take(),v100.take());
+return;
+b40:
+v88.set(p1.get());
+v89.set(std::string("/",1));
+v90.set((v88.get() + v89.get()));
+v91.set(p13.get());
+v92.set((v90.get() + v91.get()));
+v93.set(p7.get());
+v94.set(std::string("/",1));
+v95.set((v93.get() + v94.get()));
+v96.set(p13.get());
+v97.set((v95.get() + v96.get()));
+v98.set(ir_f288(v97.take()));
+ir_f287(v92.take(),v98.take());
+goto b42;
+b41:
+goto b42;
+b42:
+goto b37;
 }
 void ir_f296(const ir_t119& a0,std::string a1,std::string a2,std::string a3,std::string a4,std::vector<std::string> a5,std::vector<std::string> a6) {
 ets::ir::Slot<const ir_t119*> p0;
@@ -55055,82 +55109,87 @@ ets::ir::Slot<bool> p8;
 ets::ir::Slot<std::string> p10;
 ets::ir::Slot<bool> p11;
 ets::ir::Slot<bool> p13;
-ets::ir::Slot<std::string> p16;
-ets::ir::Slot<std::string> p17;
+ets::ir::Slot<std::string> p15;
+ets::ir::Slot<bool> p16;
+ets::ir::Slot<double> p17;
+ets::ir::Slot<double> p18;
 ets::ir::Slot<bool> p20;
-ets::ir::Slot<bool> p21;
-ets::ir::Slot<bool> p22;
 ets::ir::Slot<bool> p23;
-ets::ir::Slot<bool> p24;
-ets::ir::Slot<std::string> p25;
 ets::ir::Slot<std::string> p26;
-ets::ir::Slot<std::string> p27;
-ets::ir::Slot<std::string> p28;
-ets::ir::Slot<std::string> p29;
-ets::ir::Slot<std::string> p30;
-ets::ir::Slot<std::string> p31;
-ets::ir::Slot<ir_t32> p32;
-ets::ir::Slot<ir_t32> p33;
-ets::ir::Slot<std::vector<std::string>> p34;
-ets::ir::Slot<std::vector<std::string>> p35;
-ets::ir::Slot<std::vector<std::string>> p36;
-ets::ir::Slot<double> p37;
-ets::ir::Slot<bool> p38;
-ets::ir::Slot<bool> p40;
-ets::ir::Slot<std::string> p43;
+ets::ir::Slot<bool> p28;
+ets::ir::Slot<bool> p29;
+ets::ir::Slot<bool> p30;
+ets::ir::Slot<bool> p31;
+ets::ir::Slot<bool> p32;
+ets::ir::Slot<std::string> p33;
+ets::ir::Slot<std::string> p34;
+ets::ir::Slot<std::string> p35;
+ets::ir::Slot<std::string> p36;
+ets::ir::Slot<std::string> p37;
+ets::ir::Slot<std::string> p38;
+ets::ir::Slot<std::string> p39;
+ets::ir::Slot<ir_t32> p40;
+ets::ir::Slot<ir_t32> p41;
+ets::ir::Slot<std::vector<std::string>> p42;
+ets::ir::Slot<std::vector<std::string>> p43;
+ets::ir::Slot<std::vector<std::string>> p44;
 ets::ir::Slot<double> p45;
-ets::ir::Slot<bool> p47;
-ets::ir::Slot<std::string> p49;
-ets::ir::Slot<bool> p51;
-ets::ir::Slot<bool> p52;
-ets::ir::Slot<ir_t34> p57;
-ets::ir::Slot<bool> p58;
+ets::ir::Slot<bool> p46;
+ets::ir::Slot<bool> p48;
+ets::ir::Slot<std::string> p51;
+ets::ir::Slot<double> p53;
+ets::ir::Slot<bool> p55;
+ets::ir::Slot<std::string> p57;
 ets::ir::Slot<bool> p59;
 ets::ir::Slot<bool> p60;
-ets::ir::Slot<bool> p61;
-ets::ir::Slot<bool> p62;
-ets::ir::Slot<bool> p63;
-ets::ir::Slot<bool> p64;
-ets::ir::Slot<bool> p65;
+ets::ir::Slot<ir_t34> p65;
 ets::ir::Slot<bool> p66;
-ets::ir::Slot<ets_json::Value> p67;
-ets::ir::Slot<std::string> p68;
-ets::ir::Slot<std::string> p69;
+ets::ir::Slot<bool> p67;
+ets::ir::Slot<bool> p68;
+ets::ir::Slot<bool> p69;
 ets::ir::Slot<bool> p70;
 ets::ir::Slot<bool> p71;
 ets::ir::Slot<bool> p72;
-ets::ir::Slot<ets_json::Value> p73;
-ets::ir::Slot<std::string> p74;
-ets::ir::Slot<bool> p76;
-ets::ir::Slot<std::vector<std::string>> p78;
-ets::ir::Slot<std::string> p79;
+ets::ir::Slot<bool> p73;
+ets::ir::Slot<bool> p74;
+ets::ir::Slot<ets_json::Value> p75;
+ets::ir::Slot<std::string> p76;
+ets::ir::Slot<std::string> p77;
+ets::ir::Slot<bool> p78;
+ets::ir::Slot<bool> p79;
+ets::ir::Slot<bool> p80;
 ets::ir::Slot<ets_json::Value> p81;
-ets::ir::Slot<std::vector<std::string>> p82;
-ets::ir::Slot<std::string> p83;
-ets::ir::Slot<ir_t34> p85;
-ets::ir::Slot<bool> p87;
-ets::ir::Slot<std::string> p88;
-ets::ir::Slot<ir_t88> p89;
-ets::ir::Slot<ir_t88> p90;
-ets::ir::Slot<ir_t119> p91;
-ets::ir::Slot<ets_json::Value> p92;
-ets::ir::Slot<ets_json::Value> p93;
-ets::ir::Slot<std::string> p94;
-ets::ir::Slot<std::string> p95;
+ets::ir::Slot<std::string> p82;
+ets::ir::Slot<bool> p84;
+ets::ir::Slot<std::vector<std::string>> p86;
+ets::ir::Slot<std::string> p87;
+ets::ir::Slot<ets_json::Value> p89;
+ets::ir::Slot<std::vector<std::string>> p90;
+ets::ir::Slot<std::string> p91;
+ets::ir::Slot<ir_t34> p93;
+ets::ir::Slot<bool> p95;
 ets::ir::Slot<std::string> p96;
-ets::ir::Slot<bool> p98;
-ets::ir::Slot<std::string> p99;
-ets::ir::Slot<std::string> p100;
-ets::ir::Slot<std::vector<std::string>> p101;
+ets::ir::Slot<ir_t88> p97;
+ets::ir::Slot<ir_t88> p98;
+ets::ir::Slot<ir_t119> p99;
+ets::ir::Slot<ets_json::Value> p100;
+ets::ir::Slot<ets_json::Value> p101;
 ets::ir::Slot<std::string> p102;
-ets::ir::Slot<std::vector<std::string>> p103;
+ets::ir::Slot<std::string> p103;
 ets::ir::Slot<std::string> p104;
-ets::ir::Slot<std::vector<std::string>> p105;
-ets::ir::Slot<std::string> p106;
-ets::ir::Slot<bool> p107;
+ets::ir::Slot<bool> p106;
+ets::ir::Slot<std::string> p107;
 ets::ir::Slot<std::string> p108;
 ets::ir::Slot<std::vector<std::string>> p109;
 ets::ir::Slot<std::string> p110;
+ets::ir::Slot<std::vector<std::string>> p111;
+ets::ir::Slot<std::string> p112;
+ets::ir::Slot<std::vector<std::string>> p113;
+ets::ir::Slot<std::string> p114;
+ets::ir::Slot<bool> p115;
+ets::ir::Slot<std::string> p116;
+ets::ir::Slot<std::vector<std::string>> p117;
+ets::ir::Slot<std::string> p118;
 ets::ir::Slot<std::vector<std::string>> v0;
 ets::ir::Slot<double> v1;
 ets::ir::Slot<double> v2;
@@ -55208,486 +55267,486 @@ ets::ir::Slot<std::string> v73;
 ets::ir::Slot<bool> v74;
 ets::ir::Slot<bool> v75;
 ets::ir::Slot<bool> v76;
-ets::ir::Slot<std::vector<std::string>> v77;
-ets::ir::Slot<double> v78;
+ets::ir::Slot<std::string> v77;
+ets::ir::Slot<bool> v78;
 ets::ir::Slot<double> v79;
-ets::ir::Slot<bool> v80;
-ets::ir::Slot<std::string> v81;
-ets::ir::Slot<double> v82;
-ets::ir::Slot<bool> v83;
+ets::ir::Slot<double> v80;
+ets::ir::Slot<double> v81;
+ets::ir::Slot<std::vector<std::string>> v82;
+ets::ir::Slot<double> v83;
 ets::ir::Slot<bool> v84;
 ets::ir::Slot<double> v85;
 ets::ir::Slot<std::string> v86;
 ets::ir::Slot<std::string> v87;
 ets::ir::Slot<bool> v88;
-ets::ir::Slot<std::string> v89;
+ets::ir::Slot<double> v89;
 ets::ir::Slot<std::string> v90;
 ets::ir::Slot<std::string> v91;
-ets::ir::Slot<std::string> v92;
-ets::ir::Slot<std::vector<std::string>> v93;
-ets::ir::Slot<double> v94;
+ets::ir::Slot<bool> v92;
+ets::ir::Slot<bool> v93;
+ets::ir::Slot<bool> v94;
 ets::ir::Slot<double> v95;
-ets::ir::Slot<bool> v96;
-ets::ir::Slot<double> v97;
-ets::ir::Slot<std::string> v98;
-ets::ir::Slot<std::string> v99;
-ets::ir::Slot<std::string> v100;
-ets::ir::Slot<double> v101;
-ets::ir::Slot<std::string> v102;
+ets::ir::Slot<std::string> v96;
+ets::ir::Slot<std::string> v97;
+ets::ir::Slot<bool> v98;
+ets::ir::Slot<double> v99;
+ets::ir::Slot<double> v100;
+ets::ir::Slot<bool> v101;
+ets::ir::Slot<bool> v102;
 ets::ir::Slot<std::string> v103;
-ets::ir::Slot<bool> v104;
-ets::ir::Slot<std::string> v105;
+ets::ir::Slot<double> v104;
+ets::ir::Slot<double> v105;
 ets::ir::Slot<std::string> v106;
-ets::ir::Slot<bool> v107;
-ets::ir::Slot<bool> v108;
-ets::ir::Slot<bool> v109;
-ets::ir::Slot<bool> v110;
-ets::ir::Slot<bool> v111;
-ets::ir::Slot<std::string> v112;
-ets::ir::Slot<std::string> v113;
-ets::ir::Slot<std::string> v114;
-ets::ir::Slot<std::string> v115;
-ets::ir::Slot<std::string> v116;
+ets::ir::Slot<double> v107;
+ets::ir::Slot<double> v108;
+ets::ir::Slot<double> v109;
+ets::ir::Slot<double> v110;
+ets::ir::Slot<double> v111;
+ets::ir::Slot<double> v112;
+ets::ir::Slot<double> v113;
+ets::ir::Slot<bool> v114;
+ets::ir::Slot<bool> v115;
+ets::ir::Slot<double> v116;
 ets::ir::Slot<std::string> v117;
 ets::ir::Slot<std::string> v118;
-ets::ir::Slot<ir_t32> v119;
-ets::ir::Slot<ir_t32*> v120;
-ets::ir::Slot<ir_t32> v121;
-ets::ir::Slot<std::vector<std::string>> v122;
-ets::ir::Slot<std::vector<std::string>> v123;
-ets::ir::Slot<std::vector<std::string>> v124;
+ets::ir::Slot<bool> v119;
+ets::ir::Slot<std::string> v120;
+ets::ir::Slot<std::string> v121;
+ets::ir::Slot<std::string> v122;
+ets::ir::Slot<std::string> v123;
+ets::ir::Slot<std::string> v124;
 ets::ir::Slot<double> v125;
-ets::ir::Slot<std::vector<std::string>> v126;
-ets::ir::Slot<double> v127;
-ets::ir::Slot<double> v128;
+ets::ir::Slot<std::string> v126;
+ets::ir::Slot<std::string> v127;
+ets::ir::Slot<bool> v128;
 ets::ir::Slot<bool> v129;
-ets::ir::Slot<double> v130;
+ets::ir::Slot<std::string> v130;
 ets::ir::Slot<std::string> v131;
-ets::ir::Slot<std::string> v132;
+ets::ir::Slot<bool> v132;
 ets::ir::Slot<bool> v133;
-ets::ir::Slot<double> v134;
-ets::ir::Slot<std::string> v135;
-ets::ir::Slot<std::string> v136;
-ets::ir::Slot<bool> v137;
-ets::ir::Slot<bool> v138;
-ets::ir::Slot<bool> v139;
-ets::ir::Slot<bool> v140;
-ets::ir::Slot<double> v141;
+ets::ir::Slot<bool> v134;
+ets::ir::Slot<bool> v135;
+ets::ir::Slot<bool> v136;
+ets::ir::Slot<std::string> v137;
+ets::ir::Slot<std::string> v138;
+ets::ir::Slot<std::string> v139;
+ets::ir::Slot<std::string> v140;
+ets::ir::Slot<std::string> v141;
 ets::ir::Slot<std::string> v142;
 ets::ir::Slot<std::string> v143;
-ets::ir::Slot<bool> v144;
-ets::ir::Slot<double> v145;
-ets::ir::Slot<double> v146;
+ets::ir::Slot<ir_t32> v144;
+ets::ir::Slot<ir_t32*> v145;
+ets::ir::Slot<ir_t32> v146;
 ets::ir::Slot<std::vector<std::string>> v147;
-ets::ir::Slot<double> v148;
-ets::ir::Slot<bool> v149;
+ets::ir::Slot<std::vector<std::string>> v148;
+ets::ir::Slot<std::vector<std::string>> v149;
 ets::ir::Slot<double> v150;
-ets::ir::Slot<std::string> v151;
-ets::ir::Slot<std::string> v152;
-ets::ir::Slot<std::string> v153;
+ets::ir::Slot<std::vector<std::string>> v151;
+ets::ir::Slot<double> v152;
+ets::ir::Slot<double> v153;
 ets::ir::Slot<bool> v154;
 ets::ir::Slot<double> v155;
-ets::ir::Slot<double> v156;
-ets::ir::Slot<double> v157;
-ets::ir::Slot<double> v158;
-ets::ir::Slot<std::vector<std::string>> v159;
-ets::ir::Slot<double> v160;
-ets::ir::Slot<bool> v161;
-ets::ir::Slot<std::vector<std::string>*> v162;
-ets::ir::Slot<double> v163;
-ets::ir::Slot<std::string> v164;
-ets::ir::Slot<double> v165;
+ets::ir::Slot<std::string> v156;
+ets::ir::Slot<std::string> v157;
+ets::ir::Slot<bool> v158;
+ets::ir::Slot<double> v159;
+ets::ir::Slot<std::string> v160;
+ets::ir::Slot<std::string> v161;
+ets::ir::Slot<bool> v162;
+ets::ir::Slot<bool> v163;
+ets::ir::Slot<bool> v164;
+ets::ir::Slot<bool> v165;
 ets::ir::Slot<double> v166;
-ets::ir::Slot<double> v167;
-ets::ir::Slot<double> v168;
-ets::ir::Slot<std::string> v169;
-ets::ir::Slot<std::string> v170;
-ets::ir::Slot<bool> v171;
-ets::ir::Slot<bool> v172;
-ets::ir::Slot<bool> v173;
-ets::ir::Slot<std::string> v174;
+ets::ir::Slot<std::string> v167;
+ets::ir::Slot<std::string> v168;
+ets::ir::Slot<bool> v169;
+ets::ir::Slot<double> v170;
+ets::ir::Slot<double> v171;
+ets::ir::Slot<std::vector<std::string>> v172;
+ets::ir::Slot<double> v173;
+ets::ir::Slot<bool> v174;
 ets::ir::Slot<double> v175;
 ets::ir::Slot<std::string> v176;
 ets::ir::Slot<std::string> v177;
-ets::ir::Slot<bool> v178;
-ets::ir::Slot<double> v179;
+ets::ir::Slot<std::string> v178;
+ets::ir::Slot<bool> v179;
 ets::ir::Slot<double> v180;
 ets::ir::Slot<double> v181;
 ets::ir::Slot<double> v182;
-ets::ir::Slot<std::vector<std::string>> v183;
-ets::ir::Slot<double> v184;
-ets::ir::Slot<bool> v185;
-ets::ir::Slot<double> v186;
-ets::ir::Slot<std::string> v187;
-ets::ir::Slot<bool> v188;
-ets::ir::Slot<bool> v189;
-ets::ir::Slot<bool> v190;
-ets::ir::Slot<std::string> v191;
+ets::ir::Slot<double> v183;
+ets::ir::Slot<std::vector<std::string>> v184;
+ets::ir::Slot<double> v185;
+ets::ir::Slot<bool> v186;
+ets::ir::Slot<std::vector<std::string>*> v187;
+ets::ir::Slot<double> v188;
+ets::ir::Slot<std::string> v189;
+ets::ir::Slot<double> v190;
+ets::ir::Slot<double> v191;
 ets::ir::Slot<double> v192;
-ets::ir::Slot<std::string> v193;
+ets::ir::Slot<double> v193;
 ets::ir::Slot<std::string> v194;
-ets::ir::Slot<bool> v195;
+ets::ir::Slot<std::string> v195;
 ets::ir::Slot<bool> v196;
-ets::ir::Slot<std::string> v197;
-ets::ir::Slot<std::string> v198;
-ets::ir::Slot<bool> v199;
-ets::ir::Slot<bool> v200;
+ets::ir::Slot<bool> v197;
+ets::ir::Slot<bool> v198;
+ets::ir::Slot<std::string> v199;
+ets::ir::Slot<double> v200;
 ets::ir::Slot<std::string> v201;
 ets::ir::Slot<std::string> v202;
 ets::ir::Slot<bool> v203;
-ets::ir::Slot<bool> v204;
-ets::ir::Slot<std::string> v205;
-ets::ir::Slot<std::string> v206;
-ets::ir::Slot<bool> v207;
-ets::ir::Slot<bool> v208;
-ets::ir::Slot<bool> v209;
-ets::ir::Slot<std::string> v210;
-ets::ir::Slot<std::string> v211;
-ets::ir::Slot<bool> v212;
+ets::ir::Slot<double> v204;
+ets::ir::Slot<double> v205;
+ets::ir::Slot<double> v206;
+ets::ir::Slot<double> v207;
+ets::ir::Slot<std::vector<std::string>> v208;
+ets::ir::Slot<double> v209;
+ets::ir::Slot<bool> v210;
+ets::ir::Slot<double> v211;
+ets::ir::Slot<std::string> v212;
 ets::ir::Slot<bool> v213;
-ets::ir::Slot<std::string> v214;
-ets::ir::Slot<std::string> v215;
+ets::ir::Slot<bool> v214;
+ets::ir::Slot<bool> v215;
 ets::ir::Slot<std::string> v216;
-ets::ir::Slot<std::string> v217;
+ets::ir::Slot<double> v217;
 ets::ir::Slot<std::string> v218;
 ets::ir::Slot<std::string> v219;
-ets::ir::Slot<std::string> v220;
-ets::ir::Slot<std::string> v221;
+ets::ir::Slot<bool> v220;
+ets::ir::Slot<bool> v221;
 ets::ir::Slot<std::string> v222;
 ets::ir::Slot<std::string> v223;
-ets::ir::Slot<std::string> v224;
-ets::ir::Slot<std::vector<std::string>> v225;
+ets::ir::Slot<bool> v224;
+ets::ir::Slot<bool> v225;
 ets::ir::Slot<std::string> v226;
-ets::ir::Slot<bool> v227;
-ets::ir::Slot<double> v228;
-ets::ir::Slot<double> v229;
-ets::ir::Slot<double> v230;
-ets::ir::Slot<double> v231;
-ets::ir::Slot<std::vector<std::string>> v232;
-ets::ir::Slot<double> v233;
+ets::ir::Slot<std::string> v227;
+ets::ir::Slot<bool> v228;
+ets::ir::Slot<bool> v229;
+ets::ir::Slot<std::string> v230;
+ets::ir::Slot<std::string> v231;
+ets::ir::Slot<bool> v232;
+ets::ir::Slot<bool> v233;
 ets::ir::Slot<bool> v234;
 ets::ir::Slot<std::string> v235;
 ets::ir::Slot<std::string> v236;
-ets::ir::Slot<std::string> v237;
-ets::ir::Slot<double> v238;
-ets::ir::Slot<double> v239;
+ets::ir::Slot<bool> v237;
+ets::ir::Slot<bool> v238;
+ets::ir::Slot<std::string> v239;
 ets::ir::Slot<std::string> v240;
 ets::ir::Slot<std::string> v241;
 ets::ir::Slot<std::string> v242;
-ets::ir::Slot<bool> v243;
+ets::ir::Slot<std::string> v243;
 ets::ir::Slot<std::string> v244;
 ets::ir::Slot<std::string> v245;
-ets::ir::Slot<bool> v246;
-ets::ir::Slot<bool> v247;
+ets::ir::Slot<std::string> v246;
+ets::ir::Slot<std::string> v247;
 ets::ir::Slot<std::string> v248;
 ets::ir::Slot<std::string> v249;
-ets::ir::Slot<bool> v250;
-ets::ir::Slot<bool> v251;
-ets::ir::Slot<std::string> v252;
-ets::ir::Slot<std::string> v253;
-ets::ir::Slot<std::string> v254;
+ets::ir::Slot<std::vector<std::string>> v250;
+ets::ir::Slot<std::string> v251;
+ets::ir::Slot<bool> v252;
+ets::ir::Slot<double> v253;
+ets::ir::Slot<double> v254;
 ets::ir::Slot<double> v255;
-ets::ir::Slot<std::string> v256;
-ets::ir::Slot<std::string> v257;
-ets::ir::Slot<bool> v258;
-ets::ir::Slot<std::string> v259;
+ets::ir::Slot<double> v256;
+ets::ir::Slot<std::vector<std::string>> v257;
+ets::ir::Slot<double> v258;
+ets::ir::Slot<bool> v259;
 ets::ir::Slot<std::string> v260;
 ets::ir::Slot<std::string> v261;
-ets::ir::Slot<bool> v262;
-ets::ir::Slot<std::string> v263;
-ets::ir::Slot<std::string> v264;
+ets::ir::Slot<std::string> v262;
+ets::ir::Slot<double> v263;
+ets::ir::Slot<double> v264;
 ets::ir::Slot<std::string> v265;
-ets::ir::Slot<bool> v266;
+ets::ir::Slot<std::string> v266;
 ets::ir::Slot<std::string> v267;
-ets::ir::Slot<std::string> v268;
+ets::ir::Slot<bool> v268;
 ets::ir::Slot<std::string> v269;
-ets::ir::Slot<bool> v270;
-ets::ir::Slot<std::string> v271;
-ets::ir::Slot<std::string> v272;
+ets::ir::Slot<std::string> v270;
+ets::ir::Slot<bool> v271;
+ets::ir::Slot<bool> v272;
 ets::ir::Slot<std::string> v273;
-ets::ir::Slot<bool> v274;
-ets::ir::Slot<std::string> v275;
-ets::ir::Slot<std::string> v276;
+ets::ir::Slot<std::string> v274;
+ets::ir::Slot<bool> v275;
+ets::ir::Slot<bool> v276;
 ets::ir::Slot<std::string> v277;
-ets::ir::Slot<bool> v278;
+ets::ir::Slot<std::string> v278;
 ets::ir::Slot<std::string> v279;
-ets::ir::Slot<std::string> v280;
+ets::ir::Slot<double> v280;
 ets::ir::Slot<std::string> v281;
-ets::ir::Slot<bool> v282;
-ets::ir::Slot<std::string> v283;
+ets::ir::Slot<std::string> v282;
+ets::ir::Slot<bool> v283;
 ets::ir::Slot<std::string> v284;
 ets::ir::Slot<std::string> v285;
-ets::ir::Slot<bool> v286;
-ets::ir::Slot<std::vector<std::string>*> v287;
+ets::ir::Slot<std::string> v286;
+ets::ir::Slot<bool> v287;
 ets::ir::Slot<std::string> v288;
 ets::ir::Slot<std::string> v289;
 ets::ir::Slot<std::string> v290;
-ets::ir::Slot<std::string> v291;
-ets::ir::Slot<bool> v292;
-ets::ir::Slot<std::vector<std::string>*> v293;
+ets::ir::Slot<bool> v291;
+ets::ir::Slot<std::string> v292;
+ets::ir::Slot<std::string> v293;
 ets::ir::Slot<std::string> v294;
-ets::ir::Slot<std::string> v295;
+ets::ir::Slot<bool> v295;
 ets::ir::Slot<std::string> v296;
-ets::ir::Slot<bool> v297;
-ets::ir::Slot<std::vector<std::string>*> v298;
-ets::ir::Slot<std::string> v299;
+ets::ir::Slot<std::string> v297;
+ets::ir::Slot<std::string> v298;
+ets::ir::Slot<bool> v299;
 ets::ir::Slot<std::string> v300;
 ets::ir::Slot<std::string> v301;
-ets::ir::Slot<bool> v302;
-ets::ir::Slot<double> v303;
-ets::ir::Slot<double> v304;
-ets::ir::Slot<double> v305;
-ets::ir::Slot<double> v306;
-ets::ir::Slot<std::vector<std::string>> v307;
-ets::ir::Slot<double> v308;
-ets::ir::Slot<bool> v309;
+ets::ir::Slot<std::string> v302;
+ets::ir::Slot<bool> v303;
+ets::ir::Slot<std::string> v304;
+ets::ir::Slot<std::string> v305;
+ets::ir::Slot<std::string> v306;
+ets::ir::Slot<bool> v307;
+ets::ir::Slot<std::string> v308;
+ets::ir::Slot<std::string> v309;
 ets::ir::Slot<std::string> v310;
-ets::ir::Slot<double> v311;
-ets::ir::Slot<std::vector<ir_t34>*> v312;
+ets::ir::Slot<bool> v311;
+ets::ir::Slot<std::vector<std::string>*> v312;
 ets::ir::Slot<std::string> v313;
-ets::ir::Slot<double> v314;
+ets::ir::Slot<std::string> v314;
 ets::ir::Slot<std::string> v315;
-ets::ir::Slot<ir_t34> v316;
-ets::ir::Slot<ir_t34*> v317;
-ets::ir::Slot<ir_t34> v318;
+ets::ir::Slot<std::string> v316;
+ets::ir::Slot<bool> v317;
+ets::ir::Slot<std::vector<std::string>*> v318;
 ets::ir::Slot<std::string> v319;
 ets::ir::Slot<std::string> v320;
-ets::ir::Slot<bool> v321;
-ets::ir::Slot<std::string> v322;
-ets::ir::Slot<std::string> v323;
-ets::ir::Slot<bool> v324;
-ets::ir::Slot<bool> v325;
+ets::ir::Slot<std::string> v321;
+ets::ir::Slot<bool> v322;
+ets::ir::Slot<std::vector<std::string>*> v323;
+ets::ir::Slot<std::string> v324;
+ets::ir::Slot<std::string> v325;
 ets::ir::Slot<std::string> v326;
-ets::ir::Slot<std::string> v327;
-ets::ir::Slot<std::string> v328;
+ets::ir::Slot<bool> v327;
+ets::ir::Slot<double> v328;
 ets::ir::Slot<double> v329;
-ets::ir::Slot<std::string> v330;
+ets::ir::Slot<double> v330;
 ets::ir::Slot<double> v331;
-ets::ir::Slot<double> v332;
+ets::ir::Slot<std::vector<std::string>> v332;
 ets::ir::Slot<double> v333;
-ets::ir::Slot<double> v334;
+ets::ir::Slot<bool> v334;
 ets::ir::Slot<std::string> v335;
-ets::ir::Slot<std::string> v336;
-ets::ir::Slot<bool> v337;
+ets::ir::Slot<double> v336;
+ets::ir::Slot<std::vector<ir_t34>*> v337;
 ets::ir::Slot<std::string> v338;
-ets::ir::Slot<std::string> v339;
-ets::ir::Slot<bool> v340;
-ets::ir::Slot<bool> v341;
-ets::ir::Slot<std::string> v342;
-ets::ir::Slot<double> v343;
-ets::ir::Slot<bool> v344;
-ets::ir::Slot<bool> v345;
+ets::ir::Slot<double> v339;
+ets::ir::Slot<std::string> v340;
+ets::ir::Slot<ir_t34> v341;
+ets::ir::Slot<ir_t34*> v342;
+ets::ir::Slot<ir_t34> v343;
+ets::ir::Slot<std::string> v344;
+ets::ir::Slot<std::string> v345;
 ets::ir::Slot<bool> v346;
-ets::ir::Slot<bool> v347;
+ets::ir::Slot<std::string> v347;
 ets::ir::Slot<std::string> v348;
-ets::ir::Slot<std::string> v349;
+ets::ir::Slot<bool> v349;
 ets::ir::Slot<bool> v350;
-ets::ir::Slot<bool> v351;
+ets::ir::Slot<std::string> v351;
 ets::ir::Slot<std::string> v352;
 ets::ir::Slot<std::string> v353;
-ets::ir::Slot<bool> v354;
-ets::ir::Slot<bool> v355;
-ets::ir::Slot<bool> v356;
-ets::ir::Slot<std::string> v357;
+ets::ir::Slot<double> v354;
+ets::ir::Slot<std::string> v355;
+ets::ir::Slot<double> v356;
+ets::ir::Slot<double> v357;
 ets::ir::Slot<double> v358;
-ets::ir::Slot<std::vector<std::string>> v359;
-ets::ir::Slot<double> v360;
-ets::ir::Slot<double> v361;
+ets::ir::Slot<double> v359;
+ets::ir::Slot<std::string> v360;
+ets::ir::Slot<std::string> v361;
 ets::ir::Slot<bool> v362;
-ets::ir::Slot<bool> v363;
-ets::ir::Slot<bool> v364;
+ets::ir::Slot<std::string> v363;
+ets::ir::Slot<std::string> v364;
 ets::ir::Slot<bool> v365;
-ets::ir::Slot<std::string> v366;
-ets::ir::Slot<double> v367;
-ets::ir::Slot<bool> v368;
+ets::ir::Slot<bool> v366;
+ets::ir::Slot<std::string> v367;
+ets::ir::Slot<double> v368;
 ets::ir::Slot<bool> v369;
-ets::ir::Slot<std::string> v370;
-ets::ir::Slot<std::string> v371;
-ets::ir::Slot<std::string> v372;
-ets::ir::Slot<bool> v373;
+ets::ir::Slot<bool> v370;
+ets::ir::Slot<bool> v371;
+ets::ir::Slot<bool> v372;
+ets::ir::Slot<std::string> v373;
 ets::ir::Slot<std::string> v374;
-ets::ir::Slot<std::string> v375;
+ets::ir::Slot<bool> v375;
 ets::ir::Slot<bool> v376;
-ets::ir::Slot<bool> v377;
+ets::ir::Slot<std::string> v377;
 ets::ir::Slot<std::string> v378;
-ets::ir::Slot<std::string> v379;
+ets::ir::Slot<bool> v379;
 ets::ir::Slot<bool> v380;
 ets::ir::Slot<bool> v381;
 ets::ir::Slot<std::string> v382;
-ets::ir::Slot<bool> v383;
-ets::ir::Slot<std::string> v384;
-ets::ir::Slot<std::string> v385;
-ets::ir::Slot<bool> v386;
-ets::ir::Slot<std::string> v387;
-ets::ir::Slot<std::string> v388;
-ets::ir::Slot<ets_json::Value> v389;
-ets::ir::Slot<std::string> v390;
+ets::ir::Slot<double> v383;
+ets::ir::Slot<std::vector<std::string>> v384;
+ets::ir::Slot<double> v385;
+ets::ir::Slot<double> v386;
+ets::ir::Slot<bool> v387;
+ets::ir::Slot<bool> v388;
+ets::ir::Slot<bool> v389;
+ets::ir::Slot<bool> v390;
 ets::ir::Slot<std::string> v391;
-ets::ir::Slot<std::string> v392;
+ets::ir::Slot<double> v392;
 ets::ir::Slot<bool> v393;
-ets::ir::Slot<std::string> v394;
+ets::ir::Slot<bool> v394;
 ets::ir::Slot<std::string> v395;
-ets::ir::Slot<ets_json::Value> v396;
+ets::ir::Slot<std::string> v396;
 ets::ir::Slot<std::string> v397;
-ets::ir::Slot<std::string> v398;
-ets::ir::Slot<ets_json::Value> v399;
+ets::ir::Slot<bool> v398;
+ets::ir::Slot<std::string> v399;
 ets::ir::Slot<std::string> v400;
-ets::ir::Slot<ets_json::Value> v401;
-ets::ir::Slot<std::string> v402;
+ets::ir::Slot<bool> v401;
+ets::ir::Slot<bool> v402;
 ets::ir::Slot<std::string> v403;
 ets::ir::Slot<std::string> v404;
 ets::ir::Slot<bool> v405;
-ets::ir::Slot<std::string> v406;
+ets::ir::Slot<bool> v406;
 ets::ir::Slot<std::string> v407;
 ets::ir::Slot<bool> v408;
-ets::ir::Slot<bool> v409;
+ets::ir::Slot<std::string> v409;
 ets::ir::Slot<std::string> v410;
-ets::ir::Slot<std::string> v411;
-ets::ir::Slot<bool> v412;
-ets::ir::Slot<bool> v413;
-ets::ir::Slot<std::string> v414;
+ets::ir::Slot<bool> v411;
+ets::ir::Slot<std::string> v412;
+ets::ir::Slot<std::string> v413;
+ets::ir::Slot<ets_json::Value> v414;
 ets::ir::Slot<std::string> v415;
 ets::ir::Slot<std::string> v416;
 ets::ir::Slot<std::string> v417;
-ets::ir::Slot<std::string> v418;
-ets::ir::Slot<bool> v419;
+ets::ir::Slot<bool> v418;
+ets::ir::Slot<std::string> v419;
 ets::ir::Slot<std::string> v420;
-ets::ir::Slot<std::string> v421;
-ets::ir::Slot<bool> v422;
-ets::ir::Slot<bool> v423;
-ets::ir::Slot<std::string> v424;
-ets::ir::Slot<double> v425;
+ets::ir::Slot<ets_json::Value> v421;
+ets::ir::Slot<std::string> v422;
+ets::ir::Slot<std::string> v423;
+ets::ir::Slot<ets_json::Value> v424;
+ets::ir::Slot<std::string> v425;
 ets::ir::Slot<ets_json::Value> v426;
 ets::ir::Slot<std::string> v427;
-ets::ir::Slot<ets_json::Value> v428;
-ets::ir::Slot<ets_json::Value> v429;
-ets::ir::Slot<std::string> v430;
-ets::ir::Slot<ets_json::Value> v431;
+ets::ir::Slot<std::string> v428;
+ets::ir::Slot<std::string> v429;
+ets::ir::Slot<bool> v430;
+ets::ir::Slot<std::string> v431;
 ets::ir::Slot<std::string> v432;
-ets::ir::Slot<std::string> v433;
-ets::ir::Slot<std::string> v434;
-ets::ir::Slot<bool> v435;
+ets::ir::Slot<bool> v433;
+ets::ir::Slot<bool> v434;
+ets::ir::Slot<std::string> v435;
 ets::ir::Slot<std::string> v436;
-ets::ir::Slot<std::string> v437;
+ets::ir::Slot<bool> v437;
 ets::ir::Slot<bool> v438;
-ets::ir::Slot<bool> v439;
+ets::ir::Slot<std::string> v439;
 ets::ir::Slot<std::string> v440;
 ets::ir::Slot<std::string> v441;
 ets::ir::Slot<std::string> v442;
-ets::ir::Slot<ets_json::Value> v443;
-ets::ir::Slot<std::string> v444;
-ets::ir::Slot<ets_json::Value> v445;
-ets::ir::Slot<std::vector<std::string>> v446;
-ets::ir::Slot<std::size_t> v447;
+ets::ir::Slot<std::string> v443;
+ets::ir::Slot<bool> v444;
+ets::ir::Slot<std::string> v445;
+ets::ir::Slot<std::string> v446;
+ets::ir::Slot<bool> v447;
 ets::ir::Slot<bool> v448;
 ets::ir::Slot<std::string> v449;
-ets::ir::Slot<std::vector<std::string>*> v450;
-ets::ir::Slot<std::string> v451;
+ets::ir::Slot<double> v450;
+ets::ir::Slot<ets_json::Value> v451;
 ets::ir::Slot<std::string> v452;
-ets::ir::Slot<std::string> v453;
+ets::ir::Slot<ets_json::Value> v453;
 ets::ir::Slot<ets_json::Value> v454;
 ets::ir::Slot<std::string> v455;
 ets::ir::Slot<ets_json::Value> v456;
-ets::ir::Slot<ets_json::Value> v457;
-ets::ir::Slot<std::vector<std::string>> v458;
-ets::ir::Slot<std::size_t> v459;
+ets::ir::Slot<std::string> v457;
+ets::ir::Slot<std::string> v458;
+ets::ir::Slot<std::string> v459;
 ets::ir::Slot<bool> v460;
 ets::ir::Slot<std::string> v461;
-ets::ir::Slot<std::vector<ir_t34>*> v462;
-ets::ir::Slot<std::string> v463;
-ets::ir::Slot<std::string> v464;
-ets::ir::Slot<ets_json::Value> v465;
+ets::ir::Slot<std::string> v462;
+ets::ir::Slot<bool> v463;
+ets::ir::Slot<bool> v464;
+ets::ir::Slot<std::string> v465;
 ets::ir::Slot<std::string> v466;
-ets::ir::Slot<ets_json::Value> v467;
-ets::ir::Slot<std::string> v468;
+ets::ir::Slot<std::string> v467;
+ets::ir::Slot<ets_json::Value> v468;
 ets::ir::Slot<std::string> v469;
-ets::ir::Slot<ir_t34> v470;
-ets::ir::Slot<ir_t34*> v471;
-ets::ir::Slot<ir_t34> v472;
+ets::ir::Slot<ets_json::Value> v470;
+ets::ir::Slot<std::vector<std::string>> v471;
+ets::ir::Slot<std::size_t> v472;
 ets::ir::Slot<bool> v473;
-ets::ir::Slot<bool> v474;
-ets::ir::Slot<bool> v475;
+ets::ir::Slot<std::string> v474;
+ets::ir::Slot<std::vector<std::string>*> v475;
 ets::ir::Slot<std::string> v476;
 ets::ir::Slot<std::string> v477;
-ets::ir::Slot<bool> v478;
-ets::ir::Slot<std::string> v479;
+ets::ir::Slot<std::string> v478;
+ets::ir::Slot<ets_json::Value> v479;
 ets::ir::Slot<std::string> v480;
-ets::ir::Slot<std::string> v481;
-ets::ir::Slot<std::string> v482;
-ets::ir::Slot<std::string> v483;
-ets::ir::Slot<bool> v484;
-ets::ir::Slot<std::string> v485;
-ets::ir::Slot<ir_t32> v486;
-ets::ir::Slot<bool> v487;
-ets::ir::Slot<ir_t88> v488;
+ets::ir::Slot<ets_json::Value> v481;
+ets::ir::Slot<ets_json::Value> v482;
+ets::ir::Slot<std::vector<std::string>> v483;
+ets::ir::Slot<std::size_t> v484;
+ets::ir::Slot<bool> v485;
+ets::ir::Slot<std::string> v486;
+ets::ir::Slot<std::vector<ir_t34>*> v487;
+ets::ir::Slot<std::string> v488;
 ets::ir::Slot<std::string> v489;
-ets::ir::Slot<std::string> v490;
-ets::ir::Slot<ir_t88> v491;
-ets::ir::Slot<ir_t88> v492;
+ets::ir::Slot<ets_json::Value> v490;
+ets::ir::Slot<std::string> v491;
+ets::ir::Slot<ets_json::Value> v492;
 ets::ir::Slot<std::string> v493;
 ets::ir::Slot<std::string> v494;
-ets::ir::Slot<bool> v495;
-ets::ir::Slot<std::string> v496;
-ets::ir::Slot<ir_t88> v497;
-ets::ir::Slot<std::string> v498;
-ets::ir::Slot<std::string> v499;
-ets::ir::Slot<std::string> v500;
-ets::ir::Slot<bool> v501;
+ets::ir::Slot<ir_t34> v495;
+ets::ir::Slot<ir_t34*> v496;
+ets::ir::Slot<ir_t34> v497;
+ets::ir::Slot<bool> v498;
+ets::ir::Slot<bool> v499;
+ets::ir::Slot<bool> v500;
+ets::ir::Slot<std::string> v501;
 ets::ir::Slot<std::string> v502;
-ets::ir::Slot<std::string> v503;
+ets::ir::Slot<bool> v503;
 ets::ir::Slot<std::string> v504;
-ets::ir::Slot<ir_t88> v505;
-ets::ir::Slot<ir_t119> v506;
-ets::ir::Slot<ets_json::Value> v507;
+ets::ir::Slot<std::string> v505;
+ets::ir::Slot<std::string> v506;
+ets::ir::Slot<std::string> v507;
 ets::ir::Slot<std::string> v508;
-ets::ir::Slot<ets_json::Value> v509;
-ets::ir::Slot<ets_json::Value> v510;
-ets::ir::Slot<std::string> v511;
-ets::ir::Slot<ets_json::Value> v512;
-ets::ir::Slot<std::string> v513;
+ets::ir::Slot<bool> v509;
+ets::ir::Slot<std::string> v510;
+ets::ir::Slot<ir_t32> v511;
+ets::ir::Slot<bool> v512;
+ets::ir::Slot<ir_t88> v513;
 ets::ir::Slot<std::string> v514;
-ets::ir::Slot<bool> v515;
-ets::ir::Slot<ets_json::Value> v516;
-ets::ir::Slot<std::string> v517;
-ets::ir::Slot<ets_json::Value> v518;
+ets::ir::Slot<std::string> v515;
+ets::ir::Slot<ir_t88> v516;
+ets::ir::Slot<ir_t88> v517;
+ets::ir::Slot<std::string> v518;
 ets::ir::Slot<std::string> v519;
-ets::ir::Slot<std::string> v520;
+ets::ir::Slot<bool> v520;
 ets::ir::Slot<std::string> v521;
-ets::ir::Slot<bool> v522;
+ets::ir::Slot<ir_t88> v522;
 ets::ir::Slot<std::string> v523;
 ets::ir::Slot<std::string> v524;
 ets::ir::Slot<std::string> v525;
-ets::ir::Slot<std::string> v526;
+ets::ir::Slot<bool> v526;
 ets::ir::Slot<std::string> v527;
 ets::ir::Slot<std::string> v528;
-ets::ir::Slot<bool> v529;
-ets::ir::Slot<std::string> v530;
-ets::ir::Slot<std::string> v531;
-ets::ir::Slot<std::string> v532;
+ets::ir::Slot<std::string> v529;
+ets::ir::Slot<ir_t88> v530;
+ets::ir::Slot<ir_t119> v531;
+ets::ir::Slot<ets_json::Value> v532;
 ets::ir::Slot<std::string> v533;
-ets::ir::Slot<std::string> v534;
-ets::ir::Slot<std::string> v535;
+ets::ir::Slot<ets_json::Value> v534;
+ets::ir::Slot<ets_json::Value> v535;
 ets::ir::Slot<std::string> v536;
-ets::ir::Slot<std::string> v537;
+ets::ir::Slot<ets_json::Value> v537;
 ets::ir::Slot<std::string> v538;
 ets::ir::Slot<std::string> v539;
-ets::ir::Slot<std::string> v540;
-ets::ir::Slot<bool> v541;
-ets::ir::Slot<ets_json::Value> v542;
-ets::ir::Slot<std::string> v543;
-ets::ir::Slot<ets_json::Value> v544;
-ets::ir::Slot<bool> v545;
-ets::ir::Slot<bool> v546;
-ets::ir::Slot<std::string> v547;
+ets::ir::Slot<bool> v540;
+ets::ir::Slot<ets_json::Value> v541;
+ets::ir::Slot<std::string> v542;
+ets::ir::Slot<ets_json::Value> v543;
+ets::ir::Slot<std::string> v544;
+ets::ir::Slot<std::string> v545;
+ets::ir::Slot<std::string> v546;
+ets::ir::Slot<bool> v547;
 ets::ir::Slot<std::string> v548;
-ets::ir::Slot<bool> v549;
-ets::ir::Slot<ets_json::Value> v550;
+ets::ir::Slot<std::string> v549;
+ets::ir::Slot<std::string> v550;
 ets::ir::Slot<std::string> v551;
-ets::ir::Slot<ets_json::Value> v552;
+ets::ir::Slot<std::string> v552;
 ets::ir::Slot<std::string> v553;
-ets::ir::Slot<std::string> v554;
+ets::ir::Slot<bool> v554;
 ets::ir::Slot<std::string> v555;
-ets::ir::Slot<bool> v556;
+ets::ir::Slot<std::string> v556;
 ets::ir::Slot<std::string> v557;
 ets::ir::Slot<std::string> v558;
 ets::ir::Slot<std::string> v559;
@@ -55701,75 +55760,100 @@ ets::ir::Slot<bool> v566;
 ets::ir::Slot<ets_json::Value> v567;
 ets::ir::Slot<std::string> v568;
 ets::ir::Slot<ets_json::Value> v569;
-ets::ir::Slot<std::string> v570;
-ets::ir::Slot<std::string> v571;
+ets::ir::Slot<bool> v570;
+ets::ir::Slot<bool> v571;
 ets::ir::Slot<std::string> v572;
-ets::ir::Slot<bool> v573;
-ets::ir::Slot<std::string> v574;
-ets::ir::Slot<std::string> v575;
+ets::ir::Slot<std::string> v573;
+ets::ir::Slot<bool> v574;
+ets::ir::Slot<ets_json::Value> v575;
 ets::ir::Slot<std::string> v576;
-ets::ir::Slot<std::string> v577;
-ets::ir::Slot<bool> v578;
+ets::ir::Slot<ets_json::Value> v577;
+ets::ir::Slot<std::string> v578;
 ets::ir::Slot<std::string> v579;
-ets::ir::Slot<ets_json::Value> v580;
-ets::ir::Slot<std::string> v581;
-ets::ir::Slot<ets_json::Value> v582;
-ets::ir::Slot<std::vector<std::string>> v583;
-ets::ir::Slot<std::size_t> v584;
-ets::ir::Slot<bool> v585;
+ets::ir::Slot<std::string> v580;
+ets::ir::Slot<bool> v581;
+ets::ir::Slot<std::string> v582;
+ets::ir::Slot<std::string> v583;
+ets::ir::Slot<std::string> v584;
+ets::ir::Slot<std::string> v585;
 ets::ir::Slot<std::string> v586;
-ets::ir::Slot<std::vector<std::string>*> v587;
+ets::ir::Slot<std::string> v587;
 ets::ir::Slot<std::string> v588;
-ets::ir::Slot<ets_json::Value> v589;
+ets::ir::Slot<std::string> v589;
 ets::ir::Slot<std::string> v590;
-ets::ir::Slot<ets_json::Value> v591;
-ets::ir::Slot<std::vector<std::string>> v592;
-ets::ir::Slot<std::size_t> v593;
-ets::ir::Slot<bool> v594;
+ets::ir::Slot<bool> v591;
+ets::ir::Slot<ets_json::Value> v592;
+ets::ir::Slot<std::string> v593;
+ets::ir::Slot<ets_json::Value> v594;
 ets::ir::Slot<std::string> v595;
-ets::ir::Slot<std::vector<std::string>*> v596;
+ets::ir::Slot<std::string> v596;
 ets::ir::Slot<std::string> v597;
-ets::ir::Slot<ets_json::Value> v598;
+ets::ir::Slot<bool> v598;
 ets::ir::Slot<std::string> v599;
-ets::ir::Slot<ets_json::Value> v600;
-ets::ir::Slot<std::vector<std::string>> v601;
-ets::ir::Slot<std::size_t> v602;
+ets::ir::Slot<std::string> v600;
+ets::ir::Slot<std::string> v601;
+ets::ir::Slot<std::string> v602;
 ets::ir::Slot<bool> v603;
 ets::ir::Slot<std::string> v604;
-ets::ir::Slot<std::vector<std::string>*> v605;
+ets::ir::Slot<ets_json::Value> v605;
 ets::ir::Slot<std::string> v606;
-ets::ir::Slot<std::string> v607;
-ets::ir::Slot<std::string> v608;
-ets::ir::Slot<const ir_t119*> v609;
-ets::ir::Slot<std::string> v610;
+ets::ir::Slot<ets_json::Value> v607;
+ets::ir::Slot<std::vector<std::string>> v608;
+ets::ir::Slot<std::size_t> v609;
+ets::ir::Slot<bool> v610;
 ets::ir::Slot<std::string> v611;
-ets::ir::Slot<std::string> v612;
+ets::ir::Slot<std::vector<std::string>*> v612;
 ets::ir::Slot<std::string> v613;
-ets::ir::Slot<std::vector<std::string>> v614;
-ets::ir::Slot<std::vector<std::string>> v615;
-ets::ir::Slot<std::string> v616;
-ets::ir::Slot<bool> v617;
-ets::ir::Slot<ets_json::Value> v618;
-ets::ir::Slot<std::string> v619;
-ets::ir::Slot<ets_json::Value> v620;
-ets::ir::Slot<bool> v621;
-ets::ir::Slot<bool> v622;
-ets::ir::Slot<std::string> v623;
+ets::ir::Slot<ets_json::Value> v614;
+ets::ir::Slot<std::string> v615;
+ets::ir::Slot<ets_json::Value> v616;
+ets::ir::Slot<std::vector<std::string>> v617;
+ets::ir::Slot<std::size_t> v618;
+ets::ir::Slot<bool> v619;
+ets::ir::Slot<std::string> v620;
+ets::ir::Slot<std::vector<std::string>*> v621;
+ets::ir::Slot<std::string> v622;
+ets::ir::Slot<ets_json::Value> v623;
 ets::ir::Slot<std::string> v624;
-ets::ir::Slot<std::string> v625;
-ets::ir::Slot<bool> v626;
-ets::ir::Slot<std::string> v627;
-ets::ir::Slot<std::string> v628;
-ets::ir::Slot<std::vector<std::string>> v629;
-ets::ir::Slot<std::size_t> v630;
-ets::ir::Slot<bool> v631;
+ets::ir::Slot<ets_json::Value> v625;
+ets::ir::Slot<std::vector<std::string>> v626;
+ets::ir::Slot<std::size_t> v627;
+ets::ir::Slot<bool> v628;
+ets::ir::Slot<std::string> v629;
+ets::ir::Slot<std::vector<std::string>*> v630;
+ets::ir::Slot<std::string> v631;
 ets::ir::Slot<std::string> v632;
-ets::ir::Slot<std::vector<std::string>*> v633;
-ets::ir::Slot<std::string> v634;
-ets::ir::Slot<std::vector<std::string>> v635;
+ets::ir::Slot<std::string> v633;
+ets::ir::Slot<const ir_t119*> v634;
+ets::ir::Slot<std::string> v635;
 ets::ir::Slot<std::string> v636;
 ets::ir::Slot<std::string> v637;
-ets::ir::Slot<double> v638;
+ets::ir::Slot<std::string> v638;
+ets::ir::Slot<std::vector<std::string>> v639;
+ets::ir::Slot<std::vector<std::string>> v640;
+ets::ir::Slot<std::string> v641;
+ets::ir::Slot<bool> v642;
+ets::ir::Slot<ets_json::Value> v643;
+ets::ir::Slot<std::string> v644;
+ets::ir::Slot<ets_json::Value> v645;
+ets::ir::Slot<bool> v646;
+ets::ir::Slot<bool> v647;
+ets::ir::Slot<std::string> v648;
+ets::ir::Slot<std::string> v649;
+ets::ir::Slot<std::string> v650;
+ets::ir::Slot<bool> v651;
+ets::ir::Slot<std::string> v652;
+ets::ir::Slot<std::string> v653;
+ets::ir::Slot<std::vector<std::string>> v654;
+ets::ir::Slot<std::size_t> v655;
+ets::ir::Slot<bool> v656;
+ets::ir::Slot<std::string> v657;
+ets::ir::Slot<std::vector<std::string>*> v658;
+ets::ir::Slot<std::string> v659;
+ets::ir::Slot<std::vector<std::string>> v660;
+ets::ir::Slot<std::string> v661;
+ets::ir::Slot<std::string> v662;
+ets::ir::Slot<double> v663;
 goto b0;
 b0:
 v0.set(([&](){std::vector<std::string> out;return out;}()));
@@ -55933,1266 +56017,1322 @@ v75.set(p13.get());
 p11.set(v75.take());
 goto b28;
 b32:
-v78.set(static_cast<double>((p0.get()).size()));
-v79.set(static_cast<double>(2.0));
-v80.set((v78.get() > v79.get()));
-if(v80.get())goto b35;else goto b36;
+v77.set(std::string(".",1));
+p15.set(v77.take());
+v78.set(true);
+p16.set(v78.take());
+v79.set(static_cast<double>(0.0));
+p17.set(v79.take());
+v80.set(static_cast<double>(1.0));
+p18.set(v80.take());
+goto b35;
 b33:
 goto b34;
 b34:
-v107.set(false);
-p20.set(v107.take());
-v108.set(false);
-p21.set(v108.take());
-v109.set(false);
-p22.set(v109.take());
-v110.set(false);
-p23.set(v110.take());
-v111.set(true);
-p24.set(v111.take());
-v112.set(std::string("",0));
-p25.set(v112.take());
-v113.set(std::string("",0));
-p26.set(v113.take());
-v114.set(std::string("",0));
-p27.set(v114.take());
-v115.set(std::string("",0));
-p28.set(v115.take());
-v116.set(std::string("",0));
-p29.set(v116.take());
-v117.set(std::string("",0));
-p30.set(v117.take());
-v118.set(std::string("",0));
-p31.set(v118.take());
-v119.set(ir_t32{});
-p33.set(v119.take());
-v120.set(std::addressof(p33.get()));
-ir_f469((*(v120.get())));
+v132.set(false);
+p28.set(v132.take());
+v133.set(false);
+p29.set(v133.take());
+v134.set(false);
+p30.set(v134.take());
+v135.set(false);
+p31.set(v135.take());
+v136.set(true);
+p32.set(v136.take());
+v137.set(std::string("",0));
+p33.set(v137.take());
+v138.set(std::string("",0));
+p34.set(v138.take());
+v139.set(std::string("",0));
+p35.set(v139.take());
+v140.set(std::string("",0));
+p36.set(v140.take());
+v141.set(std::string("",0));
+p37.set(v141.take());
+v142.set(std::string("",0));
+p38.set(v142.take());
+v143.set(std::string("",0));
+p39.set(v143.take());
+v144.set(ir_t32{});
+p41.set(v144.take());
+v145.set(std::addressof(p41.get()));
+ir_f469((*(v145.get())));
 // end lease 2; statically verified, no runtime ownership
-v121.set(p33.get());
-p32.set(v121.take());
-v122.set(([&](){std::vector<std::string> out;return out;}()));
-p34.set(v122.take());
-v123.set(([&](){std::vector<std::string> out;return out;}()));
-p35.set(v123.take());
-v124.set(([&](){std::vector<std::string> out;return out;}()));
-p36.set(v124.take());
-v125.set(static_cast<double>(0.0));
-p37.set(v125.take());
-v127.set(static_cast<double>((p0.get()).size()));
-v128.set(static_cast<double>(0.0));
-v129.set((v127.get() > v128.get()));
-if(v129.get())goto b44;else goto b45;
+v146.set(p41.get());
+p40.set(v146.take());
+v147.set(([&](){std::vector<std::string> out;return out;}()));
+p42.set(v147.take());
+v148.set(([&](){std::vector<std::string> out;return out;}()));
+p43.set(v148.take());
+v149.set(([&](){std::vector<std::string> out;return out;}()));
+p44.set(v149.take());
+v150.set(static_cast<double>(0.0));
+p45.set(v150.take());
+v152.set(static_cast<double>((p0.get()).size()));
+v153.set(static_cast<double>(0.0));
+v154.set((v152.get() > v153.get()));
+if(v154.get())goto b54;else goto b55;
 b35:
-v81.set(ir_f293());
-v82.set(static_cast<double>(2.0));
-ir_f286(v81.take(),v82.take());
-goto b37;
+v81.set(p18.get());
+v83.set(static_cast<double>((p0.get()).size()));
+v84.set((v81.get() < v83.get()));
+if(v84.get())goto b36;else goto b38;
 b36:
-goto b37;
-b37:
-v83.set(false);
-v84.set(true);
-ir_f32(v83.take(),v84.take());
-v85.set(static_cast<double>(0.0));
+v85.set(p18.get());
 v86.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v85.get()))).get());
-v87.set(std::string("init",4));
+v87.set(std::string("--no-src",8));
 v88.set((v86.get() == v87.get()));
-if(v88.get())goto b38;else goto b39;
+if(v88.get())goto b39;else goto b40;
+b37:
+v110.set(p18.get());
+v111.set(static_cast<double>(1.0));
+v112.set(ets::ir::add<double>(v110.get(),v111.get()));
+p18.set(v112.take());
+v113.set(p18.get());
+goto b35;
 b38:
-v89.set(std::string("Creando proyecto",16));
-p16.set(v89.take());
-goto b40;
+v114.set(false);
+v115.set(true);
+ir_f32(v114.take(),v115.take());
+v116.set(static_cast<double>(0.0));
+v117.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v116.get()))).get());
+v118.set(std::string("init",4));
+v119.set((v117.get() == v118.get()));
+if(v119.get())goto b51;else goto b52;
 b39:
-v90.set(std::string("Actualizando tipos",18));
-p16.set(v90.take());
-goto b40;
+v89.set(static_cast<double>(0.0));
+v90.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v89.get()))).get());
+v91.set(std::string("init",4));
+v92.set((v90.get() == v91.get()));
+p20.set(v92.take());
+goto b41;
 b40:
-v91.set(p16.get());
-ir_f34(v91.take());
-v92.set(p10.get());
-v94.set(static_cast<double>((p0.get()).size()));
-v95.set(static_cast<double>(2.0));
-v96.set((v94.get() == v95.get()));
-if(v96.get())goto b41;else goto b42;
+p20.set(v88.get());
+goto b41;
 b41:
-v97.set(static_cast<double>(1.0));
-v98.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v97.get()))).get());
-p17.set(v98.take());
-goto b43;
+v93.set(p20.get());
+if(v93.get())goto b42;else goto b43;
 b42:
-v99.set(std::string(".",1));
-p17.set(v99.take());
-goto b43;
+v94.set(false);
+p16.set(v94.take());
+goto b44;
 b43:
-v100.set(p17.get());
-v101.set(static_cast<double>(0.0));
-v102.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v101.get()))).get());
-v103.set(std::string("update-types",12));
-v104.set((v102.get() == v103.get()));
-ir_f295(v92.get(),v100.take(),v104.take());
-v105.set(std::string("",0));
-v106.set(std::string("",0));
-ir_f38(v105.take(),v106.take());
-return;
+v95.set(p18.get());
+v96.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v95.get()))).get());
+v97.set(std::string("-",1));
+v98.set(ets::string_startsWith(v96.get(),v97.get()));
+if(v98.get())goto b45;else goto b46;
 b44:
-v130.set(static_cast<double>(0.0));
-v131.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v130.get()))).get());
-v132.set(std::string("build",5));
-v133.set((v131.get() == v132.get()));
-if(v133.get())goto b47;else goto b48;
+goto b37;
 b45:
-p38.set(v129.get());
-goto b46;
+p23.set(v98.get());
+goto b47;
 b46:
-v139.set(p38.get());
-if(v139.get())goto b50;else goto b51;
+v99.set(p17.get());
+v100.set(static_cast<double>(0.0));
+v101.set((v99.get() > v100.get()));
+p23.set(v101.take());
+goto b47;
 b47:
-p40.set(v133.get());
-goto b49;
+v102.set(p23.get());
+if(v102.get())goto b48;else goto b49;
 b48:
-v134.set(static_cast<double>(0.0));
-v135.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v134.get()))).get());
-v136.set(std::string("run",3));
-v137.set((v135.get() == v136.get()));
-p40.set(v137.take());
-goto b49;
+v103.set(ir_f293());
+v104.set(static_cast<double>(2.0));
+ir_f286(v103.take(),v104.take());
+goto b50;
 b49:
-v138.set(p40.get());
-p38.set(v138.take());
-goto b46;
+v105.set(p18.get());
+v106.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v105.get()))).get());
+p15.set(v106.take());
+v107.set(p17.get());
+v108.set(static_cast<double>(1.0));
+v109.set(ets::ir::add<double>(v107.get(),v108.get()));
+p17.set(v109.take());
+goto b50;
 b50:
-v140.set(true);
-p20.set(v140.take());
-v141.set(static_cast<double>(0.0));
-v142.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v141.get()))).get());
-v143.set(std::string("run",3));
-v144.set((v142.get() == v143.get()));
-p21.set(v144.take());
-v145.set(static_cast<double>(1.0));
-p37.set(v145.take());
-goto b52;
+goto b44;
 b51:
-goto b52;
+v120.set(std::string("Creando proyecto",16));
+p26.set(v120.take());
+goto b53;
 b52:
+v121.set(std::string("Actualizando tipos",18));
+p26.set(v121.take());
 goto b53;
 b53:
-v146.set(p37.get());
-v148.set(static_cast<double>((p0.get()).size()));
-v149.set((v146.get() < v148.get()));
-if(v149.get())goto b54;else goto b56;
+v122.set(p26.get());
+ir_f34(v122.take());
+v123.set(p10.get());
+v124.set(p15.get());
+v125.set(static_cast<double>(0.0));
+v126.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v125.get()))).get());
+v127.set(std::string("update-types",12));
+v128.set((v126.get() == v127.get()));
+v129.set(p16.get());
+ir_f295(v123.take(),v124.take(),v128.take(),v129.take());
+v130.set(std::string("",0));
+v131.set(std::string("",0));
+ir_f38(v130.take(),v131.take());
+return;
 b54:
-v150.set(p37.get());
-v151.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v150.get()))).get());
-p43.set(v151.take());
-v152.set(p43.get());
-v153.set(std::string("--",2));
-v154.set((v152.get() == v153.get()));
-if(v154.get())goto b57;else goto b58;
+v155.set(static_cast<double>(0.0));
+v156.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v155.get()))).get());
+v157.set(std::string("build",5));
+v158.set((v156.get() == v157.get()));
+if(v158.get())goto b57;else goto b58;
 b55:
-v331.set(p37.get());
-v332.set(static_cast<double>(1.0));
-v333.set(ets::ir::add<double>(v331.get(),v332.get()));
-p37.set(v333.take());
-v334.set(p37.get());
-goto b53;
+p46.set(v154.get());
+goto b56;
 b56:
-v335.set(p25.get());
-v336.set(std::string("",0));
-v337.set((v335.get() != v336.get()));
-if(v337.get())goto b151;else goto b152;
+v164.set(p46.get());
+if(v164.get())goto b60;else goto b61;
 b57:
-v155.set(p37.get());
-v156.set(static_cast<double>(1.0));
-v157.set(ets::ir::add<double>(v155.get(),v156.get()));
-p45.set(v157.take());
-goto b60;
+p48.set(v158.get());
+goto b59;
 b58:
+v159.set(static_cast<double>(0.0));
+v160.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v159.get()))).get());
+v161.set(std::string("run",3));
+v162.set((v160.get() == v161.get()));
+p48.set(v162.take());
 goto b59;
 b59:
-v169.set(p43.get());
-v170.set(std::string("--profile-analysis",18));
-v171.set((v169.get() == v170.get()));
-if(v171.get())goto b64;else goto b65;
+v163.set(p48.get());
+p46.set(v163.take());
+goto b56;
 b60:
-v158.set(p45.get());
-v160.set(static_cast<double>((p0.get()).size()));
-v161.set((v158.get() < v160.get()));
-if(v161.get())goto b61;else goto b63;
+v165.set(true);
+p28.set(v165.take());
+v166.set(static_cast<double>(0.0));
+v167.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v166.get()))).get());
+v168.set(std::string("run",3));
+v169.set((v167.get() == v168.get()));
+p29.set(v169.take());
+v170.set(static_cast<double>(1.0));
+p45.set(v170.take());
+goto b62;
 b61:
-v162.set(std::addressof(p36.get()));
-v163.set(p45.get());
-v164.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v163.get()))).get());
-ets_push_vec<std::string>((*(v162.get())),v164.get());
-// end lease 3; statically verified, no runtime ownership
 goto b62;
 b62:
-v165.set(p45.get());
-v166.set(static_cast<double>(1.0));
-v167.set(ets::ir::add<double>(v165.get(),v166.get()));
-p45.set(v167.take());
-v168.set(p45.get());
-goto b60;
+goto b63;
 b63:
-goto b56;
+v171.set(p45.get());
+v173.set(static_cast<double>((p0.get()).size()));
+v174.set((v171.get() < v173.get()));
+if(v174.get())goto b64;else goto b66;
 b64:
-v172.set(ir_f29());
-v173.set((!v172.get()));
-if(v173.get())goto b67;else goto b68;
+v175.set(p45.get());
+v176.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v175.get()))).get());
+p51.set(v176.take());
+v177.set(p51.get());
+v178.set(std::string("--",2));
+v179.set((v177.get() == v178.get()));
+if(v179.get())goto b67;else goto b68;
 b65:
-goto b66;
+v356.set(p45.get());
+v357.set(static_cast<double>(1.0));
+v358.set(ets::ir::add<double>(v356.get(),v357.get()));
+p45.set(v358.take());
+v359.set(p45.get());
+goto b63;
 b66:
-v176.set(p43.get());
-v177.set(std::string("--jobs",6));
-v178.set((v176.get() == v177.get()));
-if(v178.get())goto b70;else goto b71;
+v360.set(p33.get());
+v361.set(std::string("",0));
+v362.set((v360.get() != v361.get()));
+if(v362.get())goto b161;else goto b162;
 b67:
-v174.set(ir_f9());
-v175.set(static_cast<double>(1.0));
-ir_f286(v174.take(),v175.take());
-goto b69;
+v180.set(p45.get());
+v181.set(static_cast<double>(1.0));
+v182.set(ets::ir::add<double>(v180.get(),v181.get()));
+p53.set(v182.take());
+goto b70;
 b68:
 goto b69;
 b69:
-goto b55;
+v194.set(p51.get());
+v195.set(std::string("--profile-analysis",18));
+v196.set((v194.get() == v195.get()));
+if(v196.get())goto b74;else goto b75;
 b70:
-v179.set(p37.get());
-v180.set(static_cast<double>(1.0));
-v181.set(ets::ir::add<double>(v179.get(),v180.get()));
-p37.set(v181.take());
-v182.set(p37.get());
-v184.set(static_cast<double>((p0.get()).size()));
-v185.set((v182.get() >= v184.get()));
-if(v185.get())goto b73;else goto b74;
+v183.set(p53.get());
+v185.set(static_cast<double>((p0.get()).size()));
+v186.set((v183.get() < v185.get()));
+if(v186.get())goto b71;else goto b73;
 b71:
+v187.set(std::addressof(p44.get()));
+v188.set(p53.get());
+v189.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v188.get()))).get());
+ets_push_vec<std::string>((*(v187.get())),v189.get());
+// end lease 3; statically verified, no runtime ownership
 goto b72;
 b72:
-v193.set(p43.get());
-v194.set(std::string("--verbose",9));
-v195.set((v193.get() == v194.get()));
-if(v195.get())goto b79;else goto b80;
+v190.set(p53.get());
+v191.set(static_cast<double>(1.0));
+v192.set(ets::ir::add<double>(v190.get(),v191.get()));
+p53.set(v192.take());
+v193.set(p53.get());
+goto b70;
 b73:
-p47.set(v185.get());
-goto b75;
+goto b66;
 b74:
-v186.set(p37.get());
-v187.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v186.get()))).get());
-v188.set(ir_f28(v187.take()));
-v189.set((!v188.get()));
-p47.set(v189.take());
-goto b75;
+v197.set(ir_f29());
+v198.set((!v197.get()));
+if(v198.get())goto b77;else goto b78;
 b75:
-v190.set(p47.get());
-if(v190.get())goto b76;else goto b77;
+goto b76;
 b76:
-v191.set(std::string("--jobs requiere un entero entre 1 y 32",38));
-v192.set(static_cast<double>(2.0));
-ir_f286(v191.take(),v192.take());
-goto b78;
-b77:
-goto b78;
-b78:
-goto b55;
-b79:
-v196.set(true);
-p23.set(v196.take());
-goto b55;
-b80:
-goto b81;
-b81:
-v197.set(p43.get());
-v198.set(std::string("--no-progress",13));
-v199.set((v197.get() == v198.get()));
-if(v199.get())goto b82;else goto b83;
-b82:
-v200.set(false);
-p24.set(v200.take());
-goto b55;
-b83:
-goto b84;
-b84:
-v201.set(p43.get());
-v202.set(std::string("--build",7));
+v201.set(p51.get());
+v202.set(std::string("--jobs",6));
 v203.set((v201.get() == v202.get()));
-if(v203.get())goto b85;else goto b86;
+if(v203.get())goto b80;else goto b81;
+b77:
+v199.set(ir_f9());
+v200.set(static_cast<double>(1.0));
+ir_f286(v199.take(),v200.take());
+goto b79;
+b78:
+goto b79;
+b79:
+goto b65;
+b80:
+v204.set(p45.get());
+v205.set(static_cast<double>(1.0));
+v206.set(ets::ir::add<double>(v204.get(),v205.get()));
+p45.set(v206.take());
+v207.set(p45.get());
+v209.set(static_cast<double>((p0.get()).size()));
+v210.set((v207.get() >= v209.get()));
+if(v210.get())goto b83;else goto b84;
+b81:
+goto b82;
+b82:
+v218.set(p51.get());
+v219.set(std::string("--verbose",9));
+v220.set((v218.get() == v219.get()));
+if(v220.get())goto b89;else goto b90;
+b83:
+p55.set(v210.get());
+goto b85;
+b84:
+v211.set(p45.get());
+v212.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v211.get()))).get());
+v213.set(ir_f28(v212.take()));
+v214.set((!v213.get()));
+p55.set(v214.take());
+goto b85;
 b85:
-v204.set(true);
-p20.set(v204.take());
-goto b55;
+v215.set(p55.get());
+if(v215.get())goto b86;else goto b87;
 b86:
-goto b87;
+v216.set(std::string("--jobs requiere un entero entre 1 y 32",38));
+v217.set(static_cast<double>(2.0));
+ir_f286(v216.take(),v217.take());
+goto b88;
 b87:
-v205.set(p43.get());
-v206.set(std::string("--run",5));
-v207.set((v205.get() == v206.get()));
-if(v207.get())goto b88;else goto b89;
+goto b88;
 b88:
-v208.set(true);
-p21.set(v208.take());
-v209.set(true);
-p20.set(v209.take());
-goto b55;
+goto b65;
 b89:
-goto b90;
+v221.set(true);
+p31.set(v221.take());
+goto b65;
 b90:
-v210.set(p43.get());
-v211.set(std::string("--check",7));
-v212.set((v210.get() == v211.get()));
-if(v212.get())goto b91;else goto b92;
+goto b91;
 b91:
-v213.set(true);
-p22.set(v213.take());
-goto b55;
+v222.set(p51.get());
+v223.set(std::string("--no-progress",13));
+v224.set((v222.get() == v223.get()));
+if(v224.get())goto b92;else goto b93;
 b92:
-goto b93;
+v225.set(false);
+p32.set(v225.take());
+goto b65;
 b93:
-v214.set(std::string("-o",2));
-v215.set(std::string("--binary",8));
-v216.set(std::string("--from-ir",9));
-v217.set(std::string("--emit-ir",9));
-v218.set(std::string("--config",8));
-v219.set(std::string("--cxx",5));
-v220.set(std::string("--root",6));
-v221.set(std::string("--cache",7));
-v222.set(std::string("--alias",7));
-v223.set(std::string("--cxx-flag",10));
-v224.set(std::string("--link-flag",11));
-v225.set(([&](){std::vector<std::string> out;out.push_back(v214.get());out.push_back(v215.get());out.push_back(v216.get());out.push_back(v217.get());out.push_back(v218.get());out.push_back(v219.get());out.push_back(v220.get());out.push_back(v221.get());out.push_back(v222.get());out.push_back(v223.get());out.push_back(v224.get());return out;}()));
-v226.set(p43.get());
-v227.set(ets_includes_vec(v225.get(),v226.get()));
-if(v227.get())goto b94;else goto b95;
+goto b94;
 b94:
-v228.set(p37.get());
-v229.set(static_cast<double>(1.0));
-v230.set(ets::ir::add<double>(v228.get(),v229.get()));
-p37.set(v230.take());
-v231.set(p37.get());
-v233.set(static_cast<double>((p0.get()).size()));
-v234.set((v231.get() >= v233.get()));
-if(v234.get())goto b97;else goto b98;
+v226.set(p51.get());
+v227.set(std::string("--build",7));
+v228.set((v226.get() == v227.get()));
+if(v228.get())goto b95;else goto b96;
 b95:
-goto b96;
+v229.set(true);
+p28.set(v229.take());
+goto b65;
 b96:
-v319.set(p43.get());
-v320.set(std::string("-",1));
-v321.set(ets::string_startsWith(v319.get(),v320.get()));
-if(v321.get())goto b145;else goto b146;
+goto b97;
 b97:
-v235.set(std::string("Falta un valor para ",20));
-v236.set(p43.get());
-v237.set((v235.get() + v236.get()));
-v238.set(static_cast<double>(2.0));
-ir_f286(v237.take(),v238.take());
-goto b99;
+v230.set(p51.get());
+v231.set(std::string("--run",5));
+v232.set((v230.get() == v231.get()));
+if(v232.get())goto b98;else goto b99;
 b98:
-goto b99;
+v233.set(true);
+p29.set(v233.take());
+v234.set(true);
+p28.set(v234.take());
+goto b65;
 b99:
-v239.set(p37.get());
-v240.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v239.get()))).get());
-p49.set(v240.take());
-v241.set(p49.get());
-v242.set(std::string("-",1));
-v243.set(ets::string_startsWith(v241.get(),v242.get()));
-if(v243.get())goto b100;else goto b101;
+goto b100;
 b100:
-v244.set(p43.get());
-v245.set(std::string("--cxx-flag",10));
-v246.set((v244.get() != v245.get()));
-p51.set(v246.take());
-goto b102;
+v235.set(p51.get());
+v236.set(std::string("--check",7));
+v237.set((v235.get() == v236.get()));
+if(v237.get())goto b101;else goto b102;
 b101:
-p51.set(v243.get());
-goto b102;
+v238.set(true);
+p30.set(v238.take());
+goto b65;
 b102:
-v247.set(p51.get());
-if(v247.get())goto b103;else goto b104;
+goto b103;
 b103:
-v248.set(p43.get());
+v239.set(std::string("-o",2));
+v240.set(std::string("--binary",8));
+v241.set(std::string("--from-ir",9));
+v242.set(std::string("--emit-ir",9));
+v243.set(std::string("--config",8));
+v244.set(std::string("--cxx",5));
+v245.set(std::string("--root",6));
+v246.set(std::string("--cache",7));
+v247.set(std::string("--alias",7));
+v248.set(std::string("--cxx-flag",10));
 v249.set(std::string("--link-flag",11));
-v250.set((v248.get() != v249.get()));
-p52.set(v250.take());
-goto b105;
+v250.set(([&](){std::vector<std::string> out;out.push_back(v239.get());out.push_back(v240.get());out.push_back(v241.get());out.push_back(v242.get());out.push_back(v243.get());out.push_back(v244.get());out.push_back(v245.get());out.push_back(v246.get());out.push_back(v247.get());out.push_back(v248.get());out.push_back(v249.get());return out;}()));
+v251.set(p51.get());
+v252.set(ets_includes_vec(v250.get(),v251.get()));
+if(v252.get())goto b104;else goto b105;
 b104:
-p52.set(v247.get());
-goto b105;
+v253.set(p45.get());
+v254.set(static_cast<double>(1.0));
+v255.set(ets::ir::add<double>(v253.get(),v254.get()));
+p45.set(v255.take());
+v256.set(p45.get());
+v258.set(static_cast<double>((p0.get()).size()));
+v259.set((v256.get() >= v258.get()));
+if(v259.get())goto b107;else goto b108;
 b105:
-v251.set(p52.get());
-if(v251.get())goto b106;else goto b107;
+goto b106;
 b106:
-v252.set(std::string("Falta un valor para ",20));
-v253.set(p43.get());
-v254.set((v252.get() + v253.get()));
-v255.set(static_cast<double>(2.0));
-ir_f286(v254.take(),v255.take());
-goto b108;
+v344.set(p51.get());
+v345.set(std::string("-",1));
+v346.set(ets::string_startsWith(v344.get(),v345.get()));
+if(v346.get())goto b155;else goto b156;
 b107:
-goto b108;
+v260.set(std::string("Falta un valor para ",20));
+v261.set(p51.get());
+v262.set((v260.get() + v261.get()));
+v263.set(static_cast<double>(2.0));
+ir_f286(v262.take(),v263.take());
+goto b109;
 b108:
-v256.set(p43.get());
-v257.set(std::string("-o",2));
-v258.set((v256.get() == v257.get()));
-if(v258.get())goto b109;else goto b110;
+goto b109;
 b109:
-v259.set(p49.get());
-p26.set(v259.take());
-goto b111;
+v264.set(p45.get());
+v265.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v264.get()))).get());
+p57.set(v265.take());
+v266.set(p57.get());
+v267.set(std::string("-",1));
+v268.set(ets::string_startsWith(v266.get(),v267.get()));
+if(v268.get())goto b110;else goto b111;
 b110:
-v260.set(p43.get());
-v261.set(std::string("--binary",8));
-v262.set((v260.get() == v261.get()));
-if(v262.get())goto b112;else goto b113;
+v269.set(p51.get());
+v270.set(std::string("--cxx-flag",10));
+v271.set((v269.get() != v270.get()));
+p59.set(v271.take());
+goto b112;
 b111:
-goto b55;
+p59.set(v268.get());
+goto b112;
 b112:
-v263.set(p49.get());
-p27.set(v263.take());
-goto b114;
+v272.set(p59.get());
+if(v272.get())goto b113;else goto b114;
 b113:
-v264.set(p43.get());
-v265.set(std::string("--from-ir",9));
-v266.set((v264.get() == v265.get()));
-if(v266.get())goto b115;else goto b116;
+v273.set(p51.get());
+v274.set(std::string("--link-flag",11));
+v275.set((v273.get() != v274.get()));
+p60.set(v275.take());
+goto b115;
 b114:
-goto b111;
+p60.set(v272.get());
+goto b115;
 b115:
-v267.set(p49.get());
-p28.set(v267.take());
-goto b117;
+v276.set(p60.get());
+if(v276.get())goto b116;else goto b117;
 b116:
-v268.set(p43.get());
-v269.set(std::string("--emit-ir",9));
-v270.set((v268.get() == v269.get()));
-if(v270.get())goto b118;else goto b119;
+v277.set(std::string("Falta un valor para ",20));
+v278.set(p51.get());
+v279.set((v277.get() + v278.get()));
+v280.set(static_cast<double>(2.0));
+ir_f286(v279.take(),v280.take());
+goto b118;
 b117:
-goto b114;
+goto b118;
 b118:
-v271.set(p49.get());
-p29.set(v271.take());
-goto b120;
+v281.set(p51.get());
+v282.set(std::string("-o",2));
+v283.set((v281.get() == v282.get()));
+if(v283.get())goto b119;else goto b120;
 b119:
-v272.set(p43.get());
-v273.set(std::string("--config",8));
-v274.set((v272.get() == v273.get()));
-if(v274.get())goto b121;else goto b122;
+v284.set(p57.get());
+p34.set(v284.take());
+goto b121;
 b120:
-goto b117;
+v285.set(p51.get());
+v286.set(std::string("--binary",8));
+v287.set((v285.get() == v286.get()));
+if(v287.get())goto b122;else goto b123;
 b121:
-v275.set(p49.get());
-p30.set(v275.take());
-goto b123;
+goto b65;
 b122:
-v276.set(p43.get());
-v277.set(std::string("--cxx",5));
-v278.set((v276.get() == v277.get()));
-if(v278.get())goto b124;else goto b125;
+v288.set(p57.get());
+p35.set(v288.take());
+goto b124;
 b123:
-goto b120;
+v289.set(p51.get());
+v290.set(std::string("--from-ir",9));
+v291.set((v289.get() == v290.get()));
+if(v291.get())goto b125;else goto b126;
 b124:
-v279.set(p49.get());
-p31.set(v279.take());
-goto b126;
+goto b121;
 b125:
-v280.set(p43.get());
-v281.set(std::string("--cache",7));
-v282.set((v280.get() == v281.get()));
-if(v282.get())goto b127;else goto b128;
+v292.set(p57.get());
+p36.set(v292.take());
+goto b127;
 b126:
-goto b123;
+v293.set(p51.get());
+v294.set(std::string("--emit-ir",9));
+v295.set((v293.get() == v294.get()));
+if(v295.get())goto b128;else goto b129;
 b127:
-v283.set(p49.get());
-(p32.get()).f3.set(v283.take());
-goto b129;
+goto b124;
 b128:
-v284.set(p43.get());
-v285.set(std::string("--root",6));
-v286.set((v284.get() == v285.get()));
-if(v286.get())goto b130;else goto b131;
+v296.set(p57.get());
+p37.set(v296.take());
+goto b130;
 b129:
-goto b126;
+v297.set(p51.get());
+v298.set(std::string("--config",8));
+v299.set((v297.get() == v298.get()));
+if(v299.get())goto b131;else goto b132;
 b130:
-v287.set(std::addressof((p32.get()).f1.get()));
-v288.set(p49.get());
-v289.set(normalizePath(v288.get()));
-ets_push_vec<std::string>((*(v287.get())),v289.get());
-// end lease 4; statically verified, no runtime ownership
-goto b132;
+goto b127;
 b131:
-v290.set(p43.get());
-v291.set(std::string("--cxx-flag",10));
-v292.set((v290.get() == v291.get()));
-if(v292.get())goto b133;else goto b134;
+v300.set(p57.get());
+p38.set(v300.take());
+goto b133;
 b132:
-goto b129;
+v301.set(p51.get());
+v302.set(std::string("--cxx",5));
+v303.set((v301.get() == v302.get()));
+if(v303.get())goto b134;else goto b135;
 b133:
-v293.set(std::addressof(p34.get()));
-v294.set(p49.get());
-ets_push_vec<std::string>((*(v293.get())),v294.get());
-// end lease 5; statically verified, no runtime ownership
-goto b135;
+goto b130;
 b134:
-v295.set(p43.get());
-v296.set(std::string("--link-flag",11));
-v297.set((v295.get() == v296.get()));
-if(v297.get())goto b136;else goto b137;
+v304.set(p57.get());
+p39.set(v304.take());
+goto b136;
 b135:
-goto b132;
+v305.set(p51.get());
+v306.set(std::string("--cache",7));
+v307.set((v305.get() == v306.get()));
+if(v307.get())goto b137;else goto b138;
 b136:
-v298.set(std::addressof(p35.get()));
-v299.set(p49.get());
-ets_push_vec<std::string>((*(v298.get())),v299.get());
-// end lease 6; statically verified, no runtime ownership
-goto b138;
+goto b133;
 b137:
-v300.set(p43.get());
-v301.set(std::string("--alias",7));
-v302.set((v300.get() == v301.get()));
-if(v302.get())goto b139;else goto b140;
+v308.set(p57.get());
+(p40.get()).f3.set(v308.take());
+goto b139;
 b138:
-goto b135;
+v309.set(p51.get());
+v310.set(std::string("--root",6));
+v311.set((v309.get() == v310.get()));
+if(v311.get())goto b140;else goto b141;
 b139:
-v303.set(p37.get());
-v304.set(static_cast<double>(1.0));
-v305.set(ets::ir::add<double>(v303.get(),v304.get()));
-p37.set(v305.take());
-v306.set(p37.get());
-v308.set(static_cast<double>((p0.get()).size()));
-v309.set((v306.get() >= v308.get()));
-if(v309.get())goto b142;else goto b143;
+goto b136;
 b140:
-goto b141;
+v312.set(std::addressof((p40.get()).f1.get()));
+v313.set(p57.get());
+v314.set(normalizePath(v313.get()));
+ets_push_vec<std::string>((*(v312.get())),v314.get());
+// end lease 4; statically verified, no runtime ownership
+goto b142;
 b141:
-goto b138;
+v315.set(p51.get());
+v316.set(std::string("--cxx-flag",10));
+v317.set((v315.get() == v316.get()));
+if(v317.get())goto b143;else goto b144;
 b142:
-v310.set(std::string("Falta la ruta del alias",23));
-v311.set(static_cast<double>(2.0));
-ir_f286(v310.take(),v311.take());
-goto b144;
+goto b139;
 b143:
-goto b144;
+v318.set(std::addressof(p42.get()));
+v319.set(p57.get());
+ets_push_vec<std::string>((*(v318.get())),v319.get());
+// end lease 5; statically verified, no runtime ownership
+goto b145;
 b144:
-v312.set(std::addressof((p32.get()).f2.get()));
-v313.set(p49.get());
-v314.set(p37.get());
-v315.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v314.get()))).get());
-v316.set(ir_t34{});
-p57.set(v316.take());
-v317.set(std::addressof(p57.get()));
-ir_f470((*(v317.get())),v313.take(),v315.take());
-// end lease 8; statically verified, no runtime ownership
-v318.set(p57.get());
-ets_push_vec<ir_t34>((*(v312.get())),v318.get());
-// end lease 7; statically verified, no runtime ownership
-goto b141;
+v320.set(p51.get());
+v321.set(std::string("--link-flag",11));
+v322.set((v320.get() == v321.get()));
+if(v322.get())goto b146;else goto b147;
 b145:
-p58.set(v321.get());
-goto b147;
+goto b142;
 b146:
-v322.set(p25.get());
-v323.set(std::string("",0));
-v324.set((v322.get() != v323.get()));
-p58.set(v324.take());
-goto b147;
+v323.set(std::addressof(p43.get()));
+v324.set(p57.get());
+ets_push_vec<std::string>((*(v323.get())),v324.get());
+// end lease 6; statically verified, no runtime ownership
+goto b148;
 b147:
-v325.set(p58.get());
-if(v325.get())goto b148;else goto b149;
+v325.set(p51.get());
+v326.set(std::string("--alias",7));
+v327.set((v325.get() == v326.get()));
+if(v327.get())goto b149;else goto b150;
 b148:
-v326.set(std::string("Argumento inesperado: ",22));
-v327.set(p43.get());
-v328.set((v326.get() + v327.get()));
-v329.set(static_cast<double>(2.0));
-ir_f286(v328.take(),v329.take());
-goto b150;
+goto b145;
 b149:
-goto b150;
+v328.set(p45.get());
+v329.set(static_cast<double>(1.0));
+v330.set(ets::ir::add<double>(v328.get(),v329.get()));
+p45.set(v330.take());
+v331.set(p45.get());
+v333.set(static_cast<double>((p0.get()).size()));
+v334.set((v331.get() >= v333.get()));
+if(v334.get())goto b152;else goto b153;
 b150:
-v330.set(p43.get());
-p25.set(v330.take());
-goto b55;
+goto b151;
 b151:
-v338.set(p28.get());
-v339.set(std::string("",0));
-v340.set((v338.get() != v339.get()));
-p59.set(v340.take());
-goto b153;
+goto b148;
 b152:
-p59.set(v337.get());
-goto b153;
+v335.set(std::string("Falta la ruta del alias",23));
+v336.set(static_cast<double>(2.0));
+ir_f286(v335.take(),v336.take());
+goto b154;
 b153:
-v341.set(p59.get());
-if(v341.get())goto b154;else goto b155;
+goto b154;
 b154:
-v342.set(std::string("Usa una fuente o --from-ir",26));
-v343.set(static_cast<double>(2.0));
-ir_f286(v342.take(),v343.take());
-goto b156;
+v337.set(std::addressof((p40.get()).f2.get()));
+v338.set(p57.get());
+v339.set(p45.get());
+v340.set(ets::ir::view((p0.get()).at(static_cast<std::size_t>(v339.get()))).get());
+v341.set(ir_t34{});
+p65.set(v341.take());
+v342.set(std::addressof(p65.get()));
+ir_f470((*(v342.get())),v338.take(),v340.take());
+// end lease 8; statically verified, no runtime ownership
+v343.set(p65.get());
+ets_push_vec<ir_t34>((*(v337.get())),v343.get());
+// end lease 7; statically verified, no runtime ownership
+goto b151;
 b155:
-goto b156;
+p66.set(v346.get());
+goto b157;
 b156:
-v344.set(p22.get());
-if(v344.get())goto b157;else goto b158;
+v347.set(p33.get());
+v348.set(std::string("",0));
+v349.set((v347.get() != v348.get()));
+p66.set(v349.take());
+goto b157;
 b157:
-v345.set(p20.get());
-if(v345.get())goto b160;else goto b161;
+v350.set(p66.get());
+if(v350.get())goto b158;else goto b159;
 b158:
-p60.set(v344.get());
-goto b159;
+v351.set(std::string("Argumento inesperado: ",22));
+v352.set(p51.get());
+v353.set((v351.get() + v352.get()));
+v354.set(static_cast<double>(2.0));
+ir_f286(v353.take(),v354.take());
+goto b160;
 b159:
-v356.set(p60.get());
-if(v356.get())goto b169;else goto b170;
+goto b160;
 b160:
-p61.set(v345.get());
-goto b162;
+v355.set(p51.get());
+p33.set(v355.take());
+goto b65;
 b161:
-v346.set(p21.get());
-p61.set(v346.take());
-goto b162;
+v363.set(p36.get());
+v364.set(std::string("",0));
+v365.set((v363.get() != v364.get()));
+p67.set(v365.take());
+goto b163;
 b162:
-v347.set(p61.get());
-if(v347.get())goto b163;else goto b164;
+p67.set(v362.get());
+goto b163;
 b163:
-p62.set(v347.get());
-goto b165;
+v366.set(p67.get());
+if(v366.get())goto b164;else goto b165;
 b164:
-v348.set(p26.get());
-v349.set(std::string("",0));
-v350.set((v348.get() != v349.get()));
-p62.set(v350.take());
-goto b165;
+v367.set(std::string("Usa una fuente o --from-ir",26));
+v368.set(static_cast<double>(2.0));
+ir_f286(v367.take(),v368.take());
+goto b166;
 b165:
-v351.set(p62.get());
-if(v351.get())goto b166;else goto b167;
+goto b166;
 b166:
-p63.set(v351.get());
-goto b168;
+v369.set(p30.get());
+if(v369.get())goto b167;else goto b168;
 b167:
-v352.set(p27.get());
-v353.set(std::string("",0));
-v354.set((v352.get() != v353.get()));
-p63.set(v354.take());
-goto b168;
+v370.set(p28.get());
+if(v370.get())goto b170;else goto b171;
 b168:
-v355.set(p63.get());
-p60.set(v355.take());
-goto b159;
+p68.set(v369.get());
+goto b169;
 b169:
-v357.set(std::string("--check no admite generación o ejecución",42));
-v358.set(static_cast<double>(2.0));
-ir_f286(v357.take(),v358.take());
-goto b171;
+v381.set(p68.get());
+if(v381.get())goto b179;else goto b180;
 b170:
-goto b171;
+p69.set(v370.get());
+goto b172;
 b171:
-v360.set(static_cast<double>((p36.get()).size()));
-v361.set(static_cast<double>(0.0));
-v362.set((v360.get() > v361.get()));
-if(v362.get())goto b172;else goto b173;
+v371.set(p29.get());
+p69.set(v371.take());
+goto b172;
 b172:
-v363.set(p21.get());
-v364.set((!v363.get()));
-p64.set(v364.take());
-goto b174;
+v372.set(p69.get());
+if(v372.get())goto b173;else goto b174;
 b173:
-p64.set(v362.get());
-goto b174;
+p70.set(v372.get());
+goto b175;
 b174:
-v365.set(p64.get());
-if(v365.get())goto b175;else goto b176;
+v373.set(p34.get());
+v374.set(std::string("",0));
+v375.set((v373.get() != v374.get()));
+p70.set(v375.take());
+goto b175;
 b175:
-v366.set(std::string("Los argumentos del programa requieren run",41));
-v367.set(static_cast<double>(2.0));
-ir_f286(v366.take(),v367.take());
-goto b177;
+v376.set(p70.get());
+if(v376.get())goto b176;else goto b177;
 b176:
-goto b177;
+p71.set(v376.get());
+goto b178;
 b177:
-v368.set(p23.get());
-v369.set(p24.get());
-ir_f32(v368.take(),v369.take());
-v370.set(std::string("Cargando configuración",23));
-ir_f34(v370.take());
-v371.set(p30.get());
-v372.set(std::string("",0));
-v373.set((v371.get() == v372.get()));
-if(v373.get())goto b178;else goto b179;
+v377.set(p35.get());
+v378.set(std::string("",0));
+v379.set((v377.get() != v378.get()));
+p71.set(v379.take());
+goto b178;
 b178:
-v374.set(p25.get());
-v375.set(std::string("",0));
-v376.set((v374.get() == v375.get()));
-p65.set(v376.take());
-goto b180;
+v380.set(p71.get());
+p68.set(v380.take());
+goto b169;
 b179:
-p65.set(v373.get());
-goto b180;
+v382.set(std::string("--check no admite generación o ejecución",42));
+v383.set(static_cast<double>(2.0));
+ir_f286(v382.take(),v383.take());
+goto b181;
 b180:
-v377.set(p65.get());
-if(v377.get())goto b181;else goto b182;
+goto b181;
 b181:
-v378.set(p28.get());
-v379.set(std::string("",0));
-v380.set((v378.get() == v379.get()));
-p66.set(v380.take());
-goto b183;
+v385.set(static_cast<double>((p44.get()).size()));
+v386.set(static_cast<double>(0.0));
+v387.set((v385.get() > v386.get()));
+if(v387.get())goto b182;else goto b183;
 b182:
-p66.set(v377.get());
-goto b183;
+v388.set(p29.get());
+v389.set((!v388.get()));
+p72.set(v389.take());
+goto b184;
 b183:
-v381.set(p66.get());
-if(v381.get())goto b184;else goto b185;
+p72.set(v387.get());
+goto b184;
 b184:
-v382.set(std::string("estatic.config.json",19));
-v383.set(ir_f10(v382.take()));
-if(v383.get())goto b187;else goto b188;
+v390.set(p72.get());
+if(v390.get())goto b185;else goto b186;
 b185:
-goto b186;
+v391.set(std::string("Los argumentos del programa requieren run",41));
+v392.set(static_cast<double>(2.0));
+ir_f286(v391.take(),v392.take());
+goto b187;
 b186:
-v388.set(std::string("{}",2));
-v389.set(JSON.parseValue(v388.get()));
-p67.set(v389.take());
-v390.set(std::string(".",1));
-p68.set(v390.take());
-v391.set(p30.get());
-v392.set(std::string("",0));
-v393.set((v391.get() != v392.get()));
-if(v393.get())goto b193;else goto b194;
+goto b187;
 b187:
-v384.set(std::string("estatic.config.json",19));
-p30.set(v384.take());
-goto b189;
+v393.set(p31.get());
+v394.set(p32.get());
+ir_f32(v393.take(),v394.take());
+v395.set(std::string("Cargando configuración",23));
+ir_f34(v395.take());
+v396.set(p38.get());
+v397.set(std::string("",0));
+v398.set((v396.get() == v397.get()));
+if(v398.get())goto b188;else goto b189;
 b188:
-v385.set(std::string("estatic.config.ts",17));
-v386.set(ir_f10(v385.take()));
-if(v386.get())goto b190;else goto b191;
+v399.set(p33.get());
+v400.set(std::string("",0));
+v401.set((v399.get() == v400.get()));
+p73.set(v401.take());
+goto b190;
 b189:
-goto b186;
+p73.set(v398.get());
+goto b190;
 b190:
-v387.set(std::string("estatic.config.ts",17));
-p30.set(v387.take());
-goto b192;
+v402.set(p73.get());
+if(v402.get())goto b191;else goto b192;
 b191:
-goto b192;
-b192:
-goto b189;
-b193:
-v394.set(p30.get());
-v395.set(ir_f288(v394.take()));
-v396.set(ir_f284(v395.take()));
-p67.set(v396.take());
-v397.set(p30.get());
-v398.set(ir_f290(v397.take()));
-p68.set(v398.take());
-goto b195;
-b194:
-goto b195;
-b195:
-v399.set(p67.get());
-v400.set(std::string("entry",5));
-v401.set(jsonObjectGet(v399.get(),v400.get()));
-v402.set(jsonAsString(v401.get()));
-p69.set(v402.take());
-v403.set(p25.get());
+v403.set(p36.get());
 v404.set(std::string("",0));
 v405.set((v403.get() == v404.get()));
-if(v405.get())goto b196;else goto b197;
+p74.set(v405.take());
+goto b193;
+b192:
+p74.set(v402.get());
+goto b193;
+b193:
+v406.set(p74.get());
+if(v406.get())goto b194;else goto b195;
+b194:
+v407.set(std::string("estatic.config.json",19));
+v408.set(ir_f10(v407.take()));
+if(v408.get())goto b197;else goto b198;
+b195:
+goto b196;
 b196:
-v406.set(p28.get());
-v407.set(std::string("",0));
-v408.set((v406.get() == v407.get()));
-p70.set(v408.take());
-goto b198;
+v413.set(std::string("{}",2));
+v414.set(JSON.parseValue(v413.get()));
+p75.set(v414.take());
+v415.set(std::string(".",1));
+p76.set(v415.take());
+v416.set(p38.get());
+v417.set(std::string("",0));
+v418.set((v416.get() != v417.get()));
+if(v418.get())goto b203;else goto b204;
 b197:
-p70.set(v405.get());
-goto b198;
+v409.set(std::string("estatic.config.json",19));
+p38.set(v409.take());
+goto b199;
 b198:
-v409.set(p70.get());
-if(v409.get())goto b199;else goto b200;
+v410.set(std::string("estatic.config.ts",17));
+v411.set(ir_f10(v410.take()));
+if(v411.get())goto b200;else goto b201;
 b199:
-v410.set(p69.get());
-v411.set(std::string("",0));
-v412.set((v410.get() != v411.get()));
-p71.set(v412.take());
-goto b201;
+goto b196;
 b200:
-p71.set(v409.get());
-goto b201;
+v412.set(std::string("estatic.config.ts",17));
+p38.set(v412.take());
+goto b202;
 b201:
-v413.set(p71.get());
-if(v413.get())goto b202;else goto b203;
+goto b202;
 b202:
-v414.set(p68.get());
-v415.set(p69.get());
-v416.set(ir_f289(v414.take(),v415.take()));
-p25.set(v416.take());
-goto b204;
+goto b199;
 b203:
-goto b204;
+v419.set(p38.get());
+v420.set(ir_f288(v419.take()));
+v421.set(ir_f284(v420.take()));
+p75.set(v421.take());
+v422.set(p38.get());
+v423.set(ir_f290(v422.take()));
+p76.set(v423.take());
+goto b205;
 b204:
-v417.set(p25.get());
-v418.set(std::string("",0));
-v419.set((v417.get() == v418.get()));
-if(v419.get())goto b205;else goto b206;
+goto b205;
 b205:
-v420.set(p28.get());
-v421.set(std::string("",0));
-v422.set((v420.get() == v421.get()));
-p72.set(v422.take());
-goto b207;
+v424.set(p75.get());
+v425.set(std::string("entry",5));
+v426.set(jsonObjectGet(v424.get(),v425.get()));
+v427.set(jsonAsString(v426.get()));
+p77.set(v427.take());
+v428.set(p33.get());
+v429.set(std::string("",0));
+v430.set((v428.get() == v429.get()));
+if(v430.get())goto b206;else goto b207;
 b206:
-p72.set(v419.get());
-goto b207;
+v431.set(p36.get());
+v432.set(std::string("",0));
+v433.set((v431.get() == v432.get()));
+p78.set(v433.take());
+goto b208;
 b207:
-v423.set(p72.get());
-if(v423.get())goto b208;else goto b209;
+p78.set(v430.get());
+goto b208;
 b208:
-v424.set(ir_f293());
-v425.set(static_cast<double>(2.0));
-ir_f286(v424.take(),v425.take());
-goto b210;
+v434.set(p78.get());
+if(v434.get())goto b209;else goto b210;
 b209:
-goto b210;
+v435.set(p77.get());
+v436.set(std::string("",0));
+v437.set((v435.get() != v436.get()));
+p79.set(v437.take());
+goto b211;
 b210:
-v426.set(p67.get());
-v427.set(std::string("incremental",11));
-v428.set(jsonObjectGet(v426.get(),v427.get()));
-p73.set(v428.take());
-v429.set(p73.get());
-v430.set(std::string("cacheDirectory",14));
-v431.set(jsonObjectGet(v429.get(),v430.get()));
-v432.set(jsonAsString(v431.get()));
-p74.set(v432.take());
-v433.set((p32.get()).f3.get());
-v434.set(std::string("",0));
-v435.set((v433.get() == v434.get()));
-if(v435.get())goto b211;else goto b212;
+p79.set(v434.get());
+goto b211;
 b211:
-v436.set(p74.get());
-v437.set(std::string("",0));
-v438.set((v436.get() != v437.get()));
-p76.set(v438.take());
-goto b213;
+v438.set(p79.get());
+if(v438.get())goto b212;else goto b213;
 b212:
-p76.set(v435.get());
-goto b213;
-b213:
 v439.set(p76.get());
-if(v439.get())goto b214;else goto b215;
+v440.set(p77.get());
+v441.set(ir_f289(v439.take(),v440.take()));
+p33.set(v441.take());
+goto b214;
+b213:
+goto b214;
 b214:
-v440.set(p68.get());
-v441.set(p74.get());
-v442.set(ir_f289(v440.take(),v441.take()));
-(p32.get()).f3.set(v442.take());
-goto b216;
+v442.set(p33.get());
+v443.set(std::string("",0));
+v444.set((v442.get() == v443.get()));
+if(v444.get())goto b215;else goto b216;
 b215:
-goto b216;
+v445.set(p36.get());
+v446.set(std::string("",0));
+v447.set((v445.get() == v446.get()));
+p80.set(v447.take());
+goto b217;
 b216:
-v443.set(p67.get());
-v444.set(std::string("moduleRoots",11));
-v445.set(jsonObjectGet(v443.get(),v444.get()));
-v446.set(ir_f285(v445.take()));
-p78.set(v446.take());
-v447.set(std::size_t{0});
+p80.set(v444.get());
 goto b217;
 b217:
-v448.set(v447.get()<(p78.get()).size());
+v448.set(p80.get());
 if(v448.get())goto b218;else goto b219;
 b218:
-v449.set((p78.get()).at(v447.get()++));
-p79.set(v449.take());
-v450.set(std::addressof((p32.get()).f1.get()));
-v451.set(p68.get());
-v452.set(p79.get());
-v453.set(ir_f289(v451.take(),v452.take()));
-ets_push_vec<std::string>((*(v450.get())),v453.get());
-// end lease 9; statically verified, no runtime ownership
-goto b217;
+v449.set(ir_f293());
+v450.set(static_cast<double>(2.0));
+ir_f286(v449.take(),v450.take());
+goto b220;
 b219:
-v454.set(p67.get());
-v455.set(std::string("aliases",7));
-v456.set(jsonObjectGet(v454.get(),v455.get()));
-p81.set(v456.take());
-v457.set(p81.get());
-v458.set(ir_f24(v457.take()));
-p82.set(v458.take());
-v459.set(std::size_t{0});
 goto b220;
 b220:
-v460.set(v459.get()<(p82.get()).size());
+v451.set(p75.get());
+v452.set(std::string("incremental",11));
+v453.set(jsonObjectGet(v451.get(),v452.get()));
+p81.set(v453.take());
+v454.set(p81.get());
+v455.set(std::string("cacheDirectory",14));
+v456.set(jsonObjectGet(v454.get(),v455.get()));
+v457.set(jsonAsString(v456.get()));
+p82.set(v457.take());
+v458.set((p40.get()).f3.get());
+v459.set(std::string("",0));
+v460.set((v458.get() == v459.get()));
 if(v460.get())goto b221;else goto b222;
 b221:
-v461.set((p82.get()).at(v459.get()++));
-p83.set(v461.take());
-v462.set(std::addressof((p32.get()).f2.get()));
-v463.set(p83.get());
-v464.set(p68.get());
-v465.set(p81.get());
-v466.set(p83.get());
-v467.set(jsonObjectGet(v465.get(),v466.get()));
-v468.set(jsonAsString(v467.get()));
-v469.set(ir_f289(v464.take(),v468.take()));
-v470.set(ir_t34{});
-p85.set(v470.take());
-v471.set(std::addressof(p85.get()));
-ir_f470((*(v471.get())),v463.take(),v469.take());
-// end lease 11; statically verified, no runtime ownership
-v472.set(p85.get());
-ets_push_vec<ir_t34>((*(v462.get())),v472.get());
-// end lease 10; statically verified, no runtime ownership
-goto b220;
+v461.set(p82.get());
+v462.set(std::string("",0));
+v463.set((v461.get() != v462.get()));
+p84.set(v463.take());
+goto b223;
 b222:
-v473.set(p23.get());
-if(v473.get())goto b223;else goto b224;
+p84.set(v460.get());
+goto b223;
 b223:
-p87.set(v473.get());
-goto b225;
+v464.set(p84.get());
+if(v464.get())goto b224;else goto b225;
 b224:
-v474.set(ir_f33());
-p87.set(v474.take());
-goto b225;
+v465.set(p76.get());
+v466.set(p82.get());
+v467.set(ir_f289(v465.take(),v466.take()));
+(p40.get()).f3.set(v467.take());
+goto b226;
 b225:
-v475.set(p87.get());
-(p32.get()).f0.set(v475.take());
-v476.set(p28.get());
-v477.set(std::string("",0));
-v478.set((v476.get() == v477.get()));
-if(v478.get())goto b226;else goto b227;
+goto b226;
 b226:
-v479.set(std::string("Analizando fuentes y verificando IR",35));
-p88.set(v479.take());
-goto b228;
+v468.set(p75.get());
+v469.set(std::string("moduleRoots",11));
+v470.set(jsonObjectGet(v468.get(),v469.get()));
+v471.set(ir_f285(v470.take()));
+p86.set(v471.take());
+v472.set(std::size_t{0});
+goto b227;
 b227:
-v480.set(std::string("Leyendo IR",10));
-p88.set(v480.take());
-goto b228;
+v473.set(v472.get()<(p86.get()).size());
+if(v473.get())goto b228;else goto b229;
 b228:
-v481.set(p88.get());
-ir_f34(v481.take());
-v482.set(p28.get());
-v483.set(std::string("",0));
-v484.set((v482.get() == v483.get()));
-if(v484.get())goto b229;else goto b230;
+v474.set((p86.get()).at(v472.get()++));
+p87.set(v474.take());
+v475.set(std::addressof((p40.get()).f1.get()));
+v476.set(p76.get());
+v477.set(p87.get());
+v478.set(ir_f289(v476.take(),v477.take()));
+ets_push_vec<std::string>((*(v475.get())),v478.get());
+// end lease 9; statically verified, no runtime ownership
+goto b227;
 b229:
-v485.set(p25.get());
-v486.set(p32.get());
-v487.set(p23.get());
-v488.set(ir_f294(v485.take(),v486.take(),v487.take()));
-p90.set(v488.take());
-goto b231;
+v479.set(p75.get());
+v480.set(std::string("aliases",7));
+v481.set(jsonObjectGet(v479.get(),v480.get()));
+p89.set(v481.take());
+v482.set(p89.get());
+v483.set(ir_f24(v482.take()));
+p90.set(v483.take());
+v484.set(std::size_t{0});
+goto b230;
 b230:
-v489.set(p28.get());
-v490.set(ir_f288(v489.take()));
-v491.set(ir_f279(v490.take()));
-p90.set(v491.take());
-goto b231;
+v485.set(v484.get()<(p90.get()).size());
+if(v485.get())goto b231;else goto b232;
 b231:
-v492.set(p90.get());
-p89.set(v492.take());
-v493.set(p29.get());
-v494.set(std::string("",0));
-v495.set((v493.get() != v494.get()));
-if(v495.get())goto b232;else goto b233;
+v486.set((p90.get()).at(v484.get()++));
+p91.set(v486.take());
+v487.set(std::addressof((p40.get()).f2.get()));
+v488.set(p91.get());
+v489.set(p76.get());
+v490.set(p89.get());
+v491.set(p91.get());
+v492.set(jsonObjectGet(v490.get(),v491.get()));
+v493.set(jsonAsString(v492.get()));
+v494.set(ir_f289(v489.take(),v493.take()));
+v495.set(ir_t34{});
+p93.set(v495.take());
+v496.set(std::addressof(p93.get()));
+ir_f470((*(v496.get())),v488.take(),v494.take());
+// end lease 11; statically verified, no runtime ownership
+v497.set(p93.get());
+ets_push_vec<ir_t34>((*(v487.get())),v497.get());
+// end lease 10; statically verified, no runtime ownership
+goto b230;
 b232:
-v496.set(p29.get());
-v497.set(p89.get());
-v498.set(ir_f206(v497.take()));
-v499.set(std::string("\n",1));
-v500.set((v498.get() + v499.get()));
-ir_f287(v496.take(),v500.take());
-goto b234;
+v498.set(p31.get());
+if(v498.get())goto b233;else goto b234;
 b233:
-goto b234;
+p95.set(v498.get());
+goto b235;
 b234:
-v501.set(p22.get());
-if(v501.get())goto b235;else goto b236;
+v499.set(ir_f33());
+p95.set(v499.take());
+goto b235;
 b235:
+v500.set(p95.get());
+(p40.get()).f0.set(v500.take());
+v501.set(p36.get());
 v502.set(std::string("",0));
-v503.set(std::string("",0));
-ir_f38(v502.take(),v503.take());
-return;
+v503.set((v501.get() == v502.get()));
+if(v503.get())goto b236;else goto b237;
 b236:
-goto b237;
+v504.set(std::string("Analizando fuentes y verificando IR",35));
+p96.set(v504.take());
+goto b238;
 b237:
-v504.set(std::string("Generando C++ desde IR verificado",33));
-ir_f34(v504.take());
-v505.set(p89.get());
-v506.set(ir_f233(v505.take()));
-p91.set(v506.take());
-v507.set(p67.get());
-v508.set(std::string("output",6));
-v509.set(jsonObjectGet(v507.get(),v508.get()));
-p92.set(v509.take());
-v510.set(p67.get());
-v511.set(std::string("compiler",8));
-v512.set(jsonObjectGet(v510.get(),v511.get()));
-p93.set(v512.take());
-v513.set(p26.get());
-v514.set(std::string("",0));
-v515.set((v513.get() == v514.get()));
-if(v515.get())goto b238;else goto b239;
+v505.set(std::string("Leyendo IR",10));
+p96.set(v505.take());
+goto b238;
 b238:
-v516.set(p92.get());
-v517.set(std::string("cpp",3));
-v518.set(jsonObjectGet(v516.get(),v517.get()));
-v519.set(jsonAsString(v518.get()));
-p94.set(v519.take());
-v520.set(p94.get());
-v521.set(std::string("",0));
-v522.set((v520.get() != v521.get()));
-if(v522.get())goto b241;else goto b242;
+v506.set(p96.get());
+ir_f34(v506.take());
+v507.set(p36.get());
+v508.set(std::string("",0));
+v509.set((v507.get() == v508.get()));
+if(v509.get())goto b239;else goto b240;
 b239:
-goto b240;
+v510.set(p33.get());
+v511.set(p40.get());
+v512.set(p31.get());
+v513.set(ir_f294(v510.take(),v511.take(),v512.take()));
+p98.set(v513.take());
+goto b241;
 b240:
-v538.set(std::string("Guardando resultados",20));
-ir_f34(v538.take());
-v539.set(p26.get());
-v540.set((p91.get()).f0.get());
-ir_f287(v539.take(),v540.take());
-v541.set(p20.get());
-if(v541.get())goto b247;else goto b248;
+v514.set(p36.get());
+v515.set(ir_f288(v514.take()));
+v516.set(ir_f279(v515.take()));
+p98.set(v516.take());
+goto b241;
 b241:
-v523.set(p68.get());
-v524.set(p94.get());
-v525.set(ir_f289(v523.take(),v524.take()));
-p95.set(v525.take());
-goto b243;
+v517.set(p98.get());
+p97.set(v517.take());
+v518.set(p37.get());
+v519.set(std::string("",0));
+v520.set((v518.get() != v519.get()));
+if(v520.get())goto b242;else goto b243;
 b242:
-v526.set(std::string("build/",6));
-v527.set(p28.get());
-v528.set(std::string("",0));
-v529.set((v527.get() == v528.get()));
-if(v529.get())goto b244;else goto b245;
+v521.set(p37.get());
+v522.set(p97.get());
+v523.set(ir_f206(v522.take()));
+v524.set(std::string("\n",1));
+v525.set((v523.get() + v524.get()));
+ir_f287(v521.take(),v525.take());
+goto b244;
 b243:
-v537.set(p95.get());
-p26.set(v537.take());
-goto b240;
+goto b244;
 b244:
-v530.set(p25.get());
-p96.set(v530.take());
-goto b246;
+v526.set(p30.get());
+if(v526.get())goto b245;else goto b246;
 b245:
-v531.set(p28.get());
-p96.set(v531.take());
-goto b246;
+v527.set(std::string("",0));
+v528.set(std::string("",0));
+ir_f38(v527.take(),v528.take());
+return;
 b246:
-v532.set(p96.get());
-v533.set(ir_f291(v532.take()));
-v534.set((v526.get() + v533.get()));
-v535.set(std::string(".cpp",4));
-v536.set((v534.get() + v535.get()));
-p95.set(v536.take());
-goto b243;
+goto b247;
 b247:
-p98.set(v541.get());
-goto b249;
+v529.set(std::string("Generando C++ desde IR verificado",33));
+ir_f34(v529.take());
+v530.set(p97.get());
+v531.set(ir_f233(v530.take()));
+p99.set(v531.take());
+v532.set(p75.get());
+v533.set(std::string("output",6));
+v534.set(jsonObjectGet(v532.get(),v533.get()));
+p100.set(v534.take());
+v535.set(p75.get());
+v536.set(std::string("compiler",8));
+v537.set(jsonObjectGet(v535.get(),v536.get()));
+p101.set(v537.take());
+v538.set(p34.get());
+v539.set(std::string("",0));
+v540.set((v538.get() == v539.get()));
+if(v540.get())goto b248;else goto b249;
 b248:
-v542.set(p93.get());
-v543.set(std::string("enabled",7));
-v544.set(jsonObjectGet(v542.get(),v543.get()));
-v545.set(jsonAsBool(v544.get()));
-p98.set(v545.take());
-goto b249;
+v541.set(p100.get());
+v542.set(std::string("cpp",3));
+v543.set(jsonObjectGet(v541.get(),v542.get()));
+v544.set(jsonAsString(v543.get()));
+p102.set(v544.take());
+v545.set(p102.get());
+v546.set(std::string("",0));
+v547.set((v545.get() != v546.get()));
+if(v547.get())goto b251;else goto b252;
 b249:
-v546.set(p98.get());
-if(v546.get())goto b250;else goto b251;
+goto b250;
 b250:
-v547.set(p27.get());
-v548.set(std::string("",0));
-v549.set((v547.get() == v548.get()));
-if(v549.get())goto b253;else goto b254;
+v563.set(std::string("Guardando resultados",20));
+ir_f34(v563.take());
+v564.set(p34.get());
+v565.set((p99.get()).f0.get());
+ir_f287(v564.take(),v565.take());
+v566.set(p28.get());
+if(v566.get())goto b257;else goto b258;
 b251:
-goto b252;
+v548.set(p76.get());
+v549.set(p102.get());
+v550.set(ir_f289(v548.take(),v549.take()));
+p103.set(v550.take());
+goto b253;
 b252:
-v616.set(p26.get());
-v617.set(p20.get());
-if(v617.get())goto b277;else goto b278;
+v551.set(std::string("build/",6));
+v552.set(p36.get());
+v553.set(std::string("",0));
+v554.set((v552.get() == v553.get()));
+if(v554.get())goto b254;else goto b255;
 b253:
-v550.set(p92.get());
-v551.set(std::string("binary",6));
-v552.set(jsonObjectGet(v550.get(),v551.get()));
-v553.set(jsonAsString(v552.get()));
-p99.set(v553.take());
-v554.set(p99.get());
-v555.set(std::string("",0));
-v556.set((v554.get() != v555.get()));
-if(v556.get())goto b256;else goto b257;
+v562.set(p103.get());
+p34.set(v562.take());
+goto b250;
 b254:
-goto b255;
+v555.set(p33.get());
+p104.set(v555.take());
+goto b256;
 b255:
-v564.set(p31.get());
-v565.set(std::string("",0));
-v566.set((v564.get() == v565.get()));
-if(v566.get())goto b259;else goto b260;
+v556.set(p36.get());
+p104.set(v556.take());
+goto b256;
 b256:
-v557.set(p68.get());
-v558.set(p99.get());
-v559.set(ir_f289(v557.take(),v558.take()));
-p100.set(v559.take());
-goto b258;
+v557.set(p104.get());
+v558.set(ir_f291(v557.take()));
+v559.set((v551.get() + v558.get()));
+v560.set(std::string(".cpp",4));
+v561.set((v559.get() + v560.get()));
+p103.set(v561.take());
+goto b253;
 b257:
-v560.set(p26.get());
-v561.set(std::string(".bin",4));
-v562.set((v560.get() + v561.get()));
-p100.set(v562.take());
-goto b258;
+p106.set(v566.get());
+goto b259;
 b258:
-v563.set(p100.get());
-p27.set(v563.take());
-goto b255;
-b259:
-v567.set(p93.get());
-v568.set(std::string("command",7));
+v567.set(p101.get());
+v568.set(std::string("enabled",7));
 v569.set(jsonObjectGet(v567.get(),v568.get()));
-v570.set(jsonAsString(v569.get()));
-p31.set(v570.take());
-goto b261;
+v570.set(jsonAsBool(v569.get()));
+p106.set(v570.take());
+goto b259;
+b259:
+v571.set(p106.get());
+if(v571.get())goto b260;else goto b261;
 b260:
-goto b261;
+v572.set(p35.get());
+v573.set(std::string("",0));
+v574.set((v572.get() == v573.get()));
+if(v574.get())goto b263;else goto b264;
 b261:
-v571.set(p31.get());
-v572.set(std::string("",0));
-v573.set((v571.get() == v572.get()));
-if(v573.get())goto b262;else goto b263;
+goto b262;
 b262:
-v574.set(std::string("CXX",3));
-v575.set(ir_f1(v574.take()));
-p31.set(v575.take());
-goto b264;
+v641.set(p34.get());
+v642.set(p28.get());
+if(v642.get())goto b287;else goto b288;
 b263:
-goto b264;
+v575.set(p100.get());
+v576.set(std::string("binary",6));
+v577.set(jsonObjectGet(v575.get(),v576.get()));
+v578.set(jsonAsString(v577.get()));
+p107.set(v578.take());
+v579.set(p107.get());
+v580.set(std::string("",0));
+v581.set((v579.get() != v580.get()));
+if(v581.get())goto b266;else goto b267;
 b264:
-v576.set(p31.get());
-v577.set(std::string("",0));
-v578.set((v576.get() == v577.get()));
-if(v578.get())goto b265;else goto b266;
+goto b265;
 b265:
-v579.set(std::string("g++",3));
-p31.set(v579.take());
-goto b267;
+v589.set(p39.get());
+v590.set(std::string("",0));
+v591.set((v589.get() == v590.get()));
+if(v591.get())goto b269;else goto b270;
 b266:
-goto b267;
+v582.set(p76.get());
+v583.set(p107.get());
+v584.set(ir_f289(v582.take(),v583.take()));
+p108.set(v584.take());
+goto b268;
 b267:
-v580.set(p93.get());
-v581.set(std::string("flags",5));
-v582.set(jsonObjectGet(v580.get(),v581.get()));
-v583.set(ir_f285(v582.take()));
-p101.set(v583.take());
-v584.set(std::size_t{0});
+v585.set(p34.get());
+v586.set(std::string(".bin",4));
+v587.set((v585.get() + v586.get()));
+p108.set(v587.take());
 goto b268;
 b268:
-v585.set(v584.get()<(p34.get()).size());
-if(v585.get())goto b269;else goto b270;
+v588.set(p108.get());
+p35.set(v588.take());
+goto b265;
 b269:
-v586.set((p34.get()).at(v584.get()++));
-p102.set(v586.take());
-v587.set(std::addressof(p101.get()));
-v588.set(p102.get());
-ets_push_vec<std::string>((*(v587.get())),v588.get());
-// end lease 12; statically verified, no runtime ownership
-goto b268;
+v592.set(p101.get());
+v593.set(std::string("command",7));
+v594.set(jsonObjectGet(v592.get(),v593.get()));
+v595.set(jsonAsString(v594.get()));
+p39.set(v595.take());
+goto b271;
 b270:
-v589.set(p93.get());
-v590.set(std::string("linkFlags",9));
-v591.set(jsonObjectGet(v589.get(),v590.get()));
-v592.set(ir_f285(v591.take()));
-p103.set(v592.take());
-v593.set(std::size_t{0});
 goto b271;
 b271:
-v594.set(v593.get()<(p35.get()).size());
-if(v594.get())goto b272;else goto b273;
+v596.set(p39.get());
+v597.set(std::string("",0));
+v598.set((v596.get() == v597.get()));
+if(v598.get())goto b272;else goto b273;
 b272:
-v595.set((p35.get()).at(v593.get()++));
-p104.set(v595.take());
-v596.set(std::addressof(p103.get()));
-v597.set(p104.get());
-ets_push_vec<std::string>((*(v596.get())),v597.get());
-// end lease 13; statically verified, no runtime ownership
-goto b271;
+v599.set(std::string("CXX",3));
+v600.set(ir_f1(v599.take()));
+p39.set(v600.take());
+goto b274;
 b273:
-v598.set(p67.get());
-v599.set(std::string("linkLibraries",13));
-v600.set(jsonObjectGet(v598.get(),v599.get()));
-v601.set(ir_f285(v600.take()));
-p105.set(v601.take());
-v602.set(std::size_t{0});
 goto b274;
 b274:
-v603.set(v602.get()<(p105.get()).size());
+v601.set(p39.get());
+v602.set(std::string("",0));
+v603.set((v601.get() == v602.get()));
 if(v603.get())goto b275;else goto b276;
 b275:
-v604.set((p105.get()).at(v602.get()++));
-p106.set(v604.take());
-v605.set(std::addressof(p103.get()));
-v606.set(std::string("-l",2));
-v607.set(p106.get());
-v608.set((v606.get() + v607.get()));
-ets_push_vec<std::string>((*(v605.get())),v608.get());
-// end lease 14; statically verified, no runtime ownership
-goto b274;
+v604.set(std::string("g++",3));
+p39.set(v604.take());
+goto b277;
 b276:
-v609.set(std::addressof(p91.get()));
-v610.set(p26.get());
-v611.set(p27.get());
-v612.set(p10.get());
-v613.set(p31.get());
-v614.set(p101.get());
-v615.set(p103.get());
-ir_f296((*(v609.get())),v610.take(),v611.take(),v612.take(),v613.take(),v614.take(),v615.take());
-// end lease 15; statically verified, no runtime ownership
-goto b252;
+goto b277;
 b277:
-p107.set(v617.get());
-goto b279;
+v605.set(p101.get());
+v606.set(std::string("flags",5));
+v607.set(jsonObjectGet(v605.get(),v606.get()));
+v608.set(ir_f285(v607.take()));
+p109.set(v608.take());
+v609.set(std::size_t{0});
+goto b278;
 b278:
-v618.set(p93.get());
-v619.set(std::string("enabled",7));
-v620.set(jsonObjectGet(v618.get(),v619.get()));
-v621.set(jsonAsBool(v620.get()));
-p107.set(v621.take());
-goto b279;
+v610.set(v609.get()<(p42.get()).size());
+if(v610.get())goto b279;else goto b280;
 b279:
-v622.set(p107.get());
-if(v622.get())goto b280;else goto b281;
+v611.set((p42.get()).at(v609.get()++));
+p110.set(v611.take());
+v612.set(std::addressof(p109.get()));
+v613.set(p110.get());
+ets_push_vec<std::string>((*(v612.get())),v613.get());
+// end lease 12; statically verified, no runtime ownership
+goto b278;
 b280:
-v623.set(p27.get());
-p108.set(v623.take());
-goto b282;
+v614.set(p101.get());
+v615.set(std::string("linkFlags",9));
+v616.set(jsonObjectGet(v614.get(),v615.get()));
+v617.set(ir_f285(v616.take()));
+p111.set(v617.take());
+v618.set(std::size_t{0});
+goto b281;
 b281:
-v624.set(std::string("",0));
-p108.set(v624.take());
-goto b282;
+v619.set(v618.get()<(p43.get()).size());
+if(v619.get())goto b282;else goto b283;
 b282:
-v625.set(p108.get());
-ir_f38(v616.get(),v625.take());
-v626.set(p21.get());
-if(v626.get())goto b283;else goto b284;
+v620.set((p43.get()).at(v618.get()++));
+p112.set(v620.take());
+v621.set(std::addressof(p111.get()));
+v622.set(p112.get());
+ets_push_vec<std::string>((*(v621.get())),v622.get());
+// end lease 13; statically verified, no runtime ownership
+goto b281;
 b283:
-v627.set(p27.get());
-v628.set(normalizePath(v627.get()));
-v629.set(([&](){std::vector<std::string> out;out.push_back(v628.get());return out;}()));
-p109.set(v629.take());
-v630.set(std::size_t{0});
-goto b286;
+v623.set(p75.get());
+v624.set(std::string("linkLibraries",13));
+v625.set(jsonObjectGet(v623.get(),v624.get()));
+v626.set(ir_f285(v625.take()));
+p113.set(v626.take());
+v627.set(std::size_t{0});
+goto b284;
 b284:
-goto b285;
+v628.set(v627.get()<(p113.get()).size());
+if(v628.get())goto b285;else goto b286;
 b285:
-return;
+v629.set((p113.get()).at(v627.get()++));
+p114.set(v629.take());
+v630.set(std::addressof(p111.get()));
+v631.set(std::string("-l",2));
+v632.set(p114.get());
+v633.set((v631.get() + v632.get()));
+ets_push_vec<std::string>((*(v630.get())),v633.get());
+// end lease 14; statically verified, no runtime ownership
+goto b284;
 b286:
-v631.set(v630.get()<(p36.get()).size());
-if(v631.get())goto b287;else goto b288;
+v634.set(std::addressof(p99.get()));
+v635.set(p34.get());
+v636.set(p35.get());
+v637.set(p10.get());
+v638.set(p39.get());
+v639.set(p109.get());
+v640.set(p111.get());
+ir_f296((*(v634.get())),v635.take(),v636.take(),v637.take(),v638.take(),v639.take(),v640.take());
+// end lease 15; statically verified, no runtime ownership
+goto b262;
 b287:
-v632.set((p36.get()).at(v630.get()++));
-p110.set(v632.take());
-v633.set(std::addressof(p109.get()));
-v634.set(p110.get());
-ets_push_vec<std::string>((*(v633.get())),v634.get());
-// end lease 16; statically verified, no runtime ownership
-goto b286;
+p115.set(v642.get());
+goto b289;
 b288:
-v635.set(p109.get());
-v636.set(std::string("",0));
-v637.set(std::string("",0));
-v638.set(ir_f292(v635.take(),v636.take(),v637.take()));
-exitProcess(v638.get());
-goto b285;
+v643.set(p101.get());
+v644.set(std::string("enabled",7));
+v645.set(jsonObjectGet(v643.get(),v644.get()));
+v646.set(jsonAsBool(v645.get()));
+p115.set(v646.take());
+goto b289;
+b289:
+v647.set(p115.get());
+if(v647.get())goto b290;else goto b291;
+b290:
+v648.set(p35.get());
+p116.set(v648.take());
+goto b292;
+b291:
+v649.set(std::string("",0));
+p116.set(v649.take());
+goto b292;
+b292:
+v650.set(p116.get());
+ir_f38(v641.get(),v650.take());
+v651.set(p29.get());
+if(v651.get())goto b293;else goto b294;
+b293:
+v652.set(p35.get());
+v653.set(normalizePath(v652.get()));
+v654.set(([&](){std::vector<std::string> out;out.push_back(v653.get());return out;}()));
+p117.set(v654.take());
+v655.set(std::size_t{0});
+goto b296;
+b294:
+goto b295;
+b295:
+return;
+b296:
+v656.set(v655.get()<(p44.get()).size());
+if(v656.get())goto b297;else goto b298;
+b297:
+v657.set((p44.get()).at(v655.get()++));
+p118.set(v657.take());
+v658.set(std::addressof(p117.get()));
+v659.set(p118.get());
+ets_push_vec<std::string>((*(v658.get())),v659.get());
+// end lease 16; statically verified, no runtime ownership
+goto b296;
+b298:
+v660.set(p117.get());
+v661.set(std::string("",0));
+v662.set(std::string("",0));
+v663.set(ir_f292(v660.take(),v661.take(),v662.take()));
+exitProcess(v663.get());
+goto b295;
 }
 void ir_f298() {
 goto b0;
@@ -58686,188 +58826,189 @@ goto b12;
 void ir_f394(ir_t138& a0,std::vector<ir_t12> a1) {
 ets::ir::Slot<ir_t138*> p0;
 ets::ir::Slot<std::vector<ir_t12>> p1;
-ets::ir::Slot<ir_t12> p17;
-ets::ir::Slot<ir_t12> p21;
-ets::ir::Slot<ir_t12> p31;
-ets::ir::Slot<double> p33;
-ets::ir::Slot<double> p45;
-ets::ir::Slot<ir_t12> p48;
-ets::ir::Slot<bool> p54;
-ets::ir::Slot<bool> p57;
-ets::ir::Slot<bool> p60;
-ets::ir::Slot<bool> p63;
-ets::ir::Slot<bool> p66;
-ets::ir::Slot<bool> p79;
-ets::ir::Slot<bool> p82;
-ets::ir::Slot<bool> p85;
-ets::ir::Slot<ir_t12> p89;
+ets::ir::Slot<ir_t12> p19;
+ets::ir::Slot<ir_t12> p23;
+ets::ir::Slot<ir_t12> p33;
+ets::ir::Slot<double> p35;
+ets::ir::Slot<double> p47;
+ets::ir::Slot<ir_t12> p50;
+ets::ir::Slot<bool> p56;
+ets::ir::Slot<bool> p59;
+ets::ir::Slot<bool> p62;
+ets::ir::Slot<bool> p65;
+ets::ir::Slot<bool> p68;
+ets::ir::Slot<bool> p81;
+ets::ir::Slot<bool> p84;
+ets::ir::Slot<bool> p87;
+ets::ir::Slot<ir_t12> p91;
 ets::ir::Slot<std::vector<ir_t12>> v0;
 ets::ir::Slot<double> v1;
 ets::ir::Slot<std::vector<ir_t11>> v2;
 ets::ir::Slot<std::vector<ir_t20>> v3;
 ets::ir::Slot<double> v4;
 ets::ir::Slot<bool> v5;
-ets::ir::Slot<std::vector<ir_t12>> v6;
-ets::ir::Slot<double> v7;
+ets::ir::Slot<bool> v6;
+ets::ir::Slot<std::vector<ir_t12>> v7;
 ets::ir::Slot<double> v8;
-ets::ir::Slot<bool> v9;
-ets::ir::Slot<std::vector<ir_t12>*> v10;
-ets::ir::Slot<std::string> v11;
+ets::ir::Slot<double> v9;
+ets::ir::Slot<bool> v10;
+ets::ir::Slot<std::vector<ir_t12>*> v11;
 ets::ir::Slot<std::string> v12;
-ets::ir::Slot<double> v13;
+ets::ir::Slot<std::string> v13;
 ets::ir::Slot<double> v14;
 ets::ir::Slot<double> v15;
 ets::ir::Slot<double> v16;
 ets::ir::Slot<double> v17;
 ets::ir::Slot<double> v18;
-ets::ir::Slot<ir_t12> v19;
-ets::ir::Slot<ir_t12*> v20;
-ets::ir::Slot<ir_t12> v21;
-ets::ir::Slot<std::string> v22;
-ets::ir::Slot<ir_t138*> v23;
-ets::ir::Slot<std::vector<ir_t12>> v24;
-ets::ir::Slot<double> v25;
+ets::ir::Slot<double> v19;
+ets::ir::Slot<ir_t12> v20;
+ets::ir::Slot<ir_t12*> v21;
+ets::ir::Slot<ir_t12> v22;
+ets::ir::Slot<std::string> v23;
+ets::ir::Slot<ir_t138*> v24;
+ets::ir::Slot<std::vector<ir_t12>> v25;
 ets::ir::Slot<double> v26;
 ets::ir::Slot<double> v27;
-ets::ir::Slot<std::string> v28;
+ets::ir::Slot<double> v28;
 ets::ir::Slot<std::string> v29;
-ets::ir::Slot<bool> v30;
-ets::ir::Slot<std::vector<ir_t12>> v31;
-ets::ir::Slot<double> v32;
+ets::ir::Slot<std::string> v30;
+ets::ir::Slot<bool> v31;
+ets::ir::Slot<std::vector<ir_t12>> v32;
 ets::ir::Slot<double> v33;
 ets::ir::Slot<double> v34;
-ets::ir::Slot<ir_t12> v35;
-ets::ir::Slot<std::vector<ir_t12>*> v36;
-ets::ir::Slot<std::string> v37;
+ets::ir::Slot<double> v35;
+ets::ir::Slot<ir_t12> v36;
+ets::ir::Slot<std::vector<ir_t12>*> v37;
 ets::ir::Slot<std::string> v38;
-ets::ir::Slot<double> v39;
+ets::ir::Slot<std::string> v39;
 ets::ir::Slot<double> v40;
 ets::ir::Slot<double> v41;
 ets::ir::Slot<double> v42;
 ets::ir::Slot<double> v43;
 ets::ir::Slot<double> v44;
-ets::ir::Slot<ir_t12> v45;
-ets::ir::Slot<ir_t12*> v46;
-ets::ir::Slot<ir_t12> v47;
-ets::ir::Slot<std::string> v48;
-ets::ir::Slot<ir_t138*> v49;
-ets::ir::Slot<double> v50;
+ets::ir::Slot<double> v45;
+ets::ir::Slot<ir_t12> v46;
+ets::ir::Slot<ir_t12*> v47;
+ets::ir::Slot<ir_t12> v48;
+ets::ir::Slot<std::string> v49;
+ets::ir::Slot<ir_t138*> v50;
 ets::ir::Slot<double> v51;
 ets::ir::Slot<double> v52;
 ets::ir::Slot<double> v53;
-ets::ir::Slot<std::vector<ir_t12>> v54;
-ets::ir::Slot<double> v55;
-ets::ir::Slot<bool> v56;
-ets::ir::Slot<double> v57;
-ets::ir::Slot<std::string> v58;
+ets::ir::Slot<double> v54;
+ets::ir::Slot<std::vector<ir_t12>> v55;
+ets::ir::Slot<double> v56;
+ets::ir::Slot<bool> v57;
+ets::ir::Slot<double> v58;
 ets::ir::Slot<std::string> v59;
-ets::ir::Slot<bool> v60;
-ets::ir::Slot<double> v61;
-ets::ir::Slot<std::string> v62;
-ets::ir::Slot<ir_t138*> v63;
-ets::ir::Slot<double> v64;
+ets::ir::Slot<std::string> v60;
+ets::ir::Slot<bool> v61;
+ets::ir::Slot<double> v62;
+ets::ir::Slot<std::string> v63;
+ets::ir::Slot<ir_t138*> v64;
 ets::ir::Slot<double> v65;
 ets::ir::Slot<double> v66;
 ets::ir::Slot<double> v67;
 ets::ir::Slot<double> v68;
 ets::ir::Slot<double> v69;
 ets::ir::Slot<double> v70;
-ets::ir::Slot<std::vector<ir_t12>> v71;
-ets::ir::Slot<double> v72;
-ets::ir::Slot<bool> v73;
-ets::ir::Slot<double> v74;
-ets::ir::Slot<ir_t12> v75;
-ets::ir::Slot<double> v76;
+ets::ir::Slot<double> v71;
+ets::ir::Slot<std::vector<ir_t12>> v72;
+ets::ir::Slot<double> v73;
+ets::ir::Slot<bool> v74;
+ets::ir::Slot<double> v75;
+ets::ir::Slot<ir_t12> v76;
 ets::ir::Slot<double> v77;
-ets::ir::Slot<const ir_t138*> v78;
-ets::ir::Slot<bool> v79;
+ets::ir::Slot<double> v78;
+ets::ir::Slot<const ir_t138*> v79;
 ets::ir::Slot<bool> v80;
-ets::ir::Slot<double> v81;
+ets::ir::Slot<bool> v81;
 ets::ir::Slot<double> v82;
-ets::ir::Slot<const ir_t138*> v83;
-ets::ir::Slot<bool> v84;
+ets::ir::Slot<double> v83;
+ets::ir::Slot<const ir_t138*> v84;
 ets::ir::Slot<bool> v85;
 ets::ir::Slot<bool> v86;
-ets::ir::Slot<double> v87;
+ets::ir::Slot<bool> v87;
 ets::ir::Slot<double> v88;
-ets::ir::Slot<const ir_t138*> v89;
-ets::ir::Slot<bool> v90;
+ets::ir::Slot<double> v89;
+ets::ir::Slot<const ir_t138*> v90;
 ets::ir::Slot<bool> v91;
 ets::ir::Slot<bool> v92;
-ets::ir::Slot<double> v93;
+ets::ir::Slot<bool> v93;
 ets::ir::Slot<double> v94;
-ets::ir::Slot<const ir_t138*> v95;
-ets::ir::Slot<bool> v96;
+ets::ir::Slot<double> v95;
+ets::ir::Slot<const ir_t138*> v96;
 ets::ir::Slot<bool> v97;
 ets::ir::Slot<bool> v98;
-ets::ir::Slot<double> v99;
+ets::ir::Slot<bool> v99;
 ets::ir::Slot<double> v100;
-ets::ir::Slot<const ir_t138*> v101;
-ets::ir::Slot<bool> v102;
+ets::ir::Slot<double> v101;
+ets::ir::Slot<const ir_t138*> v102;
 ets::ir::Slot<bool> v103;
 ets::ir::Slot<bool> v104;
-ets::ir::Slot<double> v105;
+ets::ir::Slot<bool> v105;
 ets::ir::Slot<double> v106;
-ets::ir::Slot<const ir_t138*> v107;
-ets::ir::Slot<bool> v108;
+ets::ir::Slot<double> v107;
+ets::ir::Slot<const ir_t138*> v108;
 ets::ir::Slot<bool> v109;
 ets::ir::Slot<bool> v110;
-ets::ir::Slot<ir_t12> v111;
-ets::ir::Slot<std::string> v112;
-ets::ir::Slot<ir_t138*> v113;
-ets::ir::Slot<double> v114;
+ets::ir::Slot<bool> v111;
+ets::ir::Slot<ir_t12> v112;
+ets::ir::Slot<std::string> v113;
+ets::ir::Slot<ir_t138*> v114;
 ets::ir::Slot<double> v115;
 ets::ir::Slot<double> v116;
 ets::ir::Slot<double> v117;
 ets::ir::Slot<double> v118;
 ets::ir::Slot<double> v119;
-ets::ir::Slot<const ir_t138*> v120;
-ets::ir::Slot<bool> v121;
+ets::ir::Slot<double> v120;
+ets::ir::Slot<const ir_t138*> v121;
 ets::ir::Slot<bool> v122;
-ets::ir::Slot<ir_t12> v123;
-ets::ir::Slot<std::string> v124;
-ets::ir::Slot<ir_t138*> v125;
-ets::ir::Slot<std::string> v126;
+ets::ir::Slot<bool> v123;
+ets::ir::Slot<ir_t12> v124;
+ets::ir::Slot<std::string> v125;
+ets::ir::Slot<ir_t138*> v126;
 ets::ir::Slot<std::string> v127;
-ets::ir::Slot<bool> v128;
-ets::ir::Slot<double> v129;
+ets::ir::Slot<std::string> v128;
+ets::ir::Slot<bool> v129;
 ets::ir::Slot<double> v130;
-ets::ir::Slot<bool> v131;
-ets::ir::Slot<double> v132;
+ets::ir::Slot<double> v131;
+ets::ir::Slot<bool> v132;
 ets::ir::Slot<double> v133;
-ets::ir::Slot<bool> v134;
+ets::ir::Slot<double> v134;
 ets::ir::Slot<bool> v135;
-ets::ir::Slot<double> v136;
+ets::ir::Slot<bool> v136;
 ets::ir::Slot<double> v137;
-ets::ir::Slot<bool> v138;
+ets::ir::Slot<double> v138;
 ets::ir::Slot<bool> v139;
 ets::ir::Slot<bool> v140;
-ets::ir::Slot<ir_t12> v141;
-ets::ir::Slot<std::string> v142;
-ets::ir::Slot<ir_t138*> v143;
-ets::ir::Slot<double> v144;
+ets::ir::Slot<bool> v141;
+ets::ir::Slot<ir_t12> v142;
+ets::ir::Slot<std::string> v143;
+ets::ir::Slot<ir_t138*> v144;
 ets::ir::Slot<double> v145;
-ets::ir::Slot<bool> v146;
-ets::ir::Slot<double> v147;
+ets::ir::Slot<double> v146;
+ets::ir::Slot<bool> v147;
 ets::ir::Slot<double> v148;
 ets::ir::Slot<double> v149;
-ets::ir::Slot<ir_t12> v150;
-ets::ir::Slot<double> v151;
+ets::ir::Slot<double> v150;
+ets::ir::Slot<ir_t12> v151;
 ets::ir::Slot<double> v152;
 ets::ir::Slot<double> v153;
 ets::ir::Slot<double> v154;
 ets::ir::Slot<double> v155;
 ets::ir::Slot<double> v156;
-ets::ir::Slot<const ir_t138*> v157;
-ets::ir::Slot<bool> v158;
+ets::ir::Slot<double> v157;
+ets::ir::Slot<const ir_t138*> v158;
 ets::ir::Slot<bool> v159;
-ets::ir::Slot<ir_t12> v160;
-ets::ir::Slot<std::string> v161;
-ets::ir::Slot<ir_t138*> v162;
-ets::ir::Slot<double> v163;
+ets::ir::Slot<bool> v160;
+ets::ir::Slot<ir_t12> v161;
+ets::ir::Slot<std::string> v162;
+ets::ir::Slot<ir_t138*> v163;
 ets::ir::Slot<double> v164;
 ets::ir::Slot<double> v165;
 ets::ir::Slot<double> v166;
+ets::ir::Slot<double> v167;
 p0.set(std::addressof(a0));
 p1.set(std::move(a1));
 goto b0;
@@ -58884,71 +59025,73 @@ v4.set(static_cast<double>(0.0));
 (ets::ir::view(*(p0.get())).get()).f4.set(v4.take());
 v5.set(false);
 (ets::ir::view(*(p0.get())).get()).f5.set(v5.take());
-v7.set(static_cast<double>((p1.get()).size()));
-v8.set(static_cast<double>(0.0));
-v9.set((v7.get() == v8.get()));
-if(v9.get())goto b1;else goto b2;
+v6.set(false);
+(ets::ir::view(*(p0.get())).get()).f6.set(v6.take());
+v8.set(static_cast<double>((p1.get()).size()));
+v9.set(static_cast<double>(0.0));
+v10.set((v8.get() == v9.get()));
+if(v10.get())goto b1;else goto b2;
 b1:
-v10.set(std::addressof((ets::ir::view(*(p0.get())).get()).f0.get()));
-v11.set(std::string("eof",3));
-v12.set(std::string("",0));
-v13.set(static_cast<double>(0.0));
-v14.set(static_cast<double>(1.0));
+v11.set(std::addressof((ets::ir::view(*(p0.get())).get()).f0.get()));
+v12.set(std::string("eof",3));
+v13.set(std::string("",0));
+v14.set(static_cast<double>(0.0));
 v15.set(static_cast<double>(1.0));
-v16.set(static_cast<double>(0.0));
-v17.set(static_cast<double>(1.0));
+v16.set(static_cast<double>(1.0));
+v17.set(static_cast<double>(0.0));
 v18.set(static_cast<double>(1.0));
-v19.set(ir_t12{});
-p17.set(v19.take());
-v20.set(std::addressof(p17.get()));
-ir_f400((*(v20.get())),v11.take(),v12.take(),v13.take(),v14.take(),v15.take(),v16.take(),v17.take(),v18.take());
+v19.set(static_cast<double>(1.0));
+v20.set(ir_t12{});
+p19.set(v20.take());
+v21.set(std::addressof(p19.get()));
+ir_f400((*(v21.get())),v12.take(),v13.take(),v14.take(),v15.take(),v16.take(),v17.take(),v18.take(),v19.take());
 // end lease 1; statically verified, no runtime ownership
-v21.set(p17.get());
-ets_push_vec<ir_t12>((*(v10.get())),v21.get());
+v22.set(p19.get());
+ets_push_vec<ir_t12>((*(v11.get())),v22.get());
 // end lease 0; statically verified, no runtime ownership
-v22.set(std::string("La entrada de tokens necesita un eof final",42));
-v23.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f479((*(v23.get())),v22.take());
+v23.set(std::string("La entrada de tokens necesita un eof final",42));
+v24.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+ir_f479((*(v24.get())),v23.take());
 // end lease 2; statically verified, no runtime ownership
 goto b3;
 b2:
-v25.set(static_cast<double>((p1.get()).size()));
-v26.set(static_cast<double>(1.0));
-v27.set(ets::ir::sub<double>(v25.get(),v26.get()));
-v28.set((ets::ir::view((p1.get()).at(static_cast<std::size_t>(v27.get()))).get()).f0.get());
-v29.set(std::string("eof",3));
-v30.set((v28.get() != v29.get()));
-if(v30.get())goto b4;else goto b5;
+v26.set(static_cast<double>((p1.get()).size()));
+v27.set(static_cast<double>(1.0));
+v28.set(ets::ir::sub<double>(v26.get(),v27.get()));
+v29.set((ets::ir::view((p1.get()).at(static_cast<std::size_t>(v28.get()))).get()).f0.get());
+v30.set(std::string("eof",3));
+v31.set((v29.get() != v30.get()));
+if(v31.get())goto b4;else goto b5;
 b3:
-v50.set(static_cast<double>(0.0));
-p33.set(v50.take());
+v51.set(static_cast<double>(0.0));
+p35.set(v51.take());
 goto b7;
 b4:
-v32.set(static_cast<double>((p1.get()).size()));
-v33.set(static_cast<double>(1.0));
-v34.set(ets::ir::sub<double>(v32.get(),v33.get()));
-v35.set(ets::ir::view((p1.get()).at(static_cast<std::size_t>(v34.get()))).get());
-p21.set(v35.take());
-v36.set(std::addressof((ets::ir::view(*(p0.get())).get()).f0.get()));
-v37.set(std::string("eof",3));
-v38.set(std::string("",0));
-v39.set((p21.get()).f5.get());
-v40.set((p21.get()).f6.get());
-v41.set((p21.get()).f7.get());
-v42.set((p21.get()).f5.get());
-v43.set((p21.get()).f6.get());
-v44.set((p21.get()).f7.get());
-v45.set(ir_t12{});
-p31.set(v45.take());
-v46.set(std::addressof(p31.get()));
-ir_f400((*(v46.get())),v37.take(),v38.take(),v39.take(),v40.take(),v41.take(),v42.take(),v43.take(),v44.take());
+v33.set(static_cast<double>((p1.get()).size()));
+v34.set(static_cast<double>(1.0));
+v35.set(ets::ir::sub<double>(v33.get(),v34.get()));
+v36.set(ets::ir::view((p1.get()).at(static_cast<std::size_t>(v35.get()))).get());
+p23.set(v36.take());
+v37.set(std::addressof((ets::ir::view(*(p0.get())).get()).f0.get()));
+v38.set(std::string("eof",3));
+v39.set(std::string("",0));
+v40.set((p23.get()).f5.get());
+v41.set((p23.get()).f6.get());
+v42.set((p23.get()).f7.get());
+v43.set((p23.get()).f5.get());
+v44.set((p23.get()).f6.get());
+v45.set((p23.get()).f7.get());
+v46.set(ir_t12{});
+p33.set(v46.take());
+v47.set(std::addressof(p33.get()));
+ir_f400((*(v47.get())),v38.take(),v39.take(),v40.take(),v41.take(),v42.take(),v43.take(),v44.take(),v45.take());
 // end lease 4; statically verified, no runtime ownership
-v47.set(p31.get());
-ets_push_vec<ir_t12>((*(v36.get())),v47.get());
+v48.set(p33.get());
+ets_push_vec<ir_t12>((*(v37.get())),v48.get());
 // end lease 3; statically verified, no runtime ownership
-v48.set(std::string("La entrada de tokens necesita un eof final",42));
-v49.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f479((*(v49.get())),v48.take());
+v49.set(std::string("La entrada de tokens necesita un eof final",42));
+v50.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+ir_f479((*(v50.get())),v49.take());
 // end lease 5; statically verified, no runtime ownership
 goto b6;
 b5:
@@ -58956,172 +59099,172 @@ goto b6;
 b6:
 goto b3;
 b7:
-v51.set(p33.get());
-v52.set(static_cast<double>(1.0));
-v53.set(ets::ir::add<double>(v51.get(),v52.get()));
-v55.set(static_cast<double>(((ets::ir::view(*(p0.get())).get()).f0.get()).size()));
-v56.set((v53.get() < v55.get()));
-if(v56.get())goto b8;else goto b10;
+v52.set(p35.get());
+v53.set(static_cast<double>(1.0));
+v54.set(ets::ir::add<double>(v52.get(),v53.get()));
+v56.set(static_cast<double>(((ets::ir::view(*(p0.get())).get()).f0.get()).size()));
+v57.set((v54.get() < v56.get()));
+if(v57.get())goto b8;else goto b10;
 b8:
-v57.set(p33.get());
-v58.set((ets::ir::view(((ets::ir::view(*(p0.get())).get()).f0.get()).at(static_cast<std::size_t>(v57.get()))).get()).f0.get());
-v59.set(std::string("eof",3));
-v60.set((v58.get() == v59.get()));
-if(v60.get())goto b11;else goto b12;
+v58.set(p35.get());
+v59.set((ets::ir::view(((ets::ir::view(*(p0.get())).get()).f0.get()).at(static_cast<std::size_t>(v58.get()))).get()).f0.get());
+v60.set(std::string("eof",3));
+v61.set((v59.get() == v60.get()));
+if(v61.get())goto b11;else goto b12;
 b9:
-v65.set(p33.get());
-v66.set(static_cast<double>(1.0));
-v67.set(ets::ir::add<double>(v65.get(),v66.get()));
-p33.set(v67.take());
-v68.set(p33.get());
+v66.set(p35.get());
+v67.set(static_cast<double>(1.0));
+v68.set(ets::ir::add<double>(v66.get(),v67.get()));
+p35.set(v68.take());
+v69.set(p35.get());
 goto b7;
 b10:
-v69.set(static_cast<double>(0.0));
-p45.set(v69.take());
+v70.set(static_cast<double>(0.0));
+p47.set(v70.take());
 goto b14;
 b11:
-v61.set(p33.get());
-(ets::ir::view(*(p0.get())).get()).f1.set(v61.take());
-v62.set(std::string("eof solo puede aparecer al final de los tokens",46));
-v63.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f479((*(v63.get())),v62.take());
+v62.set(p35.get());
+(ets::ir::view(*(p0.get())).get()).f1.set(v62.take());
+v63.set(std::string("eof solo puede aparecer al final de los tokens",46));
+v64.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+ir_f479((*(v64.get())),v63.take());
 // end lease 6; statically verified, no runtime ownership
-v64.set(static_cast<double>(0.0));
-(ets::ir::view(*(p0.get())).get()).f1.set(v64.take());
+v65.set(static_cast<double>(0.0));
+(ets::ir::view(*(p0.get())).get()).f1.set(v65.take());
 goto b10;
 b12:
 goto b13;
 b13:
 goto b9;
 b14:
-v70.set(p45.get());
-v72.set(static_cast<double>(((ets::ir::view(*(p0.get())).get()).f0.get()).size()));
-v73.set((v70.get() < v72.get()));
-if(v73.get())goto b15;else goto b17;
+v71.set(p47.get());
+v73.set(static_cast<double>(((ets::ir::view(*(p0.get())).get()).f0.get()).size()));
+v74.set((v71.get() < v73.get()));
+if(v74.get())goto b15;else goto b17;
 b15:
-v74.set(p45.get());
-v75.set(ets::ir::view(((ets::ir::view(*(p0.get())).get()).f0.get()).at(static_cast<std::size_t>(v74.get()))).get());
-p48.set(v75.take());
-v76.set((p48.get()).f2.get());
-v77.set(static_cast<double>(0.0));
-v78.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v79.set(ir_f480((*(v78.get())),v76.take(),v77.take()));
+v75.set(p47.get());
+v76.set(ets::ir::view(((ets::ir::view(*(p0.get())).get()).f0.get()).at(static_cast<std::size_t>(v75.get()))).get());
+p50.set(v76.take());
+v77.set((p50.get()).f2.get());
+v78.set(static_cast<double>(0.0));
+v79.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v80.set(ir_f480((*(v79.get())),v77.take(),v78.take()));
 // end lease 7; statically verified, no runtime ownership
-v80.set((!v79.get()));
-if(v80.get())goto b18;else goto b19;
+v81.set((!v80.get()));
+if(v81.get())goto b18;else goto b19;
 b16:
-v163.set(p45.get());
-v164.set(static_cast<double>(1.0));
-v165.set(ets::ir::add<double>(v163.get(),v164.get()));
-p45.set(v165.take());
-v166.set(p45.get());
+v164.set(p47.get());
+v165.set(static_cast<double>(1.0));
+v166.set(ets::ir::add<double>(v164.get(),v165.get()));
+p47.set(v166.take());
+v167.set(p47.get());
 goto b14;
 b17:
 return;
 b18:
-p54.set(v80.get());
+p56.set(v81.get());
 goto b20;
 b19:
-v81.set((p48.get()).f5.get());
-v82.set(static_cast<double>(0.0));
-v83.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v84.set(ir_f480((*(v83.get())),v81.take(),v82.take()));
+v82.set((p50.get()).f5.get());
+v83.set(static_cast<double>(0.0));
+v84.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v85.set(ir_f480((*(v84.get())),v82.take(),v83.take()));
 // end lease 8; statically verified, no runtime ownership
-v85.set((!v84.get()));
-p54.set(v85.take());
+v86.set((!v85.get()));
+p56.set(v86.take());
 goto b20;
 b20:
-v86.set(p54.get());
-if(v86.get())goto b21;else goto b22;
+v87.set(p56.get());
+if(v87.get())goto b21;else goto b22;
 b21:
-p57.set(v86.get());
+p59.set(v87.get());
 goto b23;
 b22:
-v87.set((p48.get()).f3.get());
-v88.set(static_cast<double>(1.0));
-v89.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v90.set(ir_f480((*(v89.get())),v87.take(),v88.take()));
+v88.set((p50.get()).f3.get());
+v89.set(static_cast<double>(1.0));
+v90.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v91.set(ir_f480((*(v90.get())),v88.take(),v89.take()));
 // end lease 9; statically verified, no runtime ownership
-v91.set((!v90.get()));
-p57.set(v91.take());
+v92.set((!v91.get()));
+p59.set(v92.take());
 goto b23;
 b23:
-v92.set(p57.get());
-if(v92.get())goto b24;else goto b25;
+v93.set(p59.get());
+if(v93.get())goto b24;else goto b25;
 b24:
-p60.set(v92.get());
+p62.set(v93.get());
 goto b26;
 b25:
-v93.set((p48.get()).f6.get());
-v94.set(static_cast<double>(1.0));
-v95.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v96.set(ir_f480((*(v95.get())),v93.take(),v94.take()));
+v94.set((p50.get()).f6.get());
+v95.set(static_cast<double>(1.0));
+v96.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v97.set(ir_f480((*(v96.get())),v94.take(),v95.take()));
 // end lease 10; statically verified, no runtime ownership
-v97.set((!v96.get()));
-p60.set(v97.take());
+v98.set((!v97.get()));
+p62.set(v98.take());
 goto b26;
 b26:
-v98.set(p60.get());
-if(v98.get())goto b27;else goto b28;
+v99.set(p62.get());
+if(v99.get())goto b27;else goto b28;
 b27:
-p63.set(v98.get());
+p65.set(v99.get());
 goto b29;
 b28:
-v99.set((p48.get()).f4.get());
-v100.set(static_cast<double>(1.0));
-v101.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v102.set(ir_f480((*(v101.get())),v99.take(),v100.take()));
+v100.set((p50.get()).f4.get());
+v101.set(static_cast<double>(1.0));
+v102.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v103.set(ir_f480((*(v102.get())),v100.take(),v101.take()));
 // end lease 11; statically verified, no runtime ownership
-v103.set((!v102.get()));
-p63.set(v103.take());
+v104.set((!v103.get()));
+p65.set(v104.take());
 goto b29;
 b29:
-v104.set(p63.get());
-if(v104.get())goto b30;else goto b31;
+v105.set(p65.get());
+if(v105.get())goto b30;else goto b31;
 b30:
-p66.set(v104.get());
+p68.set(v105.get());
 goto b32;
 b31:
-v105.set((p48.get()).f7.get());
-v106.set(static_cast<double>(1.0));
-v107.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v108.set(ir_f480((*(v107.get())),v105.take(),v106.take()));
+v106.set((p50.get()).f7.get());
+v107.set(static_cast<double>(1.0));
+v108.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v109.set(ir_f480((*(v108.get())),v106.take(),v107.take()));
 // end lease 12; statically verified, no runtime ownership
-v109.set((!v108.get()));
-p66.set(v109.take());
+v110.set((!v109.get()));
+p68.set(v110.take());
 goto b32;
 b32:
-v110.set(p66.get());
-if(v110.get())goto b33;else goto b34;
+v111.set(p68.get());
+if(v111.get())goto b33;else goto b34;
 b33:
-v111.set(p48.get());
-v112.set(std::string("Las coordenadas de tokens deben ser enteros válidos de 32 bits",63));
-v113.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f481((*(v113.get())),v111.take(),v112.take());
+v112.set(p50.get());
+v113.set(std::string("Las coordenadas de tokens deben ser enteros válidos de 32 bits",63));
+v114.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+ir_f481((*(v114.get())),v112.take(),v113.take());
 // end lease 13; statically verified, no runtime ownership
 goto b35;
 b34:
-v114.set((p48.get()).f2.get());
-v115.set((p48.get()).f3.get());
-v116.set((p48.get()).f4.get());
-v117.set((p48.get()).f5.get());
-v118.set((p48.get()).f6.get());
-v119.set((p48.get()).f7.get());
-v120.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v121.set(ir_f482((*(v120.get())),v114.take(),v115.take(),v116.take(),v117.take(),v118.take(),v119.take()));
+v115.set((p50.get()).f2.get());
+v116.set((p50.get()).f3.get());
+v117.set((p50.get()).f4.get());
+v118.set((p50.get()).f5.get());
+v119.set((p50.get()).f6.get());
+v120.set((p50.get()).f7.get());
+v121.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v122.set(ir_f482((*(v121.get())),v115.take(),v116.take(),v117.take(),v118.take(),v119.take(),v120.take()));
 // end lease 14; statically verified, no runtime ownership
-v122.set((!v121.get()));
-if(v122.get())goto b36;else goto b37;
+v123.set((!v122.get()));
+if(v123.get())goto b36;else goto b37;
 b35:
-v126.set((p48.get()).f0.get());
-v127.set(std::string("eof",3));
-v128.set((v126.get() == v127.get()));
-if(v128.get())goto b39;else goto b40;
+v127.set((p50.get()).f0.get());
+v128.set(std::string("eof",3));
+v129.set((v127.get() == v128.get()));
+if(v129.get())goto b39;else goto b40;
 b36:
-v123.set(p48.get());
-v124.set(std::string("El span del token tiene posiciones inconsistentes",49));
-v125.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f481((*(v125.get())),v123.take(),v124.take());
+v124.set(p50.get());
+v125.set(std::string("El span del token tiene posiciones inconsistentes",49));
+v126.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+ir_f481((*(v126.get())),v124.take(),v125.take());
 // end lease 15; statically verified, no runtime ownership
 goto b38;
 b37:
@@ -59129,81 +59272,81 @@ goto b38;
 b38:
 goto b35;
 b39:
-v129.set((p48.get()).f2.get());
-v130.set((p48.get()).f5.get());
-v131.set((v129.get() != v130.get()));
-if(v131.get())goto b42;else goto b43;
+v130.set((p50.get()).f2.get());
+v131.set((p50.get()).f5.get());
+v132.set((v130.get() != v131.get()));
+if(v132.get())goto b42;else goto b43;
 b40:
-p79.set(v128.get());
+p81.set(v129.get());
 goto b41;
 b41:
-v140.set(p79.get());
-if(v140.get())goto b48;else goto b49;
+v141.set(p81.get());
+if(v141.get())goto b48;else goto b49;
 b42:
-p82.set(v131.get());
+p84.set(v132.get());
 goto b44;
 b43:
-v132.set((p48.get()).f3.get());
-v133.set((p48.get()).f6.get());
-v134.set((v132.get() != v133.get()));
-p82.set(v134.take());
+v133.set((p50.get()).f3.get());
+v134.set((p50.get()).f6.get());
+v135.set((v133.get() != v134.get()));
+p84.set(v135.take());
 goto b44;
 b44:
-v135.set(p82.get());
-if(v135.get())goto b45;else goto b46;
+v136.set(p84.get());
+if(v136.get())goto b45;else goto b46;
 b45:
-p85.set(v135.get());
+p87.set(v136.get());
 goto b47;
 b46:
-v136.set((p48.get()).f4.get());
-v137.set((p48.get()).f7.get());
-v138.set((v136.get() != v137.get()));
-p85.set(v138.take());
+v137.set((p50.get()).f4.get());
+v138.set((p50.get()).f7.get());
+v139.set((v137.get() != v138.get()));
+p87.set(v139.take());
 goto b47;
 b47:
-v139.set(p85.get());
-p79.set(v139.take());
+v140.set(p87.get());
+p81.set(v140.take());
 goto b41;
 b48:
-v141.set(p48.get());
-v142.set(std::string("El token eof debe tener un span vacío",38));
-v143.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f481((*(v143.get())),v141.take(),v142.take());
+v142.set(p50.get());
+v143.set(std::string("El token eof debe tener un span vacío",38));
+v144.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+ir_f481((*(v144.get())),v142.take(),v143.take());
 // end lease 16; statically verified, no runtime ownership
 goto b50;
 b49:
 goto b50;
 b50:
-v144.set(p45.get());
-v145.set(static_cast<double>(0.0));
-v146.set((v144.get() > v145.get()));
-if(v146.get())goto b51;else goto b52;
+v145.set(p47.get());
+v146.set(static_cast<double>(0.0));
+v147.set((v145.get() > v146.get()));
+if(v147.get())goto b51;else goto b52;
 b51:
-v147.set(p45.get());
-v148.set(static_cast<double>(1.0));
-v149.set(ets::ir::sub<double>(v147.get(),v148.get()));
-v150.set(ets::ir::view(((ets::ir::view(*(p0.get())).get()).f0.get()).at(static_cast<std::size_t>(v149.get()))).get());
-p89.set(v150.take());
-v151.set((p89.get()).f5.get());
-v152.set((p89.get()).f6.get());
-v153.set((p89.get()).f7.get());
-v154.set((p48.get()).f2.get());
-v155.set((p48.get()).f3.get());
-v156.set((p48.get()).f4.get());
-v157.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v158.set(ir_f482((*(v157.get())),v151.take(),v152.take(),v153.take(),v154.take(),v155.take(),v156.take()));
+v148.set(p47.get());
+v149.set(static_cast<double>(1.0));
+v150.set(ets::ir::sub<double>(v148.get(),v149.get()));
+v151.set(ets::ir::view(((ets::ir::view(*(p0.get())).get()).f0.get()).at(static_cast<std::size_t>(v150.get()))).get());
+p91.set(v151.take());
+v152.set((p91.get()).f5.get());
+v153.set((p91.get()).f6.get());
+v154.set((p91.get()).f7.get());
+v155.set((p50.get()).f2.get());
+v156.set((p50.get()).f3.get());
+v157.set((p50.get()).f4.get());
+v158.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v159.set(ir_f482((*(v158.get())),v152.take(),v153.take(),v154.take(),v155.take(),v156.take(),v157.take()));
 // end lease 17; statically verified, no runtime ownership
-v159.set((!v158.get()));
-if(v159.get())goto b54;else goto b55;
+v160.set((!v159.get()));
+if(v160.get())goto b54;else goto b55;
 b52:
 goto b53;
 b53:
 goto b16;
 b54:
-v160.set(p48.get());
-v161.set(std::string("Los tokens deben estar ordenados y no solaparse",47));
-v162.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f481((*(v162.get())),v160.take(),v161.take());
+v161.set(p50.get());
+v162.set(std::string("Los tokens deben estar ordenados y no solaparse",47));
+v163.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+ir_f481((*(v163.get())),v161.take(),v162.take());
 // end lease 18; statically verified, no runtime ownership
 goto b56;
 b55:
@@ -175972,15 +176115,19 @@ goto b9;
 }
 std::string ir_f769(ir_t138& a0) {
 ets::ir::Slot<ir_t138*> p0;
-ets::ir::Slot<std::string> p2;
+ets::ir::Slot<bool> p2;
+ets::ir::Slot<std::string> p7;
 ets::ir::Slot<ir_t138*> v0;
 ets::ir::Slot<bool> v1;
 ets::ir::Slot<bool> v2;
 ets::ir::Slot<std::string> v3;
-ets::ir::Slot<ir_t138*> v4;
-ets::ir::Slot<std::string> v5;
+ets::ir::Slot<bool> v4;
+ets::ir::Slot<bool> v5;
 ets::ir::Slot<ir_t138*> v6;
 ets::ir::Slot<std::string> v7;
+ets::ir::Slot<bool> v8;
+ets::ir::Slot<ir_t138*> v9;
+ets::ir::Slot<std::string> v10;
 p0.set(std::addressof(a0));
 goto b0;
 b0:
@@ -175995,15 +176142,21 @@ return v3.get();
 b2:
 goto b3;
 b3:
-v4.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v5.set(ir_f898((*(v4.get()))));
-// end lease 1; statically verified, no runtime ownership
-p2.set(v5.get());
+v4.set((ets::ir::view(*(p0.get())).get()).f6.get());
+p2.set(v4.take());
+v5.set(false);
+(ets::ir::view(*(p0.get())).get()).f6.set(v5.take());
 v6.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f607((*(v6.get())));
+v7.set(ir_f898((*(v6.get()))));
+// end lease 1; statically verified, no runtime ownership
+p7.set(v7.get());
+v8.set(p2.get());
+(ets::ir::view(*(p0.get())).get()).f6.set(v8.take());
+v9.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+ir_f607((*(v9.get())));
 // end lease 2; statically verified, no runtime ownership
-v7.set(p2.get());
-return v7.get();
+v10.set(p7.get());
+return v10.get();
 }
 ir_t12 ir_f770(ir_t138& a0) {
 ets::ir::Slot<ir_t138*> p0;
@@ -232959,28 +233112,30 @@ return v19.get();
 }
 std::string ir_f898(ir_t138& a0) {
 ets::ir::Slot<ir_t138*> p0;
-ets::ir::Slot<std::string> p4;
-ets::ir::Slot<ir_t12> p6;
-ets::ir::Slot<std::string> p10;
-ets::ir::Slot<ir_t12> p12;
-ets::ir::Slot<ir_t12> p15;
-ets::ir::Slot<bool> p20;
-ets::ir::Slot<bool> p22;
+ets::ir::Slot<ir_t12> p4;
+ets::ir::Slot<std::string> p8;
+ets::ir::Slot<std::string> p16;
+ets::ir::Slot<ir_t12> p18;
+ets::ir::Slot<std::string> p22;
 ets::ir::Slot<ir_t12> p24;
-ets::ir::Slot<std::string> p26;
-ets::ir::Slot<std::vector<std::string>> p30;
+ets::ir::Slot<ir_t12> p27;
 ets::ir::Slot<bool> p32;
+ets::ir::Slot<bool> p34;
+ets::ir::Slot<ir_t12> p36;
+ets::ir::Slot<std::string> p38;
 ets::ir::Slot<std::vector<std::string>> p42;
 ets::ir::Slot<bool> p44;
-ets::ir::Slot<std::string> p50;
-ets::ir::Slot<std::string> p51;
-ets::ir::Slot<bool> p55;
-ets::ir::Slot<ir_t12> p58;
-ets::ir::Slot<ir_t12> p66;
-ets::ir::Slot<ir_t12> p69;
-ets::ir::Slot<std::vector<std::string>> p72;
-ets::ir::Slot<bool> p74;
-ets::ir::Slot<bool> p79;
+ets::ir::Slot<std::vector<std::string>> p54;
+ets::ir::Slot<bool> p56;
+ets::ir::Slot<std::string> p62;
+ets::ir::Slot<std::string> p63;
+ets::ir::Slot<bool> p67;
+ets::ir::Slot<ir_t12> p70;
+ets::ir::Slot<ir_t12> p78;
+ets::ir::Slot<ir_t12> p81;
+ets::ir::Slot<std::vector<std::string>> p84;
+ets::ir::Slot<bool> p86;
+ets::ir::Slot<bool> p91;
 ets::ir::Slot<std::string> v0;
 ets::ir::Slot<ir_t138*> v1;
 ets::ir::Slot<bool> v2;
@@ -232991,233 +233146,247 @@ ets::ir::Slot<std::string> v6;
 ets::ir::Slot<std::string> v7;
 ets::ir::Slot<std::string> v8;
 ets::ir::Slot<std::string> v9;
-ets::ir::Slot<ir_t138*> v10;
+ets::ir::Slot<const ir_t138*> v10;
 ets::ir::Slot<bool> v11;
-ets::ir::Slot<std::string> v12;
-ets::ir::Slot<std::string> v13;
-ets::ir::Slot<ir_t138*> v14;
-ets::ir::Slot<ir_t12> v15;
+ets::ir::Slot<ir_t138*> v12;
+ets::ir::Slot<ir_t12> v13;
+ets::ir::Slot<bool> v14;
+ets::ir::Slot<ir_t138*> v15;
 ets::ir::Slot<std::string> v16;
-ets::ir::Slot<std::string> v17;
-ets::ir::Slot<std::string> v18;
-ets::ir::Slot<ir_t138*> v19;
-ets::ir::Slot<bool> v20;
-ets::ir::Slot<std::string> v21;
+ets::ir::Slot<bool> v17;
+ets::ir::Slot<bool> v18;
+ets::ir::Slot<ir_t12> v19;
+ets::ir::Slot<std::string> v20;
+ets::ir::Slot<ir_t138*> v21;
 ets::ir::Slot<std::string> v22;
 ets::ir::Slot<std::string> v23;
-ets::ir::Slot<std::string> v24;
-ets::ir::Slot<const ir_t138*> v25;
-ets::ir::Slot<bool> v26;
-ets::ir::Slot<ir_t138*> v27;
-ets::ir::Slot<ir_t12> v28;
-ets::ir::Slot<std::string> v29;
+ets::ir::Slot<ir_t138*> v24;
+ets::ir::Slot<bool> v25;
+ets::ir::Slot<std::string> v26;
+ets::ir::Slot<std::string> v27;
+ets::ir::Slot<ir_t138*> v28;
+ets::ir::Slot<ir_t12> v29;
 ets::ir::Slot<std::string> v30;
-ets::ir::Slot<ir_t138*> v31;
-ets::ir::Slot<ir_t12> v32;
-ets::ir::Slot<std::string> v33;
-ets::ir::Slot<std::string> v34;
+ets::ir::Slot<std::string> v31;
+ets::ir::Slot<std::string> v32;
+ets::ir::Slot<ir_t138*> v33;
+ets::ir::Slot<bool> v34;
 ets::ir::Slot<std::string> v35;
 ets::ir::Slot<std::string> v36;
-ets::ir::Slot<ir_t138*> v37;
+ets::ir::Slot<std::string> v37;
 ets::ir::Slot<std::string> v38;
-ets::ir::Slot<std::string> v39;
-ets::ir::Slot<ir_t138*> v40;
-ets::ir::Slot<bool> v41;
-ets::ir::Slot<std::string> v42;
-ets::ir::Slot<const ir_t138*> v43;
-ets::ir::Slot<bool> v44;
-ets::ir::Slot<bool> v45;
-ets::ir::Slot<std::string> v46;
-ets::ir::Slot<const ir_t138*> v47;
-ets::ir::Slot<bool> v48;
-ets::ir::Slot<double> v49;
-ets::ir::Slot<const ir_t138*> v50;
-ets::ir::Slot<ir_t12> v51;
+ets::ir::Slot<const ir_t138*> v39;
+ets::ir::Slot<bool> v40;
+ets::ir::Slot<ir_t138*> v41;
+ets::ir::Slot<ir_t12> v42;
+ets::ir::Slot<std::string> v43;
+ets::ir::Slot<std::string> v44;
+ets::ir::Slot<ir_t138*> v45;
+ets::ir::Slot<ir_t12> v46;
+ets::ir::Slot<std::string> v47;
+ets::ir::Slot<std::string> v48;
+ets::ir::Slot<std::string> v49;
+ets::ir::Slot<std::string> v50;
+ets::ir::Slot<ir_t138*> v51;
 ets::ir::Slot<std::string> v52;
 ets::ir::Slot<std::string> v53;
-ets::ir::Slot<bool> v54;
+ets::ir::Slot<ir_t138*> v54;
 ets::ir::Slot<bool> v55;
-ets::ir::Slot<bool> v56;
-ets::ir::Slot<bool> v57;
-ets::ir::Slot<ir_t138*> v58;
-ets::ir::Slot<std::string> v59;
+ets::ir::Slot<std::string> v56;
+ets::ir::Slot<const ir_t138*> v57;
+ets::ir::Slot<bool> v58;
+ets::ir::Slot<bool> v59;
 ets::ir::Slot<std::string> v60;
-ets::ir::Slot<ir_t138*> v61;
-ets::ir::Slot<ir_t12> v62;
-ets::ir::Slot<std::string> v63;
-ets::ir::Slot<std::string> v64;
-ets::ir::Slot<std::string> v65;
+ets::ir::Slot<const ir_t138*> v61;
+ets::ir::Slot<bool> v62;
+ets::ir::Slot<double> v63;
+ets::ir::Slot<const ir_t138*> v64;
+ets::ir::Slot<ir_t12> v65;
 ets::ir::Slot<std::string> v66;
 ets::ir::Slot<std::string> v67;
-ets::ir::Slot<ir_t138*> v68;
-ets::ir::Slot<std::string> v69;
-ets::ir::Slot<std::vector<std::string>> v70;
-ets::ir::Slot<std::string> v71;
-ets::ir::Slot<const ir_t138*> v72;
-ets::ir::Slot<bool> v73;
-ets::ir::Slot<bool> v74;
-ets::ir::Slot<std::string> v75;
-ets::ir::Slot<const ir_t138*> v76;
-ets::ir::Slot<bool> v77;
-ets::ir::Slot<bool> v78;
-ets::ir::Slot<bool> v79;
+ets::ir::Slot<bool> v68;
+ets::ir::Slot<bool> v69;
+ets::ir::Slot<bool> v70;
+ets::ir::Slot<bool> v71;
+ets::ir::Slot<ir_t138*> v72;
+ets::ir::Slot<std::string> v73;
+ets::ir::Slot<std::string> v74;
+ets::ir::Slot<ir_t138*> v75;
+ets::ir::Slot<ir_t12> v76;
+ets::ir::Slot<std::string> v77;
+ets::ir::Slot<std::string> v78;
+ets::ir::Slot<std::string> v79;
 ets::ir::Slot<std::string> v80;
-ets::ir::Slot<ir_t138*> v81;
-ets::ir::Slot<ir_t12> v82;
+ets::ir::Slot<std::string> v81;
+ets::ir::Slot<ir_t138*> v82;
 ets::ir::Slot<std::string> v83;
-ets::ir::Slot<ir_t138*> v84;
-ets::ir::Slot<ir_t12> v85;
-ets::ir::Slot<std::vector<std::string>*> v86;
-ets::ir::Slot<ir_t138*> v87;
-ets::ir::Slot<std::string> v88;
+ets::ir::Slot<std::vector<std::string>> v84;
+ets::ir::Slot<std::string> v85;
+ets::ir::Slot<const ir_t138*> v86;
+ets::ir::Slot<bool> v87;
+ets::ir::Slot<bool> v88;
 ets::ir::Slot<std::string> v89;
-ets::ir::Slot<ir_t138*> v90;
+ets::ir::Slot<const ir_t138*> v90;
 ets::ir::Slot<bool> v91;
 ets::ir::Slot<bool> v92;
-ets::ir::Slot<std::string> v93;
-ets::ir::Slot<ir_t138*> v94;
-ets::ir::Slot<ir_t12> v95;
-ets::ir::Slot<std::string> v96;
-ets::ir::Slot<ir_t138*> v97;
-ets::ir::Slot<ir_t12> v98;
-ets::ir::Slot<std::string> v99;
-ets::ir::Slot<const std::vector<std::string>*> v100;
-ets::ir::Slot<std::string> v101;
+ets::ir::Slot<bool> v93;
+ets::ir::Slot<std::string> v94;
+ets::ir::Slot<ir_t138*> v95;
+ets::ir::Slot<ir_t12> v96;
+ets::ir::Slot<std::string> v97;
+ets::ir::Slot<ir_t138*> v98;
+ets::ir::Slot<ir_t12> v99;
+ets::ir::Slot<std::vector<std::string>*> v100;
+ets::ir::Slot<ir_t138*> v101;
 ets::ir::Slot<std::string> v102;
 ets::ir::Slot<std::string> v103;
-ets::ir::Slot<std::string> v104;
-ets::ir::Slot<std::string> v105;
-ets::ir::Slot<ir_t138*> v106;
+ets::ir::Slot<ir_t138*> v104;
+ets::ir::Slot<bool> v105;
+ets::ir::Slot<bool> v106;
 ets::ir::Slot<std::string> v107;
-ets::ir::Slot<std::string> v108;
-ets::ir::Slot<std::string> v109;
-ets::ir::Slot<ir_t138*> v110;
-ets::ir::Slot<bool> v111;
-ets::ir::Slot<std::vector<std::string>> v112;
+ets::ir::Slot<ir_t138*> v108;
+ets::ir::Slot<ir_t12> v109;
+ets::ir::Slot<std::string> v110;
+ets::ir::Slot<ir_t138*> v111;
+ets::ir::Slot<ir_t12> v112;
 ets::ir::Slot<std::string> v113;
-ets::ir::Slot<const ir_t138*> v114;
-ets::ir::Slot<bool> v115;
-ets::ir::Slot<bool> v116;
+ets::ir::Slot<const std::vector<std::string>*> v114;
+ets::ir::Slot<std::string> v115;
+ets::ir::Slot<std::string> v116;
 ets::ir::Slot<std::string> v117;
-ets::ir::Slot<const ir_t138*> v118;
-ets::ir::Slot<bool> v119;
-ets::ir::Slot<bool> v120;
-ets::ir::Slot<bool> v121;
-ets::ir::Slot<std::vector<std::string>*> v122;
-ets::ir::Slot<ir_t138*> v123;
-ets::ir::Slot<std::string> v124;
-ets::ir::Slot<std::string> v125;
-ets::ir::Slot<ir_t138*> v126;
-ets::ir::Slot<bool> v127;
-ets::ir::Slot<bool> v128;
-ets::ir::Slot<std::string> v129;
-ets::ir::Slot<ir_t138*> v130;
-ets::ir::Slot<ir_t12> v131;
-ets::ir::Slot<std::string> v132;
-ets::ir::Slot<const std::vector<std::string>*> v133;
-ets::ir::Slot<std::string> v134;
-ets::ir::Slot<std::string> v135;
-ets::ir::Slot<std::string> v136;
-ets::ir::Slot<std::string> v137;
+ets::ir::Slot<std::string> v118;
+ets::ir::Slot<std::string> v119;
+ets::ir::Slot<ir_t138*> v120;
+ets::ir::Slot<std::string> v121;
+ets::ir::Slot<std::string> v122;
+ets::ir::Slot<std::string> v123;
+ets::ir::Slot<ir_t138*> v124;
+ets::ir::Slot<bool> v125;
+ets::ir::Slot<std::vector<std::string>> v126;
+ets::ir::Slot<std::string> v127;
+ets::ir::Slot<const ir_t138*> v128;
+ets::ir::Slot<bool> v129;
+ets::ir::Slot<bool> v130;
+ets::ir::Slot<std::string> v131;
+ets::ir::Slot<const ir_t138*> v132;
+ets::ir::Slot<bool> v133;
+ets::ir::Slot<bool> v134;
+ets::ir::Slot<bool> v135;
+ets::ir::Slot<std::vector<std::string>*> v136;
+ets::ir::Slot<ir_t138*> v137;
 ets::ir::Slot<std::string> v138;
-ets::ir::Slot<ir_t138*> v139;
-ets::ir::Slot<std::string> v140;
-ets::ir::Slot<std::string> v141;
-ets::ir::Slot<ir_t138*> v142;
+ets::ir::Slot<std::string> v139;
+ets::ir::Slot<ir_t138*> v140;
+ets::ir::Slot<bool> v141;
+ets::ir::Slot<bool> v142;
 ets::ir::Slot<std::string> v143;
-ets::ir::Slot<std::string> v144;
-ets::ir::Slot<std::string> v145;
-ets::ir::Slot<bool> v146;
-ets::ir::Slot<std::string> v147;
-ets::ir::Slot<ir_t138*> v148;
+ets::ir::Slot<ir_t138*> v144;
+ets::ir::Slot<ir_t12> v145;
+ets::ir::Slot<std::string> v146;
+ets::ir::Slot<const std::vector<std::string>*> v147;
+ets::ir::Slot<std::string> v148;
 ets::ir::Slot<std::string> v149;
 ets::ir::Slot<std::string> v150;
-ets::ir::Slot<const ir_t138*> v151;
-ets::ir::Slot<bool> v152;
-ets::ir::Slot<std::string> v153;
-ets::ir::Slot<const ir_t138*> v154;
-ets::ir::Slot<bool> v155;
-ets::ir::Slot<bool> v156;
-ets::ir::Slot<ir_t138*> v157;
-ets::ir::Slot<ir_t12> v158;
+ets::ir::Slot<std::string> v151;
+ets::ir::Slot<std::string> v152;
+ets::ir::Slot<ir_t138*> v153;
+ets::ir::Slot<std::string> v154;
+ets::ir::Slot<std::string> v155;
+ets::ir::Slot<ir_t138*> v156;
+ets::ir::Slot<std::string> v157;
+ets::ir::Slot<std::string> v158;
 ets::ir::Slot<std::string> v159;
-ets::ir::Slot<std::string> v160;
-ets::ir::Slot<ir_t138*> v161;
-ets::ir::Slot<std::string> v162;
-ets::ir::Slot<const ir_t138*> v163;
-ets::ir::Slot<bool> v164;
-ets::ir::Slot<bool> v165;
-ets::ir::Slot<ir_t138*> v166;
-ets::ir::Slot<ir_t12> v167;
-ets::ir::Slot<std::string> v168;
-ets::ir::Slot<std::string> v169;
-ets::ir::Slot<ir_t138*> v170;
-ets::ir::Slot<bool> v171;
-ets::ir::Slot<std::string> v172;
-ets::ir::Slot<const ir_t138*> v173;
-ets::ir::Slot<bool> v174;
-ets::ir::Slot<std::string> v175;
+ets::ir::Slot<bool> v160;
+ets::ir::Slot<std::string> v161;
+ets::ir::Slot<ir_t138*> v162;
+ets::ir::Slot<std::string> v163;
+ets::ir::Slot<std::string> v164;
+ets::ir::Slot<const ir_t138*> v165;
+ets::ir::Slot<bool> v166;
+ets::ir::Slot<std::string> v167;
+ets::ir::Slot<const ir_t138*> v168;
+ets::ir::Slot<bool> v169;
+ets::ir::Slot<bool> v170;
+ets::ir::Slot<ir_t138*> v171;
+ets::ir::Slot<ir_t12> v172;
+ets::ir::Slot<std::string> v173;
+ets::ir::Slot<std::string> v174;
+ets::ir::Slot<ir_t138*> v175;
 ets::ir::Slot<std::string> v176;
-ets::ir::Slot<std::string> v177;
-ets::ir::Slot<ir_t138*> v178;
-ets::ir::Slot<ir_t12> v179;
-ets::ir::Slot<std::string> v180;
-ets::ir::Slot<std::string> v181;
+ets::ir::Slot<const ir_t138*> v177;
+ets::ir::Slot<bool> v178;
+ets::ir::Slot<bool> v179;
+ets::ir::Slot<ir_t138*> v180;
+ets::ir::Slot<ir_t12> v181;
 ets::ir::Slot<std::string> v182;
 ets::ir::Slot<std::string> v183;
-ets::ir::Slot<std::string> v184;
-ets::ir::Slot<std::string> v185;
-ets::ir::Slot<ir_t138*> v186;
-ets::ir::Slot<ir_t12> v187;
-ets::ir::Slot<std::string> v188;
+ets::ir::Slot<ir_t138*> v184;
+ets::ir::Slot<bool> v185;
+ets::ir::Slot<std::string> v186;
+ets::ir::Slot<const ir_t138*> v187;
+ets::ir::Slot<bool> v188;
 ets::ir::Slot<std::string> v189;
 ets::ir::Slot<std::string> v190;
-ets::ir::Slot<ir_t138*> v191;
-ets::ir::Slot<bool> v192;
-ets::ir::Slot<std::vector<std::string>> v193;
+ets::ir::Slot<std::string> v191;
+ets::ir::Slot<ir_t138*> v192;
+ets::ir::Slot<ir_t12> v193;
 ets::ir::Slot<std::string> v194;
-ets::ir::Slot<const ir_t138*> v195;
-ets::ir::Slot<bool> v196;
-ets::ir::Slot<bool> v197;
+ets::ir::Slot<std::string> v195;
+ets::ir::Slot<std::string> v196;
+ets::ir::Slot<std::string> v197;
 ets::ir::Slot<std::string> v198;
-ets::ir::Slot<const ir_t138*> v199;
-ets::ir::Slot<bool> v200;
-ets::ir::Slot<bool> v201;
-ets::ir::Slot<bool> v202;
-ets::ir::Slot<std::vector<std::string>*> v203;
-ets::ir::Slot<ir_t138*> v204;
-ets::ir::Slot<std::string> v205;
-ets::ir::Slot<std::string> v206;
-ets::ir::Slot<ir_t138*> v207;
-ets::ir::Slot<bool> v208;
-ets::ir::Slot<bool> v209;
-ets::ir::Slot<std::string> v210;
-ets::ir::Slot<ir_t138*> v211;
-ets::ir::Slot<ir_t12> v212;
-ets::ir::Slot<std::string> v213;
-ets::ir::Slot<std::string> v214;
+ets::ir::Slot<std::string> v199;
+ets::ir::Slot<ir_t138*> v200;
+ets::ir::Slot<ir_t12> v201;
+ets::ir::Slot<std::string> v202;
+ets::ir::Slot<std::string> v203;
+ets::ir::Slot<std::string> v204;
+ets::ir::Slot<ir_t138*> v205;
+ets::ir::Slot<bool> v206;
+ets::ir::Slot<std::vector<std::string>> v207;
+ets::ir::Slot<std::string> v208;
+ets::ir::Slot<const ir_t138*> v209;
+ets::ir::Slot<bool> v210;
+ets::ir::Slot<bool> v211;
+ets::ir::Slot<std::string> v212;
+ets::ir::Slot<const ir_t138*> v213;
+ets::ir::Slot<bool> v214;
 ets::ir::Slot<bool> v215;
-ets::ir::Slot<std::vector<std::string>> v216;
-ets::ir::Slot<double> v217;
-ets::ir::Slot<double> v218;
-ets::ir::Slot<bool> v219;
-ets::ir::Slot<bool> v220;
-ets::ir::Slot<double> v221;
-ets::ir::Slot<std::string> v222;
-ets::ir::Slot<std::string> v223;
+ets::ir::Slot<bool> v216;
+ets::ir::Slot<std::vector<std::string>*> v217;
+ets::ir::Slot<ir_t138*> v218;
+ets::ir::Slot<std::string> v219;
+ets::ir::Slot<std::string> v220;
+ets::ir::Slot<ir_t138*> v221;
+ets::ir::Slot<bool> v222;
+ets::ir::Slot<bool> v223;
 ets::ir::Slot<std::string> v224;
-ets::ir::Slot<std::string> v225;
-ets::ir::Slot<std::string> v226;
+ets::ir::Slot<ir_t138*> v225;
+ets::ir::Slot<ir_t12> v226;
 ets::ir::Slot<std::string> v227;
-ets::ir::Slot<const std::vector<std::string>*> v228;
-ets::ir::Slot<std::string> v229;
-ets::ir::Slot<std::string> v230;
-ets::ir::Slot<std::string> v231;
-ets::ir::Slot<std::string> v232;
-ets::ir::Slot<std::string> v233;
-ets::ir::Slot<std::string> v234;
-ets::ir::Slot<ir_t138*> v235;
+ets::ir::Slot<std::string> v228;
+ets::ir::Slot<bool> v229;
+ets::ir::Slot<std::vector<std::string>> v230;
+ets::ir::Slot<double> v231;
+ets::ir::Slot<double> v232;
+ets::ir::Slot<bool> v233;
+ets::ir::Slot<bool> v234;
+ets::ir::Slot<double> v235;
 ets::ir::Slot<std::string> v236;
+ets::ir::Slot<std::string> v237;
+ets::ir::Slot<std::string> v238;
+ets::ir::Slot<std::string> v239;
+ets::ir::Slot<std::string> v240;
+ets::ir::Slot<std::string> v241;
+ets::ir::Slot<const std::vector<std::string>*> v242;
+ets::ir::Slot<std::string> v243;
+ets::ir::Slot<std::string> v244;
+ets::ir::Slot<std::string> v245;
+ets::ir::Slot<std::string> v246;
+ets::ir::Slot<std::string> v247;
+ets::ir::Slot<std::string> v248;
+ets::ir::Slot<ir_t138*> v249;
+ets::ir::Slot<std::string> v250;
 p0.set(std::addressof(a0));
 goto b0;
 b0:
@@ -233238,495 +233407,530 @@ return v8.get();
 b2:
 goto b3;
 b3:
-v9.set(std::string("typeof",6));
+v9.set(std::string("const",5));
 v10.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v11.set(ir_f492((*(v10.get())),v9.take()));
+v11.set(ir_f491((*(v10.get())),v9.take()));
 // end lease 2; statically verified, no runtime ownership
 if(v11.get())goto b4;else goto b5;
 b4:
-v12.set(std::string("$typeof$",8));
-v13.set(std::string("identifier",10));
-v14.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v15.set(ir_f601((*(v14.get())),v13.take()));
+v12.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v13.set(ir_f494((*(v12.get()))));
 // end lease 3; statically verified, no runtime ownership
-p6.set(v15.get());
-v16.set((p6.get()).f1.get());
-v17.set((v12.get() + v16.get()));
-p4.set(v17.take());
-goto b7;
+p4.set(v13.get());
+v14.set(true);
+(ets::ir::view(*(p0.get())).get()).f6.set(v14.take());
+v15.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v16.set(ir_f898((*(v15.get()))));
+// end lease 4; statically verified, no runtime ownership
+p8.set(v16.get());
+v17.set((ets::ir::view(*(p0.get())).get()).f6.get());
+if(v17.get())goto b7;else goto b8;
 b5:
 goto b6;
 b6:
-v39.set(std::string("(",1));
-v40.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v41.set(ir_f492((*(v40.get())),v39.take()));
-// end lease 4; statically verified, no runtime ownership
-if(v41.get())goto b14;else goto b15;
-b7:
-v18.set(std::string(".",1));
-v19.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v20.set(ir_f492((*(v19.get())),v18.take()));
+v23.set(std::string("typeof",6));
+v24.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v25.set(ir_f492((*(v24.get())),v23.take()));
 // end lease 5; statically verified, no runtime ownership
-if(v20.get())goto b8;else goto b10;
-b8:
-v21.set(p4.get());
-v22.set(std::string(".",1));
-v23.set((v21.get() + v22.get()));
-v24.set(std::string("default",7));
-v25.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v26.set(ir_f491((*(v25.get())),v24.take()));
+if(v25.get())goto b10;else goto b11;
+b7:
+v18.set(false);
+(ets::ir::view(*(p0.get())).get()).f6.set(v18.take());
+v19.set(p4.get());
+v20.set(std::string("'const' en un tipo requiere '&' (constRef) o '*' (constPtr)",59));
+v21.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+ir_f481((*(v21.get())),v19.take(),v20.take());
 // end lease 6; statically verified, no runtime ownership
-if(v26.get())goto b11;else goto b12;
-b9:
-goto b7;
-b10:
-v36.set(p4.get());
-v37.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v38.set(ir_f976((*(v37.get())),v36.take()));
-// end lease 7; statically verified, no runtime ownership
-return v38.get();
-b11:
-v27.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v28.set(ir_f494((*(v27.get()))));
-// end lease 8; statically verified, no runtime ownership
-p12.set(v28.get());
-v29.set((p12.get()).f1.get());
-p10.set(v29.take());
-goto b13;
-b12:
-v30.set(std::string("identifier",10));
-v31.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v32.set(ir_f601((*(v31.get())),v30.take()));
-// end lease 9; statically verified, no runtime ownership
-p15.set(v32.get());
-v33.set((p15.get()).f1.get());
-p10.set(v33.take());
-goto b13;
-b13:
-v34.set(p10.get());
-v35.set((v23.get() + v34.get()));
-p4.set(v35.take());
 goto b9;
+b8:
+goto b9;
+b9:
+v22.set(p8.get());
+return v22.get();
+b10:
+v26.set(std::string("$typeof$",8));
+v27.set(std::string("identifier",10));
+v28.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v29.set(ir_f601((*(v28.get())),v27.take()));
+// end lease 7; statically verified, no runtime ownership
+p18.set(v29.get());
+v30.set((p18.get()).f1.get());
+v31.set((v26.get() + v30.get()));
+p16.set(v31.take());
+goto b13;
+b11:
+goto b12;
+b12:
+v53.set(std::string("(",1));
+v54.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v55.set(ir_f492((*(v54.get())),v53.take()));
+// end lease 8; statically verified, no runtime ownership
+if(v55.get())goto b20;else goto b21;
+b13:
+v32.set(std::string(".",1));
+v33.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v34.set(ir_f492((*(v33.get())),v32.take()));
+// end lease 9; statically verified, no runtime ownership
+if(v34.get())goto b14;else goto b16;
 b14:
-v42.set(std::string(")",1));
-v43.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v44.set(ir_f491((*(v43.get())),v42.take()));
+v35.set(p16.get());
+v36.set(std::string(".",1));
+v37.set((v35.get() + v36.get()));
+v38.set(std::string("default",7));
+v39.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v40.set(ir_f491((*(v39.get())),v38.take()));
 // end lease 10; statically verified, no runtime ownership
-v45.set((!v44.get()));
-if(v45.get())goto b17;else goto b18;
+if(v40.get())goto b17;else goto b18;
 b15:
-goto b16;
+goto b13;
 b16:
-v109.set(std::string("[",1));
-v110.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v111.set(ir_f492((*(v110.get())),v109.take()));
+v50.set(p16.get());
+v51.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v52.set(ir_f976((*(v51.get())),v50.take()));
 // end lease 11; statically verified, no runtime ownership
-if(v111.get())goto b36;else goto b37;
+return v52.get();
 b17:
-v46.set(std::string("identifier",10));
-v47.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v48.set(ir_f491((*(v47.get())),v46.take()));
+v41.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v42.set(ir_f494((*(v41.get()))));
 // end lease 12; statically verified, no runtime ownership
-if(v48.get())goto b20;else goto b21;
+p24.set(v42.get());
+v43.set((p24.get()).f1.get());
+p22.set(v43.take());
+goto b19;
 b18:
-p20.set(v45.get());
+v44.set(std::string("identifier",10));
+v45.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v46.set(ir_f601((*(v45.get())),v44.take()));
+// end lease 13; statically verified, no runtime ownership
+p27.set(v46.get());
+v47.set((p27.get()).f1.get());
+p22.set(v47.take());
 goto b19;
 b19:
-v57.set(p20.get());
-if(v57.get())goto b23;else goto b24;
+v48.set(p22.get());
+v49.set((v37.get() + v48.get()));
+p16.set(v49.take());
+goto b15;
 b20:
-v49.set(static_cast<double>(1.0));
-v50.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v51.set(ir_f483((*(v50.get())),v49.take()));
-// end lease 13; statically verified, no runtime ownership
-p24.set(v51.get());
-v52.set((p24.get()).f0.get());
-v53.set(std::string(":",1));
-v54.set((v52.get() == v53.get()));
-p22.set(v54.take());
-goto b22;
+v56.set(std::string(")",1));
+v57.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v58.set(ir_f491((*(v57.get())),v56.take()));
+// end lease 14; statically verified, no runtime ownership
+v59.set((!v58.get()));
+if(v59.get())goto b23;else goto b24;
 b21:
-p22.set(v48.get());
 goto b22;
 b22:
-v55.set(p22.get());
-v56.set((!v55.get()));
-p20.set(v56.take());
-goto b19;
-b23:
-v58.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v59.set(ir_f769((*(v58.get()))));
-// end lease 14; statically verified, no runtime ownership
-p26.set(v59.get());
-v60.set(std::string(")",1));
-v61.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v62.set(ir_f601((*(v61.get())),v60.take()));
+v123.set(std::string("[",1));
+v124.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v125.set(ir_f492((*(v124.get())),v123.take()));
 // end lease 15; statically verified, no runtime ownership
-v63.set(std::string("(",1));
-v64.set(p26.get());
-v65.set((v63.get() + v64.get()));
-v66.set(std::string(")",1));
-v67.set((v65.get() + v66.get()));
-v68.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v69.set(ir_f976((*(v68.get())),v67.take()));
+if(v125.get())goto b42;else goto b43;
+b23:
+v60.set(std::string("identifier",10));
+v61.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v62.set(ir_f491((*(v61.get())),v60.take()));
 // end lease 16; statically verified, no runtime ownership
-return v69.get();
+if(v62.get())goto b26;else goto b27;
 b24:
+p32.set(v59.get());
 goto b25;
 b25:
-v70.set(([&](){std::vector<std::string> out;return out;}()));
-p30.set(v70.take());
-goto b26;
+v71.set(p32.get());
+if(v71.get())goto b29;else goto b30;
 b26:
-v71.set(std::string(")",1));
-v72.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v73.set(ir_f491((*(v72.get())),v71.take()));
+v63.set(static_cast<double>(1.0));
+v64.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v65.set(ir_f483((*(v64.get())),v63.take()));
 // end lease 17; statically verified, no runtime ownership
-v74.set((!v73.get()));
-if(v74.get())goto b30;else goto b31;
+p36.set(v65.get());
+v66.set((p36.get()).f0.get());
+v67.set(std::string(":",1));
+v68.set((v66.get() == v67.get()));
+p34.set(v68.take());
+goto b28;
 b27:
-v80.set(std::string("identifier",10));
-v81.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v82.set(ir_f601((*(v81.get())),v80.take()));
-// end lease 18; statically verified, no runtime ownership
-v83.set(std::string(":",1));
-v84.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v85.set(ir_f601((*(v84.get())),v83.take()));
-// end lease 19; statically verified, no runtime ownership
-v86.set(std::addressof(p30.get()));
-v87.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v88.set(ir_f769((*(v87.get()))));
-// end lease 21; statically verified, no runtime ownership
-ets_push_vec<std::string>((*(v86.get())),v88.get());
-// end lease 20; statically verified, no runtime ownership
-v89.set(std::string(",",1));
-v90.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v91.set(ir_f492((*(v90.get())),v89.take()));
-// end lease 22; statically verified, no runtime ownership
-v92.set((!v91.get()));
-if(v92.get())goto b33;else goto b34;
+p34.set(v62.get());
+goto b28;
 b28:
-goto b26;
+v69.set(p34.get());
+v70.set((!v69.get()));
+p32.set(v70.take());
+goto b25;
 b29:
-v93.set(std::string(")",1));
-v94.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v95.set(ir_f601((*(v94.get())),v93.take()));
-// end lease 23; statically verified, no runtime ownership
-v96.set(std::string("=>",2));
-v97.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v98.set(ir_f601((*(v97.get())),v96.take()));
-// end lease 24; statically verified, no runtime ownership
-v99.set(std::string("(",1));
-v100.set(std::addressof(p30.get()));
-v101.set(std::string(",",1));
-v102.set(ets_join_vec((*(v100.get())),v101.get()));
-// end lease 25; statically verified, no runtime ownership
-v103.set((v99.get() + v102.get()));
-v104.set(std::string(")=>",3));
-v105.set((v103.get() + v104.get()));
-v106.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v107.set(ir_f769((*(v106.get()))));
-// end lease 26; statically verified, no runtime ownership
-v108.set((v105.get() + v107.get()));
-return v108.get();
+v72.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v73.set(ir_f769((*(v72.get()))));
+// end lease 18; statically verified, no runtime ownership
+p38.set(v73.get());
+v74.set(std::string(")",1));
+v75.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v76.set(ir_f601((*(v75.get())),v74.take()));
+// end lease 19; statically verified, no runtime ownership
+v77.set(std::string("(",1));
+v78.set(p38.get());
+v79.set((v77.get() + v78.get()));
+v80.set(std::string(")",1));
+v81.set((v79.get() + v80.get()));
+v82.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v83.set(ir_f976((*(v82.get())),v81.take()));
+// end lease 20; statically verified, no runtime ownership
+return v83.get();
 b30:
-v75.set(std::string("eof",3));
-v76.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v77.set(ir_f491((*(v76.get())),v75.take()));
-// end lease 27; statically verified, no runtime ownership
-v78.set((!v77.get()));
-p32.set(v78.take());
-goto b32;
+goto b31;
 b31:
-p32.set(v74.get());
+v84.set(([&](){std::vector<std::string> out;return out;}()));
+p42.set(v84.take());
 goto b32;
 b32:
-v79.set(p32.get());
-if(v79.get())goto b27;else goto b29;
+v85.set(std::string(")",1));
+v86.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v87.set(ir_f491((*(v86.get())),v85.take()));
+// end lease 21; statically verified, no runtime ownership
+v88.set((!v87.get()));
+if(v88.get())goto b36;else goto b37;
 b33:
-goto b29;
+v94.set(std::string("identifier",10));
+v95.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v96.set(ir_f601((*(v95.get())),v94.take()));
+// end lease 22; statically verified, no runtime ownership
+v97.set(std::string(":",1));
+v98.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v99.set(ir_f601((*(v98.get())),v97.take()));
+// end lease 23; statically verified, no runtime ownership
+v100.set(std::addressof(p42.get()));
+v101.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v102.set(ir_f769((*(v101.get()))));
+// end lease 25; statically verified, no runtime ownership
+ets_push_vec<std::string>((*(v100.get())),v102.get());
+// end lease 24; statically verified, no runtime ownership
+v103.set(std::string(",",1));
+v104.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v105.set(ir_f492((*(v104.get())),v103.take()));
+// end lease 26; statically verified, no runtime ownership
+v106.set((!v105.get()));
+if(v106.get())goto b39;else goto b40;
 b34:
-goto b35;
+goto b32;
 b35:
-goto b28;
+v107.set(std::string(")",1));
+v108.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v109.set(ir_f601((*(v108.get())),v107.take()));
+// end lease 27; statically verified, no runtime ownership
+v110.set(std::string("=>",2));
+v111.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v112.set(ir_f601((*(v111.get())),v110.take()));
+// end lease 28; statically verified, no runtime ownership
+v113.set(std::string("(",1));
+v114.set(std::addressof(p42.get()));
+v115.set(std::string(",",1));
+v116.set(ets_join_vec((*(v114.get())),v115.get()));
+// end lease 29; statically verified, no runtime ownership
+v117.set((v113.get() + v116.get()));
+v118.set(std::string(")=>",3));
+v119.set((v117.get() + v118.get()));
+v120.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v121.set(ir_f769((*(v120.get()))));
+// end lease 30; statically verified, no runtime ownership
+v122.set((v119.get() + v121.get()));
+return v122.get();
 b36:
-v112.set(([&](){std::vector<std::string> out;return out;}()));
-p42.set(v112.take());
-goto b39;
+v89.set(std::string("eof",3));
+v90.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v91.set(ir_f491((*(v90.get())),v89.take()));
+// end lease 31; statically verified, no runtime ownership
+v92.set((!v91.get()));
+p44.set(v92.take());
+goto b38;
 b37:
+p44.set(v88.get());
 goto b38;
 b38:
-v141.set(std::string("",0));
-p50.set(v141.take());
-v142.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v143.set(ir_f977((*(v142.get()))));
-// end lease 28; statically verified, no runtime ownership
-p51.set(v143.get());
-v144.set(p51.get());
-v145.set(std::string("",0));
-v146.set((v144.get() != v145.get()));
-if(v146.get())goto b49;else goto b50;
+v93.set(p44.get());
+if(v93.get())goto b33;else goto b35;
 b39:
-v113.set(std::string("]",1));
-v114.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v115.set(ir_f491((*(v114.get())),v113.take()));
-// end lease 29; statically verified, no runtime ownership
-v116.set((!v115.get()));
-if(v116.get())goto b43;else goto b44;
+goto b35;
 b40:
-v122.set(std::addressof(p42.get()));
-v123.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v124.set(ir_f769((*(v123.get()))));
-// end lease 31; statically verified, no runtime ownership
-ets_push_vec<std::string>((*(v122.get())),v124.get());
-// end lease 30; statically verified, no runtime ownership
-v125.set(std::string(",",1));
-v126.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v127.set(ir_f492((*(v126.get())),v125.take()));
-// end lease 32; statically verified, no runtime ownership
-v128.set((!v127.get()));
-if(v128.get())goto b46;else goto b47;
-b41:
-goto b39;
-b42:
-v129.set(std::string("]",1));
-v130.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v131.set(ir_f601((*(v130.get())),v129.take()));
-// end lease 33; statically verified, no runtime ownership
-v132.set(std::string("[",1));
-v133.set(std::addressof(p42.get()));
-v134.set(std::string(",",1));
-v135.set(ets_join_vec((*(v133.get())),v134.get()));
-// end lease 34; statically verified, no runtime ownership
-v136.set((v132.get() + v135.get()));
-v137.set(std::string("]",1));
-v138.set((v136.get() + v137.get()));
-v139.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v140.set(ir_f976((*(v139.get())),v138.take()));
-// end lease 35; statically verified, no runtime ownership
-return v140.get();
-b43:
-v117.set(std::string("eof",3));
-v118.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v119.set(ir_f491((*(v118.get())),v117.take()));
-// end lease 36; statically verified, no runtime ownership
-v120.set((!v119.get()));
-p44.set(v120.take());
-goto b45;
-b44:
-p44.set(v116.get());
-goto b45;
-b45:
-v121.set(p44.get());
-if(v121.get())goto b40;else goto b42;
-b46:
-goto b42;
-b47:
-goto b48;
-b48:
 goto b41;
-b49:
-v147.set(p51.get());
-v148.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v149.set(ir_f976((*(v148.get())),v147.take()));
+b41:
+goto b34;
+b42:
+v126.set(([&](){std::vector<std::string> out;return out;}()));
+p54.set(v126.take());
+goto b45;
+b43:
+goto b44;
+b44:
+v155.set(std::string("",0));
+p62.set(v155.take());
+v156.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v157.set(ir_f977((*(v156.get()))));
+// end lease 32; statically verified, no runtime ownership
+p63.set(v157.get());
+v158.set(p63.get());
+v159.set(std::string("",0));
+v160.set((v158.get() != v159.get()));
+if(v160.get())goto b55;else goto b56;
+b45:
+v127.set(std::string("]",1));
+v128.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v129.set(ir_f491((*(v128.get())),v127.take()));
+// end lease 33; statically verified, no runtime ownership
+v130.set((!v129.get()));
+if(v130.get())goto b49;else goto b50;
+b46:
+v136.set(std::addressof(p54.get()));
+v137.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v138.set(ir_f769((*(v137.get()))));
+// end lease 35; statically verified, no runtime ownership
+ets_push_vec<std::string>((*(v136.get())),v138.get());
+// end lease 34; statically verified, no runtime ownership
+v139.set(std::string(",",1));
+v140.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v141.set(ir_f492((*(v140.get())),v139.take()));
+// end lease 36; statically verified, no runtime ownership
+v142.set((!v141.get()));
+if(v142.get())goto b52;else goto b53;
+b47:
+goto b45;
+b48:
+v143.set(std::string("]",1));
+v144.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v145.set(ir_f601((*(v144.get())),v143.take()));
 // end lease 37; statically verified, no runtime ownership
-return v149.get();
+v146.set(std::string("[",1));
+v147.set(std::addressof(p54.get()));
+v148.set(std::string(",",1));
+v149.set(ets_join_vec((*(v147.get())),v148.get()));
+// end lease 38; statically verified, no runtime ownership
+v150.set((v146.get() + v149.get()));
+v151.set(std::string("]",1));
+v152.set((v150.get() + v151.get()));
+v153.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v154.set(ir_f976((*(v153.get())),v152.take()));
+// end lease 39; statically verified, no runtime ownership
+return v154.get();
+b49:
+v131.set(std::string("eof",3));
+v132.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v133.set(ir_f491((*(v132.get())),v131.take()));
+// end lease 40; statically verified, no runtime ownership
+v134.set((!v133.get()));
+p56.set(v134.take());
+goto b51;
 b50:
+p56.set(v130.get());
 goto b51;
 b51:
-v150.set(std::string("identifier",10));
-v151.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v152.set(ir_f491((*(v151.get())),v150.take()));
-// end lease 38; statically verified, no runtime ownership
-if(v152.get())goto b52;else goto b53;
+v135.set(p56.get());
+if(v135.get())goto b46;else goto b48;
 b52:
-p55.set(v152.get());
-goto b54;
+goto b48;
 b53:
-v153.set(std::string("type",4));
-v154.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v155.set(ir_f491((*(v154.get())),v153.take()));
-// end lease 39; statically verified, no runtime ownership
-p55.set(v155.get());
 goto b54;
 b54:
-v156.set(p55.get());
-if(v156.get())goto b55;else goto b56;
+goto b47;
 b55:
-v157.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v158.set(ir_f494((*(v157.get()))));
-// end lease 40; statically verified, no runtime ownership
-p58.set(v158.get());
-v159.set((p58.get()).f1.get());
-p50.set(v159.take());
-goto b57;
-b56:
-v160.set(std::string("Se esperaba un tipo",19));
-v161.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f479((*(v161.get())),v160.take());
+v161.set(p63.get());
+v162.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v163.set(ir_f976((*(v162.get())),v161.take()));
 // end lease 41; statically verified, no runtime ownership
-v162.set(std::string("eof",3));
-v163.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v164.set(ir_f491((*(v163.get())),v162.take()));
-// end lease 42; statically verified, no runtime ownership
-v165.set((!v164.get()));
-if(v165.get())goto b58;else goto b59;
+return v163.get();
+b56:
+goto b57;
 b57:
-goto b61;
+v164.set(std::string("identifier",10));
+v165.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v166.set(ir_f491((*(v165.get())),v164.take()));
+// end lease 42; statically verified, no runtime ownership
+if(v166.get())goto b58;else goto b59;
 b58:
-v166.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v167.set(ir_f494((*(v166.get()))));
-// end lease 43; statically verified, no runtime ownership
+p67.set(v166.get());
 goto b60;
 b59:
+v167.set(std::string("type",4));
+v168.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v169.set(ir_f491((*(v168.get())),v167.take()));
+// end lease 43; statically verified, no runtime ownership
+p67.set(v169.get());
 goto b60;
 b60:
-v168.set(std::string("<error>",7));
-return v168.get();
+v170.set(p67.get());
+if(v170.get())goto b61;else goto b62;
 b61:
-v169.set(std::string(".",1));
-v170.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v171.set(ir_f492((*(v170.get())),v169.take()));
+v171.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v172.set(ir_f494((*(v171.get()))));
 // end lease 44; statically verified, no runtime ownership
-if(v171.get())goto b62;else goto b64;
-b62:
-v172.set(std::string("default",7));
-v173.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v174.set(ir_f491((*(v173.get())),v172.take()));
-// end lease 45; statically verified, no runtime ownership
-if(v174.get())goto b65;else goto b66;
-b63:
-goto b61;
-b64:
-v190.set(std::string("<",1));
-v191.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v192.set(ir_f492((*(v191.get())),v190.take()));
-// end lease 46; statically verified, no runtime ownership
-if(v192.get())goto b68;else goto b69;
-b65:
-v175.set(p50.get());
-v176.set(std::string(".",1));
-v177.set((v175.get() + v176.get()));
-v178.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v179.set(ir_f494((*(v178.get()))));
-// end lease 47; statically verified, no runtime ownership
-p66.set(v179.get());
-v180.set((p66.get()).f1.get());
-v181.set((v177.get() + v180.get()));
-p50.set(v181.take());
-goto b67;
-b66:
-v182.set(p50.get());
-v183.set(std::string(".",1));
-v184.set((v182.get() + v183.get()));
-v185.set(std::string("identifier",10));
-v186.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v187.set(ir_f601((*(v186.get())),v185.take()));
-// end lease 48; statically verified, no runtime ownership
-p69.set(v187.get());
-v188.set((p69.get()).f1.get());
-v189.set((v184.get() + v188.get()));
-p50.set(v189.take());
-goto b67;
-b67:
+p70.set(v172.get());
+v173.set((p70.get()).f1.get());
+p62.set(v173.take());
 goto b63;
+b62:
+v174.set(std::string("Se esperaba un tipo",19));
+v175.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+ir_f479((*(v175.get())),v174.take());
+// end lease 45; statically verified, no runtime ownership
+v176.set(std::string("eof",3));
+v177.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v178.set(ir_f491((*(v177.get())),v176.take()));
+// end lease 46; statically verified, no runtime ownership
+v179.set((!v178.get()));
+if(v179.get())goto b64;else goto b65;
+b63:
+goto b67;
+b64:
+v180.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v181.set(ir_f494((*(v180.get()))));
+// end lease 47; statically verified, no runtime ownership
+goto b66;
+b65:
+goto b66;
+b66:
+v182.set(std::string("<error>",7));
+return v182.get();
+b67:
+v183.set(std::string(".",1));
+v184.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v185.set(ir_f492((*(v184.get())),v183.take()));
+// end lease 48; statically verified, no runtime ownership
+if(v185.get())goto b68;else goto b70;
 b68:
-v193.set(([&](){std::vector<std::string> out;return out;}()));
-p72.set(v193.take());
-goto b71;
-b69:
-goto b70;
-b70:
-v234.set(p50.get());
-v235.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v236.set(ir_f976((*(v235.get())),v234.take()));
+v186.set(std::string("default",7));
+v187.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v188.set(ir_f491((*(v187.get())),v186.take()));
 // end lease 49; statically verified, no runtime ownership
-return v236.get();
-b71:
-v194.set(std::string(">",1));
-v195.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v196.set(ir_f491((*(v195.get())),v194.take()));
+if(v188.get())goto b71;else goto b72;
+b69:
+goto b67;
+b70:
+v204.set(std::string("<",1));
+v205.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v206.set(ir_f492((*(v205.get())),v204.take()));
 // end lease 50; statically verified, no runtime ownership
-v197.set((!v196.get()));
-if(v197.get())goto b75;else goto b76;
-b72:
-v203.set(std::addressof(p72.get()));
-v204.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v205.set(ir_f769((*(v204.get()))));
-// end lease 52; statically verified, no runtime ownership
-ets_push_vec<std::string>((*(v203.get())),v205.get());
+if(v206.get())goto b74;else goto b75;
+b71:
+v189.set(p62.get());
+v190.set(std::string(".",1));
+v191.set((v189.get() + v190.get()));
+v192.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v193.set(ir_f494((*(v192.get()))));
 // end lease 51; statically verified, no runtime ownership
-v206.set(std::string(",",1));
-v207.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v208.set(ir_f492((*(v207.get())),v206.take()));
-// end lease 53; statically verified, no runtime ownership
-v209.set((!v208.get()));
-if(v209.get())goto b78;else goto b79;
-b73:
-goto b71;
-b74:
-v210.set(std::string(">",1));
-v211.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v212.set(ir_f601((*(v211.get())),v210.take()));
-// end lease 54; statically verified, no runtime ownership
-v213.set(p50.get());
-v214.set(std::string("Array",5));
-v215.set((v213.get() == v214.get()));
-if(v215.get())goto b81;else goto b82;
-b75:
-v198.set(std::string("eof",3));
-v199.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v200.set(ir_f491((*(v199.get())),v198.take()));
-// end lease 55; statically verified, no runtime ownership
-v201.set((!v200.get()));
-p74.set(v201.take());
-goto b77;
-b76:
-p74.set(v197.get());
-goto b77;
-b77:
-v202.set(p74.get());
-if(v202.get())goto b72;else goto b74;
-b78:
-goto b74;
-b79:
-goto b80;
-b80:
+p78.set(v193.get());
+v194.set((p78.get()).f1.get());
+v195.set((v191.get() + v194.get()));
+p62.set(v195.take());
 goto b73;
+b72:
+v196.set(p62.get());
+v197.set(std::string(".",1));
+v198.set((v196.get() + v197.get()));
+v199.set(std::string("identifier",10));
+v200.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v201.set(ir_f601((*(v200.get())),v199.take()));
+// end lease 52; statically verified, no runtime ownership
+p81.set(v201.get());
+v202.set((p81.get()).f1.get());
+v203.set((v198.get() + v202.get()));
+p62.set(v203.take());
+goto b73;
+b73:
+goto b69;
+b74:
+v207.set(([&](){std::vector<std::string> out;return out;}()));
+p84.set(v207.take());
+goto b77;
+b75:
+goto b76;
+b76:
+v248.set(p62.get());
+v249.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v250.set(ir_f976((*(v249.get())),v248.take()));
+// end lease 53; statically verified, no runtime ownership
+return v250.get();
+b77:
+v208.set(std::string(">",1));
+v209.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v210.set(ir_f491((*(v209.get())),v208.take()));
+// end lease 54; statically verified, no runtime ownership
+v211.set((!v210.get()));
+if(v211.get())goto b81;else goto b82;
+b78:
+v217.set(std::addressof(p84.get()));
+v218.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v219.set(ir_f769((*(v218.get()))));
+// end lease 56; statically verified, no runtime ownership
+ets_push_vec<std::string>((*(v217.get())),v219.get());
+// end lease 55; statically verified, no runtime ownership
+v220.set(std::string(",",1));
+v221.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v222.set(ir_f492((*(v221.get())),v220.take()));
+// end lease 57; statically verified, no runtime ownership
+v223.set((!v222.get()));
+if(v223.get())goto b84;else goto b85;
+b79:
+goto b77;
+b80:
+v224.set(std::string(">",1));
+v225.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v226.set(ir_f601((*(v225.get())),v224.take()));
+// end lease 58; statically verified, no runtime ownership
+v227.set(p62.get());
+v228.set(std::string("Array",5));
+v229.set((v227.get() == v228.get()));
+if(v229.get())goto b87;else goto b88;
 b81:
-v217.set(static_cast<double>((p72.get()).size()));
-v218.set(static_cast<double>(1.0));
-v219.set((v217.get() == v218.get()));
-p79.set(v219.take());
+v212.set(std::string("eof",3));
+v213.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v214.set(ir_f491((*(v213.get())),v212.take()));
+// end lease 59; statically verified, no runtime ownership
+v215.set((!v214.get()));
+p86.set(v215.take());
 goto b83;
 b82:
-p79.set(v215.get());
+p86.set(v211.get());
 goto b83;
 b83:
-v220.set(p79.get());
-if(v220.get())goto b84;else goto b85;
+v216.set(p86.get());
+if(v216.get())goto b78;else goto b80;
 b84:
-v221.set(static_cast<double>(0.0));
-v222.set(ets::ir::view((p72.get()).at(static_cast<std::size_t>(v221.get()))).get());
-v223.set(std::string("[]",2));
-v224.set((v222.get() + v223.get()));
-p50.set(v224.take());
-goto b86;
+goto b80;
 b85:
-v225.set(p50.get());
-v226.set(std::string("<",1));
-v227.set((v225.get() + v226.get()));
-v228.set(std::addressof(p72.get()));
-v229.set(std::string(",",1));
-v230.set(ets_join_vec((*(v228.get())),v229.get()));
-// end lease 56; statically verified, no runtime ownership
-v231.set((v227.get() + v230.get()));
-v232.set(std::string(">",1));
-v233.set((v231.get() + v232.get()));
-p50.set(v233.take());
 goto b86;
 b86:
-goto b70;
+goto b79;
+b87:
+v231.set(static_cast<double>((p84.get()).size()));
+v232.set(static_cast<double>(1.0));
+v233.set((v231.get() == v232.get()));
+p91.set(v233.take());
+goto b89;
+b88:
+p91.set(v229.get());
+goto b89;
+b89:
+v234.set(p91.get());
+if(v234.get())goto b90;else goto b91;
+b90:
+v235.set(static_cast<double>(0.0));
+v236.set(ets::ir::view((p84.get()).at(static_cast<std::size_t>(v235.get()))).get());
+v237.set(std::string("[]",2));
+v238.set((v236.get() + v237.get()));
+p62.set(v238.take());
+goto b92;
+b91:
+v239.set(p62.get());
+v240.set(std::string("<",1));
+v241.set((v239.get() + v240.get()));
+v242.set(std::addressof(p84.get()));
+v243.set(std::string(",",1));
+v244.set(ets_join_vec((*(v242.get())),v243.get()));
+// end lease 60; statically verified, no runtime ownership
+v245.set((v241.get() + v244.get()));
+v246.set(std::string(">",1));
+v247.set((v245.get() + v246.get()));
+p62.set(v247.take());
+goto b92;
+b92:
+goto b76;
 }
 double ir_f899(ir_t176& a0,ir_t80 a1,double a2,double a3) {
 ets::ir::Slot<ir_t176*> p0;
@@ -259038,6 +259242,13 @@ ets::ir::Slot<std::string> p2;
 ets::ir::Slot<std::string> p4;
 ets::ir::Slot<bool> p7;
 ets::ir::Slot<ir_t12> p10;
+ets::ir::Slot<bool> p15;
+ets::ir::Slot<bool> p17;
+ets::ir::Slot<ir_t12> p20;
+ets::ir::Slot<bool> p22;
+ets::ir::Slot<ir_t12> p24;
+ets::ir::Slot<std::string> p30;
+ets::ir::Slot<std::string> p31;
 ets::ir::Slot<std::string> v0;
 ets::ir::Slot<std::string> v1;
 ets::ir::Slot<ir_t138*> v2;
@@ -259070,24 +259281,61 @@ ets::ir::Slot<std::string> v28;
 ets::ir::Slot<std::string> v29;
 ets::ir::Slot<std::string> v30;
 ets::ir::Slot<std::string> v31;
-ets::ir::Slot<ir_t138*> v32;
+ets::ir::Slot<const ir_t138*> v32;
 ets::ir::Slot<bool> v33;
 ets::ir::Slot<std::string> v34;
-ets::ir::Slot<std::string> v35;
-ets::ir::Slot<std::string> v36;
-ets::ir::Slot<ir_t138*> v37;
-ets::ir::Slot<std::string> v38;
-ets::ir::Slot<std::string> v39;
-ets::ir::Slot<std::string> v40;
-ets::ir::Slot<ir_t138*> v41;
-ets::ir::Slot<bool> v42;
-ets::ir::Slot<std::string> v43;
-ets::ir::Slot<std::string> v44;
-ets::ir::Slot<std::string> v45;
-ets::ir::Slot<ir_t138*> v46;
+ets::ir::Slot<const ir_t138*> v35;
+ets::ir::Slot<bool> v36;
+ets::ir::Slot<bool> v37;
+ets::ir::Slot<double> v38;
+ets::ir::Slot<const ir_t138*> v39;
+ets::ir::Slot<ir_t12> v40;
+ets::ir::Slot<std::string> v41;
+ets::ir::Slot<const ir_t138*> v42;
+ets::ir::Slot<bool> v43;
+ets::ir::Slot<bool> v44;
+ets::ir::Slot<ir_t138*> v45;
+ets::ir::Slot<ir_t12> v46;
 ets::ir::Slot<std::string> v47;
 ets::ir::Slot<std::string> v48;
-ets::ir::Slot<std::string> v49;
+ets::ir::Slot<bool> v49;
+ets::ir::Slot<bool> v50;
+ets::ir::Slot<bool> v51;
+ets::ir::Slot<bool> v52;
+ets::ir::Slot<std::string> v53;
+ets::ir::Slot<std::string> v54;
+ets::ir::Slot<std::string> v55;
+ets::ir::Slot<std::string> v56;
+ets::ir::Slot<std::string> v57;
+ets::ir::Slot<std::string> v58;
+ets::ir::Slot<std::string> v59;
+ets::ir::Slot<bool> v60;
+ets::ir::Slot<std::string> v61;
+ets::ir::Slot<std::string> v62;
+ets::ir::Slot<std::string> v63;
+ets::ir::Slot<std::string> v64;
+ets::ir::Slot<std::string> v65;
+ets::ir::Slot<std::string> v66;
+ets::ir::Slot<std::string> v67;
+ets::ir::Slot<std::string> v68;
+ets::ir::Slot<ir_t138*> v69;
+ets::ir::Slot<bool> v70;
+ets::ir::Slot<std::string> v71;
+ets::ir::Slot<std::string> v72;
+ets::ir::Slot<std::string> v73;
+ets::ir::Slot<ir_t138*> v74;
+ets::ir::Slot<std::string> v75;
+ets::ir::Slot<std::string> v76;
+ets::ir::Slot<std::string> v77;
+ets::ir::Slot<ir_t138*> v78;
+ets::ir::Slot<bool> v79;
+ets::ir::Slot<std::string> v80;
+ets::ir::Slot<std::string> v81;
+ets::ir::Slot<std::string> v82;
+ets::ir::Slot<ir_t138*> v83;
+ets::ir::Slot<std::string> v84;
+ets::ir::Slot<std::string> v85;
+ets::ir::Slot<std::string> v86;
 p0.set(std::addressof(a0));
 p1.set(std::move(a1));
 goto b0;
@@ -259166,46 +259414,140 @@ goto b13;
 b13:
 goto b7;
 b14:
-v31.set(std::string("|",1));
+v31.set(std::string("&",1));
 v32.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v33.set(ir_f492((*(v32.get())),v31.take()));
+v33.set(ir_f491((*(v32.get())),v31.take()));
 // end lease 7; statically verified, no runtime ownership
-if(v33.get())goto b15;else goto b17;
+if(v33.get())goto b18;else goto b19;
 b15:
-v34.set(p2.get());
-v35.set(std::string(" | ",3));
-v36.set((v34.get() + v35.get()));
-v37.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v38.set(ir_f769((*(v37.get()))));
+v45.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v46.set(ir_f494((*(v45.get()))));
 // end lease 8; statically verified, no runtime ownership
-v39.set((v36.get() + v38.get()));
-p2.set(v39.take());
-goto b16;
+p24.set(v46.get());
+v47.set((p24.get()).f0.get());
+v48.set(std::string("*",1));
+v49.set((v47.get() == v48.get()));
+p22.set(v49.take());
+v50.set((ets::ir::view(*(p0.get())).get()).f6.get());
+if(v50.get())goto b24;else goto b25;
 b16:
 goto b14;
 b17:
-goto b18;
+goto b33;
 b18:
-v40.set(std::string("&",1));
-v41.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v42.set(ir_f492((*(v41.get())),v40.take()));
-// end lease 9; statically verified, no runtime ownership
-if(v42.get())goto b19;else goto b21;
+p15.set(v33.get());
+goto b20;
 b19:
-v43.set(p2.get());
-v44.set(std::string(" & ",3));
-v45.set((v43.get() + v44.get()));
-v46.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v47.set(ir_f769((*(v46.get()))));
-// end lease 10; statically verified, no runtime ownership
-v48.set((v45.get() + v47.get()));
-p2.set(v48.take());
+v34.set(std::string("*",1));
+v35.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v36.set(ir_f491((*(v35.get())),v34.take()));
+// end lease 9; statically verified, no runtime ownership
+p15.set(v36.get());
 goto b20;
 b20:
-goto b18;
+v37.set(p15.get());
+if(v37.get())goto b21;else goto b22;
 b21:
-v49.set(p2.get());
-return v49.get();
+v38.set(static_cast<double>(1.0));
+v39.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v40.set(ir_f483((*(v39.get())),v38.take()));
+// end lease 10; statically verified, no runtime ownership
+p20.set(v40.get());
+v41.set((p20.get()).f0.get());
+v42.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v43.set(ir_f1016((*(v42.get())),v41.take()));
+// end lease 11; statically verified, no runtime ownership
+p17.set(v43.get());
+goto b23;
+b22:
+p17.set(v37.get());
+goto b23;
+b23:
+v44.set(p17.get());
+if(v44.get())goto b15;else goto b17;
+b24:
+v51.set(false);
+(ets::ir::view(*(p0.get())).get()).f6.set(v51.take());
+v52.set(p22.get());
+if(v52.get())goto b27;else goto b28;
+b25:
+v60.set(p22.get());
+if(v60.get())goto b30;else goto b31;
+b26:
+goto b16;
+b27:
+v53.set(std::string("constPtr<",9));
+p30.set(v53.take());
+goto b29;
+b28:
+v54.set(std::string("constRef<",9));
+p30.set(v54.take());
+goto b29;
+b29:
+v55.set(p30.get());
+v56.set(p2.get());
+v57.set((v55.get() + v56.get()));
+v58.set(std::string(">",1));
+v59.set((v57.get() + v58.get()));
+p2.set(v59.take());
+goto b26;
+b30:
+v61.set(std::string("ptr<",4));
+p31.set(v61.take());
+goto b32;
+b31:
+v62.set(std::string("ref<",4));
+p31.set(v62.take());
+goto b32;
+b32:
+v63.set(p31.get());
+v64.set(p2.get());
+v65.set((v63.get() + v64.get()));
+v66.set(std::string(">",1));
+v67.set((v65.get() + v66.get()));
+p2.set(v67.take());
+goto b26;
+b33:
+v68.set(std::string("|",1));
+v69.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v70.set(ir_f492((*(v69.get())),v68.take()));
+// end lease 12; statically verified, no runtime ownership
+if(v70.get())goto b34;else goto b36;
+b34:
+v71.set(p2.get());
+v72.set(std::string(" | ",3));
+v73.set((v71.get() + v72.get()));
+v74.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v75.set(ir_f769((*(v74.get()))));
+// end lease 13; statically verified, no runtime ownership
+v76.set((v73.get() + v75.get()));
+p2.set(v76.take());
+goto b35;
+b35:
+goto b33;
+b36:
+goto b37;
+b37:
+v77.set(std::string("&",1));
+v78.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v79.set(ir_f492((*(v78.get())),v77.take()));
+// end lease 14; statically verified, no runtime ownership
+if(v79.get())goto b38;else goto b40;
+b38:
+v80.set(p2.get());
+v81.set(std::string(" & ",3));
+v82.set((v80.get() + v81.get()));
+v83.set(std::addressof(ets::ir::view(*(p0.get())).get()));
+v84.set(ir_f769((*(v83.get()))));
+// end lease 15; statically verified, no runtime ownership
+v85.set((v82.get() + v84.get()));
+p2.set(v85.take());
+goto b39;
+b39:
+goto b37;
+b40:
+v86.set(p2.get());
+return v86.get();
 }
 std::string ir_f977(ir_t138& a0) {
 ets::ir::Slot<ir_t138*> p0;
@@ -259699,7 +260041,7 @@ v55.set(p22.get());
 v56.set(static_cast<double>(35.0));
 v57.set(ir_f97(v55.take(),v56.take()));
 v58.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v59.set(ir_f1016((*(v58.get())),v54.take(),v57.take()));
+v59.set(ir_f1017((*(v58.get())),v54.take(),v57.take()));
 // end lease 4; statically verified, no runtime ownership
 v60.set(p1.get());
 v61.set((v59.get() == v60.get()));
@@ -259751,7 +260093,7 @@ v83.set(p22.get());
 v84.set(static_cast<double>(26.0));
 v85.set(ir_f97(v83.take(),v84.take()));
 v86.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v87.set(ir_f1016((*(v86.get())),v82.take(),v85.take()));
+v87.set(ir_f1017((*(v86.get())),v82.take(),v85.take()));
 // end lease 6; statically verified, no runtime ownership
 v88.set(p1.get());
 v89.set((v87.get() == v88.get()));
@@ -260444,7 +260786,7 @@ v135.set((p27.get()).f4.get());
 v136.set(p3.get());
 v137.set(p80.get());
 v138.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v139.set(ir_f1017((*(v138.get())),v134.take(),v135.take(),v136.take(),v137.take()));
+v139.set(ir_f1018((*(v138.get())),v134.take(),v135.take(),v136.take(),v137.take()));
 // end lease 10; statically verified, no runtime ownership
 p82.set(v139.get());
 v140.set(static_cast<double>(0.0));
@@ -260685,7 +261027,7 @@ v238.set(p124.get());
 v239.set(p3.get());
 v240.set(p80.get());
 v241.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v242.set(ir_f1017((*(v241.get())),v237.take(),v238.take(),v239.take(),v240.take()));
+v242.set(ir_f1018((*(v241.get())),v237.take(),v238.take(),v239.take(),v240.take()));
 // end lease 26; statically verified, no runtime ownership
 p138.set(v242.get());
 v243.set(p131.get());
@@ -262920,7 +263262,7 @@ v187.set(p48.get());
 v188.set(p76.get());
 v189.set(p87.get());
 v190.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f1018((*(v190.get())),v187.take(),v188.take(),v189.take());
+ir_f1019((*(v190.get())),v187.take(),v188.take(),v189.take());
 // end lease 18; statically verified, no runtime ownership
 goto b45;
 b66:
@@ -263322,7 +263664,7 @@ v414.set(p21.get());
 v415.set(p48.get());
 v416.set(p6.get());
 v417.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f1019((*(v417.get())),v413.take(),v414.take(),v415.take(),v416.take());
+ir_f1020((*(v417.get())),v413.take(),v414.take(),v415.take(),v416.take());
 // end lease 35; statically verified, no runtime ownership
 v418.set((ets::ir::view(*(p0.get())).get()).f17.get());
 p188.set(v418.take());
@@ -265503,7 +265845,7 @@ v79.set(p32.get());
 v80.set(p3.get());
 v81.set(p5.get());
 v82.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v83.set(ir_f1017((*(v82.get())),v78.take(),v79.take(),v80.take(),v81.take()));
+v83.set(ir_f1018((*(v82.get())),v78.take(),v79.take(),v80.take(),v81.take()));
 // end lease 7; statically verified, no runtime ownership
 p57.set(v83.get());
 v84.set(p39.get());
@@ -268094,7 +268436,7 @@ v19.set(p16.get());
 v20.set(p2.get());
 v21.set(p3.get());
 v22.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v23.set(ir_f1020((*(v22.get())),v18.take(),v19.take(),v20.take(),v21.take()));
+v23.set(ir_f1021((*(v22.get())),v18.take(),v19.take(),v20.take(),v21.take()));
 // end lease 3; statically verified, no runtime ownership
 p17.set(v23.get());
 v24.set(p17.get());
@@ -268111,7 +268453,7 @@ v29.set(p16.get());
 v30.set(p2.get());
 v31.set(p3.get());
 v32.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v33.set(ir_f1021((*(v32.get())),v28.take(),v29.take(),v30.take(),v31.take()));
+v33.set(ir_f1022((*(v32.get())),v28.take(),v29.take(),v30.take(),v31.take()));
 // end lease 4; statically verified, no runtime ownership
 v34.set(p17.get());
 v35.set(std::addressof(ets::ir::view(*(p4.get())).get()));
@@ -268135,7 +268477,7 @@ v41.set(p23.get());
 v42.set(p2.get());
 v43.set(p3.get());
 v44.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v45.set(ir_f1020((*(v44.get())),v40.take(),v41.take(),v42.take(),v43.take()));
+v45.set(ir_f1021((*(v44.get())),v40.take(),v41.take(),v42.take(),v43.take()));
 // end lease 7; statically verified, no runtime ownership
 p24.set(v45.get());
 v46.set(p24.get());
@@ -268152,7 +268494,7 @@ v51.set(p23.get());
 v52.set(p2.get());
 v53.set(p3.get());
 v54.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v55.set(ir_f1021((*(v54.get())),v50.take(),v51.take(),v52.take(),v53.take()));
+v55.set(ir_f1022((*(v54.get())),v50.take(),v51.take(),v52.take(),v53.take()));
 // end lease 8; statically verified, no runtime ownership
 v56.set(p24.get());
 v57.set(std::string("write",5));
@@ -268175,7 +268517,7 @@ v63.set(p29.get());
 v64.set(p2.get());
 v65.set(p3.get());
 v66.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v67.set(ir_f1020((*(v66.get())),v62.take(),v63.take(),v64.take(),v65.take()));
+v67.set(ir_f1021((*(v66.get())),v62.take(),v63.take(),v64.take(),v65.take()));
 // end lease 10; statically verified, no runtime ownership
 p30.set(v67.get());
 v68.set(p30.get());
@@ -268190,7 +268532,7 @@ v72.set(p29.get());
 v73.set(p2.get());
 v74.set(p3.get());
 v75.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v76.set(ir_f1021((*(v75.get())),v71.take(),v72.take(),v73.take(),v74.take()));
+v76.set(ir_f1022((*(v75.get())),v71.take(),v72.take(),v73.take(),v74.take()));
 // end lease 11; statically verified, no runtime ownership
 p32.set(v76.get());
 v77.set(p2.get());
@@ -269371,7 +269713,7 @@ v236.set(ir_f645((*(v235.get())),v233.take(),v234.take()));
 v237.set(ir_t196{});
 p187.set(v237.take());
 v238.set(std::addressof(p187.get()));
-ir_f1022((*(v238.get())),v230.take(),v231.take(),v232.take(),v236.take());
+ir_f1023((*(v238.get())),v230.take(),v231.take(),v232.take(),v236.take());
 // end lease 24; statically verified, no runtime ownership
 v239.set(p187.get());
 p185.set(v239.take());
@@ -269684,7 +270026,7 @@ v404.set(p269.get());
 v405.set(ir_t196{});
 p273.set(v405.take());
 v406.set(std::addressof(p273.get()));
-ir_f1022((*(v406.get())),v401.take(),v402.take(),v403.take(),v404.take());
+ir_f1023((*(v406.get())),v401.take(),v402.take(),v403.take(),v404.take());
 // end lease 43; statically verified, no runtime ownership
 v407.set(p273.get());
 ets_push_vec<ir_t196>((*(v400.get())),v407.get());
@@ -269734,7 +270076,7 @@ v428.set(ir_f641((*(v427.get())),v425.take(),v426.take()));
 v429.set(ir_f48(v428.take()));
 v430.set(p246.get());
 v431.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v432.set(ir_f1023((*(v431.get())),v430.take()));
+v432.set(ir_f1024((*(v431.get())),v430.take()));
 // end lease 47; statically verified, no runtime ownership
 v433.set(ir_t75{});
 p285.set(v433.take());
@@ -269953,7 +270295,7 @@ v539.set(std::addressof(ets::ir::view(*(p4.get())).get()));
 v540.set(std::addressof(p144.get()));
 v541.set(p348.get());
 v542.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f1024((*(v542.get())),(*(v539.get())),(*(v540.get())),v541.take());
+ir_f1025((*(v542.get())),(*(v539.get())),(*(v540.get())),v541.take());
 // end lease 69; statically verified, no runtime ownership
 // end lease 67; statically verified, no runtime ownership
 // end lease 68; statically verified, no runtime ownership
@@ -270523,7 +270865,7 @@ v30.set(static_cast<double>(((p5.get()).f7.get()).size()));
 v31.set(numberToString(v30.get()));
 v32.set((v28.get() + v31.get()));
 v33.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v34.set(ir_f1025((*(v33.get())),v21.take(),v32.take()));
+v34.set(ir_f1026((*(v33.get())),v21.take(),v32.take()));
 // end lease 1; statically verified, no runtime ownership
 return v34.get();
 b8:
@@ -270600,7 +270942,7 @@ b19:
 v67.set(p1.get());
 v68.set(std::string("constructor fields pending",26));
 v69.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v70.set(ir_f1025((*(v69.get())),v67.take(),v68.take()));
+v70.set(ir_f1026((*(v69.get())),v67.take(),v68.take()));
 // end lease 6; statically verified, no runtime ownership
 return v70.get();
 b20:
@@ -270677,7 +271019,7 @@ v100.set(std::string("parameter ",10));
 v101.set(p49.get());
 v102.set((v100.get() + v101.get()));
 v103.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v104.set(ir_f1025((*(v103.get())),v99.take(),v102.take()));
+v104.set(ir_f1026((*(v103.get())),v99.take(),v102.take()));
 // end lease 10; statically verified, no runtime ownership
 return v104.get();
 b35:
@@ -270704,7 +271046,7 @@ v117.set(std::string("result ",7));
 v118.set(p56.get());
 v119.set((v117.get() + v118.get()));
 v120.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v121.set(ir_f1025((*(v120.get())),v116.take(),v119.take()));
+v121.set(ir_f1026((*(v120.get())),v116.take(),v119.take()));
 // end lease 12; statically verified, no runtime ownership
 return v121.get();
 b41:
@@ -270731,7 +271073,7 @@ goto b45;
 b45:
 v150.set(p1.get());
 v151.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v152.set(ir_f1026((*(v151.get())),v150.take()));
+v152.set(ir_f1027((*(v151.get())),v150.take()));
 // end lease 14; statically verified, no runtime ownership
 if(v152.get())goto b58;else goto b59;
 b46:
@@ -270777,7 +271119,7 @@ v145.set(std::string("receiver ",9));
 v146.set(p68.get());
 v147.set((v145.get() + v146.get()));
 v148.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v149.set(ir_f1025((*(v148.get())),v144.take(),v147.take()));
+v149.set(ir_f1026((*(v148.get())),v144.take(),v147.take()));
 // end lease 17; statically verified, no runtime ownership
 return v149.get();
 b56:
@@ -270788,7 +271130,7 @@ b58:
 v153.set(p1.get());
 v154.set(std::string("defaults",8));
 v155.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v156.set(ir_f1025((*(v155.get())),v153.take(),v154.take()));
+v156.set(ir_f1026((*(v155.get())),v153.take(),v154.take()));
 // end lease 18; statically verified, no runtime ownership
 return v156.get();
 b59:
@@ -270822,7 +271164,7 @@ v167.set(p84.get());
 v168.set(p2.get());
 v169.set(p3.get());
 v170.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v171.set(ir_f1020((*(v170.get())),v166.take(),v167.take(),v168.take(),v169.take()));
+v171.set(ir_f1021((*(v170.get())),v166.take(),v167.take(),v168.take(),v169.take()));
 // end lease 19; statically verified, no runtime ownership
 p85.set(v171.get());
 v172.set(p85.get());
@@ -270900,7 +271242,7 @@ v197.set(std::string("root ",5));
 v198.set(p87.get());
 v199.set((v197.get() + v198.get()));
 v200.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v201.set(ir_f1025((*(v200.get())),v196.take(),v199.take()));
+v201.set(ir_f1026((*(v200.get())),v196.take(),v199.take()));
 // end lease 23; statically verified, no runtime ownership
 return v201.get();
 b83:
@@ -270918,7 +271260,7 @@ v206.set(p107.get());
 v207.set(p2.get());
 v208.set(p3.get());
 v209.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v210.set(ir_f1020((*(v209.get())),v205.take(),v206.take(),v207.take(),v208.take()));
+v210.set(ir_f1021((*(v209.get())),v205.take(),v206.take(),v207.take(),v208.take()));
 // end lease 24; statically verified, no runtime ownership
 p108.set(v210.get());
 v211.set(p108.get());
@@ -270945,7 +271287,7 @@ b91:
 v219.set(p1.get());
 v220.set(std::string("uninitialized write",19));
 v221.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v222.set(ir_f1025((*(v221.get())),v219.take(),v220.take()));
+v222.set(ir_f1026((*(v221.get())),v219.take(),v220.take()));
 // end lease 25; statically verified, no runtime ownership
 return v222.get();
 b92:
@@ -278400,7 +278742,7 @@ v48.set(p6.get());
 v49.set(p7.get());
 v50.set(p14.get());
 v51.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v52.set(ir_f1027((*(v51.get())),v46.take(),v47.take(),v48.take(),v49.take(),v50.take()));
+v52.set(ir_f1028((*(v51.get())),v46.take(),v47.take(),v48.take(),v49.take(),v50.take()));
 // end lease 4; statically verified, no runtime ownership
 p28.set(v52.get());
 v53.set(std::addressof(p28.get()));
@@ -279446,7 +279788,7 @@ b23:
 v68.set(p1.get());
 v69.set(p21.get());
 v70.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v71.set(ir_f1028((*(v70.get())),v68.take(),v69.take()));
+v71.set(ir_f1029((*(v70.get())),v68.take(),v69.take()));
 // end lease 6; statically verified, no runtime ownership
 p24.set(v71.get());
 v72.set(p24.get());
@@ -280315,7 +280657,7 @@ v24.set(p10.get());
 v25.set(p1.get());
 v26.set(true);
 v27.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v28.set(ir_f1029((*(v27.get())),v24.take(),v25.take(),v26.take()));
+v28.set(ir_f1030((*(v27.get())),v24.take(),v25.take(),v26.take()));
 // end lease 7; statically verified, no runtime ownership
 return v28.get();
 b10:
@@ -280391,7 +280733,7 @@ b26:
 goto b27;
 b27:
 v90.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v91.set(ir_f1030((*(v90.get()))));
+v91.set(ir_f1031((*(v90.get()))));
 // end lease 10; statically verified, no runtime ownership
 p42.set(v91.get());
 v92.set(std::string("++",2));
@@ -280507,7 +280849,7 @@ v111.set(ir_f494((*(v110.get()))));
 // end lease 22; statically verified, no runtime ownership
 v112.set(false);
 v113.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v114.set(ir_f1029((*(v113.get())),v109.take(),v111.take(),v112.take()));
+v114.set(ir_f1030((*(v113.get())),v109.take(),v111.take(),v112.take()));
 // end lease 23; statically verified, no runtime ownership
 p42.set(v114.get());
 goto b45;
@@ -281046,7 +281388,277 @@ b12:
 v24.set((p1.get()).f0.get());
 return v24.get();
 }
-double ir_f1016(const ir_t176& a0,double a1,double a2) {
+bool ir_f1016(const ir_t138& a0,std::string a1) {
+ets::ir::Slot<const ir_t138*> p0;
+ets::ir::Slot<std::string> p1;
+ets::ir::Slot<bool> p2;
+ets::ir::Slot<bool> p3;
+ets::ir::Slot<bool> p4;
+ets::ir::Slot<bool> p5;
+ets::ir::Slot<bool> p6;
+ets::ir::Slot<bool> p7;
+ets::ir::Slot<bool> p8;
+ets::ir::Slot<bool> p9;
+ets::ir::Slot<bool> p10;
+ets::ir::Slot<bool> p11;
+ets::ir::Slot<bool> p12;
+ets::ir::Slot<bool> p13;
+ets::ir::Slot<bool> p14;
+ets::ir::Slot<bool> p15;
+ets::ir::Slot<bool> p16;
+ets::ir::Slot<std::string> v0;
+ets::ir::Slot<std::string> v1;
+ets::ir::Slot<bool> v2;
+ets::ir::Slot<std::string> v3;
+ets::ir::Slot<std::string> v4;
+ets::ir::Slot<bool> v5;
+ets::ir::Slot<bool> v6;
+ets::ir::Slot<std::string> v7;
+ets::ir::Slot<std::string> v8;
+ets::ir::Slot<bool> v9;
+ets::ir::Slot<bool> v10;
+ets::ir::Slot<std::string> v11;
+ets::ir::Slot<std::string> v12;
+ets::ir::Slot<bool> v13;
+ets::ir::Slot<bool> v14;
+ets::ir::Slot<std::string> v15;
+ets::ir::Slot<std::string> v16;
+ets::ir::Slot<bool> v17;
+ets::ir::Slot<bool> v18;
+ets::ir::Slot<std::string> v19;
+ets::ir::Slot<std::string> v20;
+ets::ir::Slot<bool> v21;
+ets::ir::Slot<bool> v22;
+ets::ir::Slot<std::string> v23;
+ets::ir::Slot<std::string> v24;
+ets::ir::Slot<bool> v25;
+ets::ir::Slot<bool> v26;
+ets::ir::Slot<std::string> v27;
+ets::ir::Slot<std::string> v28;
+ets::ir::Slot<bool> v29;
+ets::ir::Slot<bool> v30;
+ets::ir::Slot<std::string> v31;
+ets::ir::Slot<std::string> v32;
+ets::ir::Slot<bool> v33;
+ets::ir::Slot<bool> v34;
+ets::ir::Slot<std::string> v35;
+ets::ir::Slot<std::string> v36;
+ets::ir::Slot<bool> v37;
+ets::ir::Slot<bool> v38;
+ets::ir::Slot<std::string> v39;
+ets::ir::Slot<std::string> v40;
+ets::ir::Slot<bool> v41;
+ets::ir::Slot<bool> v42;
+ets::ir::Slot<std::string> v43;
+ets::ir::Slot<std::string> v44;
+ets::ir::Slot<bool> v45;
+ets::ir::Slot<bool> v46;
+ets::ir::Slot<std::string> v47;
+ets::ir::Slot<std::string> v48;
+ets::ir::Slot<bool> v49;
+ets::ir::Slot<bool> v50;
+ets::ir::Slot<std::string> v51;
+ets::ir::Slot<std::string> v52;
+ets::ir::Slot<bool> v53;
+ets::ir::Slot<bool> v54;
+ets::ir::Slot<std::string> v55;
+ets::ir::Slot<std::string> v56;
+ets::ir::Slot<bool> v57;
+ets::ir::Slot<bool> v58;
+ets::ir::Slot<std::string> v59;
+ets::ir::Slot<std::string> v60;
+ets::ir::Slot<bool> v61;
+ets::ir::Slot<bool> v62;
+p0.set(std::addressof(a0));
+p1.set(std::move(a1));
+goto b0;
+b0:
+v0.set(p1.get());
+v1.set(std::string(")",1));
+v2.set((v0.get() == v1.get()));
+if(v2.get())goto b1;else goto b2;
+b1:
+p2.set(v2.get());
+goto b3;
+b2:
+v3.set(p1.get());
+v4.set(std::string(",",1));
+v5.set((v3.get() == v4.get()));
+p2.set(v5.take());
+goto b3;
+b3:
+v6.set(p2.get());
+if(v6.get())goto b4;else goto b5;
+b4:
+p3.set(v6.get());
+goto b6;
+b5:
+v7.set(p1.get());
+v8.set(std::string(">",1));
+v9.set((v7.get() == v8.get()));
+p3.set(v9.take());
+goto b6;
+b6:
+v10.set(p3.get());
+if(v10.get())goto b7;else goto b8;
+b7:
+p4.set(v10.get());
+goto b9;
+b8:
+v11.set(p1.get());
+v12.set(std::string("=",1));
+v13.set((v11.get() == v12.get()));
+p4.set(v13.take());
+goto b9;
+b9:
+v14.set(p4.get());
+if(v14.get())goto b10;else goto b11;
+b10:
+p5.set(v14.get());
+goto b12;
+b11:
+v15.set(p1.get());
+v16.set(std::string(";",1));
+v17.set((v15.get() == v16.get()));
+p5.set(v17.take());
+goto b12;
+b12:
+v18.set(p5.get());
+if(v18.get())goto b13;else goto b14;
+b13:
+p6.set(v18.get());
+goto b15;
+b14:
+v19.set(p1.get());
+v20.set(std::string("]",1));
+v21.set((v19.get() == v20.get()));
+p6.set(v21.take());
+goto b15;
+b15:
+v22.set(p6.get());
+if(v22.get())goto b16;else goto b17;
+b16:
+p7.set(v22.get());
+goto b18;
+b17:
+v23.set(p1.get());
+v24.set(std::string("|",1));
+v25.set((v23.get() == v24.get()));
+p7.set(v25.take());
+goto b18;
+b18:
+v26.set(p7.get());
+if(v26.get())goto b19;else goto b20;
+b19:
+p8.set(v26.get());
+goto b21;
+b20:
+v27.set(p1.get());
+v28.set(std::string("&",1));
+v29.set((v27.get() == v28.get()));
+p8.set(v29.take());
+goto b21;
+b21:
+v30.set(p8.get());
+if(v30.get())goto b22;else goto b23;
+b22:
+p9.set(v30.get());
+goto b24;
+b23:
+v31.set(p1.get());
+v32.set(std::string("*",1));
+v33.set((v31.get() == v32.get()));
+p9.set(v33.take());
+goto b24;
+b24:
+v34.set(p9.get());
+if(v34.get())goto b25;else goto b26;
+b25:
+p10.set(v34.get());
+goto b27;
+b26:
+v35.set(p1.get());
+v36.set(std::string("{",1));
+v37.set((v35.get() == v36.get()));
+p10.set(v37.take());
+goto b27;
+b27:
+v38.set(p10.get());
+if(v38.get())goto b28;else goto b29;
+b28:
+p11.set(v38.get());
+goto b30;
+b29:
+v39.set(p1.get());
+v40.set(std::string("}",1));
+v41.set((v39.get() == v40.get()));
+p11.set(v41.take());
+goto b30;
+b30:
+v42.set(p11.get());
+if(v42.get())goto b31;else goto b32;
+b31:
+p12.set(v42.get());
+goto b33;
+b32:
+v43.set(p1.get());
+v44.set(std::string("newline",7));
+v45.set((v43.get() == v44.get()));
+p12.set(v45.take());
+goto b33;
+b33:
+v46.set(p12.get());
+if(v46.get())goto b34;else goto b35;
+b34:
+p13.set(v46.get());
+goto b36;
+b35:
+v47.set(p1.get());
+v48.set(std::string("eof",3));
+v49.set((v47.get() == v48.get()));
+p13.set(v49.take());
+goto b36;
+b36:
+v50.set(p13.get());
+if(v50.get())goto b37;else goto b38;
+b37:
+p14.set(v50.get());
+goto b39;
+b38:
+v51.set(p1.get());
+v52.set(std::string("=>",2));
+v53.set((v51.get() == v52.get()));
+p14.set(v53.take());
+goto b39;
+b39:
+v54.set(p14.get());
+if(v54.get())goto b40;else goto b41;
+b40:
+p15.set(v54.get());
+goto b42;
+b41:
+v55.set(p1.get());
+v56.set(std::string("?",1));
+v57.set((v55.get() == v56.get()));
+p15.set(v57.take());
+goto b42;
+b42:
+v58.set(p15.get());
+if(v58.get())goto b43;else goto b44;
+b43:
+p16.set(v58.get());
+goto b45;
+b44:
+v59.set(p1.get());
+v60.set(std::string(":",1));
+v61.set((v59.get() == v60.get()));
+p16.set(v61.take());
+goto b45;
+b45:
+v62.set(p16.get());
+return v62.get();
+}
+double ir_f1017(const ir_t176& a0,double a1,double a2) {
 ets::ir::Slot<const ir_t176*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<double> p2;
@@ -281163,7 +281775,7 @@ return v32.get();
 b13:
 goto b3;
 }
-double ir_f1017(ir_t176& a0,double a1,double a2,double a3,double a4) {
+double ir_f1018(ir_t176& a0,double a1,double a2,double a3,double a4) {
 ets::ir::Slot<ir_t176*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<double> p2;
@@ -281292,7 +281904,7 @@ goto b13;
 b13:
 goto b3;
 }
-void ir_f1018(ir_t176& a0,double a1,double a2,double a3) {
+void ir_f1019(ir_t176& a0,double a1,double a2,double a3) {
 ets::ir::Slot<ir_t176*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<double> p2;
@@ -281363,7 +281975,7 @@ goto b7;
 b7:
 goto b3;
 }
-void ir_f1019(ir_t176& a0,double a1,double a2,double a3,std::string a4) {
+void ir_f1020(ir_t176& a0,double a1,double a2,double a3,std::string a4) {
 ets::ir::Slot<ir_t176*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<double> p2;
@@ -282017,7 +282629,7 @@ v31.set(p1.get());
 v32.set(p2.get());
 v33.set(p15.get());
 v34.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f1031((*(v34.get())),v31.take(),v32.take(),v33.take());
+ir_f1032((*(v34.get())),v31.take(),v32.take(),v33.take());
 // end lease 3; statically verified, no runtime ownership
 v35.set(std::size_t{0});
 goto b16;
@@ -282050,7 +282662,7 @@ v44.set((p19.get()).f1.get());
 v45.set(p15.get());
 v46.set(p4.get());
 v47.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f1019((*(v47.get())),v43.take(),v44.take(),v45.take(),v46.take());
+ir_f1020((*(v47.get())),v43.take(),v44.take(),v45.take(),v46.take());
 // end lease 4; statically verified, no runtime ownership
 goto b21;
 b20:
@@ -282077,7 +282689,7 @@ v60.set(p2.get());
 v61.set(p3.get());
 v62.set(p4.get());
 v63.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f1032((*(v63.get())),v59.take(),v60.take(),v61.take(),v62.take());
+ir_f1033((*(v63.get())),v59.take(),v60.take(),v61.take(),v62.take());
 // end lease 5; statically verified, no runtime ownership
 return;
 b26:
@@ -282296,7 +282908,7 @@ v167.set(ir_f97(v159.get(),v166.take()));
 v168.set(p3.get());
 v169.set(p4.get());
 v170.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f1019((*(v170.get())),v158.get(),v167.take(),v168.take(),v169.take());
+ir_f1020((*(v170.get())),v158.get(),v167.take(),v168.take(),v169.take());
 // end lease 9; statically verified, no runtime ownership
 return;
 b67:
@@ -282389,7 +283001,7 @@ v219.set(p67.get());
 v220.set(p65.get());
 v221.set(p4.get());
 v222.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f1019((*(v222.get())),v218.take(),v219.take(),v220.take(),v221.take());
+ir_f1020((*(v222.get())),v218.take(),v219.take(),v220.take(),v221.take());
 // end lease 15; statically verified, no runtime ownership
 goto b81;
 b81:
@@ -282445,7 +283057,7 @@ v246.set(ir_f97(v244.take(),v245.take()));
 v247.set(p65.get());
 v248.set(p4.get());
 v249.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f1019((*(v249.get())),v243.take(),v246.take(),v247.take(),v248.take());
+ir_f1020((*(v249.get())),v243.take(),v246.take(),v247.take(),v248.take());
 // end lease 18; statically verified, no runtime ownership
 v250.set((ets::ir::view(*(p0.get())).get()).f16.get());
 v251.set(std::string("return",6));
@@ -282661,7 +283273,7 @@ v375.set(ir_f97(v373.take(),v374.take()));
 v376.set(p129.get());
 v377.set(p4.get());
 v378.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f1019((*(v378.get())),v372.take(),v375.take(),v376.take(),v377.take());
+ir_f1020((*(v378.get())),v372.take(),v375.take(),v376.take(),v377.take());
 // end lease 28; statically verified, no runtime ownership
 v379.set((ets::ir::view(*(p0.get())).get()).f16.get());
 v380.set(std::string("return",6));
@@ -282932,7 +283544,7 @@ v499.set((p203.get()).f1.get());
 v500.set(p3.get());
 v501.set(p4.get());
 v502.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f1019((*(v502.get())),v498.take(),v499.take(),v500.take(),v501.take());
+ir_f1020((*(v502.get())),v498.take(),v499.take(),v500.take(),v501.take());
 // end lease 38; statically verified, no runtime ownership
 goto b173;
 b172:
@@ -282954,7 +283566,7 @@ goto b179;
 b179:
 return;
 }
-double ir_f1020(ir_t184& a0,double a1,double a2,double a3,double a4) {
+double ir_f1021(ir_t184& a0,double a1,double a2,double a3,double a4) {
 ets::ir::Slot<ir_t184*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<double> p2;
@@ -283209,7 +283821,7 @@ goto b31;
 b31:
 goto b17;
 }
-double ir_f1021(const ir_t184& a0,double a1,double a2,double a3,double a4) {
+double ir_f1022(const ir_t184& a0,double a1,double a2,double a3,double a4) {
 ets::ir::Slot<const ir_t184*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<double> p2;
@@ -283369,7 +283981,7 @@ goto b19;
 b19:
 goto b16;
 }
-void ir_f1022(ir_t196& a0,double a1,double a2,double a3,double a4) {
+void ir_f1023(ir_t196& a0,double a1,double a2,double a3,double a4) {
 ets::ir::Slot<ir_t196*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<double> p2;
@@ -283396,7 +284008,7 @@ v3.set(p4.get());
 (ets::ir::view(*(p0.get())).get()).f3.set(v3.take());
 return;
 }
-std::string ir_f1023(const ir_t184& a0,double a1) {
+std::string ir_f1024(const ir_t184& a0,double a1) {
 ets::ir::Slot<const ir_t184*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<std::string> p4;
@@ -283424,7 +284036,7 @@ if(v2.get())goto b1;else goto b2;
 b1:
 v3.set(p1.get());
 v4.set(std::addressof((ets::ir::view(*(p0.get())).get()).f3.get()));
-v5.set(ir_f1033((*(v4.get())),v3.take()));
+v5.set(ir_f1034((*(v4.get())),v3.take()));
 // end lease 1; statically verified, no runtime ownership
 p4.set(v5.get());
 goto b3;
@@ -283441,7 +284053,7 @@ b3:
 v11.set(p4.get());
 return v11.get();
 }
-void ir_f1024(const ir_t184& a0,ir_t203& a1,const ir_t203& a2,double a3) {
+void ir_f1025(const ir_t184& a0,ir_t203& a1,const ir_t203& a2,double a3) {
 ets::ir::Slot<const ir_t184*> p0;
 ets::ir::Slot<ir_t203*> p1;
 ets::ir::Slot<const ir_t203*> p2;
@@ -283553,7 +284165,7 @@ goto b10;
 b10:
 goto b3;
 }
-bool ir_f1025(ir_t184& a0,double a1,std::string a2) {
+bool ir_f1026(ir_t184& a0,double a1,std::string a2) {
 ets::ir::Slot<ir_t184*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<std::string> p2;
@@ -283638,7 +284250,7 @@ b6:
 v25.set(false);
 return v25.get();
 }
-bool ir_f1026(ir_t184& a0,double a1) {
+bool ir_f1027(ir_t184& a0,double a1) {
 ets::ir::Slot<ir_t184*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<std::vector<double>> p6;
@@ -284034,7 +284646,7 @@ goto b49;
 b49:
 goto b44;
 }
-std::vector<std::string> ir_f1027(const ir_t209& a0,double a1,std::vector<double> a2,std::vector<std::string> a3,std::vector<double> a4,double a5) {
+std::vector<std::string> ir_f1028(const ir_t209& a0,double a1,std::vector<double> a2,std::vector<std::string> a3,std::vector<double> a4,double a5) {
 ets::ir::Slot<const ir_t209*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<std::vector<double>> p2;
@@ -284242,7 +284854,7 @@ goto b20;
 b22:
 goto b19;
 }
-double ir_f1028(const ir_t209& a0,ir_t52 a1,std::string a2) {
+double ir_f1029(const ir_t209& a0,ir_t52 a1,std::string a2) {
 ets::ir::Slot<const ir_t209*> p0;
 ets::ir::Slot<ir_t52> p1;
 ets::ir::Slot<std::string> p2;
@@ -284372,7 +284984,7 @@ goto b19;
 b19:
 goto b6;
 }
-double ir_f1029(ir_t138& a0,double a1,ir_t12 a2,bool a3) {
+double ir_f1030(ir_t138& a0,double a1,ir_t12 a2,bool a3) {
 ets::ir::Slot<ir_t138*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<ir_t12> p2;
@@ -284542,7 +285154,7 @@ ir_f488((*(v49.get())),v46.take(),v47.take(),v48.take());
 v50.set(p10.get());
 return v50.get();
 }
-double ir_f1030(ir_t138& a0) {
+double ir_f1031(ir_t138& a0) {
 ets::ir::Slot<ir_t138*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<bool> p3;
@@ -284776,7 +285388,7 @@ p0.set(std::addressof(a0));
 goto b0;
 b0:
 v0.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v1.set(ir_f1034((*(v0.get()))));
+v1.set(ir_f1035((*(v0.get()))));
 // end lease 0; statically verified, no runtime ownership
 p1.set(v1.get());
 v2.set(true);
@@ -284830,7 +285442,7 @@ v25.set(p7.get());
 if(v25.get())goto b14;else goto b15;
 b11:
 v20.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v21.set(ir_f1035((*(v20.get()))));
+v21.set(ir_f1036((*(v20.get()))));
 // end lease 4; statically verified, no runtime ownership
 v22.set(std::string("(",1));
 v23.set((v21.get() == v22.get()));
@@ -284913,7 +285525,7 @@ if(v56.get())goto b20;else goto b21;
 b20:
 v57.set(p13.get());
 v58.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f1036((*(v58.get())),v57.take());
+ir_f1037((*(v58.get())),v57.take());
 // end lease 14; statically verified, no runtime ownership
 goto b22;
 b21:
@@ -284941,7 +285553,7 @@ p1.set(v70.take());
 goto b16;
 b23:
 v79.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v80.set(ir_f1035((*(v79.get()))));
+v80.set(ir_f1036((*(v79.get()))));
 // end lease 19; statically verified, no runtime ownership
 v81.set(std::string(".",1));
 v82.set((v80.get() == v81.get()));
@@ -284961,7 +285573,7 @@ ir_f886((*(v86.get())),v84.take(),v85.take());
 // end lease 20; statically verified, no runtime ownership
 v87.set(p1.get());
 v88.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f1036((*(v88.get())),v87.take());
+ir_f1037((*(v88.get())),v87.take());
 // end lease 21; statically verified, no runtime ownership
 goto b28;
 b27:
@@ -285081,7 +285693,7 @@ v137.set(ir_f491((*(v136.get())),v135.take()));
 if(v137.get())goto b44;else goto b45;
 b44:
 v138.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v139.set(ir_f1037((*(v138.get()))));
+v139.set(ir_f1038((*(v138.get()))));
 // end lease 36; statically verified, no runtime ownership
 v140.set(std::string("(",1));
 v141.set((v139.get() == v140.get()));
@@ -285096,7 +285708,7 @@ if(v142.get())goto b47;else goto b48;
 b47:
 v143.set(p54.get());
 v144.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-ir_f1036((*(v144.get())),v143.take());
+ir_f1037((*(v144.get())),v143.take());
 // end lease 37; statically verified, no runtime ownership
 goto b49;
 b48:
@@ -285206,7 +285818,7 @@ goto b58;
 b58:
 goto b34;
 }
-void ir_f1031(ir_t176& a0,double a1,double a2,double a3) {
+void ir_f1032(ir_t176& a0,double a1,double a2,double a3) {
 ets::ir::Slot<ir_t176*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<double> p2;
@@ -285505,7 +286117,7 @@ goto b33;
 b33:
 goto b25;
 }
-void ir_f1032(ir_t176& a0,double a1,double a2,double a3,std::string a4) {
+void ir_f1033(ir_t176& a0,double a1,double a2,double a3,std::string a4) {
 ets::ir::Slot<ir_t176*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<double> p2;
@@ -285825,7 +286437,7 @@ v105.set(ets::ir::add<double>(v103.get(),v104.get()));
 p32.set(v105.take());
 goto b12;
 }
-std::string ir_f1033(const ir_t185& a0,double a1) {
+std::string ir_f1034(const ir_t185& a0,double a1) {
 ets::ir::Slot<const ir_t185*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<ir_t52> p2;
@@ -285915,7 +286527,7 @@ b9:
 v23.set(p15.get());
 return v23.get();
 }
-double ir_f1034(ir_t138& a0) {
+double ir_f1035(ir_t138& a0) {
 ets::ir::Slot<ir_t138*> p0;
 ets::ir::Slot<ir_t12> p1;
 ets::ir::Slot<bool> p10;
@@ -286224,7 +286836,7 @@ if(v4.get())goto b1;else goto b2;
 b1:
 v5.set(p1.get());
 v6.set(std::addressof(ets::ir::view(*(p0.get())).get()));
-v7.set(ir_f1038((*(v6.get())),v5.take()));
+v7.set(ir_f1039((*(v6.get())),v5.take()));
 // end lease 1; statically verified, no runtime ownership
 return v7.get();
 b2:
@@ -286757,7 +287369,7 @@ v267.set(ir_f484((*(v266.get())),v263.take(),v264.take(),v265.take()));
 // end lease 57; statically verified, no runtime ownership
 return v267.get();
 }
-std::string ir_f1035(const ir_t138& a0) {
+std::string ir_f1036(const ir_t138& a0) {
 ets::ir::Slot<const ir_t138*> p0;
 ets::ir::Slot<double> p2;
 ets::ir::Slot<double> p3;
@@ -286964,7 +287576,7 @@ goto b28;
 b28:
 goto b13;
 }
-void ir_f1036(ir_t138& a0,double a1) {
+void ir_f1037(ir_t138& a0,double a1) {
 ets::ir::Slot<ir_t138*> p0;
 ets::ir::Slot<double> p1;
 ets::ir::Slot<bool> p4;
@@ -287052,7 +287664,7 @@ goto b10;
 b10:
 goto b3;
 }
-std::string ir_f1037(const ir_t138& a0) {
+std::string ir_f1038(const ir_t138& a0) {
 ets::ir::Slot<const ir_t138*> p0;
 ets::ir::Slot<double> p2;
 ets::ir::Slot<double> p3;
@@ -287276,7 +287888,7 @@ goto b31;
 b31:
 goto b13;
 }
-double ir_f1038(ir_t138& a0,ir_t12 a1) {
+double ir_f1039(ir_t138& a0,ir_t12 a1) {
 ets::ir::Slot<ir_t138*> p0;
 ets::ir::Slot<ir_t12> p1;
 ets::ir::Slot<double> p2;
