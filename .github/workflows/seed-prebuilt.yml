@@ -1,0 +1,146 @@
+name: Seed prebuilt (Linux + macOS)
+
+# Compila la semilla C++ en cada plataforma con `native-cpp/build-all.sh
+# --update-prebuilt` (enlace autocontenido), comprueba que no depende de
+# librerías dinámicas de terceros, la prueba y, en main, la guarda en
+# native-cpp/prebuilt/<plataforma>/ junto a la huella de sus fuentes.
+# install.sh y build-all.sh solo la usan si esa huella coincide con el checkout.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - native-cpp/frontend/**
+      - native-cpp/build/**
+      - native-cpp/build-all.sh
+      - bootstrap/native/**
+      - src/codegen/ir/native/**
+      - runtime/**
+      - .github/workflows/seed-prebuilt.yml
+  push:
+    branches: [main]
+    paths:
+      - native-cpp/frontend/**
+      - native-cpp/build/**
+      - native-cpp/build-all.sh
+      - bootstrap/native/**
+      - src/codegen/ir/native/**
+      - runtime/**
+      - .github/workflows/seed-prebuilt.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: seed-prebuilt-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux-x86_64
+          - os: macos-latest
+            platform: darwin-arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install static build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          sudo apt-get -o Acquire::Retries=5 update
+          sudo apt-get -o Acquire::Retries=5 install -y g++ libssl-dev
+          test -f /usr/lib/x86_64-linux-gnu/libcrypto.a
+
+      - name: Install static build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          brew list openssl@3 >/dev/null 2>&1 || brew install openssl@3
+          test -f "$(brew --prefix openssl@3)/lib/libcrypto.a"
+
+      - name: Build self-contained seed
+        run: bash native-cpp/build-all.sh --update-prebuilt --out "$RUNNER_TEMP/seed"
+
+      - name: Verify no third-party dynamic libraries
+        run: |
+          set -euo pipefail
+          dir="native-cpp/prebuilt/${{ matrix.platform }}"
+          for bin in "$dir/frontend" "$dir/etsc"; do
+            if [ "$RUNNER_OS" = Linux ]; then
+              file "$bin"
+              file "$bin" | grep -q 'statically linked' || { echo "::error::$bin is not statically linked"; exit 1; }
+            else
+              otool -L "$bin"
+              # Only the OS libraries every macOS ships may remain.
+              extra="$(otool -L "$bin" | tail -n +2 | awk '{print $1}' | grep -v -E '^/usr/lib/(libSystem\.B|libc\+\+\.1)\.dylib$' || true)"
+              if [ -n "$extra" ]; then echo "::error::$bin links $extra"; exit 1; fi
+            fi
+          done
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          dir="native-cpp/prebuilt/${{ matrix.platform }}"
+          "$dir/etsc" --version
+          "$dir/frontend" examples/hello.ets > "$RUNNER_TEMP/hello.ir.json"
+          test -s "$RUNNER_TEMP/hello.ir.json"
+          # build-all.sh must now pick the precompiled seed (inputs match).
+          bash native-cpp/build-all.sh --out "$RUNNER_TEMP/picked/native" 2>&1 | tee "$RUNNER_TEMP/picked.log"
+          grep -q 'Semilla precompilada' "$RUNNER_TEMP/picked.log"
+          if [ "$RUNNER_OS" = Linux ]; then
+            # Same layout as the seed: <dir>/native/{etsc,frontend}.
+            ESTC_ROOT="$GITHUB_WORKSPACE" "$RUNNER_TEMP/picked/native/etsc" build examples/hello.ets \
+              -o "$RUNNER_TEMP/hello.cpp" --binary "$RUNNER_TEMP/hello" --no-progress
+            "$RUNNER_TEMP/hello" | grep -q 'Hola, mundo'
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: seed-${{ matrix.platform }}
+          path: native-cpp/prebuilt/${{ matrix.platform }}/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: seed-*
+          path: ${{ runner.temp }}/seeds
+      - name: Commit precompiled seeds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for d in "$RUNNER_TEMP"/seeds/seed-*; do
+            platform="${d##*/seed-}"
+            mkdir -p "native-cpp/prebuilt/$platform"
+            cp "$d"/* "native-cpp/prebuilt/$platform/"
+            chmod +x "native-cpp/prebuilt/$platform/frontend" "native-cpp/prebuilt/$platform/etsc"
+          done
+          (cd native-cpp && find . -type f -not -path './native/*' | LC_ALL=C sort > files.txt)
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A native-cpp/prebuilt native-cpp/files.txt
+          if git diff --cached --quiet; then echo 'Seeds unchanged.' >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          git commit -m "build(native-cpp): semillas precompiladas para ${GITHUB_SHA::7}"
+          if ! git push origin HEAD:main; then
+            branch="build/seed-prebuilt-${{ github.run_id }}"
+            git push origin "HEAD:$branch"
+            gh pr create --base main --head "$branch" \
+              --title "build(native-cpp): semillas precompiladas" \
+              --body "Linux x86_64 y macOS arm64, enlace autocontenido, generadas por seed-prebuilt.yml." \
+              || echo "::warning::Rama $branch subida; crea la PR a mano."
+          fi

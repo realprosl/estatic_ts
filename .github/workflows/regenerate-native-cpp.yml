@@ -36,6 +36,9 @@ jobs:
           find native-cpp -mindepth 1 -maxdepth 1 -printf '%f %y\n' | LC_ALL=C sort > "$RUNNER_TEMP/layout.before"
           cp native-cpp/build-all.sh "$RUNNER_TEMP/build-all.sh"
           cp native-cpp/README.md "$RUNNER_TEMP/README.md"
+          # The precompiled seeds are not generated here (seed-prebuilt.yml builds
+          # them on each OS); keep them so the layout survives the regeneration.
+          if [ -d native-cpp/prebuilt ]; then cp -a native-cpp/prebuilt "$RUNNER_TEMP/prebuilt"; fi
       - name: Install C++ dependencies
         run: |
           sudo apt-get update
@@ -56,6 +59,7 @@ jobs:
           chmod +x "$d/build-all.sh"
           cp "$RUNNER_TEMP/README.md" "$d/README.md"
           sed -i 's/native-cpp-bootstrap.yml/regenerate-native-cpp.yml/g' "$d/README.md"
+          if [ -d "$RUNNER_TEMP/prebuilt" ]; then cp -a "$RUNNER_TEMP/prebuilt" "$d/prebuilt"; fi
           (cd "$d" && find . -type f | LC_ALL=C sort > files.txt)
 
       - name: Validate complete snapshot, structure and source-only policy
@@ -80,7 +84,8 @@ jobs:
             printf '%s\n' "$bad_sources"
             exit 1
           fi
-          bad_objects="$(find native-cpp -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.exe' \) -print)"
+          # Executables are only allowed as precompiled seeds in native-cpp/prebuilt/.
+          bad_objects="$(find native-cpp -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.dylib' -o -name '*.exe' \) -print)"
           if [ -n "$bad_objects" ] || [ -d native-cpp/native ]; then
             echo "::error::Prebuilt binaries in source-only snapshot"
             printf '%s\n' "$bad_objects"
@@ -107,7 +112,7 @@ jobs:
       - name: Build compiler from downloaded snapshot (no Node or TS)
         run: |
           set -euo pipefail
-          bash native-cpp/build-all.sh
+          bash native-cpp/build-all.sh --no-prebuilt
           test -x native-cpp/native/frontend
           test -x native-cpp/native/etsc
           native-cpp/native/etsc --version

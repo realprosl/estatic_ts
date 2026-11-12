@@ -26,6 +26,11 @@
 #include <unordered_set>
 #include <variant>
 #include <vector>
+#if defined(__APPLE__)
+#include <cerrno>
+#include <clocale>
+#include <xlocale.h>
+#endif
 #include "runtime/ets_core.hpp"
 #include "runtime/ets_io.hpp"
 #include "runtime/ets_string.hpp"
@@ -279,9 +284,21 @@ private:
         double value = 0.0;
         const char* first = input.data() + start;
         const char* last = input.data() + pos;
+#if defined(__APPLE__)
+        // libc++ only ships floating-point std::from_chars from macOS 26: use
+        // strtod_l with the "C" locale (locale-independent, same contract).
+        static const locale_t cLocale = newlocale(LC_ALL_MASK, "C", nullptr);
+        const std::string text(first, last);
+        char* end = nullptr;
+        errno = 0;
+        value = strtod_l(text.c_str(), &end, cLocale);
+        if (errno == ERANGE) { error = "number out of range"; return ets_json_value(); }
+        if (end != text.c_str() + text.size()) { error = "invalid number"; return ets_json_value(); }
+#else
         const auto parsed = std::from_chars(first, last, value);
         if (parsed.ec == std::errc::result_out_of_range) { error = "number out of range"; return ets_json_value(); }
         if (parsed.ec != std::errc{} || parsed.ptr != last) { error = "invalid number"; return ets_json_value(); }
+#endif
         return ets_json_value(value);
     }
     ets_json_value parseBool() {
