@@ -342,7 +342,7 @@ export class SafetyAnalyzer {
     for (const r of this.binding.references) {
       if (r.deferred || r.space != "value" || (r.target) < 0) continue;
       const s: BindingSymbol = this.binding.symbols[r.target];
-      if ((s.module) < 0 || (!localBinding(s.kind) && !["Parameter","receiver"].includes(s.kind)) || this.owner(s.scope) < 0) continue;
+      if ((s.module) < 0 || (!localBinding(s.kind) && !["Parameter","receiver"].includes(s.kind)) || (this.owner(s.scope) < 0 && s.scope == this.binding.files[s.module].scope)) continue;
       let scope: number = r.scope;
       while (scope >= 0 && scope != s.scope) {
         const owner = this.binding.scopes[scope];

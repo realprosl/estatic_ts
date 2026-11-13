@@ -286,6 +286,12 @@ for(const [name,source,expected] of [
  ["escaping capture",'function make(n:number):(x:number)=>number{return (x:number):number=>n+x;}const f=make(10);print(f(2));',["12"]],
  ["mutable capture",'let n=0;const f=():number=>{n+=1;return n;};print(f(),f());',["1 2"]],
  ["local reference capture",'function f():number{let n=0;const bump=():void=>{n+=1;};bump();bump();return n;}print(f());',["2"]],
+ ["top-level for capture",'for(let i:number=0;i<2;i=i+1){const f=():void=>print(i);f();}',["0","1"]],
+ ["top-level for-of capture",'for(const v of [7,8]){const f=():void=>print(v);f();}',["7","8"]],
+ ["top-level block capture",'{const j:number=5;const f=():void=>print(j);f();}',["5"]],
+ ["top-level if capture",'if(true){const j:number=5;const f=():void=>print(j);f();}',["5"]],
+ ["top-level loop body const capture",'for(let i:number=0;i<2;i=i+1){const k:number=i*10;const f=():number=>k+1;print(f());}',["1","11"]],
+ ["top-level match callback in loop",'for(const i of [7,8]){match(i,[when(7,(v:number):void=>print(i)),otherwise(():void=>print(0))]);}',["7","0"]],
  ["nested function",'function f(n:number):number{function add(x:number):number{return n+x;}return add(2);}print(f(3));',["5"]],
 ] as const) test(`native IR extended ${name}`,()=>assert.deepEqual(execute(run(source)),expected));
 
