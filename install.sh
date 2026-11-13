@@ -161,13 +161,33 @@ if [ -e "$destination" ]; then
   [ "$owned" -eq 1 ] || fail "No se sobrescribe un comando ajeno: $destination; usa otro --prefix"
 fi
 
-# Los precompilados se descargan de la rama `prebuilt` (no estan en main).
-if [ "$force_seed" -eq 0 ] || [ "$force_compiler" -eq 0 ]; then
-  bash "$seed_dir/fetch-prebuilt.sh"
+case "$(uname -s)" in Darwin) platform_os=darwin ;; *) platform_os=linux ;; esac
+platform_arch="$(uname -m)"; [ "$platform_arch" = aarch64 ] && platform_arch=arm64
+platform="$platform_os-$platform_arch"
+mkdir -p "$work/native"
+
+# --- Atajo (#151): compilador precompilado sin semilla -----------------------
+# En el caso normal (main y plataforma soportada) basta el compilador
+# precompilado de la rama `prebuilt`: se descarga solo el de esta plataforma y,
+# si su huella coincide con las fuentes, se instala sin descargar ni preparar
+# la semilla. Si no vale, se sigue por el camino completo.
+fast=0
+if [ "$seed_only" -eq 0 ] && [ "$force_compiler" -eq 0 ] && [ -z "$seed_bin" ]; then
+  bash "$seed_dir/fetch-prebuilt.sh" --platform "$platform" --compiler-only
+  if ETSC_CLI_SCOPE=install ESTC_ROOT="$repo_dir" CXX="$cxx" bash "$seed_dir/build-compiler.sh" \
+       --prebuilt-only --out "$work/generation/etsc"; then
+    fast=1
+    rm -f "$work/native/etsc"; cp "$work/generation/etsc" "$work/native/etsc"; chmod +x "$work/native/etsc"
+    etsc_info "La semilla no hace falta: compilador precompilado válido ($platform)"
+  fi
 fi
 
+if [ "$fast" -eq 0 ]; then
+# Los precompilados se descargan de la rama `prebuilt` (no estan en main).
+if [ "$force_seed" -eq 0 ] || [ "$force_compiler" -eq 0 ]; then
+  bash "$seed_dir/fetch-prebuilt.sh" --platform "$platform"
+fi
 etsc_info "Construyendo la semilla C++20"
-mkdir -p "$work/native"
 # native-cpp/build-all.sh es el unico sitio que construye la semilla: por
 # defecto usa la precompilada de native-cpp/prebuilt/<plataforma> si coincide
 # con las fuentes y, si no (o con --force-seed), la compila.
@@ -205,6 +225,8 @@ if [ "$seed_only" -eq 0 ]; then
   cp "$work/generation/etsc" "$work/native/etsc"
   chmod +x "$work/native/etsc"
 fi
+
+fi # fast
 
 command_hash="$(hash_file "$work/native/etsc")"
 
