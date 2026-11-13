@@ -85,7 +85,7 @@ test("installed etsc initializes, builds and runs independently of the clone wit
   const run=(args:string[],cwd=dir)=>spawnSync(bin,args,{cwd,encoding:"utf8",timeout:120000,env:nativeEnv});
   // La semilla es el compilador ETS (compiler/unity.cpp): su CLI es la de
   // compiler/driver/main.ets, no la del CLI de la etapa 0.
-  for(const flag of ["--version","-version","-v","-V","/V"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/^etsc bootstrap ETS \(ets-ir-2\)\n$/);}
+  for(const flag of ["--version","-version","-v","-V","/V"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/^etsc \d+\.\d+\.\d+ \(v\d+\)\n$/);}
   for(const flag of ["--help","-h","-H"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/Uso: etsc build\|run/);assert.match(p.stdout,/init \[directorio\]/);assert.match(p.stdout,/--version/);}
   // Diagnósticos al estilo de rustc: código, fichero:línea:columna, la línea
   // de código subrayada, ayuda y resumen final.
@@ -104,7 +104,7 @@ assert(!diagnosed.stderr.includes("\x1b["),"Sin terminal no hay colores");
   const explained=run(["--explain","E3003"]);assert.equal(explained.status,0,explained.stderr);assert.match(explained.stdout,/^E3003: .*'const'/);
   writeFileSync(join(home,"templates/types/estatic.d.ts"),"// stale template");
   mkdirSync(project);writeFileSync(join(project,"existing.txt"),"keep me");
-  let p=run(["init",project]);assert.equal(p.status,0,p.stderr);assert.match(readFileSync(join(project,"README.md"),"utf8"),/etsc build/);
+  let p=run(["init",project,"--verbose"]);assert.equal(p.status,0,p.stderr);assert.match(p.stderr,/Creando proyecto/);assert.match(readFileSync(join(project,"README.md"),"utf8"),/etsc build/);
   assert.equal(readFileSync(join(project,"existing.txt"),"utf8"),"keep me");
   assert.equal(readFileSync(join(project,"types/estatic.d.ts"),"utf8"),readFileSync(join(root,"types/estatic.d.ts"),"utf8"));
   const editor=JSON.parse(readFileSync(join(project,"tsconfig.json"),"utf8"));assert(editor.include.includes("types/**/*"));assert(editor.include.includes("estatic.config.json"));
@@ -145,6 +145,20 @@ assert(!diagnosed.stderr.includes("\x1b["),"Sin terminal no hay colores");
   writeFileSync(tsConfig,'export default (()=>({entry:"src/main.ts"}))();');p=runMoved(["--check"]);assert.equal(p.status,2);rmSync(tsConfig);renameSync(configPath+".saved",configPath);
   mkdirSync(join(project,"deps"));writeFileSync(join(project,"deps/dep.ets"),'export const answer=42;');config.aliases={app:"deps"};writeFileSync(configPath,JSON.stringify(config));writeFileSync(join(project,"src/main.ts"),'import {answer} from "app/dep";print(answer);');
   p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");
+  // #143: una cabecera forzada con -include invalida el objeto cacheado si cambia.
+  const header=join(project,"cache-header.hpp"),headerFlags=["--cxx-flag","-include","--cxx-flag",header];writeFileSync(header,"// valid header\n");
+  p=runMoved(["run",...headerFlags]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");
+  writeFileSync(header,"#error changed header must invalidate the object\n");
+  p=runMoved(["build",...headerFlags]);assert.equal(p.status,1);assert.match(p.stderr,/changed header/);
+  writeFileSync(header,"// valid header\n");p=runMoved(["run",...headerFlags]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");
+  // #143: un objeto de la caché dañado se recompila.
+  for(const file of programObjects())writeFileSync(join(project,".build/cache/objects",file),"corrupt");rmSync(join(project,".build/cache/build-fingerprint"),{force:true});
+  p=runMoved(["run",...headerFlags]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");for(const file of programObjects())assert.notEqual(readFileSync(join(project,".build/cache/objects",file),"utf8"),"corrupt");
+  // #143: cacheDirectory propio, y con incremental.enabled=false no se crea ninguna caché.
+  config.incremental={enabled:true,cacheDirectory:"custom cache"};writeFileSync(configPath,JSON.stringify(config));
+  p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");assert(existsSync(join(project,"custom cache/objects")));
+  config.incremental={enabled:false,cacheDirectory:"disabled cache"};writeFileSync(configPath,JSON.stringify(config));
+  p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");assert(!existsSync(join(project,"disabled cache")));
   writeFileSync(join(project,"src/main.ts"),'print(argument(1));exitProcess(7);');p=runMoved(["run","--","forwarded"]);assert.equal(p.status,7,p.stderr);assert.equal(p.stdout,"forwarded\n");assert(!existsSync(sentinel),"The installed compiler must never execute Node");
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
@@ -209,7 +223,7 @@ test("install builds compiler/ with the seed and publishes that executable",asyn
   // La generacion 2 produce el compilador bootstrap ETS, no la semilla.
   const version=spawnSync(bin,["--version"],{encoding:"utf8",env:{...process.env,ESTC_ROOT:home}});
   assert.equal(version.status,0,version.stderr);
-  assert.match(version.stdout,/etsc bootstrap ETS/);
+  assert.match(version.stdout,/^etsc \d+\.\d+\.\d+ \(v\d+\)\n$/);
   // El runtime y las librerias que lo acompanan siguen en la distribucion.
   assert(existsSync(join(home,"native/frontend")));
   assert(existsSync(join(home,"runtime")));
