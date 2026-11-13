@@ -21,7 +21,7 @@ if "$compiler" build "$work/broken.ets" --binary "$work/should-not-exist" --no-p
   echo 'Invalid source unexpectedly succeeded' >&2; exit 1
 fi
 cat "$work/broken.log"
-grep -q 'PARSER_ERROR' "$work/broken.log"
+grep -Eq 'error\[(parser|E1[0-9]{3})\]' "$work/broken.log"
 if grep -q 'IR_INPUT' "$work/broken.log"; then
   echo 'Source diagnostics must not cause a redundant IR_INPUT' >&2; exit 1
 fi

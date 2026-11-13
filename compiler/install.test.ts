@@ -87,6 +87,16 @@ test("installed etsc initializes, builds and runs independently of the clone wit
   // compiler/driver/main.ets, no la del CLI de la etapa 0.
   for(const flag of ["--version","-version","-v","-V","/V"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/^etsc bootstrap ETS \(ets-ir-2\)\n$/);}
   for(const flag of ["--help","-h","-H"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/Uso: etsc build\|run/);assert.match(p.stdout,/init \[directorio\]/);assert.match(p.stdout,/--version/);}
+  // Diagnósticos al estilo de rustc: código, fichero:línea:columna, la línea
+  // de código subrayada, ayuda y resumen final.
+  const bad=join(dir,"bad.ets");writeFileSync(bad,"let count: number = 1;\nprint(cont);\n");
+  const diagnosed=run(["--check",bad,"--no-progress"],dir);assert.equal(diagnosed.status,1);
+  assert.match(diagnosed.stderr,/error\[binder\]: No existe 'cont' en este ámbito/);
+  assert.match(diagnosed.stderr,/--> .*bad\.ets:2:7\n/);
+  assert.match(diagnosed.stderr,/2 \| print\(cont\);\n\s+\| {7}\^{4}/);
+  assert.match(diagnosed.stderr,/= ayuda: ¿querías decir 'count'\?/);
+  assert.match(diagnosed.stderr,/error: no se pudo compilar por un error/);
+assert(!diagnosed.stderr.includes("\x1b["),"Sin terminal no hay colores");
   writeFileSync(join(home,"templates/types/estatic.d.ts"),"// stale template");
   mkdirSync(project);writeFileSync(join(project,"existing.txt"),"keep me");
   let p=run(["init",project]);assert.equal(p.status,0,p.stderr);assert.match(readFileSync(join(project,"README.md"),"utf8"),/etsc build/);

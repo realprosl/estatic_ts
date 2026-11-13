@@ -1,3 +1,4 @@
+import { closestName } from "../frontend/suggest";
 import {progressDetail} from "../progress/progress";
 import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind, nodeKindName } from "../parser/ast-schema";
 import { nativeBuiltinSignatures } from "../frontend/builtins";
@@ -111,7 +112,7 @@ export class NativeChecker {
     if (this.literalMismatch(module,id,actual,expected)) return;
     if (ownedType(expected) && actual == memoryInner(expected) && id >= 0 && this.node(module,id).kind == NodeKind.NewExpression) return;
     if (id >= 0 && actual != expected && actual != "!error" && expected != "!error" && expected != "" && this.compatible(actual,expected)) this.result.files[module].conversions[id] = expected;
-    if (!this.compatible(actual, expected)) this.report(module, id, "Tipo '" + this.displayType(actual) + "' incompatible con '" + this.displayType(expected) + "'");
+    if (!this.compatible(actual, expected)) this.report(module, id, "Tipos incompatibles: se esperaba '" + this.displayType(expected) + "' y se encontró '" + this.displayType(actual) + "'");
   }
   // Comprueba si el valor de la posicion coincide con un tipo literal. Un
   // literal de tipo solo acepta el valor exacto: `"Hola"` no satisface
@@ -730,6 +731,27 @@ export class NativeChecker {
     if (["optionalSome","optionalNone","optionalIsPresent","optionalValueOr","optionalOrElse","resultOk","resultErr","resultIsOk","resultValueOr","ok","err"].includes(name)) return "!container:" + name;
     return "!error";
   }
+  // Nombres de los miembros declarados de un tipo nominal (para sugerencias).
+  memberNames(valueType: string): string[] {
+    let names: string[] = []; let receiver: string = memoryValue(valueType); if (receiver.startsWith("class:")) receiver = receiver.slice(6,receiver.length);
+    for (const part of splitTypes(receiver,"&")) {
+      const owner: number = this.nominalSymbol(part); if (owner < 0) continue;
+      const s: BindingSymbol = this.binding.symbols[owner];
+      for (const item of this.binding.symbols) if (item.module == s.module && item.scope >= 0 && this.binding.scopes[item.scope].node == s.node && item.name != "constructor" && !names.includes(item.name)) names.push(item.name);
+    }
+    return names;
+  }
+  unknownMember(valueType: string, name: string): string {
+    const display: string = this.displayType(valueType);
+    let message: string = "El tipo '" + display + "' no declara el miembro '" + name + "'";
+    if (display == "ProcessReadable") return message + "\nayuda: un stream de lectura (process.stdin, child.stdout) solo tiene .on(\"data\" | \"end\", ...)\nnota: para dejar de leer antes de que acabe la entrada, usa process.exit(código)";
+    if (display == "ProcessWritable") return message + "\nayuda: un stream de escritura (process.stdout, child.stdin) tiene .write(texto) y .end()";
+    const names: string[] = this.memberNames(valueType);
+    const suggestion: string = closestName(name, names);
+    if (suggestion != "") return message + "\nayuda: ¿querías decir '" + suggestion + "'?";
+    if (names.length > 0 && names.length <= 10) return message + "\nnota: miembros de '" + display + "': " + names.join(", ");
+    return message;
+  }
   memberSymbol(valueType: string, name: string): number {
     let receiver: string = memoryValue(valueType); if (receiver.startsWith("class:")) receiver = receiver.slice(6,receiver.length);
     const parts: string[] = splitTypes(receiver,"&");
@@ -850,7 +872,7 @@ export class NativeChecker {
     const catalog: string = valueType+"."+name;
     if (nativeBuiltinSignatures(catalog).length > 0) return "!builtin:"+catalog;
     const sid: number = this.memberSymbol(valueType,name);
-    if (sid < 0) { this.report(module,id,"El tipo '" + this.displayType(valueType) + "' no declara el miembro '" + name + "'"); return "!error"; }
+    if (sid < 0) { this.report(module,id,this.unknownMember(valueType,name)); return "!error"; }
     if (!query) this.result.files[module].members[id] = sid;
     const s: BindingSymbol = this.binding.symbols[sid]; const n: AstNode = this.node(s.module,(s.node) < 0 ? this.graph.modules[s.module].cached.result.ast.root : s.node);
     if (((n.get(AttributeKind.IsStatic) == "true") || s.kind == "EnumMember") != valueType.startsWith("class:")) this.report(module,id,"Receptor estático/de instancia incorrecto para '" + name + "'");
@@ -998,7 +1020,7 @@ export class NativeChecker {
       const variable: boolean = ["VariableDeclaration","ArrayBinding","ObjectBinding","UsingDeclaration"].includes(s.kind);
       const declaration: AstNode = this.node(s.module,s.kind == "ArrayBinding" || s.kind == "ObjectBinding" ? this.binding.files[s.module].parents[s.node] : s.node);
       const initialization: boolean = !through && this.constructorInitialization(module,id,sid);
-      if ((variable && declaration.get(AttributeKind.Mutable) != "true") || (declaration.get(AttributeKind.Readonly) == "true" && !initialization) || (!variable && s.kind != "ClassField" && s.kind != "InterfaceField" && s.kind != "Parameter")) this.report(module,id,"Destino inmutable '" + s.name + "'");
+      if ((variable && declaration.get(AttributeKind.Mutable) != "true") || (declaration.get(AttributeKind.Readonly) == "true" && !initialization) || (!variable && s.kind != "ClassField" && s.kind != "InterfaceField" && s.kind != "Parameter")) this.report(module,id,variable && declaration.get(AttributeKind.Mutable) != "true" ? "No se puede modificar '" + s.name + "': es inmutable porque se declaró con 'const'\nayuda: declárala con 'let' si tiene que cambiar\nnota: en este dialecto 'const' también impide modificar su contenido (campos, push, ...)" : "No se puede modificar '" + s.name + "': es inmutable (readonly)");
       for (const ref of this.binding.references) if (ref.module == module && ref.node == id && ref.symbol >= 0 && this.binding.symbols[ref.symbol].kind == "import") this.report(module,id,"No se puede reasignar un import");
     }
   }

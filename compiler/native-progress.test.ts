@@ -58,7 +58,7 @@ test("native etsc reports primary source errors without redundant IR_INPUT",()=>
  for(const text of ['const n=0;n++;','for(let i=0;i<3;1++){}','let n=;']){
   const input=source("invalid-updates",text);
   const p=run(["build",input,"--frontend",frontend],{NODE:"/missing/node"});
-  assert.equal(p.status,1,p.stderr);assert.match(p.stderr,/CHECKER_ERROR|PARSER_ERROR/);assert.doesNotMatch(p.stderr,/IR_INPUT|IR_INVALID/);
+  assert.equal(p.status,1,p.stderr);assert.match(p.stderr,/(CHECKER_ERROR|PARSER_ERROR|E\d{4}): |error\[(checker|parser|E\d{4})\]/);assert.doesNotMatch(p.stderr,/IR_INPUT|IR_INVALID/);
  }
 });
 test("native etsc builds multiline objects and void ternaries",()=>{

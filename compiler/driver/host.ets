@@ -17,6 +17,7 @@ export function writeText(fileName:string,text:string):boolean{hostCode("return 
 export function files(directory:string):string[]{hostCode("return ets_compiler_host::files(directory);");let empty:string[]=[];return empty;}
 export function remove(fileName:string):boolean{hostCode("return ets_compiler_host::remove(fileName);");return false;}
 export function executable():string{hostCode("return ets_compiler_host::executable();");return "";}
+export function currentDirectory():string{hostCode("return ets_compiler_host::currentDirectory();");return "";}
 export function rename(from:string,to:string):boolean{hostCode("return ets_compiler_host::rename(from,to);");return false;}
 export function launch(args:string[],output:string="",errors:string=""):number{hostCode("return ets_compiler_host::launch(args,output,errors);");return -2;}
 export function poll(processId:number):number{hostCode("return ets_compiler_host::poll(processId);");return 125;}

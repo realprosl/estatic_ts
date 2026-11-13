@@ -82,6 +82,7 @@ inline bool remove(std::string path){error.clear();std::error_code ec;std::files
 // rename(2) es atómico dentro del mismo sistema de ficheros: publica un objeto
 // de la caché completo o nada.
 inline std::string executable(){return executablePath().string();}
+inline std::string currentDirectory(){std::error_code ec;auto path=std::filesystem::current_path(ec);return ec?std::string():path.string();}
 inline bool rename(std::string from,std::string to){error.clear();std::error_code ec;std::filesystem::rename(from,to,ec);if(ec)error=ec.message();return !ec;}
 inline double launch(std::vector<std::string> args,std::string output,std::string errors){
  error.clear();if(args.empty()){error="Comando vacío";return -2;}
