@@ -43,7 +43,7 @@ test("native graph: all import/reexport forms preserve AST metadata and type edg
 });
 test("native graph: symbol aliases never act as path aliases",()=>{
   const f=fixture({"main.ets":'import {x as local} from "./lib"; import "local";',"lib.ets":'export const x=1;'});const g=run(f,[],1);
-  assert.equal(g.diagnostics.length,1);assert.match(g.diagnostics[0].message,/import 'local'/);
+  assert.equal(g.diagnostics.length,1);assert.match(g.diagnostics[0].message,/módulo 'local'/);
 });
 test("native resolver: longest alias at segment boundaries",()=>{
   const f=fixture({"main.ets":'import "@app/nested/thing"; import "@app/base";',"a/base.ets":"", "b/thing.ets":""});
