@@ -178,6 +178,21 @@ desde la raíz del repositorio. `--help` muestra la ayuda de los que la tienen.
 Más detalle de los scripts de `scripts/` en [`scripts/README.md`](scripts/README.md) y
 de la semilla en [`native-cpp/README.md`](native-cpp/README.md).
 
+## Compilación incremental y cachés
+
+`etsc build` / `etsc run` solo rehacen lo que ha cambiado:
+
+| Caché | Dónde | Qué evita |
+|---|---|---|
+| Huella de entradas | `.build/cache/build-fingerprint` | Si fuentes, configuración, argumentos, `etsc`, runtime y g++ no cambian, no se analiza ni se compila. |
+| Objeto del programa | `.build/cache/objects/program-*.o` | Si el C++ generado no cambia (comentarios, espacios…), no se vuelve a compilar. |
+| Runtime | `<prefix>/lib/estc/<versión>/build/objects` (lo crea `install.sh`) y `~/.cache/estc/objects` | Los `.cpp` del runtime (libuv, red, HTTP, regex) se compilan una vez y se enlazan. |
+| Cabecera precompilada | `~/.cache/estc/pch` | Una por combinación de cabeceras del runtime y flags, compuesta según lo que use el programa. Se guardan las 5 más recientes. |
+
+- `incremental.enabled: false` en `estatic.config.json` lo desactiva todo.
+- `ESTC_OBJECT_CACHE=<dir>` cambia la caché de usuario; `ESTC_OBJECT_CACHE=off` la desactiva.
+- Un objeto dañado en la caché se detecta al enlazar y se recompila.
+
 ## Configuración del proyecto
 
 `estatic.config.ts` centraliza la entrada, roots y aliases de módulos, salidas y compilación nativa directa. No utiliza CMake.

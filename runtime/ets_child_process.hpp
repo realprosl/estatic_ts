@@ -260,7 +260,7 @@ inline std::shared_ptr<ReadableState> openProcessReadable(int fd) {
         }
         return state;
     }
-    if (kind == UV_FILE || kind == UV_UNKNOWN) { state->regularFd = duplicate; return state; }
+    if (kind == UV_FILE || kind == UV_UNKNOWN_HANDLE) { state->regularFd = duplicate; return state; }
     auto* pipe = makePipe(currentLoop, state);
     if (!pipe) {
 #ifdef _WIN32
@@ -304,7 +304,7 @@ inline std::shared_ptr<WritableState> openProcessWritable(int fd) {
         }
         return state;
     }
-    if (kind == UV_FILE || kind == UV_UNKNOWN) {
+    if (kind == UV_FILE || kind == UV_UNKNOWN_HANDLE) {
         // A duplicated regular fd is owned by WritableState and written with
         // EINTR/partial-write handling; no libuv handle is needed for files.
         state->regularFd = duplicate;

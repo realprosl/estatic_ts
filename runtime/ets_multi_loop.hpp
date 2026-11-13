@@ -1,3 +1,4 @@
+#pragma once
 // ets_multi_loop.hpp — pool de LibuvEventLoop ejecutandose en paralelo.
 //
 // V26: Alberto 2026-10-07 -> "multicore N loops" del V26 roadmap.

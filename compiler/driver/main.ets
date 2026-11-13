@@ -8,7 +8,8 @@ import {generateCppFromIr,IrCppResult} from "../backend/cpp/generator";
 import {parseIrProject} from "../backend/cpp/decode";
 import {formatCppResult} from "../backend/cpp/wire";
 import {parseConfig,configStrings} from "./config";
-import {environment,exists,readText,stdinText,writeText,hostError,launch,poll,pause,files,compilerHome,objectKeys,directories} from "./host";
+import {environment,exists,readText,stdinText,writeText,hostError,launch,poll,pause,files,compilerHome,objectKeys,directories,remove,rename,now,executable} from "./host";
+import {contentHash,fileMetadata} from "../modules/platform";
 import {configureProgress,progressInteractive,progressStart,progressDetail,progressTick,progressFinish,progressSummary} from "../progress/progress";
 function driverError(message:string,status:number=1):void{progressFinish(false);printError(message);exitProcess(status);}
 function checkedWrite(path:string,text:string):void{if(!writeText(path,text))driverError(hostError());}
@@ -18,8 +19,10 @@ function parent(path:string):string{let end:number=-1;for(let k:number=0;k<path.
 function stem(path:string):string{let start:number=0;let end:number=path.length;for(let k:number=0;k<path.length;k=k+1){if(path.charAt(k)=="/"){start=k+1;end=path.length;}else if(path.charAt(k)==".")end=k;}return path.slice(start,end);}
 function execute(command:string[],output:string="",errors:string=""):number{progressDetail(command.join(" "));const pid=launch(command,output,errors);if(pid<0)driverError(hostError());let status=poll(pid);while(status<0){progressTick();pause(80);status=poll(pid);}return status;}
 function help():string{return "Uso: etsc build|run [entrada.ets] [opciones]\n  --check                  Verificar sin generar\n  -o archivo.cpp           Ruta C++\n  --binary archivo         Ruta ejecutable (con build)\n  --from-ir archivo        Generar desde ets-ir-2 verificado\n  --emit-ir archivo        Guardar IR\n  --config archivo         JSON u objeto declarativo\n  --root ruta | --alias nombre ruta | --cache ruta\n  --cxx compilador | --cxx-flag flag | --link-flag flag\n  --jobs N                 Procesos de análisis (1..32; por defecto 1)\n  --profile-analysis       Tiempos, CPU y RSS por fase en stderr\n  --verbose | --no-progress\n  init [directorio] [--no-src] | update-types [directorio]\n  --no-src                 (init) no crear src/: para una carpeta que ya tiene código\n  --help | --version\n";}
+// Ficheros fuente del último análisis: alimentan la huella de entradas (fase 3).
+let analyzedFiles:string[]=[];
 function sourceIr(entry:string,options:LoaderOptions,verbose:boolean):IrProject{
- let loader=new ModuleLoader(options);const graph=loader.load(entry);const project=analyzeProject(graph,verbose||progressInteractive());
+ let loader=new ModuleLoader(options);const graph=loader.load(entry);for(const file of graph.modules)analyzedFiles.push(file.file);const project=analyzeProject(graph,verbose||progressInteractive());
  let diagnostics=project.graph.diagnostics;for(const d of project.binding.diagnostics)diagnostics.push(d);for(const d of project.checked.diagnostics)diagnostics.push(d);
  let ir=new IrProject();if(diagnostics.length==0){progressDetail("Generando IR verificado");ir=lowerProject(project.graph,project.binding,project.checked,verbose||progressInteractive());}
  let seen:string[]=[];for(const d of diagnostics){const key=d.file+":"+numberToString(d.token.offset)+":"+d.code+":"+d.message;if(!seen.includes(key)){seen.push(key);ir.diagnostics.push(new IrIssue(d.code,d.message,new IrSource("","",d.file,-1,d.token.offset,d.endToken.endOffset)));}}
@@ -30,13 +33,172 @@ function initialize(root:string,directory:string,update:boolean,sources:boolean=
  let templates=root+"/templates";if(!exists(templates))templates=root+"/native-cpp/templates";if(!exists(templates))driverError("Faltan las plantillas de instalación");// --no-src: el proyecto ya tiene su codigo; no se crea ni se comprueba src/.
  let paths:string[]=[];for(const path of files(templates))if(sources||!path.startsWith("src/"))paths.push(path);if(exists(target))driverError("No se sobrescribe "+target);for(const path of paths)if(exists(directory+"/"+path))driverError("No se sobrescribe "+directory+"/"+path);for(const path of paths)if(path!="types/estatic.d.ts")checkedWrite(directory+"/"+path,checkedRead(templates+"/"+path));checkedWrite(target,types);
 }
-function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:string,cxx:string,flags:string[],links:string[]):void{
- if(!directories(parent(binary)))driverError(hostError());progressStart("Preparando runtime");let command:string[]=[cxx,"-std=c++20","-O0","-pthread","-fno-exceptions","-I"+root];for(const flag of flags)command.push(flag);command.push(cpp);let libraries:string[]=[];
- if(result.runtimeBackends.libuv){const uv=root+"/build/libs/libuv";if(exists(uv+"/include/uv.h"))command.push("-I"+uv+"/include");command.push(root+"/runtime/runtime_ets_libuv.cpp");command.push(root+"/runtime/runtime_ets_net_libuv.cpp");libraries.push(exists(uv+"/lib/libuv.a")?uv+"/lib/libuv.a":"-luv");libraries.push("-ldl");libraries.push("-lrt");}
- if(result.headers.includes("runtime/ets_http_httplib.hpp")){command.push("-DCPPHTTPLIB_NO_EXCEPTIONS");command.push(root+"/runtime/external/httplib/httplib.cc");}
- if(result.headers.includes("runtime/ets_regex.hpp")){command.push(root+"/runtime/ets_regex_compile.cpp");command.push("-fexceptions");}
- if(result.headers.includes("runtime/ets_http_drogon.hpp")){command.push("-fexceptions");command.push("-I/usr/include/jsoncpp");const drogon=root+"/build/libs/drogon";if(exists(drogon+"/include/drogon/drogon.h"))command.push("-I"+drogon+"/include");if(exists(drogon+"/lib/libdrogon.a"))libraries.push("-L"+drogon+"/lib");const dependencies:string[]=["-ldrogon","-ltrantor","-ljsoncpp","-luuid","-lz","-lssl","-lcrypto","-lresolv","-ldl"];for(const dependency of dependencies)libraries.push(dependency);}
- if(result.runtimeBackends.tls){libraries.push("-lssl");libraries.push("-lcrypto");}if(result.runtimeBackends.curl)libraries.push("-lcurl");for(const library of libraries)command.push(library);for(const link of links)command.push(link);command.push("-o");command.push(binary);progressStart("Compilando y enlazando C++");const status=execute(command);if(status!=0)driverError(cxx+" terminó con "+numberToString(status),status);if(!exists(binary))driverError("El compilador no creó "+binary);
+// --- Huella de entradas (#149, fase 3) ---------------------------------------
+// Si nada de lo que determina el binario ha cambiado (fuentes, configuración,
+// argumentos, etsc, runtime y compilador C++), build no analiza ni compila.
+function buildKey(args:string[],configText:string,root:string,cxx:string,scratch:string):string{
+ let text="etsc "+executable()+" "+fileMetadata(executable())+"\nroot "+root+" "+runtimeIdentity(root)+"\ncxx "+compilerIdentity(cxx,scratch)+"\nCXX "+environment("CXX")+"\nconfig "+configText+"\n";
+ for(const arg of args)text=text+"arg "+arg+"\n";return contentHash(text);
+}
+function fingerprintText(key:string,inputs:string[],outputs:string[]):string{
+ let text=key+"\n";for(const file of inputs)text=text+"in\t"+file+"\t"+fileMetadata(file)+"\n";for(const file of outputs)text=text+"out\t"+file+"\t"+fileMetadata(file)+"\n";return text;
+}
+// Vigente si la clave coincide y cada fichero sigue con la misma metadata.
+function fingerprintCurrent(path:string,key:string):boolean{
+ if(!exists(path))return false;const lines=readText(path).split("\n");if(lines.length<2||lines[0]!=key)return false;let outputs=0;
+ for(let k:number=1;k<lines.length;k=k+1){if(lines[k]=="")continue;const fields=lines[k].split("\t");if(fields.length!=3)return false;if(!exists(fields[1])||fileMetadata(fields[1])!=fields[2])return false;if(fields[0]=="out")outputs=outputs+1;}
+ return outputs>0;
+}
+// --- Compilación C++ con caché de objetos del runtime (#149, fase 1) -------
+// Los .cpp del runtime (libuv, red, httplib, regex) no cambian entre
+// compilaciones: cada uno se compila a un .o guardado en la caché de usuario
+// con una huella de todo lo que lo determina (compilador, flags, fuente y
+// ficheros del runtime). El programa se compila a su propio .o y se enlaza.
+// flags: comunes a todo (base, del proyecto e -I). programFlags: los que solo
+// necesita el programa por las cabeceras que incluye. sourceFlags[k]: los que
+// necesita cada fuente del runtime. Así un objeto del runtime no depende de qué
+// otras APIs use el programa y se comparte entre proyectos.
+class CppPlan{flags:string[];programFlags:string[];sources:string[];sourceFlags:string[][];libraries:string[];pchHeader:string;constructor(){this.flags=[];this.programFlags=[];this.sources=[];this.sourceFlags=[];this.libraries=[];this.pchHeader="";}}
+function cppPlan(result:constRef<IrCppResult>,root:string,cxx:string,flags:string[]):CppPlan{
+ let plan=new CppPlan();const base:string[]=[cxx,"-std=c++20","-O0","-pthread","-fno-exceptions","-I"+root];for(const flag of base)plan.flags.push(flag);for(const flag of flags)plan.flags.push(flag);
+ if(result.runtimeBackends.libuv){const uv=root+"/build/libs/libuv";const none:string[]=[];if(exists(uv+"/include/uv.h"))plan.flags.push("-I"+uv+"/include");plan.sources.push(root+"/runtime/runtime_ets_libuv.cpp");plan.sourceFlags.push(none);plan.sources.push(root+"/runtime/runtime_ets_net_libuv.cpp");plan.sourceFlags.push(none);plan.libraries.push(exists(uv+"/lib/libuv.a")?uv+"/lib/libuv.a":"-luv");plan.libraries.push("-ldl");plan.libraries.push("-lrt");}
+ if(result.headers.includes("runtime/ets_http_httplib.hpp")){plan.programFlags.push("-DCPPHTTPLIB_NO_EXCEPTIONS");plan.sources.push(root+"/runtime/external/httplib/httplib.cc");plan.sourceFlags.push(["-DCPPHTTPLIB_NO_EXCEPTIONS"]);}
+ if(result.headers.includes("runtime/ets_regex.hpp")){plan.sources.push(root+"/runtime/ets_regex_compile.cpp");plan.sourceFlags.push(["-fexceptions"]);plan.programFlags.push("-fexceptions");}
+ if(result.headers.includes("runtime/ets_http_drogon.hpp")){plan.programFlags.push("-fexceptions");plan.flags.push("-I/usr/include/jsoncpp");const drogon=root+"/build/libs/drogon";if(exists(drogon+"/include/drogon/drogon.h"))plan.flags.push("-I"+drogon+"/include");if(exists(drogon+"/lib/libdrogon.a"))plan.libraries.push("-L"+drogon+"/lib");const dependencies:string[]=["-ldrogon","-ltrantor","-ljsoncpp","-luuid","-lz","-lssl","-lcrypto","-lresolv","-ldl"];for(const dependency of dependencies)plan.libraries.push(dependency);}
+ if(result.runtimeBackends.tls){plan.libraries.push("-lssl");plan.libraries.push("-lcrypto");}if(result.runtimeBackends.curl)plan.libraries.push("-lcurl");
+ return plan;
+}
+// Directorio de la caché de objetos del runtime: ESTC_OBJECT_CACHE, o
+// $XDG_CACHE_HOME/estc/objects, o ~/.cache/estc/objects. Vacío = sin caché.
+function runtimeObjectCache():string{
+ let directory=environment("ESTC_OBJECT_CACHE");if(directory=="off")return "";
+ if(directory==""){const xdg=environment("XDG_CACHE_HOME");const home=environment("HOME");if(xdg!="")directory=xdg+"/estc/objects";else if(home!="")directory=home+"/.cache/estc/objects";}
+ if(directory==""||!directories(directory))return "";return directory;
+}
+// Identidad del compilador C++: su salida de --version (cambia al actualizarlo).
+function compilerIdentity(cxx:string,scratch:string):string{
+ const file=scratch+".cxx-version";const pid=launch([cxx,"--version"],file,"/dev/null");if(pid<0)return cxx;let status=poll(pid);while(status<0){pause(5);status=poll(pid);}
+ const text=readText(file);remove(file);return cxx+"\n"+text;
+}
+// Huella de los ficheros del runtime instalado: ruta, tamaño y fecha de cada
+// fuente o cabecera. La instalación es inmutable; en un checkout de desarrollo
+// cualquier edición cambia la fecha y con ella la huella.
+function runtimeIdentity(root:string):string{
+ let text="";for(const path of files(root+"/runtime")){if(path.endsWith(".hpp")||path.endsWith(".h")||path.endsWith(".cpp")||path.endsWith(".cc")||path.endsWith(".c"))text=text+path+" "+fileMetadata(root+"/runtime/"+path)+"\n";}
+ return contentHash(text);
+}
+// Lanza todos los comandos a la vez y espera a que acaben. Devuelve el primer
+// estado distinto de cero (o 0).
+function executeAll(commands:string[][]):number{
+ let pids:number[]=[];for(const command of commands){progressDetail(command.join(" "));const pid=launch(command);if(pid<0)driverError(hostError());pids.push(pid);}
+ let statuses:number[]=[];for(const pid of pids)statuses.push(-1);let pending=pids.length;
+ while(pending>0){pending=0;for(let k:number=0;k<pids.length;k=k+1){if(statuses[k]<0){statuses[k]=poll(pids[k]);if(statuses[k]<0)pending=pending+1;}}if(pending>0){progressTick();pause(40);}}
+ for(const status of statuses)if(status!=0)return status;return 0;
+}
+function linkCommand(plan:constRef<CppPlan>,objects:string[],links:string[],binary:string):string[]{
+ let command:string[]=[];for(const flag of plan.flags)command.push(flag);for(const flag of plan.programFlags)command.push(flag);for(const object of objects)command.push(object);for(const library of plan.libraries)command.push(library);for(const link of links)command.push(link);command.push("-o");command.push(binary);return command;
+}
+// --- Cabecera precompilada compuesta según el uso (#149, fase 2) -----------
+// GCC admite una sola PCH por unidad, así que se compone una por combinación:
+// las líneas #include que el backend pone al principio del C++ generado (las
+// del runtime que el programa usa) más los flags. Se busca primero en la
+// instalación (<root>/build/pch) y después en la caché del usuario; si no
+// existe, el programa se compila sin ella y la PCH se crea en paralelo para el
+// siguiente build.
+function generatedIncludes(cpp:string):string[]{
+ let lines:string[]=[];for(const line of readText(cpp).split("\n")){if(line.startsWith("#include")){lines.push(line);continue;}if(line==""||line.startsWith("//"))continue;break;}return lines;
+}
+function pchArtifact(header:string,compiler:string):string{return header+(compiler.includes("clang",0)?".pch":".gch");}
+// Deja solo las `keep` PCH usadas más recientemente en la caché del usuario.
+function prunePch(directory:string,keep:number):void{
+ let keys:string[]=[];let times:string[]=[];
+ for(const file of files(directory)){if(!(file.endsWith(".gch")||file.endsWith(".pch")))continue;const slash=file.indexOf("/",0);if(slash<0)continue;const fields=fileMetadata(directory+"/"+file).split("|");keys.push(file.slice(0,slash));times.push(fields.length>1?fields[1]:"");}
+ while(keys.length>keep){
+  // Fechas "segundos:nanosegundos" de la misma longitud: el orden de texto es el temporal.
+  let oldest=0;for(let k:number=1;k<keys.length;k=k+1)if(times[k].localeCompare(times[oldest])<0)oldest=k;
+  const dir=directory+"/"+keys[oldest];for(const file of files(dir))remove(dir+"/"+file);remove(dir);
+  let restKeys:string[]=[];let restTimes:string[]=[];for(let k:number=0;k<keys.length;k=k+1)if(k!=oldest){restKeys.push(keys[k]);restTimes.push(times[k]);}keys=restKeys;times=restTimes;
+ }
+}
+function compileCommand(plan:constRef<CppPlan>,index:number,source:string,object:string):string[]{
+ let command:string[]=[];for(const flag of plan.flags)command.push(flag);if(index==0){for(const flag of plan.programFlags)command.push(flag);if(plan.pchHeader!=""){command.push("-include");command.push(plan.pchHeader);}}else{for(const flag of plan.sourceFlags[index-1])command.push(flag);}command.push("-c");command.push(source);command.push("-o");command.push(object);return command;
+}
+// Objetos de compilación:
+// - runtime: primero los preparados en la instalación (<root>/build/objects, de
+//   solo lectura, comunes a todos los usuarios); si no, la caché del usuario.
+// - programa: en la caché del proyecto, por huella del C++ generado; si el C++
+//   no cambia (comentarios, espacios…), no se vuelve a compilar.
+function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:string,cxx:string,flags:string[],links:string[],cacheObjects:boolean,projectCache:string):void{
+ if(!directories(parent(binary)))driverError(hostError());progressStart("Preparando runtime");let plan=cppPlan(result,root,cxx,flags);
+ const userCache=cacheObjects?runtimeObjectCache():"";const shipped=root+"/build/objects";
+ const programCache=cacheObjects&&projectCache!=""&&directories(projectCache+"/objects")?projectCache+"/objects":"";
+ if(userCache==""&&programCache==""&&!(cacheObjects&&exists(shipped))){
+  // Sin caché: una sola llamada, como siempre.
+  let sources:string[]=[cpp];for(const source of plan.sources)sources.push(source);
+  progressStart("Compilando y enlazando C++");const status=executeAll([linkCommand(plan,sources,links,binary)]);
+  if(status!=0)driverError(cxx+" terminó con "+numberToString(status),status);if(!exists(binary))driverError("El compilador no creó "+binary);return;
+ }
+ const identity=contentHash(compilerIdentity(cxx,binary)+"\n"+plan.flags.join("\n")+"\n"+runtimeIdentity(root));
+ // targets[k]: objeto a enlazar; build[k]: hay que compilarlo; publish[k]: ruta
+ // final si se compila a un temporal; drop[k]: borrar al acabar (sin caché).
+ let sources:string[]=[cpp];for(const source of plan.sources)sources.push(source);
+ let targets:string[]=[];let build:boolean[]=[];let publish:string[]=[];let drop:boolean[]=[];
+ for(let k:number=0;k<sources.length;k=k+1){
+  if(k==0){
+   if(programCache!=""){const object=programCache+"/program-"+contentHash(identity+"\n"+plan.programFlags.join("\n")+"\n"+readText(cpp))+".o";targets.push(object);build.push(!exists(object));publish.push(object);drop.push(false);}
+   else{targets.push(binary+".o");build.push(true);publish.push("");drop.push(true);}
+   continue;
+  }
+  const name=contentHash(identity+"\n"+plan.sourceFlags[k-1].join("\n")+"\n"+sources[k]+"\n"+fileMetadata(sources[k]))+".o";
+  if(cacheObjects&&exists(shipped+"/"+name)){targets.push(shipped+"/"+name);build.push(false);publish.push("");drop.push(false);}
+  else if(userCache!=""){targets.push(userCache+"/"+name);build.push(!exists(userCache+"/"+name));publish.push(userCache+"/"+name);drop.push(false);}
+  else{targets.push(binary+".runtime"+numberToString(k)+".o");build.push(true);publish.push("");drop.push(true);}
+ }
+ let pchPid:number=-1;let pchPartial="";let pchFinal="";
+ if(build[0]){
+  const includes=generatedIncludes(cpp);const compiler=compilerIdentity(cxx,binary);
+  if(includes.length>0){
+   const key=contentHash(identity+"\n"+plan.programFlags.join("\n")+"\n"+includes.join("\n"));
+   const shippedHeader=shipped+"/../pch/"+key+"/pch.hpp";
+   if(cacheObjects&&exists(pchArtifact(shippedHeader,compiler)))plan.pchHeader=shippedHeader;
+   else if(userCache!=""&&directories(userCache+"/../pch/"+key)){
+    const header=userCache+"/../pch/"+key+"/pch.hpp";if(!exists(header))checkedWrite(header,includes.join("\n")+"\n");
+    if(exists(pchArtifact(header,compiler)))plan.pchHeader=header;
+    else{pchFinal=pchArtifact(header,compiler);pchPartial=pchFinal+"."+numberToString(now())+".tmp";let command:string[]=[];for(const flag of plan.flags)command.push(flag);for(const flag of plan.programFlags)command.push(flag);command.push("-x");command.push("c++-header");command.push(header);command.push("-o");command.push(pchPartial);pchPid=launch(command,"/dev/null","/dev/null");}
+   }
+  }
+ }
+ let status=compileObjects(plan,sources,targets,build,publish);
+ if(pchPid>=0){
+  // La PCH nueva es para el siguiente build: se espera a que acabe y se publica.
+  let pchStatus=poll(pchPid);while(pchStatus<0){progressTick();pause(40);pchStatus=poll(pchPid);}
+  if(pchStatus==0&&exists(pchPartial)){rename(pchPartial,pchFinal);prunePch(userCache+"/../pch",5);}else remove(pchPartial);
+ }
+ if(status!=0)driverError(cxx+" terminó con "+numberToString(status),status);
+ progressStart("Enlazando");status=executeAll([linkCommand(plan,targets,links,binary)]);
+ if(status!=0){
+  // Un objeto reutilizado puede estar dañado: se recompila todo lo reutilizado
+  // (fuera de la instalación, que es de solo lectura) y se enlaza otra vez.
+  let retry:boolean=false;for(let k:number=0;k<sources.length;k=k+1){if(build[k])continue;retry=true;build[k]=true;
+   if(targets[k].startsWith(shipped+"/")){if(userCache!=""){targets[k]=userCache+"/"+targets[k].slice(shipped.length+1,targets[k].length);publish[k]=targets[k];}else{targets[k]=binary+".runtime"+numberToString(k)+".o";publish[k]="";drop[k]=true;}}
+   else remove(targets[k]);}
+  if(retry){progressStart("Recompilando objetos de la caché");status=compileObjects(plan,sources,targets,build,publish);if(status==0)status=executeAll([linkCommand(plan,targets,links,binary)]);}
+ }
+ for(let k:number=0;k<targets.length;k=k+1)if(drop[k])remove(targets[k]);
+ if(status!=0)driverError(cxx+" terminó con "+numberToString(status),status);if(!exists(binary))driverError("El compilador no creó "+binary);
+ // La caché del proyecto solo guarda el objeto del programa vigente.
+ if(programCache!=""){for(const file of files(programCache))if(file.startsWith("program-")&&programCache+"/"+file!=targets[0])remove(programCache+"/"+file);}
+}
+// Compila en paralelo los objetos marcados. Los que van a una caché se escriben
+// en un temporal y se publican con rename al terminar bien.
+function compileObjects(plan:constRef<CppPlan>,sources:string[],targets:string[],build:boolean[],publish:string[]):number{
+ let commands:string[][]=[];let partials:string[]=[];let finals:string[]=[];
+ for(let k:number=0;k<sources.length;k=k+1){if(!build[k])continue;const output=publish[k]!=""?publish[k]+"."+numberToString(now())+".tmp":targets[k];commands.push(compileCommand(plan,k,sources[k],output));if(publish[k]!=""){partials.push(output);finals.push(publish[k]);}}
+ if(commands.length==0)return 0;
+ progressStart(commands.length==1&&build[0]?"Compilando C++":"Compilando C++ y runtime");
+ const status=executeAll(commands);
+ for(let k:number=0;k<partials.length;k=k+1){if(status==0&&exists(partials[k]))rename(partials[k],finals[k]);else remove(partials[k]);}
+ return status;
 }
 function main():void{
  let args:string[]=[];for(let k:number=1;k<argumentCount();k=k+1)args.push(argument(k));
@@ -55,12 +217,30 @@ function main():void{
  if(arg.startsWith("-")||entry!="")driverError("Argumento inesperado: "+arg,2);entry=arg;}
  if(entry!=""&&fromIr!="")driverError("Usa una fuente o --from-ir",2);if(check&&(build||run||output!=""||binary!=""))driverError("--check no admite generación o ejecución",2);if(programArgs.length>0&&!run)driverError("Los argumentos del programa requieren run",2);
  configureProgress(verbose,animate);progressStart("Cargando configuración");if(configPath==""&&entry==""&&fromIr==""){if(exists("estatic.config.json"))configPath="estatic.config.json";else if(exists("estatic.config.ts"))configPath="estatic.config.ts";}
- let config:JsonValue=JSON.parseValue("{}");let base:string=".";if(configPath!=""){config=parseConfig(checkedRead(configPath));base=parent(configPath);}const configuredEntry=jsonAsString(jsonObjectGet(config,"entry"));if(entry==""&&fromIr==""&&configuredEntry!="")entry=pathAt(base,configuredEntry);if(entry==""&&fromIr=="")driverError(help(),2);
+ let config:JsonValue=JSON.parseValue("{}");let configText="";let base:string=".";if(configPath!=""){configText=checkedRead(configPath);config=parseConfig(configText);base=parent(configPath);}const configuredEntry=jsonAsString(jsonObjectGet(config,"entry"));if(entry==""&&fromIr==""&&configuredEntry!="")entry=pathAt(base,configuredEntry);if(entry==""&&fromIr=="")driverError(help(),2);
  const incremental=jsonObjectGet(config,"incremental");const cache=jsonAsString(jsonObjectGet(incremental,"cacheDirectory"));if(options.cacheDirectory==""&&cache!="")options.cacheDirectory=pathAt(base,cache);
  for(const path of configStrings(jsonObjectGet(config,"moduleRoots")))options.roots.push(pathAt(base,path));const aliases=jsonObjectGet(config,"aliases");for(const name of objectKeys(aliases))options.aliases.push(new PathAlias(name,pathAt(base,jsonAsString(jsonObjectGet(aliases,name)))));
+ // Fase 3 de #149: con una huella vigente no se analiza ni se compila.
+ const compilerConfig=jsonObjectGet(config,"compiler");const outputConfig=jsonObjectGet(config,"output");
+ const willCompile=build||jsonAsBool(jsonObjectGet(compilerConfig,"enabled"));
+ const incrementalEnabled=!jsonIsBool(jsonObjectGet(incremental,"enabled"))||jsonAsBool(jsonObjectGet(incremental,"enabled"));
+ let fingerprintPath="";let fingerprintKey="";
+ if(willCompile&&fromIr==""&&emitIr==""&&!check&&incrementalEnabled&&options.cacheDirectory!=""){
+  if(output==""){const configured=jsonAsString(jsonObjectGet(outputConfig,"cpp"));output=(configured!=""?pathAt(base,configured):"build/"+stem(entry)+".cpp");}
+  if(binary==""){const configured=jsonAsString(jsonObjectGet(outputConfig,"binary"));binary=(configured!=""?pathAt(base,configured):output+".bin");}
+  if(cxx=="")cxx=jsonAsString(jsonObjectGet(compilerConfig,"command"));if(cxx=="")cxx=environment("CXX");if(cxx=="")cxx="g++";
+  let keyArgs:string[]=["entry "+entry,"output "+output,"binary "+binary];for(const flag of flags)keyArgs.push("cxx-flag "+flag);for(const link of links)keyArgs.push("link-flag "+link);for(const moduleRoot of options.roots)keyArgs.push("root "+moduleRoot);for(const alias of options.aliases)keyArgs.push("alias "+alias.name+" "+alias.target);
+  if(directories(options.cacheDirectory)){fingerprintPath=options.cacheDirectory+"/build-fingerprint";fingerprintKey=buildKey(keyArgs,configText,root,cxx,options.cacheDirectory+"/build-fingerprint");}
+  if(fingerprintPath!=""&&fingerprintCurrent(fingerprintPath,fingerprintKey)){
+   progressStart("Sin cambios: se reutiliza el binario");progressSummary(output,binary);
+   if(run){let command:string[]=[normalizePath(binary)];for(const arg of programArgs)command.push(arg);exitProcess(execute(command));}
+   return;
+  }
+ }
+ if(fingerprintPath!=""&&exists(fingerprintPath))remove(fingerprintPath);
  options.verbose=verbose||progressInteractive();progressStart(fromIr==""?"Analizando fuentes y verificando IR":"Leyendo IR");const ir:IrProject=fromIr==""?sourceIr(entry,options,verbose):parseIrProject(checkedRead(fromIr));if(emitIr!="")checkedWrite(emitIr,formatIr(ir)+"\n");if(check){progressSummary();return;}
  progressStart("Generando C++ desde IR verificado");const generated=generateCppFromIr(ir);const outConfig=jsonObjectGet(config,"output");const compiler=jsonObjectGet(config,"compiler");if(output==""){const configured=jsonAsString(jsonObjectGet(outConfig,"cpp"));output=(configured!=""?pathAt(base,configured):"build/"+stem(fromIr==""?entry:fromIr)+".cpp");}progressStart("Guardando resultados");checkedWrite(output,generated.cpp);
- if(build||jsonAsBool(jsonObjectGet(compiler,"enabled"))){if(binary==""){const configured=jsonAsString(jsonObjectGet(outConfig,"binary"));binary=(configured!=""?pathAt(base,configured):output+".bin");}if(cxx=="")cxx=jsonAsString(jsonObjectGet(compiler,"command"));if(cxx=="")cxx=environment("CXX");if(cxx=="")cxx="g++";let compileFlags=configStrings(jsonObjectGet(compiler,"flags"));for(const flag of flags)compileFlags.push(flag);let linkFlags=configStrings(jsonObjectGet(compiler,"linkFlags"));for(const flag of links)linkFlags.push(flag);for(const library of configStrings(jsonObjectGet(config,"linkLibraries")))linkFlags.push("-l"+library);compileCpp(generated,output,binary,root,cxx,compileFlags,linkFlags);}
+ if(build||jsonAsBool(jsonObjectGet(compiler,"enabled"))){if(binary==""){const configured=jsonAsString(jsonObjectGet(outConfig,"binary"));binary=(configured!=""?pathAt(base,configured):output+".bin");}if(cxx=="")cxx=jsonAsString(jsonObjectGet(compiler,"command"));if(cxx=="")cxx=environment("CXX");if(cxx=="")cxx="g++";let compileFlags=configStrings(jsonObjectGet(compiler,"flags"));for(const flag of flags)compileFlags.push(flag);let linkFlags=configStrings(jsonObjectGet(compiler,"linkFlags"));for(const flag of links)linkFlags.push(flag);for(const library of configStrings(jsonObjectGet(config,"linkLibraries")))linkFlags.push("-l"+library);compileCpp(generated,output,binary,root,cxx,compileFlags,linkFlags,incrementalEnabled,options.cacheDirectory);if(fingerprintPath!=""){let inputs:string[]=[];for(const file of analyzedFiles)inputs.push(file);if(configPath!="")inputs.push(configPath);checkedWrite(fingerprintPath,fingerprintText(fingerprintKey,inputs,[output,binary]));}}
  progressSummary(output,(build||jsonAsBool(jsonObjectGet(compiler,"enabled")))?binary:"");if(run){let command:string[]=[normalizePath(binary)];for(const arg of programArgs)command.push(arg);exitProcess(execute(command));}
 }
 main();

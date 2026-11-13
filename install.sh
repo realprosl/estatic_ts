@@ -289,31 +289,29 @@ if [ -e "$legacy_nativo" ] && [ -f "$legacy_nativo_manifest" ]; then
 fi
 
 # --- Runtime precompilado ----------------------------------------------------
-# El driver sabe calcular la clave de cache, el manifiesto y las rutas que
-# despues reutiliza. Compilar un programa de prueba con el compilador ya
-# instalado deja el runtime listo en su cache y en la distribucion.
+# Los .cpp del runtime se compilan una vez aqui y quedan dentro de la
+# distribucion (<release>/build/objects), de solo lectura y comunes a todos los
+# usuarios: etsc los busca ahi antes que en su cache (~/.cache/estc/objects).
+# Se compila un proyecto de prueba creado con `etsc init`, asi los objetos
+# llevan los flags por defecto de estatic.config.json.
 etsc_info "Preparando runtime · libuv, red, HTTP y regex"
 probe="$work/probe"
-mkdir -p "$probe/src"
-cat > "$probe/src/main.ets" <<'EOF'
+mkdir -p "$release/build/objects"
+if ESTC_ROOT="$current" "$destination" init "$probe" >"$work/warm.log" 2>&1; then
+  cat > "$probe/src/main.ts" <<'EOF'
 async function main(): Promise<void> {
   const server = http.createServer();
+  process.stdin.on("data", (chunk: string): void => { print(chunk); });
   print("runtime listo");
 }
 main();
 EOF
-if ESTC_ROOT="$current" "$destination" build "$probe/src/main.ets" \
-     -o "$probe/app.cpp" --binary "$probe/app" --no-progress >"$work/warm.log" 2>&1; then
-  warm_cache="${ESTC_RUNTIME_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/estc/runtime}"
-  if [ -d "$warm_cache" ]; then
-    mkdir -p "$release/build/runtime-cache"
-    for entry in "$warm_cache"/*/; do
-      [ -d "$entry" ] || continue
-      name="$(basename "$entry")"
-      [ -e "$release/build/runtime-cache/$name" ] || cp -R "$entry" "$release/build/runtime-cache/$name"
-    done
-  fi
-  echo "    runtime compilado y cacheado"
+fi
+if [ -f "$probe/estatic.config.json" ] && (cd "$probe" && ESTC_ROOT="$current" ESTC_OBJECT_CACHE="$release/build/objects" "$destination" build --no-progress) >>"$work/warm.log" 2>&1; then
+  # La PCH del programa de prueba solo serviria a esa combinacion de APIs y
+  # ocupa mas de 100 MB: cada usuario compone las suyas en su cache.
+  rm -rf "$release/build/pch"
+  echo "    runtime compilado: $(find "$release/build/objects" -name '*.o' | wc -l | tr -d ' ') objetos en $release/build/objects"
 else
   echo "    aviso: no se pudo precompilar el runtime; el compilador lo hara al primer uso." >&2
   sed 's/^/    /' "$work/warm.log" >&2 || true
