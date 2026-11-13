@@ -1,3 +1,4 @@
+import { catalogArg } from "../frontend/catalog";
 import {analysisJobs,profileBegin,profileEnd} from "../analysis/options";
 import {forkWorker,finishWorker,waitWorker,temporaryDirectory,poll,pause,terminate,readText,writeText,remove,hostError} from "../driver/host";
 import {progressDetail} from "../progress/progress";
@@ -1178,7 +1179,7 @@ export class SafetyAnalyzer {
       if (this.node(m,body).kind == NodeKind.BlockStatement) {
         this.walk(m,body,state,[owner]);
         if (state.exit == "") this.fieldsInitialized(m,id,state);
-        if (this.node(m,body).start.kind != ";" && (functionReturn(this.result.files[m].types[id]) != "void" && !((n.get(AttributeKind.Async) == "true" || n.get(AttributeKind.IsAsync) == "true") && functionReturn(this.result.files[m].types[id]) == "Promise<void>")) && state.exit != "return") this.report(m,id,"No todas las rutas de la función devuelven un valor\nayuda: añade un 'return' de tipo '" + functionReturn(this.result.files[m].types[id]) + "' al final, o cambia el tipo de retorno a 'void' si no debe devolver nada");
+        if (this.node(m,body).start.kind != ";" && (functionReturn(this.result.files[m].types[id]) != "void" && !((n.get(AttributeKind.Async) == "true" || n.get(AttributeKind.IsAsync) == "true") && functionReturn(this.result.files[m].types[id]) == "Promise<void>")) && state.exit != "return") this.report(m,id,"E3004: No todas las rutas de la función devuelven un valor\nayuda: añade un 'return' de tipo '" + functionReturn(this.result.files[m].types[id]) + "' al final, o cambia el tipo de retorno a 'void' si no debe devolver nada" + catalogArg("tipo", functionReturn(this.result.files[m].types[id])));
       } else this.expression(m,body,state,[owner]);
   }
   definitions(modules: number[], nodes: number[], begin: number, end: number): void {

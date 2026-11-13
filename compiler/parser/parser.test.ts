@@ -404,7 +404,9 @@ for (const source of [
   const result = native(source); assert.ok(result.diagnostics.length > 0 && result.diagnostics.length <= 100);
 });
 test("bootstrap parser reports a missing return type with one clear diagnostic", () => {
-  const messages = (source: string) => native(source).diagnostics.map(d => d.message);
+  // Texto en español del mensaje, sin el código ni los datos para el catálogo.
+  const messages = (source: string) => native(source).diagnostics.map(d => d.message.replace(/^E\d+: /, "").split("\n\t")[0]);
+  assert.deepEqual(native("function suma(a:number){}").diagnostics.map(d => d.message.split("\n\t").slice(1)), [["nombre=suma"]]);
   assert.deepEqual(messages("function suma(a:number,b:number){return a+b;}"), ["La función 'suma' necesita un tipo de retorno: añade ': Tipo' después de los parámetros (por ejemplo ': void' o ': number')"]);
   assert.deepEqual(messages("class A{ hola(){} }"), ["El método 'hola' necesita un tipo de retorno: añade ': Tipo' después de los parámetros (por ejemplo ': void' o ': number')"]);
   assert.deepEqual(messages("interface I{ hola(): void; adios(); }"), ["El método 'adios' necesita un tipo de retorno: añade ': Tipo' después de los parámetros (por ejemplo ': void' o ': number')"]);

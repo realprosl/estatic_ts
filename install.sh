@@ -218,6 +218,7 @@ mkdir -p "$stage/compiler/modules"
 find "$repo_dir/compiler/modules" -maxdepth 1 -type f \
   \( -name '*.hpp' -o -name '*.h' \) -exec cp {} "$stage/compiler/modules/" \;
 cp -R "$repo_dir/types" "$stage/types"
+cp -R "$repo_dir/messages" "$stage/messages"
 cp -R "$seed_dir/templates/." "$stage/templates/"
 # Las declaraciones canonicas son la unica fuente de verdad.
 cp "$repo_dir/types/estatic.d.ts" "$stage/templates/types/estatic.d.ts"

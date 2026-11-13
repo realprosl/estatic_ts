@@ -1,3 +1,4 @@
+import { catalogArg, catalogVariant } from "../frontend/catalog";
 import { closestName } from "../frontend/suggest";
 import {progressDetail} from "../progress/progress";
 import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind, nodeKindName } from "../parser/ast-schema";
@@ -112,7 +113,7 @@ export class NativeChecker {
     if (this.literalMismatch(module,id,actual,expected)) return;
     if (ownedType(expected) && actual == memoryInner(expected) && id >= 0 && this.node(module,id).kind == NodeKind.NewExpression) return;
     if (id >= 0 && actual != expected && actual != "!error" && expected != "!error" && expected != "" && this.compatible(actual,expected)) this.result.files[module].conversions[id] = expected;
-    if (!this.compatible(actual, expected)) this.report(module, id, "Tipos incompatibles: se esperaba '" + this.displayType(expected) + "' y se encontró '" + this.displayType(actual) + "'");
+    if (!this.compatible(actual, expected)) this.report(module, id, "E3001: Tipos incompatibles: se esperaba '" + this.displayType(expected) + "' y se encontró '" + this.displayType(actual) + "'" + catalogArg("esperado", this.displayType(expected)) + catalogArg("encontrado", this.displayType(actual)));
   }
   // Comprueba si el valor de la posicion coincide con un tipo literal. Un
   // literal de tipo solo acepta el valor exacto: `"Hola"` no satisface
@@ -743,14 +744,15 @@ export class NativeChecker {
   }
   unknownMember(valueType: string, name: string): string {
     const display: string = this.displayType(valueType);
-    let message: string = "El tipo '" + display + "' no declara el miembro '" + name + "'";
-    if (display == "ProcessReadable") return message + "\nayuda: un stream de lectura (process.stdin, child.stdout) solo tiene .on(\"data\" | \"end\", ...)\nnota: para dejar de leer antes de que acabe la entrada, usa process.exit(código)";
-    if (display == "ProcessWritable") return message + "\nayuda: un stream de escritura (process.stdout, child.stdin) tiene .write(texto) y .end()";
+    const message: string = "E3002: El tipo '" + display + "' no declara el miembro '" + name + "'";
+    const args: string = catalogArg("tipo", display) + catalogArg("miembro", name);
+    if (display == "ProcessReadable") return message + "\nayuda: un stream de lectura (process.stdin, child.stdout) solo tiene .on(\"data\" | \"end\", ...)\nnota: para dejar de leer antes de que acabe la entrada, usa process.exit(código)" + args + catalogVariant("lectura");
+    if (display == "ProcessWritable") return message + "\nayuda: un stream de escritura (process.stdout, child.stdin) tiene .write(texto) y .end()" + args + catalogVariant("escritura");
     const names: string[] = this.memberNames(valueType);
     const suggestion: string = closestName(name, names);
-    if (suggestion != "") return message + "\nayuda: ¿querías decir '" + suggestion + "'?";
-    if (names.length > 0 && names.length <= 10) return message + "\nnota: miembros de '" + display + "': " + names.join(", ");
-    return message;
+    if (suggestion != "") return message + "\nayuda: ¿querías decir '" + suggestion + "'?" + args + catalogArg("sugerencia", suggestion) + catalogVariant("sugerencia");
+    if (names.length > 0 && names.length <= 10) return message + "\nnota: miembros de '" + display + "': " + names.join(", ") + args + catalogArg("miembros", names.join(", ")) + catalogVariant("lista");
+    return message + args;
   }
   memberSymbol(valueType: string, name: string): number {
     let receiver: string = memoryValue(valueType); if (receiver.startsWith("class:")) receiver = receiver.slice(6,receiver.length);
@@ -1015,13 +1017,13 @@ export class NativeChecker {
     }
     if (sid >= 0) {
       const s: BindingSymbol = this.binding.symbols[sid];
-      if ((s.module) < 0) { this.report(module,id,"No se puede modificar un builtin"); return; }
+      if ((s.module) < 0) { this.report(module,id,"E3005: No se puede modificar un builtin"); return; }
       if (s.kind == "receiver" || memoryMode(this.result.files[module].types[id]) == "ref") return;
       const variable: boolean = ["VariableDeclaration","ArrayBinding","ObjectBinding","UsingDeclaration"].includes(s.kind);
       const declaration: AstNode = this.node(s.module,s.kind == "ArrayBinding" || s.kind == "ObjectBinding" ? this.binding.files[s.module].parents[s.node] : s.node);
       const initialization: boolean = !through && this.constructorInitialization(module,id,sid);
-      if ((variable && declaration.get(AttributeKind.Mutable) != "true") || (declaration.get(AttributeKind.Readonly) == "true" && !initialization) || (!variable && s.kind != "ClassField" && s.kind != "InterfaceField" && s.kind != "Parameter")) this.report(module,id,variable && declaration.get(AttributeKind.Mutable) != "true" ? "No se puede modificar '" + s.name + "': es inmutable porque se declaró con 'const'\nayuda: declárala con 'let' si tiene que cambiar\nnota: en este dialecto 'const' también impide modificar su contenido (campos, push, ...)" : "No se puede modificar '" + s.name + "': es inmutable (readonly)");
-      for (const ref of this.binding.references) if (ref.module == module && ref.node == id && ref.symbol >= 0 && this.binding.symbols[ref.symbol].kind == "import") this.report(module,id,"No se puede reasignar un import");
+      if ((variable && declaration.get(AttributeKind.Mutable) != "true") || (declaration.get(AttributeKind.Readonly) == "true" && !initialization) || (!variable && s.kind != "ClassField" && s.kind != "InterfaceField" && s.kind != "Parameter")) this.report(module,id,variable && declaration.get(AttributeKind.Mutable) != "true" ? "E3003: No se puede modificar '" + s.name + "': es inmutable porque se declaró con 'const'\nayuda: declárala con 'let' si tiene que cambiar\nnota: en este dialecto 'const' también impide modificar su contenido (campos, push, ...)" + catalogArg("nombre", s.name) : "E3003: No se puede modificar '" + s.name + "': es inmutable (readonly)" + catalogArg("nombre", s.name) + catalogVariant("readonly"));
+      for (const ref of this.binding.references) if (ref.module == module && ref.node == id && ref.symbol >= 0 && this.binding.symbols[ref.symbol].kind == "import") this.report(module,id,"E3006: No se puede reasignar un import\nayuda: copia el valor a una variable local con 'let' si necesitas cambiarlo");
     }
   }
   containerCall(module: number, id: number, helper: string, expected: string): string {
