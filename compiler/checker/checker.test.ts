@@ -834,7 +834,7 @@ test('native diagnostics name type parameters instead of leaking internal ids',(
   assert.doesNotMatch(g.diagnostics.map((d:any)=>d.message).join(" "),/@\d+/);
 });
 test('native diagnostics name both sides of an incompatible assignment',()=>{
-  error('class Punto{v:number;constructor(v:number){this.v=v;}} class Caja{v:number;constructor(v:number){this.v=v;}} function g(x:Punto):number{const y:Caja = x; return y.v;}',/Tipo 'Punto' incompatible con 'Caja'/);
+  error('class Punto{v:number;constructor(v:number){this.v=v;}} class Caja{v:number;constructor(v:number){this.v=v;}} function g(x:Punto):number{const y:Caja = x; return y.v;}',/se esperaba 'Caja' y se encontró 'Punto'/);
 });
 for(const [name,source] of Object.entries({
  key:'let m=new Map<string,number>();m.set(1,2);',

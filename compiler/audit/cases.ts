@@ -28,7 +28,7 @@ const rejectionPatterns: Record<string,string> = {
   'borrow-field':'E4203',
   'callback-escape':'E4210',
   'type-error':'incompatible',
-  'unknown-name':'Nombre no declarado',
+  'unknown-name':'No existe .* en este ámbito',
 };
 const yes = (id: string, area: string, source: string, files?: Record<string, string>): AuditCase => ({id, area, source, accept: true, files});
 const no = (id: string, area: string, source: string): AuditCase => {

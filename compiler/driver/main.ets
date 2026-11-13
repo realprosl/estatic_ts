@@ -10,6 +10,7 @@ import {formatCppResult} from "../backend/cpp/wire";
 import {parseConfig,configStrings} from "./config";
 import {environment,exists,readText,stdinText,writeText,hostError,launch,poll,pause,files,compilerHome,objectKeys,directories,remove,rename,now,executable} from "./host";
 import {contentHash,fileMetadata} from "../modules/platform";
+import {renderDiagnostic,renderSummary} from "./diagnostics";
 import {configureProgress,progressInteractive,progressStart,progressDetail,progressTick,progressFinish,progressSummary} from "../progress/progress";
 function driverError(message:string,status:number=1):void{progressFinish(false);printError(message);exitProcess(status);}
 function checkedWrite(path:string,text:string):void{if(!writeText(path,text))driverError(hostError());}
@@ -26,7 +27,7 @@ function sourceIr(entry:string,options:LoaderOptions,verbose:boolean):IrProject{
  let diagnostics=project.graph.diagnostics;for(const d of project.binding.diagnostics)diagnostics.push(d);for(const d of project.checked.diagnostics)diagnostics.push(d);
  let ir=new IrProject();if(diagnostics.length==0){progressDetail("Generando IR verificado");ir=lowerProject(project.graph,project.binding,project.checked,verbose||progressInteractive());}
  let seen:string[]=[];for(const d of diagnostics){const key=d.file+":"+numberToString(d.token.offset)+":"+d.code+":"+d.message;if(!seen.includes(key)){seen.push(key);ir.diagnostics.push(new IrIssue(d.code,d.message,new IrSource("","",d.file,-1,d.token.offset,d.endToken.endOffset)));}}
- if(!ir.success||ir.diagnostics.length>0){progressFinish(false);for(const d of ir.diagnostics)printError(d.source.file+":"+numberToString(d.source.start)+": "+d.code+": "+d.message);driverError("No se produjo IR verificado");}return ir;
+ if(!ir.success||ir.diagnostics.length>0){progressFinish(false);for(const d of ir.diagnostics){printError(renderDiagnostic(d.code,d.message,d.source.file,d.source.start,d.source.end));printError("");}driverError(renderSummary(ir.diagnostics.length));}return ir;
 }
 function initialize(root:string,directory:string,update:boolean,sources:boolean=true):void{
  const target=directory+"/types/estatic.d.ts";const types=checkedRead(root+"/types/estatic.d.ts");if(update){if(exists(target)){const previous=checkedRead(target);if(previous==types)return;if(exists(target+".bak"))driverError("Ya existe "+target+".bak");checkedWrite(target+".bak",previous);}checkedWrite(target,types);return;}

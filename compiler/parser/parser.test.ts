@@ -410,6 +410,17 @@ test("bootstrap parser reports a missing return type with one clear diagnostic",
   assert.deepEqual(messages("interface I{ hola(): void; adios(); }"), ["El método 'adios' necesita un tipo de retorno: añade ': Tipo' después de los parámetros (por ejemplo ': void' o ': number')"]);
   assert.deepEqual(messages("class A{ constructor(){} } function f():void{}"), []);
 });
+test("bootstrap parser: the right side of an assignment is a full expression", () => {
+  for (const source of ["let x:number=0; x = c ? 1 : 2;", "let f=g; f = (): void => {};", "a = b = c ? d : e;"]) {
+    const result = native(source); assert.deepEqual(result.diagnostics, [], source);
+    const assignment = result.nodes.find(n => n.kind === "AssignmentExpression")!;
+    const value = result.nodes[assignment.edges.find(e => e.role === "value")!.node];
+    assert.notEqual(value.kind, "IdentifierExpression", source);
+  }
+  const ternary = native("let x:number=0; x = c ? 1 : 2;");
+  const top = ternary.nodes.find(n => n.kind === "TernaryExpression")!;
+  assert.equal(ternary.nodes[top.edges.find(e => e.role === "condition")!.node].kind, "IdentifierExpression");
+});
 test("bootstrap parser C++-style memory types lower to ref/constRef/ptr/constPtr", () => {
   const attr = (node: NativeNode, name: string) => node.attributes.find(a => a.name === name)?.value;
   const result = native("function f(a:const string&,b:Foo&,c:Foo*,d:const Foo*,e:Map<string,Foo&>,f:Foo[]&,g:Foo*&):const Foo&{return a;}");
@@ -926,8 +937,8 @@ for (const [name, source, message] of [
   ["missing import from", "import {value} './m';", "'from'"],
   ["missing module string", "import {value} from 42;", "literal de módulo"],
   ["missing imported name", "import {,} from './m';", "nombre de import/export"],
-  ["missing local alias", "import {value as } from './m';", "'identifier'"],
-  ["default cannot be local binding", "import {value as default} from './m';", "'identifier'"],
+  ["missing local alias", "import {value as } from './m';", "un nombre"],
+  ["default cannot be local binding", "import {value as default} from './m';", "un nombre"],
   ["named default needs alias", "import {default} from './m';", "nombre local"],
   ["duplicate import aliases", "import {one as local,two as local} from './m';", "duplicado"],
   ["duplicate default and named", "import local,{one as local} from './m';", "duplicado"],

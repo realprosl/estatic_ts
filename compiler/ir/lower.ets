@@ -23,6 +23,19 @@ function memoryInner(text: string): string { return memoryMode(text) == "" ? tex
 function memoryValue(text: string): string { let value: string = text; while (memoryMode(value) != "") value = memoryInner(value); return value; }
 function irSameNumbers(left: number[], right: number[]): boolean { if (left.length != right.length) return false; for (let i: number = 0; i < left.length; i = i+1) if (left[i] != right[i]) return false; return true; }
 
+// Los fallos del lowering usan términos internos ("place", "contrato IR"...).
+// Los que suelen ser errores del programa se explican; el resto se presenta
+// como lo que es: algo que el checker aceptó pero etsc aún no sabe generar.
+function userIrMessage(message: string): string {
+  if (message == "Variable sin inicializador") return "La variable necesita un valor inicial\nayuda: añade '= valor' en la declaración";
+  if (message == "Campo estático sin inicializador explícito") return "El campo static necesita un valor inicial explícito\nayuda: añade '= valor' en su declaración";
+  if (message == "Declaración de función sin cuerpo y sin @cpp_native") return "La función no tiene cuerpo\nayuda: añade '{ ... }', o márcala con @cpp_native si está implementada en C++";
+  if (message == "Ciclo de inicialización de módulos") return "Hay un ciclo de imports entre módulos cuyos valores globales dependen unos de otros\nayuda: mueve los valores compartidos a un módulo que no importe a los demás";
+  if (message == "Argumento requerido ausente" || message == "Argumento de interfaz ausente") return "Falta un argumento obligatorio en la llamada";
+  if (message.startsWith("Campo sin identidad de IR: ")) return "No se puede generar el acceso a '" + message.slice(27,message.length) + "' en esta posición\nnota: es una limitación de etsc, no un error de tipos\nayuda: si crees que el código es correcto, abre una issue con este ejemplo";
+  return "etsc todavía no sabe generar código para esto: " + message + "\nnota: el programa pasó la comprobación de tipos; es una limitación del compilador\nayuda: reescribe esta parte de otra forma o abre una issue con este ejemplo";
+}
+
 export class IrLowering {
   interfaceFrom: number[]; interfaceTo: number[];
   dispatchInterfaces: number[]; dispatchNames: string[]; dispatchSignatures: number[];
@@ -51,7 +64,7 @@ export class IrLowering {
     let source = new IrSource(record.id,record.sourceHash,this.graph.modules[this.module].file,id,n.start.offset,n.end.endOffset);
     if (n.generatedId != "") { source.generatedId = n.generatedId; source.generatedStart = n.generatedStart.offset; source.generatedEnd = n.generatedEnd.endOffset; } return source;
   }
-  fail(id: number, message: string): void { { const pendingPush = new IrIssue("IR_UNSUPPORTED",message,this.source(id)); this.result.diagnostics.push(pendingPush); } }
+  fail(id: number, message: string): void { { const pendingPush = new IrIssue("IR_UNSUPPORTED",userIrMessage(message),this.source(id)); this.result.diagnostics.push(pendingPush); } }
   resolved(text: string): string {
     for (let at: number = this.contextFrom.length-1; at >= 0; at = at-1) text = replaceType(text,this.contextFrom[at],this.contextTo[at]);
     if (this.currentFunction >= 0) for (let at: number = 0; at < this.result.functions[this.currentFunction].substitutionFrom.length; at = at+1) text = replaceType(text,this.result.functions[this.currentFunction].substitutionFrom[at],this.result.functions[this.currentFunction].substitutionTo[at]);

@@ -1,3 +1,4 @@
+import { closestName } from "../frontend/suggest";
 import { AttributeKind, EdgeRole, NodeKind, nodeKindName } from "../parser/ast-schema";
 import { nativeBuiltinNames, nativeBuiltinTypes } from "../frontend/builtins";
 import { ModuleGraph } from "../modules/loader";
@@ -88,6 +89,17 @@ export class Binder {
       if (item.name == name && (space == "any" || (space == "value" && item.values) || (space == "type" && item.types) || (space == "query" && (item.values || item.namespaceModule >= 0 || (item.kind == "import" && this.result.symbols[this.origin(symbol)].values))))) return symbol;
     }
     return -1;
+  }
+  // "No existe 'x'" con una sugerencia del nombre visible más parecido.
+  undeclared(scope: number, name: string): string {
+    let visible: string[] = []; let current: number = scope;
+    while (current >= 0) {
+      for (const symbol of this.result.scopes[current].symbols) if (!isBindingMember(this.result.symbols[symbol].kind)) visible.push(this.result.symbols[symbol].name);
+      current = this.result.scopes[current].parent;
+    }
+    const suggestion: string = closestName(name, visible);
+    if (suggestion != "") return "No existe '" + name + "' en este ámbito\nayuda: ¿querías decir '" + suggestion + "'?";
+    return "No existe '" + name + "' en este ámbito\nayuda: declárala con 'let' o 'const', o impórtala de otro módulo";
   }
   lookup(scope: number, name: string, space: string): number {
     let current: number = scope;
@@ -290,7 +302,7 @@ export class Binder {
     const sid: number = this.lookup(scope, name, space);
     if (sid < 0) {
       const other: number = this.lookup(scope, name, "any");
-      this.report(module, node, other >= 0 ? "El nombre '" + name + "' no está disponible como " + space : "Nombre no declarado '" + name + "'");
+      this.report(module, node, other >= 0 ? "El nombre '" + name + "' no está disponible como " + space : this.undeclared(scope, name));
     }
     const target: number = this.origin(sid);
     this.result.references.push(new BoundReference(module, node, scope, name, space, sid, target, false)); return sid;
