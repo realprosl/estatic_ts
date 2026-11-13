@@ -1358,7 +1358,21 @@ export class NativeChecker {
       if (args.length != 1) { this.report(module,id,"El helper de memoria necesita un argumento"); return "!error"; }
       const arg: AstNode = this.node(module,args[0]);
       if (callable == "!move") {
-        if (![NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(arg.kind) || (!this.transferType(actual[0]) && !actual[0].startsWith("@") && genericBase(actual[0]) != "pack")) this.report(module,id,"E4100: move requiere un lvalue con ownership");
+        const owner: boolean = this.transferType(actual[0]) || actual[0].startsWith("@") || genericBase(actual[0]) == "pack";
+        if (![NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(arg.kind)) { this.report(module,id,"E4100: move requiere un lvalue con ownership"); return actual[0]; }
+        if (!owner) {
+          // #153: move() de valores sin ownership (string, arrays, Map, Set,
+          // clases): evita la copia y deja la variable movida (E4102/E4103).
+          const value: string = memoryValue(actual[0]);
+          if (actual[0] == "!error") return actual[0];
+          if (borrowedType(actual[0])) { this.report(module,id,"E4100: move() no puede sacar el valor de un préstamo (T& / const T&)\nayuda: mueve la variable dueña del valor, no la referencia"); return actual[0]; }
+          if (numericType(value) || ["boolean","void","null","undefined"].includes(value)) { this.report(module,id,"E4100: move() no se aplica a '" + value + "': los valores escalares se copian sin coste\nayuda: quita el move()"); return actual[0]; }
+          if (arg.kind != NodeKind.IdentifierExpression) { this.report(module,id,"E4100: move() de un valor sin ownership solo admite una variable local o un parámetro\nayuda: guarda el valor en una variable con 'let' y muévela"); return actual[0]; }
+          const sid: number = this.reference(module,args[0]);
+          if (sid >= 0 && this.binding.symbols[sid].kind == "VariableDeclaration" && this.node(this.binding.symbols[sid].module,this.binding.symbols[sid].node).get(AttributeKind.Mutable) != "true") { this.report(module,id,"E4100: move() necesita una variable declarada con 'let': '" + this.binding.symbols[sid].name + "' es 'const'\nayuda: declárala con 'let' para poder transferirla"); return actual[0]; }
+          this.writable(module,args[0]);
+          return actual[0];
+        }
         if (arg.kind != NodeKind.IdentifierExpression) this.writable(module,args[0]);
         return actual[0];
       }

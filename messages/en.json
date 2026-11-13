@@ -60,7 +60,7 @@
   "E3006": { "mensaje": "cannot reassign an import", "ayuda": "copy the value into a local 'let' variable if you need to change it" },
 
   "E4001": { "nota": "E4001 · the variable is used before it has a value on every path; give it an initial value when declaring it" },
-  "E4100": { "nota": "E4100 · an owned value (ptr<T>, resources) must be initialized and transferred with move(variable)" },
+  "E4100": { "nota": "E4100 · move(variable) transfers a value without copying it: it accepts owners (ptr<T>, resources) and 'let' variables or parameters of type string, array, Map, Set or class" },
   "E4101": { "nota": "E4101 · owned values are not copied: transfer them with move(x) or borrow them with T& / const T&" },
   "E4102": { "nota": "E4102 · the value was already moved; after a move it cannot be used again" },
   "E4103": { "nota": "E4103 · the value was moved on some path; make sure it is not used afterwards on any branch" },
