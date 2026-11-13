@@ -136,6 +136,10 @@ function noteText(note:string):string{
 export function renderSummary(count:number):string{
  const summary=count==1?uiText("resumen_uno","no se pudo compilar por un error"):uiText("resumen_varios","no se pudo compilar por {n} errores").split("{n}").join(numberToString(count));
  let rendered=paint(uiText("error","error"),"1;31")+paint(": "+summary,"1");
- for(const code of explainable)rendered=rendered+"\n"+paint(uiText("nota","nota")+":","1")+" "+uiText("explicar","para más detalles: etsc --explain {codigo}").split("{codigo}").join(code);
+ // Copia local: el bucle llama a funciones que leen el catálogo global y el
+ // checker de memoria no admite recorrer un global prestado mientras tanto.
+ const label=uiText("nota","nota");const template=uiText("explicar","para más detalles: etsc --explain {codigo}");
+ let codes:string[]=[];for(let k:number=0;k<explainable.length;k=k+1)codes.push(explainable[k]);
+ for(const code of codes)rendered=rendered+"\n"+paint(label+":","1")+" "+template.split("{codigo}").join(code);
  return rendered;
 }
