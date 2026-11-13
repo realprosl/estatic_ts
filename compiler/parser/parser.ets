@@ -125,6 +125,15 @@ export class Parser {
   reportAt(token: ParserToken, message: string): void {
     if (100 > this.diagnostics.length) this.diagnostics.push(new ParserDiagnostic(message, token));
   }
+  // `: Tipo` de retorno obligatorio. Sin él se da un solo error que dice qué
+  // falta, en vez de "Se esperaba ':'" seguido de "Se esperaba un tipo".
+  returnType(subject: string): string {
+    if (this.accept(":")) return this.typeName();
+    this.report(this.missingReturnType(subject)); return "<error>";
+  }
+  missingReturnType(subject: string): string {
+    return subject + " necesita un tipo de retorno: añade ': Tipo' después de los parámetros (por ejemplo ': void' o ': number')";
+  }
   expect(kind: string): ParserToken {
     if (this.check(kind)) return this.take();
     this.report("Se esperaba '" + kind + "'");
@@ -766,8 +775,8 @@ export class Parser {
     this.prependDecorators(result, decorators);
     if (anonymous) this.attr(result, AttributeKind.Anonymous, "true"); else this.attr(result, AttributeKind.Name, name.lexeme);
     this.attr(result, AttributeKind.Async, isAsync ? "true" : "false");
-    this.typeParameters(result, true); this.parametersInto(result, false, false); this.expect(":");
-    this.attr(result, AttributeKind.ReturnType, this.typeName());
+    this.typeParameters(result, true); this.parametersInto(result, false, false);
+    this.attr(result, AttributeKind.ReturnType, this.returnType(anonymous ? "La función" : "La función '" + name.lexeme + "'"));
     let body: number = -1;
     if (this.accept(";")) body = this.add(NodeKind.BlockStatement, this.previous(), this.previous());
     else { const open: ParserToken = this.expect("{"); body = this.block(open); }
@@ -800,7 +809,7 @@ export class Parser {
           this.setKind(item, NodeKind.ClassMethod); this.typeParameters(item, false); this.parametersInto(item, false, member.lexeme == "constructor" && !isStatic);
           let returnType: string = "void";
           if (this.accept(":")) returnType = this.typeName();
-          else if (member.lexeme != "constructor") this.report("El método necesita un tipo de retorno");
+          else if (member.lexeme != "constructor") this.report(this.missingReturnType("El método '" + member.lexeme + "'"));
           this.attr(item, AttributeKind.ReturnType, returnType);
           const open: ParserToken = this.expect("{"); const body: number = this.block(open);
           this.edge(item, EdgeRole.Body, body); this.setEnd(item, this.node(body).end);
@@ -829,7 +838,7 @@ export class Parser {
       this.prependDecorators(item, memberDecorators);
       if (this.check("(") || this.check("<")) {
         this.setKind(item, NodeKind.InterfaceMethod); this.typeParameters(item, false); this.parametersInto(item, false, false);
-        this.expect(":"); this.attr(item, AttributeKind.ReturnType, this.typeName()); this.edge(result, EdgeRole.Methods, item);
+        this.attr(item, AttributeKind.ReturnType, this.returnType("El método '" + member.lexeme + "'")); this.edge(result, EdgeRole.Methods, item);
       } else {
         const optional: boolean = this.accept("?"); this.expect(":"); this.attr(item, AttributeKind.Type, this.typeName());
         this.attr(item, AttributeKind.Optional, optional ? "true" : "false"); this.edge(result, EdgeRole.Fields, item);

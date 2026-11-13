@@ -403,6 +403,13 @@ for (const source of [
 ] as const) test(`bootstrap parser parameter property diagnostics: ${source}`, () => {
   const result = native(source); assert.ok(result.diagnostics.length > 0 && result.diagnostics.length <= 100);
 });
+test("bootstrap parser reports a missing return type with one clear diagnostic", () => {
+  const messages = (source: string) => native(source).diagnostics.map(d => d.message);
+  assert.deepEqual(messages("function suma(a:number,b:number){return a+b;}"), ["La función 'suma' necesita un tipo de retorno: añade ': Tipo' después de los parámetros (por ejemplo ': void' o ': number')"]);
+  assert.deepEqual(messages("class A{ hola(){} }"), ["El método 'hola' necesita un tipo de retorno: añade ': Tipo' después de los parámetros (por ejemplo ': void' o ': number')"]);
+  assert.deepEqual(messages("interface I{ hola(): void; adios(); }"), ["El método 'adios' necesita un tipo de retorno: añade ': Tipo' después de los parámetros (por ejemplo ': void' o ': number')"]);
+  assert.deepEqual(messages("class A{ constructor(){} } function f():void{}"), []);
+});
 test("bootstrap parser C++-style memory types lower to ref/constRef/ptr/constPtr", () => {
   const attr = (node: NativeNode, name: string) => node.attributes.find(a => a.name === name)?.value;
   const result = native("function f(a:const string&,b:Foo&,c:Foo*,d:const Foo*,e:Map<string,Foo&>,f:Foo[]&,g:Foo*&):const Foo&{return a;}");
