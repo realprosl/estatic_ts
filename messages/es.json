@@ -1,0 +1,128 @@
+{
+  "_ui": {
+    "error": "error",
+    "ayuda": "ayuda",
+    "nota": "nota",
+    "resumen_uno": "no se pudo compilar por un error",
+    "resumen_varios": "no se pudo compilar por {n} errores",
+    "explicar": "para más detalles: etsc --explain {codigo}",
+    "sin_explicacion": "No hay explicación para '{codigo}'."
+  },
+  "_tokens": {
+    "eof": "el final del fichero",
+    "newline": "un salto de línea",
+    "identifier": "el identificador '{0}'",
+    "identifier?": "un nombre",
+    "string": "un texto",
+    "string?": "un texto entre comillas",
+    "number": "el número {0}",
+    "number?": "un número",
+    "lexeme": "'{0}'"
+  },
+
+  "E1001": {
+    "mensaje": "Se esperaba {esperado} y se encontró {encontrado}",
+    "explicacion": "El parser esperaba un símbolo concreto en esta posición. Suele faltar un paréntesis, una llave, dos puntos o una coma justo antes del punto señalado."
+  },
+  "E1002": {
+    "mensaje": "La función '{nombre}' necesita un tipo de retorno",
+    "ayuda": "añade ': Tipo' después de los parámetros (por ejemplo ': void' o ': number')",
+    "explicacion": "En este dialecto toda función y método declara su tipo de retorno: function suma(a: number, b: number): number { ... }. Si no devuelve nada, usa ': void'. Los constructores no lo llevan."
+  },
+  "E1002/anonima": {
+    "mensaje": "La función necesita un tipo de retorno",
+    "ayuda": "añade ': Tipo' después de los parámetros (por ejemplo ': void' o ': number')"
+  },
+  "E1002/metodo": {
+    "mensaje": "El método '{nombre}' necesita un tipo de retorno",
+    "ayuda": "añade ': Tipo' después de los parámetros (por ejemplo ': void' o ': number')"
+  },
+  "E1003": {
+    "mensaje": "Falta ';' o un salto de línea al final de la sentencia: se encontró {encontrado}",
+    "explicacion": "Dos sentencias seguidas en la misma línea deben separarse con ';'."
+  },
+  "E1004": { "mensaje": "Se esperaba una expresión y se encontró {encontrado}" },
+  "E1005": { "mensaje": "Se esperaba un tipo y se encontró {encontrado}" },
+  "E1006": { "mensaje": "No se esperaba {encontrado} aquí" },
+  "E1006/bloque": { "mensaje": "No se esperaba {encontrado} dentro del bloque" },
+  "E1006/switch": { "mensaje": "No se esperaba {encontrado} en el switch", "ayuda": "cada rama del switch empieza con 'case valor:' o 'default:'" },
+  "E1007": {
+    "mensaje": "El lado izquierdo de una asignación debe ser una variable, un campo o un índice",
+    "explicacion": "Solo se puede asignar a algo con nombre: x = 1, obj.campo = 1 o lista[0] = 1."
+  },
+  "E1008": { "mensaje": "Solo se pueden llamar funciones por su nombre (f(...), obj.metodo(...))" },
+
+  "E2001": {
+    "mensaje": "No existe '{nombre}' en este ámbito",
+    "ayuda": "declárala con 'let' o 'const', o impórtala de otro módulo",
+    "explicacion": "El nombre no está declarado en este bloque ni en los que lo contienen, ni importado. Comprueba si está mal escrito, si se declaró dentro de otro bloque o si falta el import."
+  },
+  "E2001/sugerencia": {
+    "mensaje": "No existe '{nombre}' en este ámbito",
+    "ayuda": "¿querías decir '{sugerencia}'?"
+  },
+  "E2002": { "mensaje": "El nombre '{nombre}' no está disponible como {espacio}" },
+  "E2101": {
+    "mensaje": "No se encuentra el módulo '{modulo}'",
+    "ayuda": "la ruta es relativa a este fichero; comprueba el nombre (si no lleva extensión, se prueban .ts y .ets)"
+  },
+  "E2101/raiz": {
+    "mensaje": "No se encuentra el módulo '{modulo}'",
+    "ayuda": "los imports sin './' se buscan en las raíces y alias de estatic.config.json"
+  },
+
+  "E3001": {
+    "mensaje": "Tipos incompatibles: se esperaba '{esperado}' y se encontró '{encontrado}'",
+    "explicacion": "El valor no es del tipo que se pide en esta posición (una variable con tipo, un parámetro, un retorno...). Convierte el valor o cambia el tipo declarado."
+  },
+  "E3002": {
+    "mensaje": "El tipo '{tipo}' no declara el miembro '{miembro}'",
+    "explicacion": "El campo o método no existe en ese tipo. Los tipos del runtime están en types/estatic.d.ts de tu proyecto (etsc update-types lo actualiza)."
+  },
+  "E3002/sugerencia": { "mensaje": "El tipo '{tipo}' no declara el miembro '{miembro}'", "ayuda": "¿querías decir '{sugerencia}'?" },
+  "E3002/lista": { "mensaje": "El tipo '{tipo}' no declara el miembro '{miembro}'", "nota": "miembros de '{tipo}': {miembros}" },
+  "E3002/lectura": {
+    "mensaje": "El tipo '{tipo}' no declara el miembro '{miembro}'",
+    "ayuda": "un stream de lectura (process.stdin, child.stdout) solo tiene .on(\"data\" | \"end\", ...)",
+    "nota": "para dejar de leer antes de que acabe la entrada, usa process.exit(código)"
+  },
+  "E3002/escritura": {
+    "mensaje": "El tipo '{tipo}' no declara el miembro '{miembro}'",
+    "ayuda": "un stream de escritura (process.stdout, child.stdin) tiene .write(texto) y .end()"
+  },
+  "E3003": {
+    "mensaje": "No se puede modificar '{nombre}': es inmutable porque se declaró con 'const'",
+    "ayuda": "declárala con 'let' si tiene que cambiar",
+    "nota": "en este dialecto 'const' también impide modificar su contenido (campos, push, ...)",
+    "explicacion": "A diferencia de TypeScript, 'const' hace inmutable el valor entero: no se puede reasignar ni modificar a través de él (campos, métodos que lo cambian como push). Usa 'let' para valores que cambian."
+  },
+  "E3003/readonly": { "mensaje": "No se puede modificar '{nombre}': es inmutable (readonly)" },
+  "E3004": {
+    "mensaje": "No todas las rutas de la función devuelven un valor",
+    "ayuda": "añade un 'return' de tipo '{tipo}' al final, o cambia el tipo de retorno a 'void' si no debe devolver nada"
+  },
+  "E3005": { "mensaje": "No se puede modificar un builtin" },
+  "E3006": { "mensaje": "No se puede reasignar un import", "ayuda": "copia el valor a una variable local con 'let' si necesitas cambiarlo" },
+
+  "E4001": { "nota": "E4001 · la variable se usa antes de tener un valor en todos los caminos; dale un valor inicial al declararla" },
+  "E4100": { "nota": "E4100 · un valor con ownership (ptr<T>, recursos) debe inicializarse y transferirse con move(variable)" },
+  "E4101": { "nota": "E4101 · los valores con ownership no se copian: transfiérelos con move(x) o préstalos con T& / const T&" },
+  "E4102": { "nota": "E4102 · el valor ya se transfirió con move(); después de un move no se puede volver a usar" },
+  "E4103": { "nota": "E4103 · en algún camino el valor ya se transfirió con move(); asegúrate de no usarlo después en ninguna rama" },
+  "E4104": { "nota": "E4104 · etsc no puede demostrar que esta operación es segura para la memoria; simplifícala (variables locales, sin callbacks opacos)" },
+  "E4203": { "nota": "E4203 · un préstamo (T&, const T&) no puede guardarse en un campo ni devolverse: vive solo mientras dura la llamada" },
+  "E4204": { "nota": "E4204 · un préstamo no puede seguir vivo a través de un await ni dentro de una tarea async; copia el valor o pásalo por valor" },
+  "E4206": { "nota": "E4206 · la misma variable se presta a la vez como mutable y compartida; usa préstamos que no se solapen" },
+  "E4207": { "nota": "E4207 · se accede a la variable mientras está prestada; termina el préstamo antes de volver a usarla" },
+  "E4208": { "nota": "E4208 · solo se presta algo con nombre y del tipo adecuado: para T& hace falta una variable declarada con let; un literal o un temporal guárdalo antes en una variable" },
+  "E4209": { "nota": "E4209 · un closure no puede capturar un préstamo u owner si etsc no puede demostrar que vive lo suficiente" },
+  "E4210": {
+    "nota": "E4210 · un closure que sobrevive a la función no puede modificar variables locales; usa variables del nivel superior del fichero o pásale el valor",
+    "explicacion": "Un callback (por ejemplo el de process.stdin.on) puede ejecutarse después de que termine la función que lo creó. Si modificara una variable local de esa función, escribiría en memoria que ya no existe. Declara la variable en el nivel superior del fichero o pásale el valor."
+  },
+  "E4300": { "nota": "E4300 · el valor es de solo lectura (readonly / const T&) y no se puede modificar a través de él" },
+  "E4301": { "nota": "E4301 · un cast no puede cambiar si un valor es préstamo, owner o copia" },
+  "E4401": { "nota": "E4401 · una función exportada no puede usar en su firma un tipo que el módulo no exporta; expórtalo también" },
+
+  "IR_INVALID": { "nota": "es un error interno de etsc (el IR generado no es válido), no de tu programa; abre una issue con este ejemplo" }
+}

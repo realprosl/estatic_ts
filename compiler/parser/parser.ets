@@ -49,6 +49,13 @@ export class AstNode {
 }
 export function nodeBegin(node: AstNode): number { return node.analysisStart >= 0 ? node.analysisStart : node.start.offset; }
 export function nodeEnd(node: AstNode): number { return node.analysisEnd >= 0 ? node.analysisEnd : node.end.endOffset; }
+// Datos para el catálogo de mensajes (messages/<idioma>.json): líneas
+// "\t nombre=valor" al final del mensaje. Copia local del formato de
+// frontend/catalog.ets para que el parser no dependa de nada más.
+function catalogArg(name: string, value: string): string { return "\n\t" + name + "=" + value; }
+function catalogVariant(variant: string): string { return catalogArg("_variante", variant); }
+function tokenArg(name: string, kind: string, lexeme: string): string { return catalogArg(name, "tok:" + kind + ":" + lexeme); }
+
 export class ParserDiagnostic {
   message: string; token: ParserToken;
   constructor(message: string, token: ParserToken) { this.message = message; this.token = token; }
@@ -132,11 +139,14 @@ export class Parser {
     this.report(this.missingReturnType(subject)); return "<error>";
   }
   missingReturnType(subject: string): string {
-    return subject + " necesita un tipo de retorno: añade ': Tipo' después de los parámetros (por ejemplo ': void' o ': number')";
+    // subject: "La función 'f'", "La función" o "El método 'm'".
+    const quote: number = subject.indexOf("'",0); const name: string = quote < 0 ? "" : subject.slice(quote+1,subject.length-1);
+    const variant: string = subject.startsWith("El método") ? catalogVariant("metodo") : (quote < 0 ? catalogVariant("anonima") : "");
+    return "E1002: " + subject + " necesita un tipo de retorno: añade ': Tipo' después de los parámetros (por ejemplo ': void' o ': number')" + catalogArg("nombre", name) + variant;
   }
   expect(kind: string): ParserToken {
     if (this.check(kind)) return this.take();
-    this.report("Se esperaba " + this.describeKind(kind) + " y se encontró " + this.found());
+    this.report("E1001: Se esperaba " + this.describeKind(kind) + " y se encontró " + this.found() + this.expectedArg(kind) + this.foundArg());
     return this.peek(0);
   }
   // Descripción legible del token actual: "'{'", "el final del fichero", ...
@@ -149,6 +159,9 @@ export class Parser {
     if (token.kind == "number") return "el número " + token.lexeme;
     return "'" + token.lexeme + "'";
   }
+  // Datos del token para el catálogo de mensajes (driver/diagnostics.ets).
+  foundArg(): string { const token: ParserToken = this.peek(0); return tokenArg("encontrado", token.kind, token.lexeme); }
+  expectedArg(kind: string): string { return tokenArg("esperado", ["identifier","string","number"].includes(kind) ? kind + "?" : "lexeme", kind); }
   describeKind(kind: string): string {
     if (kind == "identifier") return "un nombre";
     if (kind == "string") return "un texto entre comillas";
@@ -179,7 +192,7 @@ export class Parser {
     const previousLine: number = this.previous().endLine;
     const nextLine: number = this.peek(0).line;
     if (previousLine < nextLine) return this.previous();
-    if (!this.check("}") && !this.check("eof") && !this.check(",")) this.report("Falta ';' o un salto de línea al final de la sentencia: se encontró " + this.found());
+    if (!this.check("}") && !this.check("eof") && !this.check(",")) this.report("E1003: Falta ';' o un salto de línea al final de la sentencia: se encontró " + this.found() + this.foundArg());
     return this.peek(0);
   }
   parseProgram(): ParseResult {
@@ -202,7 +215,7 @@ export class Parser {
         const before: number = this.current;
         const child: number = this.statement(true);
         this.edge(program, EdgeRole.Statements, child);
-        if (this.current == before && !this.check("eof")) { this.report("No se esperaba " + this.found() + " aquí"); this.take(); }
+        if (this.current == before && !this.check("eof")) { this.report("E1006: No se esperaba " + this.found() + " aquí" + this.foundArg()); this.take(); }
       }
     }
     this.setEnd(program, this.peek(0));
@@ -621,7 +634,7 @@ export class Parser {
           if (!this.accept(";")) {
             const before: number = this.current; const child: number = this.statement(false); this.edge(clause, EdgeRole.Body, child);
             this.setEnd(clause, this.node(child).end);
-            if (this.current == before && !this.check("eof")) { this.report("No se esperaba " + this.found() + " en el switch: cada rama empieza con case o default"); this.take(); }
+            if (this.current == before && !this.check("eof")) { this.report("E1006: No se esperaba " + this.found() + " en el switch\nayuda: cada rama del switch empieza con 'case valor:' o 'default:'" + this.foundArg() + catalogVariant("switch")); this.take(); }
           }
         }
         this.edge(result, EdgeRole.Clauses, clause);
@@ -705,7 +718,7 @@ export class Parser {
       if (this.check("}") || this.check("eof")) break;
       if (!this.accept(";")) {
         const before: number = this.current; this.edge(result, EdgeRole.Statements, this.statement(false));
-        if (this.current == before && !this.check("eof")) { this.report("No se esperaba " + this.found() + " dentro del bloque"); this.take(); }
+        if (this.current == before && !this.check("eof")) { this.report("E1006: No se esperaba " + this.found() + " dentro del bloque" + this.foundArg() + catalogVariant("bloque")); this.take(); }
       }
     }
     this.setEnd(result, this.expect("}")); return result;
@@ -955,7 +968,7 @@ export class Parser {
     const literal: string = this.literalType();
     if (literal != "") return this.typeSuffix(literal);
     if (this.check("identifier") || this.check("type")) result = this.take().lexeme;
-    else { this.report("Se esperaba un tipo y se encontró " + this.found()); if (!this.check("eof")) this.take(); return "<error>"; }
+    else { this.report("E1005: Se esperaba un tipo y se encontró " + this.found() + this.foundArg()); if (!this.check("eof")) this.take(); return "<error>"; }
     while (this.accept(".")) { if (this.check("default")) result = result + "." + this.take().lexeme; else result = result + "." + this.expect("identifier").lexeme; }
     if (this.accept("<")) {
       let args: string[] = [];
@@ -1040,7 +1053,7 @@ export class Parser {
     // El lado derecho es una expresión completa: x = c ? a : b, f = (): void => {}.
     const right: number = this.expression(); this.leave();
     const kind: NodeKind = this.node(left).kind;
-    if (kind != NodeKind.IdentifierExpression && kind != NodeKind.MemberExpression && kind != NodeKind.IndexExpression) this.report("El lado izquierdo de una asignación debe ser una variable, campo o índice");
+    if (kind != NodeKind.IdentifierExpression && kind != NodeKind.MemberExpression && kind != NodeKind.IndexExpression) this.report("E1007: El lado izquierdo de una asignación debe ser una variable, un campo o un índice");
     const result: number = this.add(op.kind == "=" ? NodeKind.AssignmentExpression : NodeKind.CompoundAssignmentExpression, this.node(left).start, this.node(right).end);
     if (op.kind != "=") this.attr(result, AttributeKind.Operator, op.lexeme);
     this.edge(result, EdgeRole.Target, left); this.edge(result, EdgeRole.Value, right); return result;
@@ -1168,7 +1181,7 @@ export class Parser {
     while (scanning && !this.check("eof")) {
       if (this.check("(") || (this.node(result).kind == NodeKind.IdentifierExpression && this.genericFollower() == "(")) {
         const parent: number = this.add(NodeKind.CallExpression, this.node(result).start, this.node(result).end);
-        if (this.node(result).kind != NodeKind.IdentifierExpression) this.report("Solo se pueden llamar funciones por su nombre (f(...), obj.metodo(...))");
+        if (this.node(result).kind != NodeKind.IdentifierExpression) this.report("E1008: Solo se pueden llamar funciones por su nombre (f(...), obj.metodo(...))");
         this.attr(parent, AttributeKind.Callee, this.get(result, AttributeKind.Name));
         if (this.check("<")) this.typeArguments(parent);
         this.expect("("); this.argumentsInto(parent, EdgeRole.Args, ")"); this.setEnd(parent, this.previous()); result = parent;
@@ -1262,7 +1275,7 @@ export class Parser {
       this.attr(result, AttributeKind.ClassName, name); this.expect("("); this.argumentsInto(result, EdgeRole.Args, ")"); this.setEnd(result, this.previous()); return result;
     }
     if (token.kind == "template") this.reportAt(token, "El token template requiere preparación léxica: template-start/text/end e interpolaciones");
-    else this.report("Se esperaba una expresión y se encontró " + this.found());
+    else this.report("E1004: Se esperaba una expresión y se encontró " + this.found() + this.foundArg());
     return this.add(NodeKind.ErrorNode, token, token);
   }
   inspect(): string { return formatAst(this.parseProgram()); }

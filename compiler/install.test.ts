@@ -91,12 +91,17 @@ test("installed etsc initializes, builds and runs independently of the clone wit
   // de código subrayada, ayuda y resumen final.
   const bad=join(dir,"bad.ets");writeFileSync(bad,"let count: number = 1;\nprint(cont);\n");
   const diagnosed=run(["--check",bad,"--no-progress"],dir);assert.equal(diagnosed.status,1);
-  assert.match(diagnosed.stderr,/error\[binder\]: No existe 'cont' en este ámbito/);
+  assert.match(diagnosed.stderr,/error\[E2001\]: No existe 'cont' en este ámbito/);
   assert.match(diagnosed.stderr,/--> .*bad\.ets:2:7\n/);
   assert.match(diagnosed.stderr,/2 \| print\(cont\);\n\s+\| {7}\^{4}/);
   assert.match(diagnosed.stderr,/= ayuda: ¿querías decir 'count'\?/);
   assert.match(diagnosed.stderr,/error: no se pudo compilar por un error/);
 assert(!diagnosed.stderr.includes("\x1b["),"Sin terminal no hay colores");
+  // Catálogo messages/<idioma>.json: los mismos errores en inglés y --explain.
+  const english=spawnSync(bin,["--check",bad,"--no-progress"],{cwd:dir,encoding:"utf8",timeout:120000,env:{...nativeEnv,ESTC_LANG:"en"}});
+  assert.match(english.stderr,/error\[E2001\]: cannot find 'cont' in this scope/);assert.match(english.stderr,/= help: did you mean 'count'\?/);
+  assert.match(english.stderr,/error: could not compile due to 1 previous error/);assert.match(english.stderr,/etsc --explain E2001/);
+  const explained=run(["--explain","E3003"]);assert.equal(explained.status,0,explained.stderr);assert.match(explained.stdout,/^E3003: .*'const'/);
   writeFileSync(join(home,"templates/types/estatic.d.ts"),"// stale template");
   mkdirSync(project);writeFileSync(join(project,"existing.txt"),"keep me");
   let p=run(["init",project]);assert.equal(p.status,0,p.stderr);assert.match(readFileSync(join(project,"README.md"),"utf8"),/etsc build/);

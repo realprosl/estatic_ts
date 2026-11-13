@@ -175,7 +175,7 @@ seed_args=(--out "$work/native" --cxx "$cxx")
 [ "$force_seed" -eq 1 ] && seed_args+=(--force)
 if [ -n "$seed_bin" ]; then
   [ -x "$seed_bin" ] || fail "Semilla inexistente: $seed_bin"
-  cp "$seed_bin" "$work/native/etsc"; chmod +x "$work/native/etsc"
+  rm -f "$work/native/etsc"; cp "$seed_bin" "$work/native/etsc"; chmod +x "$work/native/etsc"
   echo "    usando la semilla proporcionada: $seed_bin"
 else
   ETSC_CLI_SCOPE=install bash "$seed_dir/build-all.sh" "${seed_args[@]}"
@@ -199,6 +199,9 @@ if [ "$seed_only" -eq 0 ]; then
   ETSC_CLI_SCOPE=install ESTC_ROOT="$repo_dir" CXX="$cxx" bash "$seed_dir/build-compiler.sh" "${compiler_args[@]}"
   # El ejecutable de la generacion 2 sustituye a la semilla como comando
   # publicado: es el que implementa el codigo actual de compiler/.
+  # Borrar antes de copiar: si algún proceso aún ejecuta la semilla, sobrescribirla
+  # falla con "Text file busy"; borrarla (unlink) siempre se puede.
+  rm -f "$work/native/etsc"
   cp "$work/generation/etsc" "$work/native/etsc"
   chmod +x "$work/native/etsc"
 fi
@@ -218,6 +221,7 @@ mkdir -p "$stage/compiler/modules"
 find "$repo_dir/compiler/modules" -maxdepth 1 -type f \
   \( -name '*.hpp' -o -name '*.h' \) -exec cp {} "$stage/compiler/modules/" \;
 cp -R "$repo_dir/types" "$stage/types"
+cp -R "$repo_dir/messages" "$stage/messages"
 cp -R "$seed_dir/templates/." "$stage/templates/"
 # Las declaraciones canonicas son la unica fuente de verdad.
 cp "$repo_dir/types/estatic.d.ts" "$stage/templates/types/estatic.d.ts"

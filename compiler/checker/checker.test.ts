@@ -2014,7 +2014,7 @@ test('diagnostic contract publishes code separately from the message',()=>{
 test('diagnostic contract preserves full generated and invocation ranges',()=>{
  const source=etsGenerator('const good=1;\nconst bad:string=1;')+'\nemit();';
  const g=run(fixture(source),1);const d=g.diagnostics.find((d:any)=>/incompatible/.test(d.message));assert.ok(d);
- assertDiagnostic(d);assert.equal(d.code,'CHECKER_ERROR');assert.equal(d.span.start.line,2);
+ assertDiagnostic(d);assert.equal(d.code,'E3001');assert.equal(d.span.start.line,2);
  assert.equal(source.slice(d.span.start.offset,d.span.end.offset),'emit()');
  assert.equal(d.generated.sourceId,g.generatedSources[0].id);assert.equal(d.generated.span.start.line,2);
  assert.ok(d.generated.span.end.offset>d.generated.span.start.offset);

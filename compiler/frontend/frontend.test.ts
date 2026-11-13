@@ -48,7 +48,8 @@ function parity(source:string,file="test.ets"): NativeResult {
   assert.deepEqual(result.tokens,expected,"expanded tokens, decoded lexemes and all UTF-16 coordinates");
   const isolated=JSON.parse(execFileSync(parserBinary,transportTokens(expected),{encoding:"utf8",timeout:20000,maxBuffer:64*1024*1024}));
   assert.deepEqual(result.ast,isolated,"the native chain and isolated parser produce the exact same arena");
-  assert.deepEqual(result.diagnostics.map(({file,phase,message,span}:any)=>({file,phase,message,span})),isolated.diagnostics.map(d=>({...d,file})));
+  // El frontend separa el código del catálogo ("E1004: ...") del mensaje; el parser aislado lo deja delante.
+  assert.deepEqual(result.diagnostics.map(({file,phase,message,span}:any)=>({file,phase,message,span})),isolated.diagnostics.map(d=>({...d,file,message:d.message.replace(/^[A-Z][A-Z0-9_]*: /,"")})));
   assert.equal(result.success,result.diagnostics.length===0);
   return result;
 }
@@ -129,5 +130,5 @@ test('frontend diagnostics share a versioned contract and preserve UTF-16 ranges
 });
 test('frontend parser diagnostics use the same schema as lexical diagnostics',()=>{
  const g=native('const n=;','parse.ets');assert.ok(g.diagnostics.length);
- for(const d of g.diagnostics){assertDiagnostic(d);assert.equal(d.code,'PARSER_ERROR');assert.equal(d.generated,null);}
+ for(const d of g.diagnostics){assertDiagnostic(d);assert.match(d.code,/^(PARSER_ERROR|E1\d{3})$/);assert.equal(d.generated,null);}
 });

@@ -178,6 +178,36 @@ desde la raíz del repositorio. `--help` muestra la ayuda de los que la tienen.
 Más detalle de los scripts de `scripts/` en [`scripts/README.md`](scripts/README.md) y
 de la semilla en [`native-cpp/README.md`](native-cpp/README.md).
 
+## Mensajes de error
+
+`etsc` presenta los errores al estilo de `rustc`: código, `fichero:línea:columna`,
+la línea de código con el tramo subrayado, y una ayuda cuando la hay.
+
+```
+error[E2001]: No existe 'cont' en este ámbito
+ --> src/main.ts:2:7
+  |
+2 | print(cont);
+  |       ^^^^
+  |
+  = ayuda: ¿querías decir 'count'?
+
+error: no se pudo compilar por un error
+```
+
+- `etsc --explain E3003` explica un código con más detalle.
+- `ESTC_LANG=en etsc build` muestra los mensajes en inglés (por defecto, español).
+- Sin terminal, o con `NO_COLOR`, no se usan colores.
+
+Los textos están en `messages/<idioma>.json` (se instalan en
+`<prefix>/lib/estc/<versión>/messages/`). Cada entrada tiene `mensaje`,
+`ayuda`, `nota` y `explicacion`, con huecos `{nombre}` que rellena el
+compilador. Una entrada `CÓDIGO/variante` (p. ej. `E2001/sugerencia`) cubre
+una forma concreta del error. Para añadir un idioma basta con copiar
+`messages/es.json` a `messages/<código>.json` y traducir los textos; lo que
+falte se muestra en español. Los mensajes que todavía no están en el
+catálogo se muestran con el texto en español que escribe cada fase.
+
 ## Compilación incremental y cachés
 
 `etsc build` / `etsc run` solo rehacen lo que ha cambiado:

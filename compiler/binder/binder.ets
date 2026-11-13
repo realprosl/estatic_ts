@@ -1,3 +1,4 @@
+import { catalogArg, catalogVariant } from "../frontend/catalog";
 import { closestName } from "../frontend/suggest";
 import { AttributeKind, EdgeRole, NodeKind, nodeKindName } from "../parser/ast-schema";
 import { nativeBuiltinNames, nativeBuiltinTypes } from "../frontend/builtins";
@@ -98,8 +99,8 @@ export class Binder {
       current = this.result.scopes[current].parent;
     }
     const suggestion: string = closestName(name, visible);
-    if (suggestion != "") return "No existe '" + name + "' en este ámbito\nayuda: ¿querías decir '" + suggestion + "'?";
-    return "No existe '" + name + "' en este ámbito\nayuda: declárala con 'let' o 'const', o impórtala de otro módulo";
+    if (suggestion != "") return "E2001: No existe '" + name + "' en este ámbito\nayuda: ¿querías decir '" + suggestion + "'?" + catalogArg("nombre", name) + catalogArg("sugerencia", suggestion) + catalogVariant("sugerencia");
+    return "E2001: No existe '" + name + "' en este ámbito\nayuda: declárala con 'let' o 'const', o impórtala de otro módulo" + catalogArg("nombre", name);
   }
   lookup(scope: number, name: string, space: string): number {
     let current: number = scope;
@@ -302,7 +303,7 @@ export class Binder {
     const sid: number = this.lookup(scope, name, space);
     if (sid < 0) {
       const other: number = this.lookup(scope, name, "any");
-      this.report(module, node, other >= 0 ? "El nombre '" + name + "' no está disponible como " + space : this.undeclared(scope, name));
+      this.report(module, node, other >= 0 ? "E2002: El nombre '" + name + "' no está disponible como " + space + catalogArg("nombre", name) + catalogArg("espacio", space) : this.undeclared(scope, name));
     }
     const target: number = this.origin(sid);
     this.result.references.push(new BoundReference(module, node, scope, name, space, sid, target, false)); return sid;

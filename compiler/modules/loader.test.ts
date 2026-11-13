@@ -131,7 +131,7 @@ test("native graph: deep dependency chain uses iterative traversal",()=>{
   const f=fixture(files);const g=run(f);assert.equal(g.modules.length,181);assert.equal(g.cache.misses,181);assert.equal(run(f).cache.hits,181);
 });
 test("native loader analyzes its own complete project without host syntax/runtime resolution",()=>{
-  const g=invoke(join(root,"compiler/modules/demo.ets"))[0];assert.equal(g.success,true);assert.equal(g.modules.length,10);assert.ok(g.modules.some((m:any)=>m.file.endsWith("/progress/progress.ets")));assert.ok(g.modules.some((m:any)=>m.file.endsWith("/driver/host.ets")));
+  const g=invoke(join(root,"compiler/modules/demo.ets"))[0];assert.equal(g.success,true);assert.equal(g.modules.length,11);assert.ok(g.modules.some((m:any)=>m.file.endsWith("/progress/progress.ets")));assert.ok(g.modules.some((m:any)=>m.file.endsWith("/driver/host.ets")));
   for(const m of g.modules) assert.equal(m.hash,hash(readFileSync(m.file)));
   const adapter=readFileSync(join(root,"compiler/modules/run.ts"),"utf8");assert.doesNotMatch(adapter,/lexer|parser|loadModuleGraph|readFile/);
 });

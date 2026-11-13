@@ -1,3 +1,4 @@
+import { catalogArg, catalogVariant } from "../frontend/catalog";
 import {progressDetail} from "../progress/progress";
 import { AttributeKind, NodeKind, nodeKindName } from "../parser/ast-schema";
 import { ParserToken, AstNode, ParseResult } from "../parser/parser";
@@ -133,7 +134,7 @@ export class ModuleLoader {
         const token: ParserToken = module.cached.result.ast.nodes[request.node].start;
         discovered[index] = module;
         if (dependency == "") {
-          graph.diagnostics.push(new SourceDiagnostic("resolver", "No se encuentra el módulo '" + request.specifier + "'" + (request.specifier.startsWith(".") ? "\nayuda: la ruta es relativa a este fichero; comprueba el nombre (si no lleva extensión, se prueban .ts y .ets)" : "\nayuda: los imports sin './' se buscan en las raíces y alias de estatic.config.json"), module.file, token));
+          graph.diagnostics.push(new SourceDiagnostic("resolver", "E2101: No se encuentra el módulo '" + request.specifier + "'" + (request.specifier.startsWith(".") ? "\nayuda: la ruta es relativa a este fichero; comprueba el nombre (si no lleva extensión, se prueban .ts y .ets)" : "\nayuda: los imports sin './' se buscan en las raíces y alias de estatic.config.json" + catalogVariant("raiz")) + catalogArg("modulo", request.specifier), module.file, token));
         } else {
           request.dependency = dependency; module.requests[module.cursor - 1] = request;
           if (!module.dependencies.includes(dependency)) module.dependencies.push(dependency);
