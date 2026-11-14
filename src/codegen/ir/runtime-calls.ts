@@ -36,6 +36,9 @@ export function emitRuntimeCall(g:IrCppGenerator,f:IrFunction,i:IrInstruction):s
     if(["setTimeout","setInterval","cancelTimer"].includes(name)){g.headers.add("runtime/ets_timer.hpp");g.backends.libuv=true;return `ets::${name}(${args()})`;}
     if(["optionalMap","optionalAndThen"].includes(name))return `${name}(${a(0)},${g.callback(f,i,1)})`;
 
+    // process.argv/process.argc como propiedades (lowering nativo: builtin.process.argv/argc).
+    if(name==="process.argv")return "ets::processArgv()";
+    if(name==="process.argc")return "ets::processArgc()";
     if(name==="stopLoop"){g.headers.add("runtime/ets_async.hpp");g.backends.libuv=true;return "ets::defaultEventLoop.stop()";}
     if(name==="length")return `ets::length(${a(0)})`;
     if(name==="optionalSome")return `${T}::some(${a(0)})`;

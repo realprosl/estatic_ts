@@ -8,5 +8,9 @@
     "native-io",
     "result-files",
     "tls-server"
+  ],
+  "_nativeOnly": "Ejemplos que usan sintaxis que la etapa 0 (src/) no soporta: este harness no los transpila; los cubre el compilador nativo (compiler/ir/cpp.test.ts y la suite nativa).",
+  "nativeOnly": [
+    "node-api-demo"
   ]
 }
