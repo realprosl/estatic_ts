@@ -105,7 +105,7 @@ assert(!diagnosed.stderr.includes("\x1b["),"Sin terminal no hay colores");
   const explained=run(["--explain","E3003"]);assert.equal(explained.status,0,explained.stderr);assert.match(explained.stdout,/^E3003: .*'const'/);
   writeFileSync(join(home,"templates/types/estatic.d.ts"),"// stale template");
   mkdirSync(project);writeFileSync(join(project,"existing.txt"),"keep me");
-  let p=run(["init",project,"--verbose"]);assert.equal(p.status,0,p.stderr);assert.match(p.stderr,/Creando proyecto/);assert.match(readFileSync(join(project,"README.md"),"utf8"),/etsc build/);
+  let p=run(["init",project]);assert.equal(p.status,0,p.stderr);assert.match(readFileSync(join(project,"README.md"),"utf8"),/etsc build/);
   assert.equal(readFileSync(join(project,"existing.txt"),"utf8"),"keep me");
   assert.equal(readFileSync(join(project,"types/estatic.d.ts"),"utf8"),readFileSync(join(root,"types/estatic.d.ts"),"utf8"));
   const editor=JSON.parse(readFileSync(join(project,"tsconfig.json"),"utf8"));assert(editor.include.includes("types/**/*"));assert(editor.include.includes("estatic.config.json"));
@@ -146,20 +146,12 @@ assert(!diagnosed.stderr.includes("\x1b["),"Sin terminal no hay colores");
   writeFileSync(tsConfig,'export default (()=>({entry:"src/main.ts"}))();');p=runMoved(["--check"]);assert.equal(p.status,2);rmSync(tsConfig);renameSync(configPath+".saved",configPath);
   mkdirSync(join(project,"deps"));writeFileSync(join(project,"deps/dep.ets"),'export const answer=42;');config.aliases={app:"deps"};writeFileSync(configPath,JSON.stringify(config));writeFileSync(join(project,"src/main.ts"),'import {answer} from "app/dep";print(answer);');
   p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");
-  // #143: una cabecera forzada con -include invalida el objeto cacheado si cambia.
-  const header=join(project,"cache-header.hpp"),headerFlags=["--cxx-flag","-include","--cxx-flag",header];writeFileSync(header,"// valid header\n");
-  p=runMoved(["run",...headerFlags]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");
-  writeFileSync(header,"#error changed header must invalidate the object\n");
-  p=runMoved(["build",...headerFlags]);assert.equal(p.status,1);assert.match(p.stderr,/changed header/);
-  writeFileSync(header,"// valid header\n");p=runMoved(["run",...headerFlags]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");
   // #143: un objeto de la caché dañado se recompila.
   for(const file of programObjects())writeFileSync(join(project,".build/cache/objects",file),"corrupt");rmSync(join(project,".build/cache/build-fingerprint"),{force:true});
-  p=runMoved(["run",...headerFlags]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");for(const file of programObjects())assert.notEqual(readFileSync(join(project,".build/cache/objects",file),"utf8"),"corrupt");
-  // #143: cacheDirectory propio, y con incremental.enabled=false no se crea ninguna caché.
+  p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");for(const file of programObjects())assert.notEqual(readFileSync(join(project,".build/cache/objects",file),"utf8"),"corrupt");
+  // #143: cacheDirectory propio.
   config.incremental={enabled:true,cacheDirectory:"custom cache"};writeFileSync(configPath,JSON.stringify(config));
   p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");assert(existsSync(join(project,"custom cache/objects")));
-  config.incremental={enabled:false,cacheDirectory:"disabled cache"};writeFileSync(configPath,JSON.stringify(config));
-  p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");assert(!existsSync(join(project,"disabled cache")));
   writeFileSync(join(project,"src/main.ts"),'print(argument(1));exitProcess(7);');p=runMoved(["run","--","forwarded"]);assert.equal(p.status,7,p.stderr);assert.equal(p.stdout,"forwarded\n");assert(!existsSync(sentinel),"The installed compiler must never execute Node");
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
@@ -179,6 +171,15 @@ test("install compiles the C++ seed without Node",async()=>{
   const home=realpathSync(join(prefix,"lib/estc/current"));
   assert(existsSync(join(home,"native/frontend")));
   assert(existsSync(join(home,"runtime")));
+  // #143 (comportamiento nuevo del CLI; la semilla aún no lo tiene).
+  {const env={...process.env,ESTC_ROOT:home};const project=join(dir,"cli143");
+   let p=spawnSync(bin,["init",project,"--verbose"],{cwd:dir,encoding:"utf8",env});assert.equal(p.status,0,p.stderr);assert.match(p.stderr,/Creando proyecto/);
+   const header=join(project,"cache-header.hpp"),flags=["--cxx-flag","-include","--cxx-flag",header],build=(args:string[])=>spawnSync(bin,[...args,"--no-progress"],{cwd:project,encoding:"utf8",env,timeout:600000});
+   writeFileSync(header,"// valid header\n");p=build(["run",...flags]);assert.equal(p.status,0,p.stderr);
+   writeFileSync(header,"#error changed header must invalidate the object\n");p=build(["build",...flags]);assert.notEqual(p.status,0);assert.match(p.stderr,/changed header/);
+   writeFileSync(header,"// valid header\n");p=build(["run",...flags]);assert.equal(p.status,0,p.stderr);
+   const configPath=join(project,"estatic.config.json");const config=JSON.parse(readFileSync(configPath,"utf8"));config.incremental={enabled:false,cacheDirectory:"disabled cache"};writeFileSync(configPath,JSON.stringify(config));
+   p=build(["run"]);assert.equal(p.status,0,p.stderr);assert(!existsSync(join(project,"disabled cache")));}
   assert(existsSync(join(home,"types/estatic.d.ts")));
   assert(existsSync(join(home,"templates/estatic.config.json")));
   // La instalacion no arrastra el compilador de stage 0.
@@ -228,6 +229,15 @@ test("install builds compiler/ with the seed and publishes that executable",asyn
   // El runtime y las librerias que lo acompanan siguen en la distribucion.
   assert(existsSync(join(home,"native/frontend")));
   assert(existsSync(join(home,"runtime")));
+  // #143 (comportamiento nuevo del CLI; la semilla aún no lo tiene).
+  {const env={...process.env,ESTC_ROOT:home};const project=join(dir,"cli143");
+   let p=spawnSync(bin,["init",project,"--verbose"],{cwd:dir,encoding:"utf8",env});assert.equal(p.status,0,p.stderr);assert.match(p.stderr,/Creando proyecto/);
+   const header=join(project,"cache-header.hpp"),flags=["--cxx-flag","-include","--cxx-flag",header],build=(args:string[])=>spawnSync(bin,[...args,"--no-progress"],{cwd:project,encoding:"utf8",env,timeout:600000});
+   writeFileSync(header,"// valid header\n");p=build(["run",...flags]);assert.equal(p.status,0,p.stderr);
+   writeFileSync(header,"#error changed header must invalidate the object\n");p=build(["build",...flags]);assert.notEqual(p.status,0);assert.match(p.stderr,/changed header/);
+   writeFileSync(header,"// valid header\n");p=build(["run",...flags]);assert.equal(p.status,0,p.stderr);
+   const configPath=join(project,"estatic.config.json");const config=JSON.parse(readFileSync(configPath,"utf8"));config.incremental={enabled:false,cacheDirectory:"disabled cache"};writeFileSync(configPath,JSON.stringify(config));
+   p=build(["run"]);assert.equal(p.status,0,p.stderr);assert(!existsSync(join(project,"disabled cache")));}
    const source=join(dir,"node-streams.ets"),app=join(dir,"node-streams-app");
    writeFileSync(source,`process.stdin.on("data",(chunk:string):void=>{process.stdout.write("parent:"+chunk);});
 const childArgs:string[]=["-c","printf child-out; printf child-err >&2; cat"];
