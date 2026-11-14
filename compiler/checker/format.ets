@@ -2,9 +2,9 @@ import { CheckResult } from "./checker";
 import { BindingResult } from "../binder/binder";
 import { ModuleGraph } from "../modules/loader";
 import { formatBinding, bindingBoolean, bindingNumbers } from "../binder/format";
-import { quoteSource, formatDiagnostic } from "../frontend/frontend";
+import { quoteSource, formatDiagnostic } from "../diag/source";
 import { formatAst } from "../parser/parser";
-import { syntaxIdentity } from "../modules/platform";
+import { syntaxIdentity } from "../platform/platform";
 export function formatChecked(result: CheckResult, binding: BindingResult, graph: ModuleGraph): string {
   let entryId: string = ""; for (const record of result.moduleRecords) if (record.file == graph.entry) entryId = record.id;
   let output: string[] = ["{\"format\":\"ets-checked-2\",\"frontendIdentity\":" + quoteSource(syntaxIdentity()) + ",\"entry\":" + quoteSource(graph.entry) + ",\"entryModuleId\":" + quoteSource(entryId) + ",\"success\":" + bindingBoolean(result.success) + ",\"binding\":" + formatBinding(binding,graph) + ",\"files\":["]; let comma: string = "";

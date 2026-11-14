@@ -8,10 +8,10 @@ import {generateCppFromIr,IrCppResult} from "../backend/cpp/generator";
 import {parseIrProject} from "../backend/cpp/decode";
 import {formatCppResult} from "../backend/cpp/wire";
 import {parseConfig,configStrings} from "./config";
-import {environment,exists,readText,stdinText,writeText,hostError,launch,poll,pause,files,compilerHome,objectKeys,directories,remove,rename,now,executable} from "./host";
-import {contentHash,fileMetadata} from "../modules/platform";
+import {environment,exists,readText,stdinText,writeText,hostError,launch,poll,pause,files,compilerHome,objectKeys,directories,remove,rename,now,executable} from "../platform/host";
+import {contentHash,fileMetadata} from "../platform/platform";
 import {renderDiagnostic,renderSummary,setDiagnosticCatalog,explainCode} from "./diagnostics";
-import {configureProgress,progressInteractive,progressStart,progressDetail,progressTick,progressFinish,progressSummary} from "../progress/progress";
+import {configureProgress,progressInteractive,progressStart,progressDetail,progressTick,progressFinish,progressSummary} from "../platform/progress";
 function driverError(message:string,status:number=1):void{progressFinish(false);printError(message);exitProcess(status);}
 function checkedWrite(path:string,text:string):void{if(!writeText(path,text))driverError(hostError());}
 function checkedRead(path:string):string{const text=readText(path);if(hostError()!="")driverError(hostError());return text;}

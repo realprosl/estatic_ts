@@ -1,4 +1,4 @@
-import {environment,setEnvironment,analysisUsage} from "../driver/host";
+import {environment,setEnvironment,analysisUsage} from "../platform/host";
 export function parseAnalysisJobs(value:string):number{
  if(value.length==0)return 0;let count:number=0;
  for(let at:number=0;at<value.length;at=at+1){const digit:number=value.charCodeAt(at)-48;if(digit<0||digit>9)return 0;count=count*10+digit;if(count>32)return 0;}

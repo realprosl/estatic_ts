@@ -25,6 +25,26 @@ clases de nodo, roles y nombres de atributo. Binder y checker usan tablas
 laterales; no se ha migrado el AST a hijos propietarios. El lexer conserva
 lexemas y posiciones; no almacena slices hacia un buffer ajeno.
 
+## Capas
+
+`compiler/` está organizado en capas. Cada capa solo importa de sí misma o de las
+que tiene debajo, y no hay ciclos entre archivos (#176, épica #174). Lo comprueba
+`compiler/audit/layers.ts` (`npm run audit:layers`, y también dentro de `npm test`).
+
+| Capa | Directorios | Puede importar de |
+|---|---|---|
+| `platform` | `platform/` (`host`, `platform`, `progress`; cabecera nativa en `modules/platform.hpp`) | — |
+| `syntax` | `lexer/`, `parser/` | platform |
+| `diag` | `diag/` (diagnósticos, catálogo, sugerencias y la fachada `parseSource`) | syntax, platform |
+| `semantic` | `modules/`, `binder/` (con `builtins`), `checker/`, `analysis/` | diag, syntax, platform |
+| `ir` | `ir/` (bajada y verificación) | semantic y las de debajo |
+| `backend-cpp` | `backend/` | de `ir/` solo `ir/model.ets`; platform |
+| `driver` | `driver/`, `audit/` y las entradas `*/demo.ets` | todas |
+
+`syntax` va por debajo de `diag`: el lexer y el parser no dependen de nada, y los
+diagnósticos usan sus tipos (`ParserToken`, `AstNode`). Así el parser puede salir a
+un repo propio (#160) sin arrastrar el resto del compilador.
+
 ## Paso 1: lexer
 
 ```
@@ -124,7 +144,7 @@ ni vincula los símbolos de otros módulos.
 
 ## Paso 3: puente nativo por archivo (v59)
 
-El [puente](./frontend/README.md) conecta lexer ETS y parser ETS mediante una
+El [puente](./diag/README.md) conecta lexer ETS y parser ETS mediante una
 conversión explícita de tokens. También expande templates dentro del lexer ETS.
 `npm run bootstrap:frontend -- --file examples/todo-project/main.ets` lee el
 archivo en el host y entrega el texto al binario, que produce tokens, AST y

@@ -11,8 +11,8 @@ if (args.length > 2 || (args[0] === "--file" && args.length !== 2) || (args.leng
 }
 const file = args[0] === "--file" ? resolve(args[1]) : "<input>";
 const source = args[0] === "--file" ? readFileSync(file, "utf8") : args[0];
-const build = join(root, "build/compiler/frontend"); mkdirSync(build, { recursive: true });
+const build = join(root, "build/compiler/diag"); mkdirSync(build, { recursive: true });
 const cpp = join(build, "demo.cpp"), binary = join(build, process.platform === "win32" ? "demo.exe" : "demo");
-execFileSync(process.execPath, ["--experimental-strip-types", join(root, "src/cli.ts"), join(root, "compiler/frontend/demo.ets"), "-o", cpp], { cwd: root, stdio: "inherit" });
+execFileSync(process.execPath, ["--experimental-strip-types", join(root, "src/cli.ts"), join(root, "compiler/diag/demo.ets"), "-o", cpp], { cwd: root, stdio: "inherit" });
 execFileSync(process.env.CXX ?? "g++", ["-std=c++20", "-O0", "-pthread", "-fno-exceptions", `-I${root}`, cpp, "-o", binary], { cwd: root, stdio: "inherit" });
 execFileSync(binary, source === undefined ? [] : [source, file], { stdio: "inherit" });

@@ -1,4 +1,4 @@
-import {terminal,columns,environment,environmentDefined} from "../driver/host";
+import {terminal,columns,environment,environmentDefined} from "./host";
 class Progress {
  enabled:boolean;verbose:boolean;animated:boolean;drawn:boolean;label:string;detail:string;started:number;total:number;frame:number;last:number;width:number;
  constructor(){this.enabled=false;this.verbose=false;this.animated=false;this.drawn=false;this.label="";this.detail="";this.started=0;this.total=0;this.frame=0;this.last=0;this.width=80;}

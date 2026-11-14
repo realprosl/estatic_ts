@@ -1,8 +1,8 @@
 import { ModuleLoader, LoaderOptions, PathAlias } from "../modules/loader";
 import { bindProject, BindingResult } from "./binder";
 import { formatBinding } from "./format";
-import { formatSource } from "../frontend/frontend";
-import { contentHash } from "../modules/platform";
+import { formatSource } from "../diag/source";
+import { contentHash } from "../platform/platform";
 function runBindingDemo(): void {
   let options: LoaderOptions = new LoaderOptions(); let entry: string = "";
   for (let i: number = 1; i < argumentCount(); i = i + 1) {

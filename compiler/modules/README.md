@@ -102,7 +102,7 @@ registro no declara artefactos de esas fases como válidos. Cambiar el cuerpo o
 la interfaz de una dependencia mantiene la caché sintáctica de sus importadores;
 el checker posterior deberá distinguir sus invalidaciones. La reutilización de
 `.o`, las dependencias de cabeceras y flags y los trabajos concurrentes permanecen
-en el diseño documentado en `../frontend/README.md`.
+en el diseño documentado en `../diag/README.md`.
 
 La caché evita lexer/parser, pero mantiene lectura/hash e hidratación; no implica
 una mejora de rendimiento medida. El grafo usa búsquedas lineales para identidad;

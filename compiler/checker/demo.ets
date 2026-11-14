@@ -5,8 +5,8 @@ import { formatBinding } from "../binder/format";
 import { checkProject, CheckResult } from "./checker";
 import { analyzeProject } from "./expansion";
 import { formatChecked } from "./format";
-import { formatSource } from "../frontend/frontend";
-import { contentHash } from "../modules/platform";
+import { formatSource } from "../diag/source";
+import { contentHash } from "../platform/platform";
 function runCheckingDemo(): void {
   let options: LoaderOptions = new LoaderOptions(); let entry: string = "";
   for (let i: number = 1; i < argumentCount(); i = i + 1) {

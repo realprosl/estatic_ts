@@ -56,7 +56,7 @@ test("installed etsc compiles bootstrap native headers outside the checkout",asy
   assert.equal(installed.status,0,installed.stderr+installed.stdout);
   const moved=join(dir,"moved-prefix");renameSync(prefix,moved);
   const boundary=join(dir,"platform.ets"),probe=join(dir,"bootstrap-header.ets");
-  writeFileSync(boundary,readFileSync(join(root,"compiler/modules/platform.ets"),"utf8"));
+  writeFileSync(boundary,readFileSync(join(root,"compiler/platform/platform.ets"),"utf8"));
   writeFileSync(probe,'import {contentHash} from "./platform"; print(contentHash("abc"));');
   // Neither the working directory nor include flags point at the checkout.
   const p=spawnSync(join(moved,"bin/etsc"),["run",probe,"--binary",join(dir,"bootstrap-header")],{cwd:dir,encoding:"utf8",timeout:120000,env:{...process.env,ESTC_ROOT:""}});

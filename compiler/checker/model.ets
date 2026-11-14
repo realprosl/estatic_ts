@@ -1,4 +1,4 @@
-import { SourceDiagnostic } from "../frontend/frontend";
+import { SourceDiagnostic } from "../diag/source";
 import { BindingResult } from "../binder/binder";
 
 export class TypedFile {

@@ -1,10 +1,10 @@
-import { catalogArg, catalogVariant } from "../frontend/catalog";
-import { closestName } from "../frontend/suggest";
+import { catalogArg, catalogVariant } from "../diag/catalog";
+import { closestName } from "../diag/suggest";
 import { AttributeKind, EdgeRole, NodeKind, nodeKindName } from "../parser/ast-schema";
-import { nativeBuiltinNames, nativeBuiltinTypes } from "../frontend/builtins";
+import { nativeBuiltinNames, nativeBuiltinTypes } from "./builtins";
 import { ModuleGraph } from "../modules/loader";
 import { AstNode, ParserToken } from "../parser/parser";
-import { diagnosticAt, SourceDiagnostic, quoteSource } from "../frontend/frontend";
+import { diagnosticAt, SourceDiagnostic, quoteSource } from "../diag/source";
 
 export class BindingScope {
   parent: number; module: number; node: number; kind: string; symbols: number[];

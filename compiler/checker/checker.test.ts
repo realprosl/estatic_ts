@@ -1,4 +1,4 @@
-import {assertDiagnostic} from "../frontend/diagnostic-contract.ts";
+import {assertDiagnostic} from "../diag/diagnostic-contract.ts";
 import {createHash} from "node:crypto";
 import {test,before,after} from "node:test";
 import assert from "node:assert/strict";

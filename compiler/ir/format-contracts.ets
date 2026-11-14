@@ -1,5 +1,5 @@
 import { IrSource, IrProject } from "./model";
-import { quoteSource } from "../frontend/frontend";
+import { quoteSource } from "../diag/source";
 import { bindingNumbers, bindingBoolean } from "../binder/format";
 import { formatIrSource } from "./format-source";
 function strings(values: string[]): string { let result: string[] = []; for (const value of values) result.push(quoteSource(value)); return "["+result.join(",")+"]"; }

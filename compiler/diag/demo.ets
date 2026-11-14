@@ -1,4 +1,4 @@
-import { inspectSource } from "./frontend";
+import { inspectSource } from "./source";
 
 if (argumentCount() == 1) print(inspectSource('const text=`Hola ${1+2}`; print(text);', "<demo>"));
 else {

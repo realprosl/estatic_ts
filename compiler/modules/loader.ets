@@ -1,9 +1,9 @@
-import { catalogArg, catalogVariant } from "../frontend/catalog";
-import {progressDetail} from "../progress/progress";
+import { catalogArg, catalogVariant } from "../diag/catalog";
+import {progressDetail} from "../platform/progress";
 import { AttributeKind, NodeKind, nodeKindName } from "../parser/ast-schema";
 import { ParserToken, AstNode, ParseResult } from "../parser/parser";
-import { SourceDiagnostic, SourceResult, quoteSource, formatSource, formatDiagnostic } from "../frontend/frontend";
-import { canonicalFile, readSnapshot } from "./platform";
+import { SourceDiagnostic, SourceResult, quoteSource, formatSource, formatDiagnostic } from "../diag/source";
+import { canonicalFile, readSnapshot } from "../platform/platform";
 import { SyntaxCache, CachedSource, FileRecord } from "./syntax-cache";
 
 export class PathAlias {

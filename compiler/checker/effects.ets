@@ -1,7 +1,7 @@
 import {profileBegin,profileEnd} from "../analysis/options";
-import {progressDetail} from "../progress/progress";
+import {progressDetail} from "../platform/progress";
 import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind } from "../parser/ast-schema";
-import { nativeBuiltinSignatures } from "../frontend/builtins";
+import { nativeBuiltinSignatures } from "../binder/builtins";
 import { ModuleGraph } from "../modules/loader";
 import { BindingResult, bindingChild, callableBinding } from "../binder/binder";
 import { AstNode, nodeBegin } from "../parser/parser";

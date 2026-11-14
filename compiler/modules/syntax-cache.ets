@@ -1,7 +1,7 @@
 import { AttributeKind, EdgeRole, NodeKind, attributeKindName, edgeRoleName, nodeKindName, parseAttributeKind, parseEdgeRole, parseNodeKind } from "../parser/ast-schema";
 import { ParserToken, AstNode, AstAttribute, AstEdge, ParseResult } from "../parser/parser";
-import { SourceResult, parseSource } from "../frontend/frontend";
-import { contentHash, readSnapshot, publishRecord, syntaxIdentity } from "./platform";
+import { SourceResult, parseSource } from "../diag/source";
+import { contentHash, readSnapshot, publishRecord, syntaxIdentity } from "../platform/platform";
 
 // Length-prefixed UTF-8 byte fields. Hydration owns fresh arrays/classes on every hit.
 export function field(text: string): string { return numberToString(text.length) + ":" + text; }

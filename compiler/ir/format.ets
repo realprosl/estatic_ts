@@ -1,6 +1,6 @@
 import { formatContracts } from "./format-contracts";
 import { IrSource, IrProject } from "./model";
-import { quoteSource } from "../frontend/frontend";
+import { quoteSource } from "../diag/source";
 import { bindingNumbers, bindingBoolean } from "../binder/format";
 import { formatIrSource } from "./format-source";
 export function formatIr(project: IrProject): string {

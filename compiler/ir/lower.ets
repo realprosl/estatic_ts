@@ -14,7 +14,7 @@ import { irNumericWidth, irNumericKind, irNumericSigned } from "./type-traits";
 import { finishBorrows } from "./borrows";
 import { preserveContracts } from "./contracts";
 import { verifyIr } from "./verify";
-import { progressDetail } from "../progress/progress";
+import { progressDetail } from "../platform/progress";
 
 function irIndex(values: number[], value: number): number { for (let i: number = 0; i < values.length; i = i+1) if (values[i] == value) return i; return -1; }
 

@@ -2,7 +2,7 @@ import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNode
 import { ModuleGraph } from "../modules/loader";
 import { BindingResult, bindingChild, callableBinding } from "../binder/binder";
 import { nodeBegin, AstNode } from "../parser/parser";
-import { diagnosticAt, SourceDiagnostic, quoteSource } from "../frontend/frontend";
+import { diagnosticAt, SourceDiagnostic, quoteSource } from "../diag/source";
 import { CheckResult, argumentParameter } from "./model";
 import { ConstantValue, constantNumber, constantInteger, constantIntegerText, constantBoolean, constantString, constantCast, constantNumeric, constantFloat, constantWord, constantSignedDouble } from "./constant";
 import { nativeNumericLiteral, nativeIntegerText, nativeBinaryPromotion } from "./numeric";

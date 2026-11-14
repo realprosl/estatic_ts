@@ -1,12 +1,12 @@
-import { catalogArg, catalogVariant } from "../frontend/catalog";
-import { closestName } from "../frontend/suggest";
-import {progressDetail} from "../progress/progress";
+import { catalogArg, catalogVariant } from "../diag/catalog";
+import { closestName } from "../diag/suggest";
+import {progressDetail} from "../platform/progress";
 import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind, nodeKindName } from "../parser/ast-schema";
-import { nativeBuiltinSignatures } from "../frontend/builtins";
+import { nativeBuiltinSignatures } from "../binder/builtins";
 import { ModuleGraph } from "../modules/loader";
 import { BindingResult, BindingSymbol, bindingChild, callableBinding } from "../binder/binder";
 import { AstNode } from "../parser/parser";
-import { diagnosticAt, SourceDiagnostic } from "../frontend/frontend";
+import { diagnosticAt, SourceDiagnostic } from "../diag/source";
 import { joinTypes, ungroupElement, splitTypes, functionClose, functionParams, functionReturn, restPosition, argumentType, numericType, primitiveType, typeCompatible, replaceType, memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticArray, semanticTuple, semanticElement, containsMemory, fixedArraySize, fixedArrayElement, semanticFixedArray, genericBase, genericArguments, canonicalSymbol, literalType, literalKind, literalValue, literalTypeText, literalTypePrefix } from "./types";
 
 import { TypedFile, CheckResult, NativeDecorator, NativeTypeQuery } from "./model";

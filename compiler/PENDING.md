@@ -89,7 +89,7 @@ declarados.
 | L04 | I | ?? y ?. implementados con receptor, firma y cortocircuito; no son pendientes por las entradas antiguas. | `receivers, expressionInner, safety.walk`; [frontend closure optional call publishes unwrapped receiver and signature](./checker/checker.test.ts#L1578) |
 | A01 | I | Async, firmas internas/externas, await y for-await con resultados propietarios implementados. | `asynchronous, awaitContext, taskSources`; [native async; frontend closure](./checker/checker.test.ts#L1050) |
 | A02 | R | Préstamos vivos, frames y efectos de creación/cuerpo se comprueban conservadoramente. No se habilitan lifetimes a través de suspensión ni contratos opacos sin prueba. | `taskSources, safety, effects`; [native async; frontend closure](./checker/checker.test.ts#L1050) |
-| S01 | I | Catálogo y contratos estáticos presentes; se verifica sincronización con stage 0 y declaraciones canónicas. | `frontend/builtins.ets, generate-native-builtins.ts`; [binder: native builtin contracts match their generated stage 0 data](./binder/binder.test.ts#L88) |
+| S01 | I | Catálogo y contratos estáticos presentes; se verifica sincronización con stage 0 y declaraciones canónicas. | `binder/builtins.ets, generate-native-builtins.ts`; [binder: native builtin contracts match their generated stage 0 data](./binder/binder.test.ts#L88) |
 | S02 | R | Efectos de builtins implementados; externos desconocidos permanecen opacos y no se interpretan como puros. | `EffectAnalyzer.builtin, canRetain`; [native effects preserve external effects separately from symbol reads](./checker/checker.test.ts#L697) |
 | X01 | I | Decoradores, objetivos, argumentos y metadatos frontend implementados; los desconocidos se diagnostican. | `decorator, decorators`; [native comptime; frontend closure](./checker/checker.test.ts#L1226) |
 | X02 | P | Clases, métodos, enums, match, ámbitos y valores exactos ya se evalúan. Persisten contratos de memoria sin materializar: un parámetro constRef durante comptime produce COMPTIME_UNSUPPORTED. | `NativeComptime.invoke, containsMemory`; [native comptime; caso reproducible en la revisión](./checker/checker.test.ts#L1239) |
@@ -110,7 +110,7 @@ declarados.
 | T10 | P | Mapped types (`{ [K in keyof T]: V }`). Depende de T09. | `checker/checker.ets`, `ir/lower.ets` |
 | T11 | P | Conditional types (`T extends U ? X : Y`). Depende de T12 para `infer`. | `checker/checker.ets` |
 | T12 | P | `infer U` en conditional types. Depende de T11. | `checker/checker.ets` |
-| T13 | P | Utility types (`Partial`, `Pick`, `Record`, `Required`, `Omit`). Dependen de T09, T10 y T11. | `frontend/builtins.ets`, `checker/checker.ets` |
+| T13 | P | Utility types (`Partial`, `Pick`, `Record`, `Required`, `Omit`). Dependen de T09, T10 y T11. | `binder/builtins.ets`, `checker/checker.ets` |
 | T14 | P | Template literal types (`` `prefix_${T}` ``). Depende de los tipos de literal generales de T18. | `checker/checker.ets` |
 | T15 | P | Type predicates (`x is T`) con narrowing por el predicado. | `parser/parser.ets`, `checker/checker.ets` |
 | T16 | P | Index signatures `[key: string]: T` con semantica de diccionario. | `checker/checker.ets`, `runtime/ets_runtime.hpp` |

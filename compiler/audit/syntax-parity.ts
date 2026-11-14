@@ -14,7 +14,7 @@ function diagnostics(error:unknown):string[]{const e=error as {diagnostics?:{mes
 async function stage0(entry:string,baseDirectory:string):Promise<void>{const graph=await loadModuleGraph(entry,{baseDirectory});for(const module of graph.modules)new Parser(new Lexer(module.source).tokenize()).parseProgram();}
 function direct(source:string):boolean{try{new Parser(new Lexer(source).tokenize()).parseProgram();return true;}catch{return false;}}
 try {
-  const binary=await buildLoader(join(directory,'binary'),'compiler/frontend/demo.ets',true);
+  const binary=await buildLoader(join(directory,'binary'),'compiler/diag/demo.ets',true);
   const pairs=syntaxCases.flatMap(c=>Object.entries({'main.ets':c.source,...c.files}).flatMap(([file,source])=>[source,`${c.id}/${file}`]));
   const native=spawnSync(binary,pairs,{cwd:root,encoding:'utf8',timeout:60000,maxBuffer:64*1024*1024});
   if(native.error)throw native.error;if(native.status!==0)throw new Error(native.stderr);

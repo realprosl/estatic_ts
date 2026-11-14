@@ -1,6 +1,6 @@
 import { AttributeKind, EdgeRole, NodeKind, attributeKindName, edgeRoleName, isCallableNodeKind, nodeKindName } from "../parser/ast-schema";
 import { ModuleGraph } from "../modules/loader";
-import { contentHash, syntaxIdentity } from "../modules/platform";
+import { contentHash, syntaxIdentity } from "../platform/platform";
 import { BindingResult, callableBinding } from "../binder/binder";
 import { CheckResult, NativeModuleRecord } from "./model";
 import { splitTypes, functionClose, functionParams, functionReturn, semanticElement, semanticTuple, fixedArraySize, fixedArrayElement, genericBase, genericArguments, ungroupElement } from "./types";

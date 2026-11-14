@@ -1,7 +1,7 @@
 import { AttributeKind, nodeKindName } from "../parser/ast-schema";
 import { BindingResult } from "./binder";
 import { ModuleGraph } from "../modules/loader";
-import { quoteSource, formatDiagnostic } from "../frontend/frontend";
+import { quoteSource, formatDiagnostic } from "../diag/source";
 export function bindingBoolean(value: boolean): string { return value ? "true" : "false"; }
 export function bindingNumbers(values: number[]): string {
   let output: string[] = []; for (const value of values) output.push(numberToString(value)); return "[" + output.join(",") + "]";
