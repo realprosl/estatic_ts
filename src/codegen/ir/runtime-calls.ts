@@ -14,7 +14,7 @@ export const objectMethods:Record<string,Set<string>>={
   "!Date":new Set(["now","utc"]), "!JSON":new Set(["parse","stringify","parseValue","stringifyBool","stringifyNumber","stringifyValue"]),
   "!path":new Set(["dirname","basename","extname","join","resolve","normalize","isAbsolute"]),
   "!fs":new Set(["readFile","writeFile","appendFile","copyFile","rename","unlink","readFileSync","writeFileSync","appendFileSync","copyFileSync","renameSync","unlinkSync","existsSync"]),
-  "!process":new Set(["cwd","exit","argv","argc"]),
+  "!process":new Set(["cwd","exit"]),
   "Console":new Set(["log","info","debug","trace","warn","error"]),
 };
 export function emitRuntimeCall(g:IrCppGenerator,f:IrFunction,i:IrInstruction):string {
@@ -36,6 +36,9 @@ export function emitRuntimeCall(g:IrCppGenerator,f:IrFunction,i:IrInstruction):s
     if(["setTimeout","setInterval","cancelTimer"].includes(name)){g.headers.add("runtime/ets_timer.hpp");g.backends.libuv=true;return `ets::${name}(${args()})`;}
     if(["optionalMap","optionalAndThen"].includes(name))return `${name}(${a(0)},${g.callback(f,i,1)})`;
 
+    // process.argv/process.argc como propiedades (lowering nativo: builtin.process.argv/argc).
+    if(name==="process.argv")return "ets::processArgv()";
+    if(name==="process.argc")return "ets::processArgc()";
     if(name==="stopLoop"){g.headers.add("runtime/ets_async.hpp");g.backends.libuv=true;return "ets::defaultEventLoop.stop()";}
     if(name==="length")return `ets::length(${a(0)})`;
     if(name==="optionalSome")return `${T}::some(${a(0)})`;
@@ -79,6 +82,9 @@ export function emitRuntimeCall(g:IrCppGenerator,f:IrFunction,i:IrInstruction):s
   }
   if(base==="Response"&&["status","header","send","json"].includes(method)){g.httpServer();return `std::addressof((${a(0,false)})->${method}(${i.operands.slice(1).map((_,k)=>a(k+1)).join(",")}))`;}
   if(base==="HttpClientResponse"&&["status","body","header"].includes(method))return `(${g.deref(a(0,false),f.values[i.operands[0]])}).${method==="status"?"status_code":method==="body"?"body_str":method}(${i.operands.slice(1).map((_,k)=>a(k+1)).join(",")})`;
+  // process.argv/process.argc son propiedades al estilo Node (ver runtime/ets_core.hpp).
+  if(base==="process"&&method==="argv")return "ets::processArgv()";
+  if(base==="process"&&method==="argc")return "ets::processArgc()";
   if(base==="Console"&&TERMINAL_METHODS[method]){g.headers.add("runtime/ets_terminal.hpp");return `console.${method}(${args()})`;}
   if(objectMethods[base]?.has(method)) {
     if(["!fs","!path","!process"].includes(base)){g.headers.add("runtime/ets_runtime_full.hpp");g.backends.libuv=true;}

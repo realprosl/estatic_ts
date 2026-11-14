@@ -790,8 +790,10 @@ declare global {
     function resolve(parts: string[]): string;
   }
   namespace process {
-    const argc: number;
+    /** Como en Node: [ejecutable, programa, ...argumentos]. Los argumentos del usuario empiezan en argv[2]: `process.argv.slice(2)`. */
     const argv: string[];
+    /** Extension del dialecto: `process.argv.length`. */
+    const argc: number;
     const stdin: ProcessReadable;
     const stdout: ProcessWritable;
     const stderr: ProcessWritable;
