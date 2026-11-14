@@ -7,9 +7,13 @@ name: Version bump on merge
 #
 # - Idempotente: el commit lleva el trailer "Version-Bump-Source-PR: #N"; si ya
 #   está en main, no se vuelve a subir.
+# - Tag anotado vX.Y.Z sobre el commit de promoción, publicado junto con él
+#   (push --atomic). Si el incremento ya está en main pero falta el tag, solo
+#   crea el tag. Nunca sobrescribe un tag existente.
 # - Serializado (concurrency) y con reintentos: si main avanza entre medias
 #   (otra fusión, seed-prebuilt.yml...), rehace el incremento sobre el main nuevo.
-# - Un push con GITHUB_TOKEN no dispara otros workflows, así que no hay bucles.
+# - Un push con GITHUB_TOKEN no dispara otros workflows (tampoco el del tag),
+#   así que no hay bucles.
 
 on:
   pull_request:
@@ -39,19 +43,59 @@ jobs:
           ref: main
           fetch-depth: 50
 
-      - name: Bump version on main
+      - name: Bump version on main and tag it
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Lee "version" y "estaticRevision" del package.json de un commit.
+          read_version() {
+            git show "$1:package.json" | node -e '
+              const pkg = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+              process.stdout.write(pkg.version + " " + pkg.estaticRevision + "\n");'
+          }
+
+          # Commit al que apunta un tag (vacío si no existe).
+          tag_target() {
+            git rev-parse -q --verify "refs/tags/$1^{commit}" 2>/dev/null || true
+          }
+
+          # Crea el tag anotado vX.Y.Z sobre el commit dado.
+          make_tag() {
+            local tag="$1" commit="$2" revision="$3"
+            git tag -a "$tag" "$commit" \
+              -m "estatic $tag (revisión $revision)" \
+              -m "Version-Bump-Source-PR: #$SOURCE_PR"
+          }
+
           for attempt in 1 2 3 4 5; do
-            git fetch origin main
+            git fetch --force --tags origin main
             git checkout -B main origin/main
-            if git log -n 200 --format=%B origin/main | grep -Fxq "Version-Bump-Source-PR: #$SOURCE_PR"; then
-              echo "PR #$SOURCE_PR ya tiene su incremento en main." >> "$GITHUB_STEP_SUMMARY"
+
+            # ¿Esta PR ya tiene su incremento en main? Entonces solo falta,
+            # como mucho, el tag (p. ej. una ejecución anterior falló a medias).
+            bump_commit="$(git log -n 200 --format=%H \
+              --grep="^Version-Bump-Source-PR: #$SOURCE_PR\$" origin/main | head -n 1)"
+            if [ -n "$bump_commit" ]; then
+              read -r version revision < <(read_version "$bump_commit")
+              tag="v$version"
+              existing="$(tag_target "$tag")"
+              if [ "$existing" = "$bump_commit" ]; then
+                echo "PR #$SOURCE_PR ya tiene su incremento y su tag $tag en main." >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+              if [ -n "$existing" ]; then
+                echo "::error::El tag $tag ya existe y apunta a $existing, no a $bump_commit. No se sobrescribe."
+                exit 1
+              fi
+              make_tag "$tag" "$bump_commit" "$revision"
+              git push origin "refs/tags/$tag"
+              echo "PR #$SOURCE_PR ya tenía su incremento; creado el tag $tag que faltaba." >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
+
             version="$(node <<'NODE'
           const fs = require('node:fs');
           const file = 'package.json';
@@ -62,16 +106,31 @@ jobs:
           pkg.version = `${match[1]}.${Number(match[2]) + 1}.0`;
           pkg.estaticRevision += 1;
           fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n');
-          process.stdout.write(`${pkg.version} (v${pkg.estaticRevision})`);
+          process.stdout.write(`${pkg.version} ${pkg.estaticRevision}`);
           NODE
             )"
+            read -r version revision <<< "$version"
+            tag="v$version"
+
+            existing="$(tag_target "$tag")"
+            if [ -n "$existing" ]; then
+              echo "::error::El tag $tag ya existe (apunta a $existing). No se sobrescribe; revisa package.json."
+              exit 1
+            fi
+
             git add package.json
-            git commit -q -m "chore(release): v${version%% *} for merged PR #$SOURCE_PR" \
+            git commit -q -m "chore(release): $tag for merged PR #$SOURCE_PR" \
               -m "Version-Bump-Source-PR: #$SOURCE_PR"
-            if git push origin HEAD:main; then
-              echo "PR #$SOURCE_PR → $version" >> "$GITHUB_STEP_SUMMARY"
+            make_tag "$tag" HEAD "$revision"
+
+            # Commit y tag van juntos: o se publican ambos o ninguno.
+            if git push --atomic origin HEAD:main "refs/tags/$tag"; then
+              echo "PR #$SOURCE_PR → $version (v$revision), tag $tag" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
+
+            # main avanzó: el commit se descarta, así que su tag también.
+            git tag -d "$tag"
             echo "main avanzó; reintento $attempt"
             sleep $((attempt * 5))
           done
