@@ -2,5 +2,5 @@
 // Generado a partir de los imports reales; añade aquí lo que otra capa necesite.
 
 export { parseIrProject } from "./decode";
-export { generateCppFromIr, IrCppResult } from "./generator";
+export { generateCppFromIr, IrCppResult, IrCppUnit } from "./generator";
 export { formatCppResult } from "./wire";

@@ -13,7 +13,7 @@ function pathAt(base:string,path:string):string{return normalizePath(path.starts
 function parent(path:string):string{let end:number=-1;for(let k:number=0;k<path.length;k=k+1)if(path.charAt(k)=="/")end=k;return end<0?".":path.slice(0,end);}
 function stem(path:string):string{let start:number=0;let end:number=path.length;for(let k:number=0;k<path.length;k=k+1){if(path.charAt(k)=="/"){start=k+1;end=path.length;}else if(path.charAt(k)==".")end=k;}return path.slice(start,end);}
 function execute(command:string[],output:string="",errors:string=""):number{progressDetail(command.join(" "));const pid=launch(command,output,errors);if(pid<0)driverError(hostError());let status=poll(pid);while(status<0){progressTick();pause(80);status=poll(pid);}return status;}
-function help():string{return "Uso: etsc build|run [entrada.ets] [opciones]\n  --check                  Verificar sin generar\n  --emit-interface         Imprimir la interfaz pública del módulo y su interfaceHash (JSON)\n  -o archivo.cpp           Ruta C++\n  --binary archivo         Ruta ejecutable (con build)\n  --from-ir archivo        Generar desde ets-ir-2 verificado\n  --emit-ir archivo        Guardar IR\n  --config archivo         JSON u objeto declarativo\n  --root ruta | --alias nombre ruta | --cache ruta\n  --cxx compilador | --cxx-flag flag | --link-flag flag\n  --jobs N                 Procesos de análisis (1..32; por defecto 1)\n  --profile-analysis       Tiempos, CPU y RSS por fase en stderr\n  --verbose | --no-progress\n  init [directorio] [--no-src] | update-types [directorio]\n  --no-src                 (init) no crear src/: para una carpeta que ya tiene código\n  --explain CÓDIGO     Explicar un código de error (ej. E3003). ESTC_LANG=en: mensajes en inglés\n  --help | --version\n";}
+function help():string{return "Uso: etsc build|run [entrada.ets] [opciones]\n  --check                  Verificar sin generar\n  --emit-interface         Imprimir la interfaz pública del módulo y su interfaceHash (JSON)\n  --unity                  Compilar el programa como un único .cpp (sin unidades por módulo)\n  -o archivo.cpp           Ruta C++\n  --binary archivo         Ruta ejecutable (con build)\n  --from-ir archivo        Generar desde ets-ir-2 verificado\n  --emit-ir archivo        Guardar IR\n  --config archivo         JSON u objeto declarativo\n  --root ruta | --alias nombre ruta | --cache ruta\n  --cxx compilador | --cxx-flag flag | --link-flag flag\n  --jobs N                 Procesos de análisis (1..32; por defecto 1)\n  --profile-analysis       Tiempos, CPU y RSS por fase en stderr\n  --verbose | --no-progress\n  init [directorio] [--no-src] | update-types [directorio]\n  --no-src                 (init) no crear src/: para una carpeta que ya tiene código\n  --explain CÓDIGO     Explicar un código de error (ej. E3003). ESTC_LANG=en: mensajes en inglés\n  --help | --version\n";}
 // Ficheros fuente del último análisis: alimentan la huella de entradas (fase 3).
 let analyzedFiles:string[]=[];
 // --emit-interface (#177): analiza el módulo como entrada e imprime su interfaz
@@ -62,7 +62,7 @@ function fingerprintCurrent(path:string,key:string):boolean{
 // necesita el programa por las cabeceras que incluye. sourceFlags[k]: los que
 // necesita cada fuente del runtime. Así un objeto del runtime no depende de qué
 // otras APIs use el programa y se comparte entre proyectos.
-class CppPlan{flags:string[];programFlags:string[];sources:string[];sourceFlags:string[][];libraries:string[];pchHeader:string;constructor(){this.flags=[];this.programFlags=[];this.sources=[];this.sourceFlags=[];this.libraries=[];this.pchHeader="";}}
+class CppPlan{flags:string[];programFlags:string[];sources:string[];sourceFlags:string[][];libraries:string[];pchHeader:string;programUnits:number;constructor(){this.flags=[];this.programFlags=[];this.sources=[];this.sourceFlags=[];this.libraries=[];this.pchHeader="";this.programUnits=1;}}
 function cppPlan(result:constRef<IrCppResult>,root:string,cxx:string,flags:string[]):CppPlan{
  let plan=new CppPlan();const base:string[]=[cxx,"-std=c++20","-O0","-pthread","-fno-exceptions","-I"+root];for(const flag of base)plan.flags.push(flag);for(const flag of flags)plan.flags.push(flag);
  if(result.runtimeBackends.libuv){const uv=root+"/build/libs/libuv";const none:string[]=[];if(exists(uv+"/include/uv.h"))plan.flags.push("-I"+uv+"/include");plan.sources.push(root+"/runtime/runtime_ets_libuv.cpp");plan.sourceFlags.push(none);plan.sources.push(root+"/runtime/runtime_ets_net_libuv.cpp");plan.sourceFlags.push(none);plan.libraries.push(exists(uv+"/lib/libuv.a")?uv+"/lib/libuv.a":"-luv");plan.libraries.push("-ldl");plan.libraries.push("-lrt");}
@@ -125,42 +125,56 @@ function prunePch(directory:string,keep:number):void{
  }
 }
 function compileCommand(plan:constRef<CppPlan>,index:number,source:string,object:string):string[]{
- let command:string[]=[];for(const flag of plan.flags)command.push(flag);if(index==0){for(const flag of plan.programFlags)command.push(flag);if(plan.pchHeader!=""){command.push("-include");command.push(plan.pchHeader);}}else{for(const flag of plan.sourceFlags[index-1])command.push(flag);}command.push("-c");command.push(source);command.push("-o");command.push(object);return command;
+ let command:string[]=[];for(const flag of plan.flags)command.push(flag);if(index<plan.programUnits){for(const flag of plan.programFlags)command.push(flag);if(plan.pchHeader!=""){command.push("-include");command.push(plan.pchHeader);}}else{for(const flag of plan.sourceFlags[index-plan.programUnits])command.push(flag);}command.push("-c");command.push(source);command.push("-o");command.push(object);return command;
 }
 // Objetos de compilación:
 // - runtime: primero los preparados en la instalación (<root>/build/objects, de
 //   solo lectura, comunes a todos los usuarios); si no, la caché del usuario.
 // - programa: en la caché del proyecto, por huella del C++ generado; si el C++
 //   no cambia (comentarios, espacios…), no se vuelve a compilar.
-function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:string,cxx:string,flags:string[],links:string[],cacheObjects:boolean,projectCache:string):void{
+function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:string,cxx:string,flags:string[],links:string[],cacheObjects:boolean,projectCache:string,unity:boolean=false):void{
  if(!directories(parent(binary)))driverError(hostError());progressStart("Preparando runtime");let plan=cppPlan(result,root,cxx,flags);
+ // Modo por módulo (#178): cabecera común + una unidad por módulo en <cpp>.units/;
+ // cada unidad es un objeto con su propia clave. --unity compila solo `cpp`.
+ let units:string[]=[cpp];let includeSource:string=cpp;
+ if(!unity&&result.units.length>0){
+  const directory=cpp+".units";if(!directories(directory))driverError(hostError());
+  writeIfChanged(directory+"/program.hpp",result.header);units=[];includeSource=directory+"/program.hpp";
+  let keep:string[]=["program.hpp"];for(const unit of result.units){writeIfChanged(directory+"/"+unit.name,unit.text);units.push(directory+"/"+unit.name);keep.push(unit.name);}
+  for(const file of files(directory))if(!keep.includes(file))remove(directory+"/"+file);
+  plan.programUnits=units.length;
+ }
  const userCache=cacheObjects?runtimeObjectCache():"";const shipped=root+"/build/objects";
  const programCache=cacheObjects&&projectCache!=""&&directories(projectCache+"/objects")?projectCache+"/objects":"";
  if(userCache==""&&programCache==""&&!(cacheObjects&&exists(shipped))){
   // Sin caché: una sola llamada, como siempre.
-  let sources:string[]=[cpp];for(const source of plan.sources)sources.push(source);
+  let sources:string[]=[];for(const unit of units)sources.push(unit);for(const source of plan.sources)sources.push(source);
   progressStart("Compilando y enlazando C++");const status=executeAll([linkCommand(plan,sources,links,binary)]);
   if(status!=0)driverError(cxx+" terminó con "+numberToString(status),status);if(!exists(binary))driverError("El compilador no creó "+binary);return;
  }
  const identity=contentHash(compilerIdentity(cxx,binary)+"\n"+plan.flags.join("\n")+"\n"+runtimeIdentity(root));
  // targets[k]: objeto a enlazar; build[k]: hay que compilarlo; publish[k]: ruta
  // final si se compila a un temporal; drop[k]: borrar al acabar (sin caché).
- let sources:string[]=[cpp];for(const source of plan.sources)sources.push(source);
+ let sources:string[]=[];for(const unit of units)sources.push(unit);for(const source of plan.sources)sources.push(source);
  let targets:string[]=[];let build:boolean[]=[];let publish:string[]=[];let drop:boolean[]=[];
+ // La clave de una unidad del programa incluye la cabecera común: si cambian
+ // tipos o firmas se recompilan todas; si cambia un cuerpo, solo la suya.
+ const headerText:string=includeSource!=cpp?readText(includeSource):"";
  for(let k:number=0;k<sources.length;k=k+1){
-  if(k==0){
-   if(programCache!=""){const object=programCache+"/program-"+contentHash(identity+"\n"+plan.programFlags.join("\n")+"\n"+readText(cpp))+".o";targets.push(object);build.push(!exists(object));publish.push(object);drop.push(false);}
-   else{targets.push(binary+".o");build.push(true);publish.push("");drop.push(true);}
+  if(k<plan.programUnits){
+   if(programCache!=""){const object=programCache+"/program-"+contentHash(identity+"\n"+plan.programFlags.join("\n")+"\n"+headerText+"\n"+readText(sources[k]))+".o";targets.push(object);build.push(!exists(object));publish.push(object);drop.push(false);}
+   else{targets.push(binary+".unit"+numberToString(k)+".o");build.push(true);publish.push("");drop.push(true);}
    continue;
   }
-  const name=contentHash(identity+"\n"+plan.sourceFlags[k-1].join("\n")+"\n"+sources[k]+"\n"+fileMetadata(sources[k]))+".o";
+  const name=contentHash(identity+"\n"+plan.sourceFlags[k-plan.programUnits].join("\n")+"\n"+sources[k]+"\n"+fileMetadata(sources[k]))+".o";
   if(cacheObjects&&exists(shipped+"/"+name)){targets.push(shipped+"/"+name);build.push(false);publish.push("");drop.push(false);}
   else if(userCache!=""){targets.push(userCache+"/"+name);build.push(!exists(userCache+"/"+name));publish.push(userCache+"/"+name);drop.push(false);}
   else{targets.push(binary+".runtime"+numberToString(k)+".o");build.push(true);publish.push("");drop.push(true);}
  }
  let pchPid:number=-1;let pchPartial="";let pchFinal="";
- if(build[0]){
-  const includes=generatedIncludes(cpp);const compiler=compilerIdentity(cxx,binary);
+ let buildsProgram:boolean=false;for(let k:number=0;k<plan.programUnits;k=k+1)if(build[k])buildsProgram=true;
+ if(buildsProgram){
+  const includes=generatedIncludes(includeSource);const compiler=compilerIdentity(cxx,binary);
   if(includes.length>0){
    const key=contentHash(identity+"\n"+plan.programFlags.join("\n")+"\n"+includes.join("\n"));
    const shippedHeader=shipped+"/../pch/"+key+"/pch.hpp";
@@ -191,15 +205,17 @@ function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:s
  for(let k:number=0;k<targets.length;k=k+1)if(drop[k])remove(targets[k]);
  if(status!=0)driverError(cxx+" terminó con "+numberToString(status),status);if(!exists(binary))driverError("El compilador no creó "+binary);
  // La caché del proyecto solo guarda el objeto del programa vigente.
- if(programCache!=""){for(const file of files(programCache))if(file.startsWith("program-")&&programCache+"/"+file!=targets[0])remove(programCache+"/"+file);}
+ if(programCache!=""){let current:string[]=[];for(let k:number=0;k<plan.programUnits;k=k+1)current.push(targets[k]);for(const file of files(programCache))if(file.startsWith("program-")&&!current.includes(programCache+"/"+file))remove(programCache+"/"+file);}
 }
+// Escribe solo si el contenido cambia (las fechas de las unidades intactas no se tocan).
+function writeIfChanged(path:string,text:string):void{if(exists(path)&&readText(path)==text)return;checkedWrite(path,text);}
 // Compila en paralelo los objetos marcados. Los que van a una caché se escriben
 // en un temporal y se publican con rename al terminar bien.
 function compileObjects(plan:constRef<CppPlan>,sources:string[],targets:string[],build:boolean[],publish:string[]):number{
  let commands:string[][]=[];let partials:string[]=[];let finals:string[]=[];
  for(let k:number=0;k<sources.length;k=k+1){if(!build[k])continue;const output=publish[k]!=""?publish[k]+"."+numberToString(now())+".tmp":targets[k];commands.push(compileCommand(plan,k,sources[k],output));if(publish[k]!=""){partials.push(output);finals.push(publish[k]);}}
  if(commands.length==0)return 0;
- progressStart(commands.length==1&&build[0]?"Compilando C++":"Compilando C++ y runtime");
+ progressStart(plan.programUnits>1?"Compilando C++ ("+numberToString(commands.length)+" unidades)":(commands.length==1&&build[0]?"Compilando C++":"Compilando C++ y runtime"));
  const status=executeAll(commands);
  for(let k:number=0;k<partials.length;k=k+1){if(status==0&&exists(partials[k]))rename(partials[k],finals[k]);else remove(partials[k]);}
  return status;
@@ -215,9 +231,9 @@ function main():void{
   let directory=".";let sources=true;let positional=0;
   for(let k:number=1;k<args.length;k=k+1){if(args[k]=="--no-src"&&args[0]=="init")sources=false;else if(args[k].startsWith("-")||positional>0)driverError(help(),2);else{directory=args[k];positional=positional+1;}}
   configureProgress(false,true);progressStart(args[0]=="init"?"Creando proyecto":"Actualizando tipos");initialize(root,directory,args[0]=="update-types",sources);progressSummary();return;}
- let build:boolean=false;let run:boolean=false;let check:boolean=false;let verbose:boolean=false;let animate:boolean=true;let entry:string="";let output:string="";let binary:string="";let fromIr:string="";let emitIr:string="";let emitInterface:boolean=false;let configPath:string="";let cxx:string="";let options=new LoaderOptions();let flags:string[]=[];let links:string[]=[];let programArgs:string[]=[];
+ let build:boolean=false;let run:boolean=false;let check:boolean=false;let verbose:boolean=false;let animate:boolean=true;let entry:string="";let output:string="";let binary:string="";let fromIr:string="";let emitIr:string="";let emitInterface:boolean=false;let unity:boolean=false;let configPath:string="";let cxx:string="";let options=new LoaderOptions();let flags:string[]=[];let links:string[]=[];let programArgs:string[]=[];
  let at:number=0;if(args.length>0&&(args[0]=="build"||args[0]=="run")){build=true;run=args[0]=="run";at=1;}
- for(;at<args.length;at=at+1){const arg=args[at];if(arg=="--"){for(let k:number=at+1;k<args.length;k=k+1)programArgs.push(args[k]);break;}if(arg=="--profile-analysis"){if(!configureAnalysisProfile())driverError(hostError());continue;}if(arg=="--jobs"){at=at+1;if(at>=args.length||!configureAnalysisJobs(args[at]))driverError("--jobs requiere un entero entre 1 y 32",2);continue;}if(arg=="--verbose"){verbose=true;continue;}if(arg=="--no-progress"){animate=false;continue;}if(arg=="--build"){build=true;continue;}if(arg=="--run"){run=true;build=true;continue;}if(arg=="--check"){check=true;continue;}if(arg=="--emit-interface"){emitInterface=true;continue;}
+ for(;at<args.length;at=at+1){const arg=args[at];if(arg=="--"){for(let k:number=at+1;k<args.length;k=k+1)programArgs.push(args[k]);break;}if(arg=="--profile-analysis"){if(!configureAnalysisProfile())driverError(hostError());continue;}if(arg=="--jobs"){at=at+1;if(at>=args.length||!configureAnalysisJobs(args[at]))driverError("--jobs requiere un entero entre 1 y 32",2);continue;}if(arg=="--verbose"){verbose=true;continue;}if(arg=="--no-progress"){animate=false;continue;}if(arg=="--build"){build=true;continue;}if(arg=="--run"){run=true;build=true;continue;}if(arg=="--check"){check=true;continue;}if(arg=="--emit-interface"){emitInterface=true;continue;}if(arg=="--unity"){unity=true;continue;}
  if(["-o","--binary","--from-ir","--emit-ir","--config","--cxx","--root","--cache","--alias","--cxx-flag","--link-flag"].includes(arg)){at+=1;if(at>=args.length)driverError("Falta un valor para "+arg,2);const value=args[at];if(value.startsWith("-")&&arg!="--cxx-flag"&&arg!="--link-flag")driverError("Falta un valor para "+arg,2);if(arg=="-o")output=value;else if(arg=="--binary")binary=value;else if(arg=="--from-ir")fromIr=value;else if(arg=="--emit-ir")emitIr=value;else if(arg=="--config")configPath=value;else if(arg=="--cxx")cxx=value;else if(arg=="--cache")options.cacheDirectory=value;else if(arg=="--root")options.roots.push(normalizePath(value));else if(arg=="--cxx-flag")flags.push(value);else if(arg=="--link-flag")links.push(value);else if(arg=="--alias"){at+=1;if(at>=args.length)driverError("Falta la ruta del alias",2);options.aliases.push(new PathAlias(value,args[at]));}continue;}
  if(arg.startsWith("-")||entry!="")driverError("Argumento inesperado: "+arg,2);entry=arg;}
  if(entry!=""&&fromIr!="")driverError("Usa una fuente o --from-ir",2);if(emitInterface&&(fromIr!=""||build||run||check||emitIr!=""||output!=""||binary!=""))driverError("--emit-interface solo admite un módulo fuente y opciones de resolución (--config, --root, --alias, --cache)",2);if(check&&(build||run||output!=""||binary!=""))driverError("--check no admite generación o ejecución",2);if(programArgs.length>0&&!run)driverError("Los argumentos del programa requieren run",2);
@@ -235,7 +251,7 @@ function main():void{
   if(output==""){const configured=jsonAsString(jsonObjectGet(outputConfig,"cpp"));output=(configured!=""?pathAt(base,configured):"build/"+stem(entry)+".cpp");}
   if(binary==""){const configured=jsonAsString(jsonObjectGet(outputConfig,"binary"));binary=(configured!=""?pathAt(base,configured):output+".bin");}
   if(cxx=="")cxx=jsonAsString(jsonObjectGet(compilerConfig,"command"));if(cxx=="")cxx=environment("CXX");if(cxx=="")cxx="g++";
-  let keyArgs:string[]=["entry "+entry,"output "+output,"binary "+binary];for(const flag of flags)keyArgs.push("cxx-flag "+flag);for(const link of links)keyArgs.push("link-flag "+link);for(const moduleRoot of options.roots)keyArgs.push("root "+moduleRoot);for(const alias of options.aliases)keyArgs.push("alias "+alias.name+" "+alias.target);
+  let keyArgs:string[]=["entry "+entry,"output "+output,"binary "+binary,"unity "+(unity?"1":"0")];for(const flag of flags)keyArgs.push("cxx-flag "+flag);for(const link of links)keyArgs.push("link-flag "+link);for(const moduleRoot of options.roots)keyArgs.push("root "+moduleRoot);for(const alias of options.aliases)keyArgs.push("alias "+alias.name+" "+alias.target);
   if(directories(options.cacheDirectory)){fingerprintPath=options.cacheDirectory+"/build-fingerprint";fingerprintKey=buildKey(keyArgs,configText,root,cxx,options.cacheDirectory+"/build-fingerprint");}
   if(fingerprintPath!=""&&fingerprintCurrent(fingerprintPath,fingerprintKey)){
    progressStart("Sin cambios: se reutiliza el binario");progressSummary(output,binary);
@@ -246,7 +262,7 @@ function main():void{
  if(fingerprintPath!=""&&exists(fingerprintPath))remove(fingerprintPath);
  options.verbose=verbose||progressInteractive();progressStart(fromIr==""?"Analizando fuentes y verificando IR":"Leyendo IR");const ir:IrProject=fromIr==""?sourceIr(entry,options,verbose):parseIrProject(checkedRead(fromIr));if(emitIr!="")checkedWrite(emitIr,formatIr(ir)+"\n");if(check){progressSummary();return;}
  progressStart("Generando C++ desde IR verificado");const generated=generateCppFromIr(ir);const outConfig=jsonObjectGet(config,"output");const compiler=jsonObjectGet(config,"compiler");if(output==""){const configured=jsonAsString(jsonObjectGet(outConfig,"cpp"));output=(configured!=""?pathAt(base,configured):"build/"+stem(fromIr==""?entry:fromIr)+".cpp");}progressStart("Guardando resultados");checkedWrite(output,generated.cpp);
- if(build||jsonAsBool(jsonObjectGet(compiler,"enabled"))){if(binary==""){const configured=jsonAsString(jsonObjectGet(outConfig,"binary"));binary=(configured!=""?pathAt(base,configured):output+".bin");}if(cxx=="")cxx=jsonAsString(jsonObjectGet(compiler,"command"));if(cxx=="")cxx=environment("CXX");if(cxx=="")cxx="g++";let compileFlags=configStrings(jsonObjectGet(compiler,"flags"));for(const flag of flags)compileFlags.push(flag);let linkFlags=configStrings(jsonObjectGet(compiler,"linkFlags"));for(const flag of links)linkFlags.push(flag);for(const library of configStrings(jsonObjectGet(config,"linkLibraries")))linkFlags.push("-l"+library);compileCpp(generated,output,binary,root,cxx,compileFlags,linkFlags,incrementalEnabled,options.cacheDirectory);if(fingerprintPath!=""){let inputs:string[]=[];for(const file of analyzedFiles)inputs.push(file);if(configPath!="")inputs.push(configPath);checkedWrite(fingerprintPath,fingerprintText(fingerprintKey,inputs,[output,binary]));}}
+ if(build||jsonAsBool(jsonObjectGet(compiler,"enabled"))){if(binary==""){const configured=jsonAsString(jsonObjectGet(outConfig,"binary"));binary=(configured!=""?pathAt(base,configured):output+".bin");}if(cxx=="")cxx=jsonAsString(jsonObjectGet(compiler,"command"));if(cxx=="")cxx=environment("CXX");if(cxx=="")cxx="g++";let compileFlags=configStrings(jsonObjectGet(compiler,"flags"));for(const flag of flags)compileFlags.push(flag);let linkFlags=configStrings(jsonObjectGet(compiler,"linkFlags"));for(const flag of links)linkFlags.push(flag);for(const library of configStrings(jsonObjectGet(config,"linkLibraries")))linkFlags.push("-l"+library);compileCpp(generated,output,binary,root,cxx,compileFlags,linkFlags,incrementalEnabled,options.cacheDirectory,unity);if(fingerprintPath!=""){let inputs:string[]=[];for(const file of analyzedFiles)inputs.push(file);if(configPath!="")inputs.push(configPath);checkedWrite(fingerprintPath,fingerprintText(fingerprintKey,inputs,[output,binary]));}}
  progressSummary(output,(build||jsonAsBool(jsonObjectGet(compiler,"enabled")))?binary:"");if(run){let command:string[]=[normalizePath(binary)];for(const arg of programArgs)command.push(arg);exitProcess(execute(command));}
 }
 main();
