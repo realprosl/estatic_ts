@@ -1,8 +1,7 @@
-import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind, nodeKindName } from "../parser/ast-schema";
-import { ModuleGraph } from "../modules/loader";
-import { BindingResult, bindingChild, callableBinding } from "../binder/binder";
-import { nodeBegin, AstNode } from "../parser/parser";
-import { diagnosticAt, SourceDiagnostic, quoteSource } from "../diag/source";
+import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind, nodeKindName, nodeBegin, AstNode } from "../parser/index";
+import { ModuleGraph } from "../modules/index";
+import { BindingResult, bindingChild, callableBinding } from "../binder/index";
+import { diagnosticAt, SourceDiagnostic, quoteSource } from "../diag/index";
 import { CheckResult, argumentParameter } from "./model";
 import { ConstantValue, constantNumber, constantInteger, constantIntegerText, constantBoolean, constantString, constantCast, constantNumeric, constantFloat, constantWord, constantSignedDouble } from "./constant";
 import { nativeNumericLiteral, nativeIntegerText, nativeBinaryPromotion } from "./numeric";

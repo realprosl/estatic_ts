@@ -1,8 +1,8 @@
-import { AttributeKind, EdgeRole, NodeKind, attributeKindName, edgeRoleName, isCallableNodeKind, nodeKindName } from "../parser/ast-schema";
-import { ModuleGraph } from "../modules/loader";
-import { contentHash, syntaxIdentity } from "../platform/platform";
-import { BindingResult, callableBinding } from "../binder/binder";
-import { CheckResult, NativeModuleRecord } from "./model";
+import { AttributeKind, EdgeRole, NodeKind, attributeKindName, edgeRoleName, isCallableNodeKind, nodeKindName } from "../parser/index";
+import { ModuleGraph } from "../modules/index";
+import { contentHash, syntaxIdentity } from "../platform/index";
+import { BindingResult, callableBinding } from "../binder/index";
+import { CheckResult, NativeInterfaceEntry, NativeModuleRecord } from "./model";
 import { splitTypes, functionClose, functionParams, functionReturn, semanticElement, semanticTuple, fixedArraySize, fixedArrayElement, genericBase, genericArguments, ungroupElement } from "./types";
 
 function framed(text: string): string { return numberToString(text.length) + ":" + text; }
@@ -76,6 +76,19 @@ export class ModuleRecordBuilder {
     }
     return this.typeTokens(text);
   }
+  // Tipo legible y estable para --emit-interface: los "#<sid>" internos (que
+  // cambian al añadir módulos) se sustituyen por el nombre del símbolo.
+  readableType(text: string): string {
+    let output: string = ""; let at: number = 0;
+    while (at < text.length) {
+      if (text.charCodeAt(at) == 35 && at + 1 < text.length && text.charCodeAt(at+1) >= 48 && text.charCodeAt(at+1) <= 57) {
+        let sid: number = 0; let end: number = at + 1;
+        while (end < text.length && text.charCodeAt(end) >= 48 && text.charCodeAt(end) <= 57) { sid = sid*10 + text.charCodeAt(end) - 48; end = end + 1; }
+        output = output + (sid < this.binding.symbols.length ? this.binding.symbols[sid].name : text.slice(at,end)); at = end;
+      } else { output = output + text.slice(at,at+1); at = at + 1; }
+    }
+    return output;
+  }
   effects(module: number, node: number): string {
     let result: string[] = [];
     for (const effect of this.checked.effects) if (effect.module == module && effect.node == node) {
@@ -126,9 +139,12 @@ export class ModuleRecordBuilder {
       if (this.checked.success) for (const entry of this.binding.exports) if (entry.module == m) {
         const sid: number = this.origin(entry.symbol); if (sid < 0) continue; const s = this.binding.symbols[sid];
         let parts: string[] = [entry.name,entry.typeOnly ? "type" : "value",this.checked.symbolIds[sid],this.stableType(this.checked.symbolTypes[sid])];
-        if (s.namespaceModule >= 0) { const dependency = this.checked.moduleRecords[s.namespaceModule]; parts.push(dependency.interfaceHash); if (dependency.requiresBody) record.requiresBody = true; }
-        else if (s.module >= 0) for (const declaration of s.declarations) { parts.push(this.contract(s.module,declaration,0)); if (this.needsBody(s.module,declaration,0)) record.requiresBody = true; for (const decorator of this.checked.decorators) if (decorator.module == s.module && decorator.target == declaration && decorator.name == "comptime") record.requiresBody = true; }
+        let entryBody: boolean = false;
+        if (s.namespaceModule >= 0) { const dependency = this.checked.moduleRecords[s.namespaceModule]; parts.push(dependency.interfaceHash); if (dependency.requiresBody) { record.requiresBody = true; entryBody = true; } }
+        else if (s.module >= 0) for (const declaration of s.declarations) { parts.push(this.contract(s.module,declaration,0)); if (this.needsBody(s.module,declaration,0)) { record.requiresBody = true; entryBody = true; } for (const decorator of this.checked.decorators) if (decorator.module == s.module && decorator.target == declaration && decorator.name == "comptime") { record.requiresBody = true; entryBody = true; } }
         contracts.push(framedList(parts));
+        const kind: string = entry.typeOnly || s.kind == "InterfaceDeclaration" || s.kind == "TypeAliasDeclaration" ? "type" : "value";
+        record.exports.push(new NativeInterfaceEntry(entry.name,kind,s.kind,this.readableType(this.checked.symbolTypes[sid]),contentHash("ets-contract-1" + framedList(parts)),entryBody));
       }
       contracts.sort(compareKeys); let interfaces: string[] = []; let implementations: string[] = []; let semantic: string[] = [];
       let dependencies: string[] = this.graph.modules[m].dependencies; dependencies.sort(compareKeys);

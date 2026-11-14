@@ -11,7 +11,9 @@
 //   backend-cpp  backend/                          (de ir/ solo el modelo)
 //   driver       driver/, audit/ y los demo.ets    (entradas: nadie las importa)
 //
-// Además, el grafo de imports entre archivos no puede tener ciclos.
+// Además, el grafo de imports entre archivos no puede tener ciclos, y desde otro
+// directorio solo se importa su punto de entrada `index.ets` (#177): la API
+// pública de cada módulo. La excepción es backend/ → ir/model.ets.
 //
 // Uso: node --experimental-strip-types compiler/audit/layers.ts [--json]
 // Sale con 1 si hay alguna violación.
@@ -30,12 +32,15 @@ const directories:Record<string,Layer>={
 // Lo único de ir/ que puede ver el backend: el modelo (y con él, el formato wire).
 const backendFromIr=new Set(["ir/model.ets"]);
 
+// Directorio-módulo de un archivo: `checker`, `parser`, `backend/cpp`…
+export function moduleOf(file:string):string{const parts=file.split("/");return parts[0]=="backend"&&parts.length>2?parts[0]+"/"+parts[1]:parts[0];}
+
 export function layerOf(file:string):Layer|undefined{
   if(file.endsWith("/demo.ets"))return "driver";
   return directories[file.split("/")[0]];
 }
 
-export interface Violation{kind:"layer"|"cycle"|"unknown";file:string;target?:string;message:string}
+export interface Violation{kind:"layer"|"cycle"|"unknown"|"index";file:string;target?:string;message:string}
 
 function sources(root:string):string[]{
   const result:string[]=[];
@@ -64,6 +69,7 @@ export function audit(root:string):{files:number;edges:number;violations:Violati
       if(other=="driver"&&target.endsWith("/demo.ets"))violations.push({kind:"layer",file,target,message:`${file} importa la entrada ${target}`});
       else if(layers.indexOf(other)>layers.indexOf(layer))violations.push({kind:"layer",file,target,message:`${file} (${layer}) importa ${target} (${other}): una capa solo puede importar de sí misma o de las de debajo`});
       else if(layer=="backend-cpp"&&other=="ir"&&!backendFromIr.has(target))violations.push({kind:"layer",file,target,message:`${file} (backend-cpp) importa ${target}: de ir/ solo puede usar ${[...backendFromIr].join(", ")}`});
+      else if(moduleOf(target)!=moduleOf(file)&&!target.endsWith("/index.ets")&&!(layer=="backend-cpp"&&backendFromIr.has(target)))violations.push({kind:"index",file,target,message:`${file} importa ${target}: desde otro módulo solo se importa ${moduleOf(target)}/index.ets`});
     }
   }
   // Ciclos entre archivos (DFS iterativo con colores).
@@ -90,7 +96,7 @@ if(process.argv[1]&&fileURLToPath(import.meta.url)===process.argv[1]){
   if(process.argv.includes("--json"))console.log(JSON.stringify(result,null,2));
   else{
     for(const violation of result.violations)console.error("✗ "+violation.message);
-    console.log(result.violations.length?`✗ capas: ${result.violations.length} violaciones en ${result.files} módulos`:`✓ capas: ${result.files} módulos, ${result.edges} imports, sin subidas de capa ni ciclos`);
+    console.log(result.violations.length?`✗ capas: ${result.violations.length} violaciones en ${result.files} módulos`:`✓ capas: ${result.files} módulos, ${result.edges} imports, sin subidas de capa, ciclos ni imports fuera de index`);
   }
   process.exit(result.violations.length?1:0);
 }

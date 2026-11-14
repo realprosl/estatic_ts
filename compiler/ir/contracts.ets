@@ -1,6 +1,6 @@
 import { IrSource, IrProject, IrAnnotation, IrEffectContract, IrEffectBorrow } from "./model";
-import { ModuleGraph } from "../modules/loader";
-import { CheckResult } from "../checker/model";
+import { ModuleGraph } from "../modules/index";
+import { CheckResult } from "../checker/index";
 function contractSource(graph: constRef<ModuleGraph>, checked: constRef<CheckResult>, module: number, id: number): IrSource {
   const n = graph.modules[module].cached.result.ast.nodes[id]; const record = checked.moduleRecords[module];
   let source = new IrSource(record.id,record.sourceHash,graph.modules[module].file,id,n.start.offset,n.end.endOffset);

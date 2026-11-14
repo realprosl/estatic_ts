@@ -1,7 +1,7 @@
 import { formatContracts } from "./format-contracts";
 import { IrSource, IrProject } from "./model";
-import { quoteSource } from "../diag/source";
-import { bindingNumbers, bindingBoolean } from "../binder/format";
+import { quoteSource } from "../diag/index";
+import { bindingNumbers, bindingBoolean } from "../binder/index";
 import { formatIrSource } from "./format-source";
 export function formatIr(project: IrProject): string {
   let types: string[] = []; for (const typeId of project.types) types.push(quoteSource(typeId));

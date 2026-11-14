@@ -1,10 +1,10 @@
 import { CheckResult } from "./checker";
-import { BindingResult } from "../binder/binder";
-import { ModuleGraph } from "../modules/loader";
-import { formatBinding, bindingBoolean, bindingNumbers } from "../binder/format";
-import { quoteSource, formatDiagnostic } from "../diag/source";
-import { formatAst } from "../parser/parser";
-import { syntaxIdentity } from "../platform/platform";
+import { NativeModuleRecord } from "./model";
+import { BindingResult, formatBinding, bindingBoolean, bindingNumbers } from "../binder/index";
+import { ModuleGraph } from "../modules/index";
+import { quoteSource, formatDiagnostic } from "../diag/index";
+import { formatAst } from "../parser/index";
+import { syntaxIdentity } from "../platform/index";
 export function formatChecked(result: CheckResult, binding: BindingResult, graph: ModuleGraph): string {
   let entryId: string = ""; for (const record of result.moduleRecords) if (record.file == graph.entry) entryId = record.id;
   let output: string[] = ["{\"format\":\"ets-checked-2\",\"frontendIdentity\":" + quoteSource(syntaxIdentity()) + ",\"entry\":" + quoteSource(graph.entry) + ",\"entryModuleId\":" + quoteSource(entryId) + ",\"success\":" + bindingBoolean(result.success) + ",\"binding\":" + formatBinding(binding,graph) + ",\"files\":["]; let comma: string = "";
@@ -29,7 +29,7 @@ export function formatChecked(result: CheckResult, binding: BindingResult, graph
   output.push("],\"moduleRecords\":["); comma = "";
   for (const record of result.moduleRecords) {
     let deps: string[] = []; for (const id of record.dependencies) deps.push(quoteSource(id)); let bodies: string[] = []; for (const id of record.bodyDependencies) bodies.push(quoteSource(id));
-    output.push(comma + "{\"file\":" + quoteSource(record.file) + ",\"id\":" + quoteSource(record.id) + ",\"sourceHash\":" + quoteSource(record.sourceHash) + ",\"interfaceHash\":" + quoteSource(record.interfaceHash) + ",\"implementationHash\":" + quoteSource(record.implementationHash) + ",\"semanticKey\":" + quoteSource(record.semanticKey) + ",\"requiresBody\":" + bindingBoolean(record.requiresBody) + ",\"dependencies\":[" + deps.join(",") + "],\"bodyDependencies\":[" + bodies.join(",") + "]}"); comma = ",";
+    output.push(comma + "{\"file\":" + quoteSource(record.file) + ",\"id\":" + quoteSource(record.id) + ",\"sourceHash\":" + quoteSource(record.sourceHash) + ",\"interfaceHash\":" + quoteSource(record.interfaceHash) + ",\"implementationHash\":" + quoteSource(record.implementationHash) + ",\"semanticKey\":" + quoteSource(record.semanticKey) + ",\"requiresBody\":" + bindingBoolean(record.requiresBody) + ",\"dependencies\":[" + deps.join(",") + "],\"bodyDependencies\":[" + bodies.join(",") + "],\"exports\":" + formatInterfaceEntries(record) + "}"); comma = ",";
   }
   output.push("],\"generatedSources\":["); comma = "";
   for (const source of graph.generatedSources) {
@@ -59,4 +59,28 @@ export function formatChecked(result: CheckResult, binding: BindingResult, graph
     output.push("]}"); comma = ",";
   }
   output.push("]}"); return output.join("");
+}
+
+// a > b por códigos UTF-16 (orden estable e independiente del idioma).
+function textAfter(a: string, b: string): boolean {
+  const n: number = a.length < b.length ? a.length : b.length;
+  for (let k: number = 0; k < n; k = k + 1) { const x: number = a.charCodeAt(k); const y: number = b.charCodeAt(k); if (x != y) return x > y; }
+  return a.length > b.length;
+}
+// Interfaz pública de un módulo (#177): entradas ordenadas por nombre y tipo/valor.
+function formatInterfaceEntries(record: constRef<NativeModuleRecord>): string {
+  let order: number[] = []; for (let k: number = 0; k < record.exports.length; k = k + 1) order.push(k);
+  for (let i: number = 1; i < order.length; i = i + 1) {
+    const current: number = order[i]; let j: number = i - 1;
+    while (j >= 0 && textAfter(record.exports[order[j]].name + "|" + record.exports[order[j]].kind, record.exports[current].name + "|" + record.exports[current].kind)) { order[j + 1] = order[j]; j = j - 1; }
+    order[j + 1] = current;
+  }
+  let items: string[] = [];
+  for (const k of order) { const entry = record.exports[k]; items.push("{\"name\":" + quoteSource(entry.name) + ",\"kind\":" + quoteSource(entry.kind) + ",\"declaration\":" + quoteSource(entry.declaration) + ",\"type\":" + quoteSource(entry.valueType) + ",\"contractHash\":" + quoteSource(entry.contractHash) + ",\"requiresBody\":" + bindingBoolean(entry.requiresBody) + "}"); }
+  return "[" + items.join(",") + "]";
+}
+// JSON estable de `etsc --emit-interface`: la interfaz de un módulo y sus hashes.
+export function formatModuleInterface(record: constRef<NativeModuleRecord>): string {
+  let deps: string[] = []; for (const id of record.dependencies) deps.push(quoteSource(id));
+  return "{\"format\":\"ets-interface-1\",\"file\":" + quoteSource(record.file) + ",\"id\":" + quoteSource(record.id) + ",\"interfaceHash\":" + quoteSource(record.interfaceHash) + ",\"implementationHash\":" + quoteSource(record.implementationHash) + ",\"requiresBody\":" + bindingBoolean(record.requiresBody) + ",\"dependencies\":[" + deps.join(",") + "],\"exports\":" + formatInterfaceEntries(record) + "}";
 }

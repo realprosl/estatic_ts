@@ -1,6 +1,6 @@
-import {configureAnalysisJobs,configureAnalysisProfile} from "../analysis/options";
-import { ModuleLoader, LoaderOptions, PathAlias } from "../modules/loader";
-import { analyzeProject } from "../checker/expansion";
+import {configureAnalysisJobs,configureAnalysisProfile} from "../analysis/index";
+import { ModuleLoader, LoaderOptions, PathAlias } from "../modules/index";
+import { analyzeProject } from "../checker/index";
 import { lowerProject } from "./lower";
 import { IrProject, IrIssue, IrSource } from "./model";
 import { formatIr } from "./format";

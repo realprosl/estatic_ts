@@ -32,8 +32,8 @@ function project(files:Record<string,string>):string{
 }
 
 test("layers: detecta un import que sube de capa",()=>{
-  const root=project({"parser/parser.ets":'import { x } from "../checker/checker";\n',"checker/checker.ets":"export const x = 1;\n"});
-  try{const v=audit(root).violations;assert.equal(v.length,1);assert.equal(v[0].kind,"layer");assert.match(v[0].message,/parser\/parser\.ets \(syntax\) importa checker\/checker\.ets \(semantic\)/);}
+  const root=project({"parser/parser.ets":'import { x } from "../checker/index";\n',"checker/index.ets":'export { x } from "./checker";\n',"checker/checker.ets":"export const x = 1;\n"});
+  try{const v=audit(root).violations;assert.equal(v.length,1);assert.equal(v[0].kind,"layer");assert.match(v[0].message,/parser\/parser\.ets \(syntax\) importa checker\/index\.ets \(semantic\)/);}
   finally{rmSync(root,{recursive:true,force:true});}
 });
 
@@ -46,5 +46,11 @@ test("layers: el backend solo ve el modelo del IR",()=>{
 test("layers: detecta ciclos y directorios sin capa",()=>{
   const root=project({"checker/a.ets":'import { b } from "./b";\nexport const a = 1;\n',"checker/b.ets":'import { a } from "./a";\nexport const b = 1;\n',"misc/x.ets":"export const x = 1;\n"});
   try{const v=audit(root).violations;assert.ok(v.some(x=>x.kind=="cycle"&&/checker\/a\.ets → checker\/b\.ets → checker\/a\.ets/.test(x.message)));assert.ok(v.some(x=>x.kind=="unknown"&&x.file=="misc/x.ets"));}
+  finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test("layers: desde otro módulo solo se importa su index.ets",()=>{
+  const root=project({"checker/c.ets":'import { a } from "../binder/binder";\nimport { b } from "../binder/index";\nexport const c = 1;\n',"binder/binder.ets":"export const a = 1;\nexport const b = 2;\n","binder/index.ets":'export { a, b } from "./binder";\n'});
+  try{const v=audit(root).violations;assert.equal(v.length,1);assert.equal(v[0].kind,"index");assert.match(v[0].message,/checker\/c\.ets importa binder\/binder\.ets: desde otro módulo solo se importa binder\/index\.ets/);}
   finally{rmSync(root,{recursive:true,force:true});}
 });

@@ -1,20 +1,14 @@
-import {profileBegin,profileEnd} from "../analysis/options";
+import {profileBegin,profileEnd} from "../analysis/index";
 import { IrDispatch, IrCleanupScope, IrRuntimeContract, IrType, IrSource, IrPlace, IrInstruction, IrBlock, IrFunction, IrModule, IrIssue, IrProject, IrAnnotation } from "./model";
-import { ModuleGraph } from "../modules/loader";
-import { BindingResult, bindingChild } from "../binder/binder";
-import { CheckResult, readonlyMethodReceiver } from "../checker/model";
-import { functionParams, functionReturn, primitiveType, functionClose, numericType, semanticElement, semanticTuple, splitTypes, joinTypes, fixedArraySize, fixedArrayElement, canonicalSymbol, genericBase, genericArguments, replaceType, literalType, literalKind, literalValue } from "../checker/types";
-import { AstNode } from "../parser/parser";
-import { NodeKind, EdgeRole, AttributeKind, nodeKindName } from "../parser/ast-schema";
-import { nativeNumericLiteral, nativeBinaryPromotion, nativeUnaryPromotion } from "../checker/numeric";
-import { NativeComptime } from "../checker/comptime";
-import { constantIntegerText } from "../checker/constant";
-import { resourceType, resourceSubstitution } from "../checker/ownership";
+import { ModuleGraph } from "../modules/index";
+import { BindingResult, bindingChild } from "../binder/index";
+import { CheckResult, readonlyMethodReceiver, functionParams, functionReturn, primitiveType, functionClose, numericType, semanticElement, semanticTuple, splitTypes, joinTypes, fixedArraySize, fixedArrayElement, canonicalSymbol, genericBase, genericArguments, replaceType, literalType, literalKind, literalValue, nativeNumericLiteral, nativeBinaryPromotion, nativeUnaryPromotion, NativeComptime, constantIntegerText, resourceType, resourceSubstitution } from "../checker/index";
+import { AstNode, NodeKind, EdgeRole, AttributeKind, nodeKindName } from "../parser/index";
 import { irNumericWidth, irNumericKind, irNumericSigned } from "./type-traits";
 import { finishBorrows } from "./borrows";
 import { preserveContracts } from "./contracts";
 import { verifyIr } from "./verify";
-import { progressDetail } from "../platform/progress";
+import { progressDetail } from "../platform/index";
 
 function irIndex(values: number[], value: number): number { for (let i: number = 0; i < values.length; i = i+1) if (values[i] == value) return i; return -1; }
 

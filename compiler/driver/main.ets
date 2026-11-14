@@ -1,17 +1,11 @@
-import {configureAnalysisJobs,configureAnalysisProfile} from "../analysis/options";
-import {ModuleLoader,LoaderOptions,PathAlias} from "../modules/loader";
-import {analyzeProject} from "../checker/expansion";
-import {lowerProject} from "../ir/lower";
-import {IrProject,IrIssue,IrSource} from "../ir/model";
-import {formatIr} from "../ir/format";
-import {generateCppFromIr,IrCppResult} from "../backend/cpp/generator";
-import {parseIrProject} from "../backend/cpp/decode";
-import {formatCppResult} from "../backend/cpp/wire";
+import {configureAnalysisJobs,configureAnalysisProfile} from "../analysis/index";
+import {ModuleLoader,LoaderOptions,PathAlias} from "../modules/index";
+import {analyzeProject,formatModuleInterface} from "../checker/index";
+import { lowerProject, IrProject, IrIssue, IrSource, formatIr } from "../ir/index";
+import { generateCppFromIr, IrCppResult, parseIrProject, formatCppResult } from "../backend/cpp/index";
 import {parseConfig,configStrings} from "./config";
-import {environment,exists,readText,stdinText,writeText,hostError,launch,poll,pause,files,compilerHome,objectKeys,directories,remove,rename,now,executable} from "../platform/host";
-import {contentHash,fileMetadata} from "../platform/platform";
+import { canonicalFile, environment, exists, readText, stdinText, writeText, hostError, launch, poll, pause, files, compilerHome, objectKeys, directories, remove, rename, now, executable, contentHash, fileMetadata, configureProgress, progressInteractive, progressStart, progressDetail, progressTick, progressFinish, progressSummary } from "../platform/index";
 import {renderDiagnostic,renderSummary,setDiagnosticCatalog,explainCode} from "./diagnostics";
-import {configureProgress,progressInteractive,progressStart,progressDetail,progressTick,progressFinish,progressSummary} from "../platform/progress";
 function driverError(message:string,status:number=1):void{progressFinish(false);printError(message);exitProcess(status);}
 function checkedWrite(path:string,text:string):void{if(!writeText(path,text))driverError(hostError());}
 function checkedRead(path:string):string{const text=readText(path);if(hostError()!="")driverError(hostError());return text;}
@@ -19,9 +13,18 @@ function pathAt(base:string,path:string):string{return normalizePath(path.starts
 function parent(path:string):string{let end:number=-1;for(let k:number=0;k<path.length;k=k+1)if(path.charAt(k)=="/")end=k;return end<0?".":path.slice(0,end);}
 function stem(path:string):string{let start:number=0;let end:number=path.length;for(let k:number=0;k<path.length;k=k+1){if(path.charAt(k)=="/"){start=k+1;end=path.length;}else if(path.charAt(k)==".")end=k;}return path.slice(start,end);}
 function execute(command:string[],output:string="",errors:string=""):number{progressDetail(command.join(" "));const pid=launch(command,output,errors);if(pid<0)driverError(hostError());let status=poll(pid);while(status<0){progressTick();pause(80);status=poll(pid);}return status;}
-function help():string{return "Uso: etsc build|run [entrada.ets] [opciones]\n  --check                  Verificar sin generar\n  -o archivo.cpp           Ruta C++\n  --binary archivo         Ruta ejecutable (con build)\n  --from-ir archivo        Generar desde ets-ir-2 verificado\n  --emit-ir archivo        Guardar IR\n  --config archivo         JSON u objeto declarativo\n  --root ruta | --alias nombre ruta | --cache ruta\n  --cxx compilador | --cxx-flag flag | --link-flag flag\n  --jobs N                 Procesos de análisis (1..32; por defecto 1)\n  --profile-analysis       Tiempos, CPU y RSS por fase en stderr\n  --verbose | --no-progress\n  init [directorio] [--no-src] | update-types [directorio]\n  --no-src                 (init) no crear src/: para una carpeta que ya tiene código\n  --explain CÓDIGO     Explicar un código de error (ej. E3003). ESTC_LANG=en: mensajes en inglés\n  --help | --version\n";}
+function help():string{return "Uso: etsc build|run [entrada.ets] [opciones]\n  --check                  Verificar sin generar\n  --emit-interface         Imprimir la interfaz pública del módulo y su interfaceHash (JSON)\n  -o archivo.cpp           Ruta C++\n  --binary archivo         Ruta ejecutable (con build)\n  --from-ir archivo        Generar desde ets-ir-2 verificado\n  --emit-ir archivo        Guardar IR\n  --config archivo         JSON u objeto declarativo\n  --root ruta | --alias nombre ruta | --cache ruta\n  --cxx compilador | --cxx-flag flag | --link-flag flag\n  --jobs N                 Procesos de análisis (1..32; por defecto 1)\n  --profile-analysis       Tiempos, CPU y RSS por fase en stderr\n  --verbose | --no-progress\n  init [directorio] [--no-src] | update-types [directorio]\n  --no-src                 (init) no crear src/: para una carpeta que ya tiene código\n  --explain CÓDIGO     Explicar un código de error (ej. E3003). ESTC_LANG=en: mensajes en inglés\n  --help | --version\n";}
 // Ficheros fuente del último análisis: alimentan la huella de entradas (fase 3).
 let analyzedFiles:string[]=[];
+// --emit-interface (#177): analiza el módulo como entrada e imprime su interfaz
+// pública (firmas, efectos inferidos y si hace falta el cuerpo) con interfaceHash.
+function emitModuleInterface(entry:string,options:LoaderOptions):void{
+ let loader=new ModuleLoader(options);const graph=loader.load(entry);const project=analyzeProject(graph,false);
+ let diagnostics=project.graph.diagnostics;for(const d of project.binding.diagnostics)diagnostics.push(d);for(const d of project.checked.diagnostics)diagnostics.push(d);
+ if(diagnostics.length>0){progressFinish(false);for(const d of diagnostics){printError(renderDiagnostic(d.code,d.message,d.file,d.token.offset,d.endToken.endOffset));printError("");}driverError(renderSummary(diagnostics.length));}
+ const file=canonicalFile(entry);for(const record of project.checked.moduleRecords)if(record.file==file||canonicalFile(record.file)==file){print(formatModuleInterface(record));return;}
+ driverError("No se encontró la interfaz de "+entry);
+}
 function sourceIr(entry:string,options:LoaderOptions,verbose:boolean):IrProject{
  let loader=new ModuleLoader(options);const graph=loader.load(entry);for(const file of graph.modules)analyzedFiles.push(file.file);const project=analyzeProject(graph,verbose||progressInteractive());
  let diagnostics=project.graph.diagnostics;for(const d of project.binding.diagnostics)diagnostics.push(d);for(const d of project.checked.diagnostics)diagnostics.push(d);
@@ -212,16 +215,17 @@ function main():void{
   let directory=".";let sources=true;let positional=0;
   for(let k:number=1;k<args.length;k=k+1){if(args[k]=="--no-src"&&args[0]=="init")sources=false;else if(args[k].startsWith("-")||positional>0)driverError(help(),2);else{directory=args[k];positional=positional+1;}}
   configureProgress(false,true);progressStart(args[0]=="init"?"Creando proyecto":"Actualizando tipos");initialize(root,directory,args[0]=="update-types",sources);progressSummary();return;}
- let build:boolean=false;let run:boolean=false;let check:boolean=false;let verbose:boolean=false;let animate:boolean=true;let entry:string="";let output:string="";let binary:string="";let fromIr:string="";let emitIr:string="";let configPath:string="";let cxx:string="";let options=new LoaderOptions();let flags:string[]=[];let links:string[]=[];let programArgs:string[]=[];
+ let build:boolean=false;let run:boolean=false;let check:boolean=false;let verbose:boolean=false;let animate:boolean=true;let entry:string="";let output:string="";let binary:string="";let fromIr:string="";let emitIr:string="";let emitInterface:boolean=false;let configPath:string="";let cxx:string="";let options=new LoaderOptions();let flags:string[]=[];let links:string[]=[];let programArgs:string[]=[];
  let at:number=0;if(args.length>0&&(args[0]=="build"||args[0]=="run")){build=true;run=args[0]=="run";at=1;}
- for(;at<args.length;at=at+1){const arg=args[at];if(arg=="--"){for(let k:number=at+1;k<args.length;k=k+1)programArgs.push(args[k]);break;}if(arg=="--profile-analysis"){if(!configureAnalysisProfile())driverError(hostError());continue;}if(arg=="--jobs"){at=at+1;if(at>=args.length||!configureAnalysisJobs(args[at]))driverError("--jobs requiere un entero entre 1 y 32",2);continue;}if(arg=="--verbose"){verbose=true;continue;}if(arg=="--no-progress"){animate=false;continue;}if(arg=="--build"){build=true;continue;}if(arg=="--run"){run=true;build=true;continue;}if(arg=="--check"){check=true;continue;}
+ for(;at<args.length;at=at+1){const arg=args[at];if(arg=="--"){for(let k:number=at+1;k<args.length;k=k+1)programArgs.push(args[k]);break;}if(arg=="--profile-analysis"){if(!configureAnalysisProfile())driverError(hostError());continue;}if(arg=="--jobs"){at=at+1;if(at>=args.length||!configureAnalysisJobs(args[at]))driverError("--jobs requiere un entero entre 1 y 32",2);continue;}if(arg=="--verbose"){verbose=true;continue;}if(arg=="--no-progress"){animate=false;continue;}if(arg=="--build"){build=true;continue;}if(arg=="--run"){run=true;build=true;continue;}if(arg=="--check"){check=true;continue;}if(arg=="--emit-interface"){emitInterface=true;continue;}
  if(["-o","--binary","--from-ir","--emit-ir","--config","--cxx","--root","--cache","--alias","--cxx-flag","--link-flag"].includes(arg)){at+=1;if(at>=args.length)driverError("Falta un valor para "+arg,2);const value=args[at];if(value.startsWith("-")&&arg!="--cxx-flag"&&arg!="--link-flag")driverError("Falta un valor para "+arg,2);if(arg=="-o")output=value;else if(arg=="--binary")binary=value;else if(arg=="--from-ir")fromIr=value;else if(arg=="--emit-ir")emitIr=value;else if(arg=="--config")configPath=value;else if(arg=="--cxx")cxx=value;else if(arg=="--cache")options.cacheDirectory=value;else if(arg=="--root")options.roots.push(normalizePath(value));else if(arg=="--cxx-flag")flags.push(value);else if(arg=="--link-flag")links.push(value);else if(arg=="--alias"){at+=1;if(at>=args.length)driverError("Falta la ruta del alias",2);options.aliases.push(new PathAlias(value,args[at]));}continue;}
  if(arg.startsWith("-")||entry!="")driverError("Argumento inesperado: "+arg,2);entry=arg;}
- if(entry!=""&&fromIr!="")driverError("Usa una fuente o --from-ir",2);if(check&&(build||run||output!=""||binary!=""))driverError("--check no admite generación o ejecución",2);if(programArgs.length>0&&!run)driverError("Los argumentos del programa requieren run",2);
+ if(entry!=""&&fromIr!="")driverError("Usa una fuente o --from-ir",2);if(emitInterface&&(fromIr!=""||build||run||check||emitIr!=""||output!=""||binary!=""))driverError("--emit-interface solo admite un módulo fuente y opciones de resolución (--config, --root, --alias, --cache)",2);if(check&&(build||run||output!=""||binary!=""))driverError("--check no admite generación o ejecución",2);if(programArgs.length>0&&!run)driverError("Los argumentos del programa requieren run",2);
  configureProgress(verbose,animate);progressStart("Cargando configuración");if(configPath==""&&entry==""&&fromIr==""){if(exists("estatic.config.json"))configPath="estatic.config.json";else if(exists("estatic.config.ts"))configPath="estatic.config.ts";}
  let config:JsonValue=JSON.parseValue("{}");let configText="";let base:string=".";if(configPath!=""){configText=checkedRead(configPath);config=parseConfig(configText);base=parent(configPath);}const configuredEntry=jsonAsString(jsonObjectGet(config,"entry"));if(entry==""&&fromIr==""&&configuredEntry!="")entry=pathAt(base,configuredEntry);if(entry==""&&fromIr=="")driverError(help(),2);
  const incremental=jsonObjectGet(config,"incremental");const cache=jsonAsString(jsonObjectGet(incremental,"cacheDirectory"));if(options.cacheDirectory==""&&cache!="")options.cacheDirectory=pathAt(base,cache);
  for(const path of configStrings(jsonObjectGet(config,"moduleRoots")))options.roots.push(pathAt(base,path));const aliases=jsonObjectGet(config,"aliases");for(const name of objectKeys(aliases))options.aliases.push(new PathAlias(name,pathAt(base,jsonAsString(jsonObjectGet(aliases,name)))));
+ if(emitInterface){emitModuleInterface(entry,options);return;}
  // Fase 3 de #149: con una huella vigente no se analiza ni se compila.
  const compilerConfig=jsonObjectGet(config,"compiler");const outputConfig=jsonObjectGet(config,"output");
  const willCompile=build||jsonAsBool(jsonObjectGet(compilerConfig,"enabled"));

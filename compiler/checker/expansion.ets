@@ -1,14 +1,11 @@
-import {progressDetail} from "../platform/progress";
-import { AttributeKind, EdgeRole, NodeKind } from "../parser/ast-schema";
-import { ModuleGraph, LoadedFile, GeneratedSource } from "../modules/loader";
-import { CachedSource, FileRecord } from "../modules/syntax-cache";
-import { AstNode, AstEdge, AstAttribute } from "../parser/parser";
-import { diagnosticAt, parseSource, SourceDiagnostic } from "../diag/source";
-import { bindProject, BindingResult, bindingChild } from "../binder/binder";
+import { progressDetail, contentHash } from "../platform/index";
+import { AttributeKind, EdgeRole, NodeKind, AstNode, AstEdge, AstAttribute } from "../parser/index";
+import { ModuleGraph, LoadedFile, GeneratedSource, CachedSource, FileRecord } from "../modules/index";
+import { diagnosticAt, parseSource, SourceDiagnostic } from "../diag/index";
+import { bindProject, BindingResult, bindingChild } from "../binder/index";
 import { NativeChecker, checkProject } from "./checker";
 import { CheckResult, TypedFile } from "./model";
 import { NativeComptime } from "./comptime";
-import { contentHash } from "../platform/platform";
 
 export class FrontendProject {
   graph: ModuleGraph; binding: BindingResult; checked: CheckResult;

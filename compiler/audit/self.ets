@@ -1,6 +1,6 @@
-import { ModuleLoader, LoaderOptions } from "../modules/loader";
-import { analyzeProject } from "../checker/expansion";
-import { quoteSource, formatDiagnostic } from "../diag/source";
+import { ModuleLoader, LoaderOptions } from "../modules/index";
+import { analyzeProject } from "../checker/index";
+import { quoteSource, formatDiagnostic } from "../diag/index";
 
 // Native frontend only. The host adapter builds this executable using stage 0;
 // the executable reads and analyzes the requested sources itself.

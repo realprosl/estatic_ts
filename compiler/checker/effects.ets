@@ -1,10 +1,8 @@
-import {profileBegin,profileEnd} from "../analysis/options";
-import {progressDetail} from "../platform/progress";
-import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind } from "../parser/ast-schema";
-import { nativeBuiltinSignatures } from "../binder/builtins";
-import { ModuleGraph } from "../modules/loader";
-import { BindingResult, bindingChild, callableBinding } from "../binder/binder";
-import { AstNode, nodeBegin } from "../parser/parser";
+import {profileBegin,profileEnd} from "../analysis/index";
+import {progressDetail} from "../platform/index";
+import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, AstNode, nodeBegin } from "../parser/index";
+import { nativeBuiltinSignatures, BindingResult, bindingChild, callableBinding } from "../binder/index";
+import { ModuleGraph } from "../modules/index";
 import { CheckResult, EffectSummary, EffectPoint, EffectBorrow, argumentParameter } from "./model";
 import { functionParams, borrowedType, memoryMode, memoryValue, genericBase, genericArguments, splitTypes, canonicalSymbol } from "./types";
 
