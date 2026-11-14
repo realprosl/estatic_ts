@@ -33,7 +33,7 @@ test('native @cppgen parameter names cannot shadow IR slots or bridge temporarie
 });
 test('native @cppgen implements all six real platform functions',()=>{
  const record=join(directory,'record.txt');
- const out=execute(`import {canonicalFile,fileMetadata,contentHash,publishRecord,syntaxIdentity,readSnapshot} from "${root}/compiler/modules/platform";
+ const out=execute(`import {canonicalFile,fileMetadata,contentHash,publishRecord,syntaxIdentity,readSnapshot} from "${root}/compiler/platform/platform";
  print(contentHash("abc"));print(publishRecord(${JSON.stringify(record)},"hello"));
  print(canonicalFile(${JSON.stringify(record)}));print(fileMetadata(${JSON.stringify(record)}).length>0);
  const snap=readSnapshot(${JSON.stringify(record)});print(snap.length);print(snap[0]);print(syntaxIdentity().length>0);`);
