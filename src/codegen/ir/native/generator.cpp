@@ -259,6 +259,9 @@ S Generator::runtimeCall(const Function& f,const Instruction& i){const auto& c=p
   if(asyncRuntimeCalls.contains(name)){result.headers.insert(name=="resolveDns"?"runtime/ets_dns.hpp":"runtime/ets_async.hpp");result.libuv=true;return asyncRuntimeCalls.at(name)+"("+args()+")";}
   if(in(name,{"setTimeout","setInterval","cancelTimer"})){result.headers.insert("runtime/ets_timer.hpp");result.libuv=true;return "ets::"+name+"("+args()+")";}
   if(in(name,{"optionalMap","optionalAndThen"}))return name+"("+a(0)+","+callback(f,i,1)+")";
+  // process.argv/process.argc como propiedades (#186).
+  if(name=="process.argv")return "ets::processArgv()";
+  if(name=="process.argc")return "ets::processArgc()";
   if(name=="stopLoop"){result.headers.insert("runtime/ets_async.hpp");result.libuv=true;return "ets::defaultEventLoop.stop()";}
   if(name=="length")return "ets::length("+a(0)+")";
   if(name=="optionalSome")return T+"::some("+a(0)+")";
@@ -283,6 +286,8 @@ S Generator::runtimeCall(const Function& f,const Instruction& i){const auto& c=p
  if(base=="Server"){httpServer();S receiver=deref(a(0,false),f.values.at(i.operands.at(0)));if(in(method,{"get","post","put","patch","delete"}))return "("+receiver+")."+(method=="delete"?"del":method)+"("+a(1)+",[handler="+a(2)+"](const ets::HttpRequest& request,ets::HttpResponse& response)mutable{handler(std::addressof(request),std::addressof(response));})";if(method=="listen")return "("+receiver+").listen("+args(1)+")";}
  if(base=="Response"&&in(method,{"status","header","send","json"})){httpServer();return "std::addressof(("+a(0,false)+")->"+method+"("+args(1)+"))";}
  if(base=="HttpClientResponse"&&in(method,{"status","body","header"}))return "("+deref(a(0,false),f.values.at(i.operands.at(0)))+")."+(method=="status"?"status_code":method=="body"?"body_str":method)+"("+args(1)+")";
+ if(base=="process"&&method=="argv")return "ets::processArgv()";
+ if(base=="process"&&method=="argc")return "ets::processArgc()";
  if(base=="Console"&&terminalMethods.contains(method)){result.headers.insert("runtime/ets_terminal.hpp");return "console."+method+"("+args()+")";}
  if(objectMethods.contains(base)&&objectMethods.at(base).contains(method)){
   if(in(base,{"!fs","!path","!process"})){result.headers.insert("runtime/ets_runtime_full.hpp");result.libuv=true;}S arguments=args();if(base=="Console"){V<S> values;for(int k=0;k<int(i.operands.size());k++)values.push_back(output(a(k,false),f.values.at(i.operands[k])));arguments=join(values);}
