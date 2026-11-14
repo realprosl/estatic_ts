@@ -4,6 +4,7 @@ import {analyzeProject,formatModuleInterface} from "../checker/index";
 import { lowerProject, IrProject, IrIssue, IrSource, formatIr } from "../ir/index";
 import { generateCppFromIr, IrCppResult, parseIrProject, formatCppResult } from "../backend/cpp/index";
 import {parseConfig,configStrings} from "./config";
+import {updateCommand} from "./update";
 import { canonicalFile, processors, environment, exists, readText, stdinText, writeText, hostError, launch, poll, pause, files, compilerHome, objectKeys, directories, remove, rename, now, executable, contentHash, fileMetadata, configureProgress, progressInteractive, progressStart, progressDetail, progressTick, progressFinish, progressSummary } from "../platform/index";
 import {renderDiagnostic,renderSummary,setDiagnosticCatalog,explainCode} from "./diagnostics";
 function driverError(message:string,status:number=1):void{progressFinish(false);printError(message);exitProcess(status);}
@@ -13,7 +14,7 @@ function pathAt(base:string,path:string):string{return normalizePath(path.starts
 function parent(path:string):string{let end:number=-1;for(let k:number=0;k<path.length;k=k+1)if(path.charAt(k)=="/")end=k;return end<0?".":path.slice(0,end);}
 function stem(path:string):string{let start:number=0;let end:number=path.length;for(let k:number=0;k<path.length;k=k+1){if(path.charAt(k)=="/"){start=k+1;end=path.length;}else if(path.charAt(k)==".")end=k;}return path.slice(start,end);}
 function execute(command:string[],output:string="",errors:string=""):number{progressDetail(command.join(" "));const pid=launch(command,output,errors);if(pid<0)driverError(hostError());let status=poll(pid);while(status<0){progressTick();pause(80);status=poll(pid);}return status;}
-function help():string{return "Uso: etsc build|run [entrada.ets] [opciones]\n  --check                  Verificar sin generar\n  --emit-interface         Imprimir la interfaz pública del módulo y su interfaceHash (JSON)\n  --unity                  Compilar el programa como un único .cpp (sin unidades por módulo)\n  -o archivo.cpp           Ruta C++\n  --binary archivo         Ruta ejecutable (con build)\n  --from-ir archivo        Generar desde ets-ir-2 verificado\n  --emit-ir archivo        Guardar IR\n  --config archivo         JSON u objeto declarativo\n  --root ruta | --alias nombre ruta | --cache ruta\n  --cxx compilador | --cxx-flag flag | --link-flag flag\n  --jobs N                 Procesos de análisis (1..32; por defecto 1)\n  --profile-analysis       Tiempos, CPU y RSS por fase en stderr\n  --verbose | --no-progress\n  init [directorio] [--no-src] | update-types [directorio]\n  --no-src                 (init) no crear src/: para una carpeta que ya tiene código\n  --explain CÓDIGO     Explicar un código de error (ej. E3003). ESTC_LANG=en: mensajes en inglés\n  --help | --version\n";}
+function help():string{return "Uso: etsc build|run [entrada.ets] [opciones]\n  --check                  Verificar sin generar\n  --emit-interface         Imprimir la interfaz pública del módulo y su interfaceHash (JSON)\n  --unity                  Compilar el programa como un único .cpp (sin unidades por módulo)\n  -o archivo.cpp           Ruta C++\n  --binary archivo         Ruta ejecutable (con build)\n  --from-ir archivo        Generar desde ets-ir-2 verificado\n  --emit-ir archivo        Guardar IR\n  --config archivo         JSON u objeto declarativo\n  --root ruta | --alias nombre ruta | --cache ruta\n  --cxx compilador | --cxx-flag flag | --link-flag flag\n  --jobs N                 Procesos de análisis (1..32; por defecto 1)\n  --profile-analysis       Tiempos, CPU y RSS por fase en stderr\n  --verbose | --no-progress\n  init [directorio] [--no-src] | update-types [directorio]\n  update [versión] [--list | --dry-run]  Actualizar etsc (sin versión: la última)\n  --no-src                 (init) no crear src/: para una carpeta que ya tiene código\n  --explain CÓDIGO     Explicar un código de error (ej. E3003). ESTC_LANG=en: mensajes en inglés\n  --help | --version\n";}
 // Ficheros fuente del último análisis: alimentan la huella de entradas (fase 3).
 let analyzedFiles:string[]=[];
 // --emit-interface (#177): analiza el módulo como entrada e imprime su interfaz
@@ -258,6 +259,7 @@ function main():void{
  if(args.length==1&&["--help","-h","-H"].includes(args[0])){print(help());return;}
  let root=environment("ESTC_ROOT");if(root=="")root=compilerHome();root=normalizePath(root);
  if(args.length==1&&["--version","-version","-v","-V","/V"].includes(args[0])){print(versionLabel(root));return;}
+ if(args.length>0&&args[0]=="update"){updateCommand(args);return;}
  setDiagnosticCatalog(root);
  if(args.length==2&&args[0]=="--explain"){print(explainCode(args[1]));return;}
  if(args.length>0&&(args[0]=="init"||args[0]=="update-types")){
