@@ -951,6 +951,8 @@ let  T=this.cppTypeId(i.typeId);
     return this.fail(`Capacidad runtime no implementada: ${c.capability}`,i.source);
   }
   const dot=c.name.lastIndexOf(".");const  base=c.name.slice(0,dot);const  method=c.name.slice(dot+1,c.name.length);
+    if(base=="process"&&method=="argv")return "ets::processArgv()";
+    if(base=="process"&&method=="argc")return "ets::processArgc()";
     if(base=="process"&&["stdin","stdout","stderr"].includes(method)){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;return `ets::processStdio.${method}.stream()`;}
     if(base=="!child_process"&&method=="spawn"){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;return `ets::child_process.spawn(${this.runtimeArguments(f,i)})`;}
     if(base=="ChildProcess"&&["stdin","stdout","stderr"].includes(method)){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;return `(${this.operand(f,i,0,false)}).${method}Stream()`;}
