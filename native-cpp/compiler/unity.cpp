@@ -62733,6 +62733,7 @@ ets::ir::Slot<std::vector<std::string>> p1;
 ets::ir::Slot<std::vector<std::string>> p2;
 ets::ir::Slot<std::string> p3;
 ets::ir::Slot<bool> p4;
+ets::ir::Slot<bool> p5;
 ets::ir::Slot<std::vector<std::string>> v0;
 ets::ir::Slot<std::string> v1;
 ets::ir::Slot<std::string> v2;
@@ -62753,7 +62754,11 @@ ets::ir::Slot<std::string> v16;
 ets::ir::Slot<std::string> v17;
 ets::ir::Slot<bool> v18;
 ets::ir::Slot<bool> v19;
-ets::ir::Slot<std::vector<std::string>> v20;
+ets::ir::Slot<std::string> v20;
+ets::ir::Slot<std::string> v21;
+ets::ir::Slot<bool> v22;
+ets::ir::Slot<bool> v23;
+ets::ir::Slot<std::vector<std::string>> v24;
 p0.set(std::move(a0));
 goto b0;
 b0:
@@ -62777,8 +62782,8 @@ v9.set(std::string("#include",8));
 v10.set(ets::string_startsWith(v8.get(),v9.get()));
 if(v10.get())goto b4;else goto b5;
 b3:
-v20.set(p1.get());
-return v20.get();
+v24.set(p1.get());
+return v24.get();
 b4:
 v11.set(std::addressof(p1.get()));
 v12.set(p3.get());
@@ -62805,10 +62810,22 @@ b9:
 v19.set(p4.get());
 if(v19.get())goto b10;else goto b11;
 b10:
-goto b1;
+p5.set(v19.get());
+goto b12;
 b11:
+v20.set(p3.get());
+v21.set(std::string("#pragma once",12));
+v22.set((v20.get() == v21.get()));
+p5.set(v22.take());
 goto b12;
 b12:
+v23.set(p5.get());
+if(v23.get())goto b13;else goto b14;
+b13:
+goto b1;
+b14:
+goto b15;
+b15:
 goto b3;
 }
 std::string ir_f346(std::string a0,std::string a1) {
