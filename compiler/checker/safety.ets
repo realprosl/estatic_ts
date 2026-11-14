@@ -438,7 +438,9 @@ export class SafetyAnalyzer {
       if (n.kind == NodeKind.VariableDeclaration || n.kind == NodeKind.UsingDeclaration) {
         const sid: number = this.binding.files[m].declarations[id]; const value: number = bindingChild(n,EdgeRole.Initializer);
         if (sid >= 0 && value >= 0) { this.edge(this.vertex(m,value),this.symbolVertex(sid)); stores.push(new LifetimeStore(m,id,this.vertex(m,value),this.binding.symbols[sid].scope)); }
-        if (sid >= 0 && this.owner(this.binding.symbols[sid].scope) < 0 && value >= 0) { const pendingPush = new EscapeSite(m,id,this.vertex(m,value),"almacenamiento global"); this.escapes.push(pendingPush); }
+        // #172: solo es almacenamiento global una declaración del ámbito del módulo;
+        // la de un bloque de nivel superior (cuerpo de un for, {}) vive lo que el bloque.
+        if (sid >= 0 && this.owner(this.binding.symbols[sid].scope) < 0 && this.binding.scopes[this.binding.symbols[sid].scope].kind == "module" && value >= 0) { const pendingPush = new EscapeSite(m,id,this.vertex(m,value),"almacenamiento global"); this.escapes.push(pendingPush); }
         for (const edge of n.edges) if (edge.role == EdgeRole.ArrayBindings || edge.role == EdgeRole.ObjectBindings) {
           const target: number = this.binding.files[m].declarations[edge.node]; const fallback: number = bindingChild(this.node(m,edge.node),EdgeRole.DefaultValue);
           if (target >= 0) {
