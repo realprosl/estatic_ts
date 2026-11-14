@@ -1,12 +1,8 @@
-import { catalogArg, catalogVariant } from "../frontend/catalog";
-import { closestName } from "../frontend/suggest";
-import {progressDetail} from "../progress/progress";
-import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind, nodeKindName } from "../parser/ast-schema";
-import { nativeBuiltinSignatures } from "../frontend/builtins";
-import { ModuleGraph } from "../modules/loader";
-import { BindingResult, BindingSymbol, bindingChild, callableBinding } from "../binder/binder";
-import { AstNode } from "../parser/parser";
-import { diagnosticAt, SourceDiagnostic } from "../frontend/frontend";
+import { catalogArg, catalogVariant, closestName, diagnosticAt, SourceDiagnostic } from "../diag/index";
+import {progressDetail} from "../platform/index";
+import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind, nodeKindName, AstNode } from "../parser/index";
+import { nativeBuiltinSignatures, BindingResult, BindingSymbol, bindingChild, callableBinding } from "../binder/index";
+import { ModuleGraph } from "../modules/index";
 import { joinTypes, ungroupElement, splitTypes, functionClose, functionParams, functionReturn, restPosition, argumentType, numericType, primitiveType, typeCompatible, replaceType, memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticArray, semanticTuple, semanticElement, containsMemory, fixedArraySize, fixedArrayElement, semanticFixedArray, genericBase, genericArguments, canonicalSymbol, literalType, literalKind, literalValue, literalTypeText, literalTypePrefix } from "./types";
 
 import { TypedFile, CheckResult, NativeDecorator, NativeTypeQuery } from "./model";

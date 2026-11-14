@@ -1,7 +1,6 @@
 import { verifyIrTables, verifyFunctionContracts, verifyModuleContracts } from "./verify-contracts";
 import { IrSource, IrIssue, IrProject, IrFunction, IrInstruction } from "./model";
-import { numericType, primitiveType } from "../checker/types";
-import { nativeNumericLiteral, nativeInteger64, nativeUnaryPromotion, nativeBinaryPromotion } from "../checker/numeric";
+import { numericType, primitiveType, nativeNumericLiteral, nativeInteger64, nativeUnaryPromotion, nativeBinaryPromotion } from "../checker/index";
 import { irNumericWidth, irNumericKind, irNumericSigned, irNumericConstant } from "./type-traits";
 import { verifyOwnershipRoutes } from "./verify-ownership";
 import { verifyBorrowRoutes } from "./verify-borrows";

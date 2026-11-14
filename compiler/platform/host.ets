@@ -23,6 +23,7 @@ export function launch(args:string[],output:string="",errors:string=""):number{h
 export function poll(processId:number):number{hostCode("return ets_compiler_host::poll(processId);");return 125;}
 export function terminate(processId:number):void{hostCode("ets_compiler_host::terminate(processId);return;");return;}
 export function now():number{hostCode("return ets_compiler_host::now();");return 0;}
+export function processors():number{hostCode("return ets_compiler_host::processors();");return 1;}
 export function pause(milliseconds:number):void{hostCode("ets_compiler_host::pause(milliseconds);return;");return;}
 export function terminal():boolean{hostCode("return ets_compiler_host::terminal();");return false;}
 export function columns():number{hostCode("return ets_compiler_host::columns();");return 80;}

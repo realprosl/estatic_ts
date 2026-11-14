@@ -1,6 +1,6 @@
 // A per-source bridge. No filesystem access, module resolution or shared state.
-import { tokenizeExpanded, LexerToken, LexerDiagnostic, LexerResult } from "../lexer/lexer";
-import { AstNode, ParserToken, ParseResult, parseTokens, formatAst } from "../parser/parser";
+import { tokenizeExpanded, LexerToken, LexerDiagnostic, LexerResult } from "../lexer/index";
+import { AstNode, ParserToken, ParseResult, parseTokens, formatAst } from "../parser/index";
 
 export class SourceDiagnostic {
   phase: string; code: string; severity: string; message: string; file: string; token: ParserToken; endToken: ParserToken;

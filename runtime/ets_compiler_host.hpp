@@ -102,6 +102,8 @@ inline double poll(double process){
  return WIFEXITED(status)?WEXITSTATUS(status):128+WTERMSIG(status);
 }
 inline void terminate(double process){kill(static_cast<pid_t>(process),SIGTERM);}
+// Procesadores disponibles para compilar en paralelo (#178); al menos 1.
+inline double processors(){unsigned n=std::thread::hardware_concurrency();return n==0?1.0:static_cast<double>(n);}
 inline double now(){return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();}
 inline void pause(double ms){std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<long long>(ms)));}
 inline bool terminal(){return isatty(STDERR_FILENO);}

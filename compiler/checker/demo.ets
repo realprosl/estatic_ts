@@ -1,12 +1,11 @@
-import {configureAnalysisJobs,configureAnalysisProfile} from "../analysis/options";
-import { ModuleLoader, LoaderOptions, PathAlias } from "../modules/loader";
-import { bindProject, BindingResult } from "../binder/binder";
-import { formatBinding } from "../binder/format";
+import {configureAnalysisJobs,configureAnalysisProfile} from "../analysis/index";
+import { ModuleLoader, LoaderOptions, PathAlias } from "../modules/index";
+import { bindProject, BindingResult, formatBinding } from "../binder/index";
 import { checkProject, CheckResult } from "./checker";
 import { analyzeProject } from "./expansion";
 import { formatChecked } from "./format";
-import { formatSource } from "../frontend/frontend";
-import { contentHash } from "../modules/platform";
+import { formatSource } from "../diag/index";
+import { contentHash } from "../platform/index";
 function runCheckingDemo(): void {
   let options: LoaderOptions = new LoaderOptions(); let entry: string = "";
   for (let i: number = 1; i < argumentCount(); i = i + 1) {

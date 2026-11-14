@@ -112,7 +112,7 @@ lvalue** (`const n = this.node(id);`) — ahí hay copia o movimiento completo d
 | `Parser.reportAt(token: ParserToken)` | `parser/parser.ets:107` | `ParserToken` | 28 | lee el token |
 | `NativeComptime.put(value: ConstantValue)` | `checker/comptime.ets:59` | `ConstantValue` | 27 | lo guarda |
 | `Parser.setEnd(cursor, end: ParserToken)` | `parser/parser.ets:130` | `ParserToken` | 11 | lo asigna |
-| `formatDiagnostic(diagnostic: SourceDiagnostic)` | `frontend/frontend.ets:78` | `SourceDiagnostic` | 5 | lo formatea |
+| `formatDiagnostic(diagnostic: SourceDiagnostic)` | `diag/source.ets:78` | `SourceDiagnostic` | 5 | lo formatea |
 | `formatIr(project: IrProject)` | `ir/format.ets:6` | `IrProject` | 4 | lo recorre entero |
 
 Detalle de dos casos típicos:

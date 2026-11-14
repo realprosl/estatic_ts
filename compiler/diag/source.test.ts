@@ -21,12 +21,12 @@ let graph: Awaited<ReturnType<typeof loadModuleGraph>>;
 type NativeResult = { file: string; parsed: boolean; success: boolean; tokens: any[]; ast: { root: number; nodes: any[]; diagnostics: any[] }; diagnostics: any[] };
 
 before(async () => {
-  const entry = join(root, "compiler/frontend/demo.ets");
+  const entry = join(root, "compiler/diag/demo.ets");
   graph = await loadModuleGraph(entry);
   // Complete asynchronous source reads before building executable fixtures.
   const frontend = await compileFile(entry, { baseDirectory: root });
   const parser = await compileFile(join(root,"compiler/parser/demo.ets"), { baseDirectory: root });
-  assert.deepEqual(frontend.moduleNames.map(file => relative(root,file)), ["compiler/lexer/lexer.ets","compiler/parser/ast-schema.ets","compiler/parser/parser.ets","compiler/frontend/frontend.ets","compiler/frontend/demo.ets"]);
+  assert.deepEqual(frontend.moduleNames.map(file => relative(root,file)), ["compiler/lexer/lexer.ets","compiler/lexer/index.ets","compiler/parser/ast-schema.ets","compiler/parser/parser.ets","compiler/parser/index.ets","compiler/diag/source.ets","compiler/diag/demo.ets"]);
   assert.equal(parser.moduleNames.length, 3);
   for (const [name, result, executable] of [["frontend",frontend,binary],["parser",parser,parserBinary]] as const) {
     const build = join(directory,name); mkdirSync(build);
@@ -103,11 +103,11 @@ test("bootstrap frontend preserves module syntax without resolving files or merg
   assert.ok(!results[0].ast.nodes.some(n=>n.kind==="VariableDeclaration"));
   assert.equal(results[1].ast.nodes.filter(n=>n.kind==="VariableDeclaration").length,1);
 });
-for(const file of ['compiler/lexer/lexer.ets','compiler/parser/ast-schema.ets','compiler/parser/parser.ets','compiler/frontend/frontend.ets','compiler/frontend/demo.ets'])
+for(const file of ['compiler/lexer/lexer.ets','compiler/parser/ast-schema.ets','compiler/parser/parser.ets','compiler/diag/source.ets','compiler/diag/demo.ets'])
   test(`bootstrap frontend parses real source with exact token/AST parity: ${file}`,()=>{assert.deepEqual(parity(readFileSync(join(root,file),"utf8"),file).diagnostics,[]);});
-test("bootstrap frontend graph integrates exactly five ETS modules and leaves isolated phases independent",()=>{
-  assert.equal(graph.modules.length,5);assert.deepEqual(graph.modules[0].dependencies,[]);assert.deepEqual(graph.modules[1].dependencies,[]);
-  const host=readFileSync(join(root,'compiler/frontend/run.ts'),'utf8');assert.doesNotMatch(host,/src\/(?:lexer|parser)|template-tokens|token-transport/);
+test("bootstrap frontend graph integrates exactly seven ETS modules (with the lexer and parser index.ets) and leaves isolated phases independent",()=>{
+  assert.equal(graph.modules.length,7);const module=(suffix:string)=>graph.modules.find((m:any)=>m.file.endsWith(suffix));assert.deepEqual(module("/lexer/lexer.ets").dependencies,[]);assert.deepEqual(module("/parser/ast-schema.ets").dependencies,[]);
+  const host=readFileSync(join(root,'compiler/diag/run.ts'),'utf8');assert.doesNotMatch(host,/src\/(?:lexer|parser)|template-tokens|token-transport/);
 });
 test("bootstrap frontend accepts repository examples accepted by the direct stage 0 parser",t=>{
   const files=readdirSync(join(root,"examples"),{recursive:true}).map(String).filter(f=>f.endsWith('.ets')).sort();let count=0;const excluded:string[]=[],failures:string[]=[];

@@ -1,5 +1,5 @@
-import { ModuleLoader, LoaderOptions } from "../modules/loader";
-import { analyzeProject } from "../checker/expansion";
+import { ModuleLoader, LoaderOptions } from "../modules/index";
+import { analyzeProject } from "../checker/index";
 import { lowerProject } from "./lower";
 import { verifyIr } from "./verify";
 import { formatIr } from "./format";

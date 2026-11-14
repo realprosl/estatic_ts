@@ -1,15 +1,12 @@
-import { catalogArg } from "../frontend/catalog";
-import {analysisJobs,profileBegin,profileEnd} from "../analysis/options";
-import {forkWorker,finishWorker,waitWorker,temporaryDirectory,poll,pause,terminate,readText,writeText,remove,hostError} from "../driver/host";
-import {progressDetail} from "../progress/progress";
-import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind } from "../parser/ast-schema";
+import { catalogArg, diagnosticAt, SourceDiagnostic, quoteSource } from "../diag/index";
+import {analysisJobs,profileBegin,profileEnd} from "../analysis/index";
+import { forkWorker, finishWorker, waitWorker, temporaryDirectory, poll, pause, terminate, readText, writeText, remove, hostError, progressDetail } from "../platform/index";
+import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind, AstNode, nodeBegin, nodeEnd } from "../parser/index";
 import { EffectAnalyzer } from "./effects";
 import { resourceType, resourceSubstitution } from "./ownership";
 import { nativeNumericLiteral } from "./numeric";
-import { ModuleGraph } from "../modules/loader";
-import { BindingResult, BindingSymbol, bindingChild, callableBinding } from "../binder/binder";
-import { AstNode, nodeBegin, nodeEnd } from "../parser/parser";
-import { diagnosticAt, SourceDiagnostic, quoteSource } from "../frontend/frontend";
+import { ModuleGraph } from "../modules/index";
+import { BindingResult, BindingSymbol, bindingChild, callableBinding } from "../binder/index";
 import { CheckResult, NativeCapture, BorrowLease, argumentParameter, readonlyMethodReceiver } from "./model";
 import { memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticElement, semanticTuple, splitTypes, functionClose, functionParams, functionReturn, argumentType, fixedArraySize, fixedArrayElement, localBinding, genericBase, genericArguments, replaceType, canonicalSymbol } from "./types";
 

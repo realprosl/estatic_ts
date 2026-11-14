@@ -1,4 +1,4 @@
-import { primitiveType } from "../checker/types";
+import { primitiveType } from "../checker/index";
 import { IrProject, IrFunction, IrInstruction, IrBlock, IrLease } from "./model";
 export class IrLeaseSet { values: number[]; constructor() { this.values = []; } }
 export function irLeaseUnion(left: number[], right: number[]): number[] { for (const value of right) if (!left.includes(value)) left.push(value); return left; }

@@ -1,5 +1,5 @@
-import { SourceDiagnostic } from "../frontend/frontend";
-import { BindingResult } from "../binder/binder";
+import { SourceDiagnostic } from "../diag/index";
+import { BindingResult } from "../binder/index";
 
 export class TypedFile {
   matchCoverage: string[]; receivers: string[]; types: string[]; members: number[]; selected: number[]; selectedModules: number[]; signatures: string[]; states: number[];
@@ -48,10 +48,17 @@ export class NativeTypeQuery {
   module: number; node: number; text: string; typeName: string; symbols: number[];
   constructor(module: number, node: number, text: string, typeName: string, symbols: number[]) { this.module = module; this.node = node; this.text = text; this.typeName = typeName; this.symbols = symbols; }
 }
+// Una entrada de la interfaz pública de un módulo (#177, `etsc --emit-interface`):
+// el nombre exportado, si es tipo o valor, su tipo y el hash de su contrato
+// (firma, atributos y efectos inferidos; el cuerpo solo si es genérico/comptime).
+export class NativeInterfaceEntry {
+  name: string; kind: string; declaration: string; valueType: string; contractHash: string; requiresBody: boolean;
+  constructor(name: string, kind: string, declaration: string, valueType: string, contractHash: string, requiresBody: boolean) { this.name = name; this.kind = kind; this.declaration = declaration; this.valueType = valueType; this.contractHash = contractHash; this.requiresBody = requiresBody; }
+}
 export class NativeModuleRecord {
   file: string; id: string; sourceHash: string; interfaceHash: string; implementationHash: string; semanticKey: string;
-  dependencies: string[]; bodyDependencies: string[]; requiresBody: boolean;
-  constructor(file: string, id: string, sourceHash: string) { this.file = file; this.id = id; this.sourceHash = sourceHash; this.interfaceHash = ""; this.implementationHash = ""; this.semanticKey = ""; this.dependencies = []; this.bodyDependencies = []; this.requiresBody = false; }
+  dependencies: string[]; bodyDependencies: string[]; requiresBody: boolean; exports: NativeInterfaceEntry[];
+  constructor(file: string, id: string, sourceHash: string) { this.file = file; this.id = id; this.sourceHash = sourceHash; this.interfaceHash = ""; this.implementationHash = ""; this.semanticKey = ""; this.dependencies = []; this.bodyDependencies = []; this.requiresBody = false; this.exports = []; }
 }
 // Receiver capability is intrinsic to the method, not the first caller's
 // mutability. Use the transitive body summary rather than treating every

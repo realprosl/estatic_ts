@@ -39,7 +39,7 @@ node --experimental-strip-types --test --test-concurrency=1 \
   compiler/lexer/lexer.test.ts \
   compiler/parser/ast-schema.test.ts \
   compiler/parser/parser.test.ts \
-  compiler/frontend/frontend.test.ts \
+  compiler/diag/source.test.ts \
   compiler/modules/loader.test.ts \
   compiler/binder/binder.test.ts \
   compiler/checker/checker.test.ts
@@ -72,7 +72,7 @@ propias fuentes.
 |---|---|---|
 | Lexer | `lexer/lexer.ets` | Tokens con `kind` y `lexeme` string, posiciones UTF-16 y diagnósticos; recorrido interno en bytes UTF-8 |
 | Parser | `parser/parser.ets`, `parser/ast-schema.ets` | Arena `nodes[]`; `NodeKind`, `EdgeRole` y `AttributeKind` numéricos; atributos con valores string y enlaces por índice |
-| Frontend por archivo | `frontend/frontend.ets` | `SourceResult`: archivo, tokens, AST y diagnósticos |
+| Frontend por archivo | `diag/source.ets` | `SourceResult`: archivo, tokens, AST y diagnósticos |
 | Cargador y caché | `modules/loader.ets`, `syntax-cache.ets` | Grafo de archivos y dependencias; caché persistente de sintaxis, no de semántica |
 | Expansión | `checker/expansion.ets` | Copia del grafo con AST generado, higiene y procedencia; nuevos ciclos de binding/checking |
 | Binder | `binder/binder.ets` | Ámbitos, símbolos, referencias, exports y tablas de padres/declaraciones por archivo |

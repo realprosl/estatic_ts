@@ -214,7 +214,7 @@ catálogo se muestran con el texto en español que escribe cada fase.
 | Caché | Dónde | Qué evita |
 |---|---|---|
 | Huella de entradas | `.build/cache/build-fingerprint` | Si fuentes, configuración, argumentos, `etsc`, runtime y g++ no cambian, no se analiza ni se compila. |
-| Objeto del programa | `.build/cache/objects/program-*.o` | Si el C++ generado no cambia (comentarios, espacios…), no se vuelve a compilar. |
+| Objetos del programa (uno por módulo, #178) | `.build/cache/objects/program-*.o` | El C++ se genera como una cabecera común (`program.hpp`: tipos, prototipos y globales) y una unidad por módulo fuente, en `<salida>.cpp.units/`. Cada unidad se compila aparte y en paralelo. Si cambias el cuerpo de una función sin tocar tipos ni firmas, solo se recompila la unidad de su módulo y se vuelve a enlazar; si cambia la cabecera, se recompilan todas. `--unity` compila el programa como un único `.cpp`. |
 | Runtime | `<prefix>/lib/estc/<versión>/build/objects` (lo crea `install.sh`) y `~/.cache/estc/objects` | Los `.cpp` del runtime (libuv, red, HTTP, regex) se compilan una vez y se enlazan. |
 | Cabecera precompilada | `~/.cache/estc/pch` | Una por combinación de cabeceras del runtime y flags, compuesta según lo que use el programa. Se guardan las 5 más recientes. |
 

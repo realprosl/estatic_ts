@@ -1,6 +1,6 @@
-import { AttributeKind, EdgeRole } from "../parser/ast-schema";
-import { ModuleGraph } from "../modules/loader";
-import { BindingResult } from "../binder/binder";
+import { AttributeKind, EdgeRole } from "../parser/index";
+import { ModuleGraph } from "../modules/index";
+import { BindingResult } from "../binder/index";
 import { CheckResult } from "./model";
 import { memoryMode, memoryInner, ownedType, borrowedType, splitTypes, genericBase, genericArguments, functionClose, functionParams, semanticTuple, semanticElement, fixedArraySize, fixedArrayElement, replaceType, canonicalSymbol } from "./types";
 

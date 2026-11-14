@@ -1,4 +1,4 @@
-import { nativeNumericLiteral } from "../checker/numeric";
+import { nativeNumericLiteral } from "../checker/index";
 // Language widths, not target size/alignment or ABI layout.
 export function irNumericWidth(text: string): number {
   if (text == "i8" || text == "u8") return 8;

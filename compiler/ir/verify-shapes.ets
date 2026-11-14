@@ -1,5 +1,5 @@
 import { IrProject, IrFunction, IrInstruction } from "./model";
-import { numericType, primitiveType } from "../checker/types";
+import { numericType, primitiveType } from "../checker/index";
 export function irAssignable(project: constRef<IrProject>, from: number, to: number, depth: number): boolean {
   if (from < 0 || to < 0 || from >= project.types.length || to >= project.types.length || depth > 64) return false;
   if (from == to) return true;

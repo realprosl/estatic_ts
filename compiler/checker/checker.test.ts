@@ -1,4 +1,4 @@
-import {assertDiagnostic} from "../frontend/diagnostic-contract.ts";
+import {assertDiagnostic} from "../diag/diagnostic-contract.ts";
 import {createHash} from "node:crypto";
 import {test,before,after} from "node:test";
 import assert from "node:assert/strict";
@@ -1556,6 +1556,33 @@ test('frontend provenance: invalid programs never publish reusable semantic keys
 test('frontend provenance: private helper body edits preserve later declaration identities',()=>{
  const f=fixture('import {f} from "./lib";export function g():number{return f();}',{'lib.ets':'function helper():number{return 1;}export function f():number{return helper();}'});const a=run(f);rewriteProject(f,'lib.ets','function helper():number{const local=2;return local;}export function f():number{return helper();}');const b=run(f);
  assert.equal(moduleRecord(a,'lib.ets').interfaceHash,moduleRecord(b,'lib.ets').interfaceHash);assert.equal(moduleRecord(a,'main.ets').semanticKey,moduleRecord(b,'main.ets').semanticKey);
+});
+test('module interface (#177): exports list name, kind, type and a per-export contract hash',()=>{
+ const g=run(fixture('import {f} from "./lib";export function g():number{return f(1);}',{'lib.ets':'export type Id=number;export function f(x:number):number{return x;}export function id<T>(x:T):T{return x;}export class C{v:number=1;}'}));
+ const lib=moduleRecord(g,'lib.ets');assert.deepEqual(lib.exports.map((e:any)=>[e.name,e.kind]),[['C','value'],['Id','type'],['f','value'],['id','value']]);
+ for(const e of lib.exports)assert.match(e.contractHash,/^[0-9a-f]{64}$/);
+ assert.equal(lib.exports.find((e:any)=>e.name==='id').requiresBody,true);assert.equal(lib.exports.find((e:any)=>e.name==='f').requiresBody,false);
+});
+test('module interface (#177): a body edit keeps interfaceHash and every contract hash',()=>{
+ const f=fixture('import {f} from "./lib";export function g():number{return f(1);}',{'lib.ets':'export function f(x:number):number{return x;}export function h():string{return "a";}'});const a=run(f);
+ rewriteProject(f,'lib.ets','export function f(x:number):number{if(x>100)return x;return x;}export function h():string{return "a";}');const b=run(f);
+ const before=moduleRecord(a,'lib.ets'),after=moduleRecord(b,'lib.ets');assert.notEqual(before.sourceHash,after.sourceHash);assert.equal(before.interfaceHash,after.interfaceHash);assert.deepEqual(before.exports,after.exports);
+});
+test('module interface (#177): a signature change only changes that export contract',()=>{
+ const f=fixture('import {f} from "./lib";export function g():number{return 1;}',{'lib.ets':'export function f(x:number):number{return x;}export function h():string{return "a";}'});const a=run(f);
+ rewriteProject(f,'lib.ets','export function f(x:number,y:number):number{return x+y;}export function h():string{return "a";}');const b=run(f);
+ const before=moduleRecord(a,'lib.ets'),after=moduleRecord(b,'lib.ets'),entry=(r:any,n:string)=>r.exports.find((e:any)=>e.name===n);
+ assert.notEqual(before.interfaceHash,after.interfaceHash);assert.notEqual(entry(before,'f').contractHash,entry(after,'f').contractHash);assert.equal(entry(before,'h').contractHash,entry(after,'h').contractHash);
+});
+test('module interface (#177): an inferred effect change changes the contract and interfaceHash',()=>{
+ const f=fixture('import {f} from "./lib";export function g():number{return f();}',{'lib.ets':'let n=0;export function f():number{return n;}'});const a=run(f);
+ rewriteProject(f,'lib.ets','let n=0;export function f():number{n+=1;return n;}');const b=run(f);
+ assert.notEqual(moduleRecord(a,'lib.ets').exports[0].contractHash,moduleRecord(b,'lib.ets').exports[0].contractHash);assert.notEqual(moduleRecord(a,'lib.ets').interfaceHash,moduleRecord(b,'lib.ets').interfaceHash);
+});
+test('module interface (#177): a generic signature change changes interfaceHash; its body edit marks requiresBody',()=>{
+ const f=fixture('import {id} from "./lib";export const n=id(1);',{'lib.ets':'export function id<T>(x:T):T{return x;}'});const a=run(f);
+ rewriteProject(f,'lib.ets','export function id<T,U=number>(x:T):T{return x;}');const b=run(f);
+ assert.notEqual(moduleRecord(a,'lib.ets').interfaceHash,moduleRecord(b,'lib.ets').interfaceHash);assert.equal(moduleRecord(b,'lib.ets').exports[0].requiresBody,true);
 });
 test('frontend provenance: variant node numbers do not enter public fingerprints',()=>{
  const f=fixture('import {make} from "./lib";const value=make();',{'lib.ets':'function helper():number{return 1;}export union U=A(number)|B;export const make=()=>A(helper());'});const a=run(f);rewriteProject(f,'lib.ets','function helper():number{const local=2;return local;}export union U=A(number)|B;export const make=()=>A(helper());');const b=run(f);

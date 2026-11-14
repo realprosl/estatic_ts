@@ -5,7 +5,7 @@ Revisión del frontend bootstrap: **2026-10-24**, sobre `24e32ac`.
 | Carpeta | Qué contiene | Más detalle |
 |---|---|---|
 | `src/` | Compilador stage 0 en TypeScript: CLI, análisis, evaluación estática y codegen C++ actual. | [src/README.md](src/README.md) |
-| `compiler/` | Frontend nativo en Estatic: lexer, parser, cargador, expansión, binder, checker, seguridad, efectos y comptime. | [compiler/README.md](compiler/README.md) |
+| `compiler/` | El compilador `etsc` escrito en Estatic, en capas sin ciclos: `platform/` → `lexer/` + `parser/` → `diag/` → `modules/` + `binder/` + `checker/` + `analysis/` → `ir/` → `backend/` → `driver/`. Lo comprueba `compiler/audit/layers.ts`. | [compiler/README.md](compiler/README.md#capas) |
 | `runtime/` | Runtime C++ consumido por los programas y por los ejecutables de bootstrap. | [runtime/README.md](runtime/README.md) |
 | `test/` | Regresiones unitarias y proyectos de ejecución. Las pruebas nativas del frontend también viven junto a sus capas en `compiler/`. | [package.json](package.json) |
 | `examples/` | Programas de ejemplo y casos negativos explícitos. | [examples/README.md](examples/README.md) |
