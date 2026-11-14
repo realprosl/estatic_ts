@@ -173,7 +173,6 @@ desde la raíz del repositorio. `--help` muestra la ayuda de los que la tienen.
 | `examples/todo-project/run.sh` | Compila el ejemplo multi-módulo con `src/` y lo ejecuta. | — |
 | `benchmarks/all/run-benchmarks.sh`, `benchmarks/match/run-benchmarks.sh` | Comparan el C++ generado con C++ escrito a mano (`hyperfine`). | — |
 | `runtime/libuv/tests/tls/generate_test_certs.sh` | Genera certificados autofirmados para las pruebas TLS. | `[DIR_SALIDA]` |
-| `scripts/merge-block-c.sh` | Automatización heredada de la fusión de un bloque de PRs antiguo. | — |
 
 Más detalle de los scripts de `scripts/` en [`scripts/README.md`](scripts/README.md) y
 de la semilla en [`native-cpp/README.md`](native-cpp/README.md).

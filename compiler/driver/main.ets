@@ -144,6 +144,13 @@ function compileCommand(plan:constRef<CppPlan>,index:number,source:string,object
 //   solo lectura, comunes a todos los usuarios); si no, la caché del usuario.
 // - programa: en la caché del proyecto, por huella del C++ generado; si el C++
 //   no cambia (comentarios, espacios…), no se vuelve a compilar.
+// Contenido de las cabeceras forzadas con `-include X` (#143): si cambian,
+// los objetos cacheados que las incluyen dejan de valer.
+function includedHeaders(flags:string[]):string{
+ let text="";for(let k:number=0;k<flags.length;k=k+1){let header="";if(flags[k]=="-include"&&k+1<flags.length)header=flags[k+1];else if(flags[k].startsWith("-include")&&flags[k].length>8)header=flags[k].slice(8,flags[k].length);
+  if(header!="")text=text+header+"\n"+(exists(header)?contentHash(readText(header)):"missing")+"\n";}
+ return text;
+}
 function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:string,cxx:string,flags:string[],links:string[],cacheObjects:boolean,projectCache:string,unity:boolean=false):void{
  if(!directories(parent(binary)))driverError(hostError());progressStart("Preparando runtime");let plan=cppPlan(result,root,cxx,flags);
  // Modo por módulo (#178): cabecera común + una unidad por módulo en <cpp>.units/;
@@ -168,7 +175,7 @@ function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:s
   progressStart("Compilando y enlazando C++");const status=executeAll([linkCommand(plan,sources,links,binary)]);
   if(status!=0)driverError(cxx+" terminó con "+numberToString(status),status);if(!exists(binary))driverError("El compilador no creó "+binary);return;
  }
- const identity=contentHash(compilerIdentity(cxx,binary)+"\n"+plan.flags.join("\n")+"\n"+runtimeIdentity(root));
+ const identity=contentHash(compilerIdentity(cxx,binary)+"\n"+plan.flags.join("\n")+"\n"+includedHeaders(plan.flags)+includedHeaders(plan.programFlags)+runtimeIdentity(root));
  // targets[k]: objeto a enlazar; build[k]: hay que compilarlo; publish[k]: ruta
  // final si se compila a un temporal; drop[k]: borrar al acabar (sin caché).
  let sources:string[]=[];for(const unit of units)sources.push(unit);for(const source of plan.sources)sources.push(source);
@@ -236,17 +243,27 @@ function compileObjects(plan:constRef<CppPlan>,sources:string[],targets:string[]
  for(let k:number=0;k<partials.length;k=k+1){if(status==0&&exists(partials[k]))rename(partials[k],finals[k]);else remove(partials[k]);}
  return status;
 }
+// --version (#143): "etsc X.Y.Z (vN)". Una instalación guarda la versión en
+// installation.json (install.sh); un checkout la lee de package.json.
+function versionLabel(root:string):string{
+ let version="";let revision="";
+ if(exists(root+"/installation.json")){const info=JSON.parseValue(readText(root+"/installation.json"));if(jsonIsObject(info)){version=jsonAsString(jsonObjectGet(info,"packageVersion"));revision=jsonAsString(jsonObjectGet(info,"revision"));}}
+ if(version==""&&exists(root+"/package.json")){const info=JSON.parseValue(readText(root+"/package.json"));if(jsonIsObject(info)){version=jsonAsString(jsonObjectGet(info,"version"));const revisionValue=jsonObjectGet(info,"estaticRevision");if(jsonIsNumber(revisionValue))revision=numberToString(jsonAsNumber(revisionValue));}}
+ if(version=="")return "etsc (versión desconocida, ets-ir-2)";
+ return revision==""?"etsc "+version:"etsc "+version+" (v"+revision+")";
+}
 function main():void{
  let args:string[]=[];for(let k:number=1;k<argumentCount();k=k+1)args.push(argument(k));
  if(args.length==1&&args[0]=="--codegen-json"){const wireProject=parseIrProject(stdinText());const wireResult=generateCppFromIr(wireProject);print(formatCppResult(wireResult));return;}
  if(args.length==1&&["--help","-h","-H"].includes(args[0])){print(help());return;}
- if(args.length==1&&["--version","-version","-v","-V","/V"].includes(args[0])){print("etsc bootstrap ETS (ets-ir-2)");return;}
- let root=environment("ESTC_ROOT");if(root=="")root=compilerHome();root=normalizePath(root);setDiagnosticCatalog(root);
+ let root=environment("ESTC_ROOT");if(root=="")root=compilerHome();root=normalizePath(root);
+ if(args.length==1&&["--version","-version","-v","-V","/V"].includes(args[0])){print(versionLabel(root));return;}
+ setDiagnosticCatalog(root);
  if(args.length==2&&args[0]=="--explain"){print(explainCode(args[1]));return;}
  if(args.length>0&&(args[0]=="init"||args[0]=="update-types")){
-  let directory=".";let sources=true;let positional=0;
-  for(let k:number=1;k<args.length;k=k+1){if(args[k]=="--no-src"&&args[0]=="init")sources=false;else if(args[k].startsWith("-")||positional>0)driverError(help(),2);else{directory=args[k];positional=positional+1;}}
-  configureProgress(false,true);progressStart(args[0]=="init"?"Creando proyecto":"Actualizando tipos");initialize(root,directory,args[0]=="update-types",sources);progressSummary();return;}
+  let directory=".";let sources=true;let positional=0;let initVerbose=false;
+  for(let k:number=1;k<args.length;k=k+1){if(args[k]=="--no-src"&&args[0]=="init")sources=false;else if(args[k]=="--verbose")initVerbose=true;else if(args[k].startsWith("-")||positional>0)driverError(help(),2);else{directory=args[k];positional=positional+1;}}
+  configureProgress(initVerbose,true);progressStart(args[0]=="init"?"Creando proyecto":"Actualizando tipos");initialize(root,directory,args[0]=="update-types",sources);progressSummary();return;}
  let build:boolean=false;let run:boolean=false;let check:boolean=false;let verbose:boolean=false;let animate:boolean=true;let entry:string="";let output:string="";let binary:string="";let fromIr:string="";let emitIr:string="";let emitInterface:boolean=false;let unity:boolean=false;let configPath:string="";let cxx:string="";let options=new LoaderOptions();let flags:string[]=[];let links:string[]=[];let programArgs:string[]=[];
  let at:number=0;if(args.length>0&&(args[0]=="build"||args[0]=="run")){build=true;run=args[0]=="run";at=1;}
  for(;at<args.length;at=at+1){const arg=args[at];if(arg=="--"){for(let k:number=at+1;k<args.length;k=k+1)programArgs.push(args[k]);break;}if(arg=="--profile-analysis"){if(!configureAnalysisProfile())driverError(hostError());continue;}if(arg=="--jobs"){at=at+1;if(at>=args.length||!configureAnalysisJobs(args[at]))driverError("--jobs requiere un entero entre 1 y 32",2);continue;}if(arg=="--verbose"){verbose=true;continue;}if(arg=="--no-progress"){animate=false;continue;}if(arg=="--build"){build=true;continue;}if(arg=="--run"){run=true;build=true;continue;}if(arg=="--check"){check=true;continue;}if(arg=="--emit-interface"){emitInterface=true;continue;}if(arg=="--unity"){unity=true;continue;}
@@ -255,7 +272,9 @@ function main():void{
  if(entry!=""&&fromIr!="")driverError("Usa una fuente o --from-ir",2);if(emitInterface&&(fromIr!=""||build||run||check||emitIr!=""||output!=""||binary!=""))driverError("--emit-interface solo admite un módulo fuente y opciones de resolución (--config, --root, --alias, --cache)",2);if(check&&(build||run||output!=""||binary!=""))driverError("--check no admite generación o ejecución",2);if(programArgs.length>0&&!run)driverError("Los argumentos del programa requieren run",2);
  configureProgress(verbose,animate);progressStart("Cargando configuración");if(configPath==""&&entry==""&&fromIr==""){if(exists("estatic.config.json"))configPath="estatic.config.json";else if(exists("estatic.config.ts"))configPath="estatic.config.ts";}
  let config:JsonValue=JSON.parseValue("{}");let configText="";let base:string=".";if(configPath!=""){configText=checkedRead(configPath);config=parseConfig(configText);base=parent(configPath);}const configuredEntry=jsonAsString(jsonObjectGet(config,"entry"));if(entry==""&&fromIr==""&&configuredEntry!="")entry=pathAt(base,configuredEntry);if(entry==""&&fromIr=="")driverError(help(),2);
- const incremental=jsonObjectGet(config,"incremental");const cache=jsonAsString(jsonObjectGet(incremental,"cacheDirectory"));if(options.cacheDirectory==""&&cache!="")options.cacheDirectory=pathAt(base,cache);
+ const incremental=jsonObjectGet(config,"incremental");const cache=jsonAsString(jsonObjectGet(incremental,"cacheDirectory"));
+ // incremental.enabled=false (#143): sin ninguna caché del proyecto, ni de sintaxis ni de objetos.
+ const cacheEnabled=!jsonIsBool(jsonObjectGet(incremental,"enabled"))||jsonAsBool(jsonObjectGet(incremental,"enabled"));if(options.cacheDirectory==""&&cache!=""&&cacheEnabled)options.cacheDirectory=pathAt(base,cache);
  for(const path of configStrings(jsonObjectGet(config,"moduleRoots")))options.roots.push(pathAt(base,path));const aliases=jsonObjectGet(config,"aliases");for(const name of objectKeys(aliases))options.aliases.push(new PathAlias(name,pathAt(base,jsonAsString(jsonObjectGet(aliases,name)))));
  if(emitInterface){emitModuleInterface(entry,options);return;}
  // Fase 3 de #149: con una huella vigente no se analiza ni se compila.
@@ -278,7 +297,7 @@ function main():void{
  if(fingerprintPath!=""&&exists(fingerprintPath))remove(fingerprintPath);
  options.verbose=verbose||progressInteractive();progressStart(fromIr==""?"Analizando fuentes y verificando IR":"Leyendo IR");const ir:IrProject=fromIr==""?sourceIr(entry,options,verbose):parseIrProject(checkedRead(fromIr));if(emitIr!="")checkedWrite(emitIr,formatIr(ir)+"\n");if(check){progressSummary();return;}
  progressStart("Generando C++ desde IR verificado");const generated=generateCppFromIr(ir);const outConfig=jsonObjectGet(config,"output");const compiler=jsonObjectGet(config,"compiler");if(output==""){const configured=jsonAsString(jsonObjectGet(outConfig,"cpp"));output=(configured!=""?pathAt(base,configured):"build/"+stem(fromIr==""?entry:fromIr)+".cpp");}progressStart("Guardando resultados");checkedWrite(output,generated.cpp);
- if(build||jsonAsBool(jsonObjectGet(compiler,"enabled"))){if(binary==""){const configured=jsonAsString(jsonObjectGet(outConfig,"binary"));binary=(configured!=""?pathAt(base,configured):output+".bin");}if(cxx=="")cxx=jsonAsString(jsonObjectGet(compiler,"command"));if(cxx=="")cxx=environment("CXX");if(cxx=="")cxx="g++";let compileFlags=configStrings(jsonObjectGet(compiler,"flags"));for(const flag of flags)compileFlags.push(flag);let linkFlags=configStrings(jsonObjectGet(compiler,"linkFlags"));for(const flag of links)linkFlags.push(flag);for(const library of configStrings(jsonObjectGet(config,"linkLibraries")))linkFlags.push("-l"+library);compileCpp(generated,output,binary,root,cxx,compileFlags,linkFlags,incrementalEnabled,options.cacheDirectory,unity);if(fingerprintPath!=""){let inputs:string[]=[];for(const file of analyzedFiles)inputs.push(file);if(configPath!="")inputs.push(configPath);checkedWrite(fingerprintPath,fingerprintText(fingerprintKey,inputs,[output,binary]));}}
+ if(build||jsonAsBool(jsonObjectGet(compiler,"enabled"))){if(binary==""){const configured=jsonAsString(jsonObjectGet(outConfig,"binary"));binary=(configured!=""?pathAt(base,configured):output+".bin");}if(cxx=="")cxx=jsonAsString(jsonObjectGet(compiler,"command"));if(cxx=="")cxx=environment("CXX");if(cxx=="")cxx="g++";let compileFlags=configStrings(jsonObjectGet(compiler,"flags"));for(const flag of flags)compileFlags.push(flag);let linkFlags=configStrings(jsonObjectGet(compiler,"linkFlags"));for(const flag of links)linkFlags.push(flag);for(const library of configStrings(jsonObjectGet(config,"linkLibraries")))linkFlags.push("-l"+library);compileCpp(generated,output,binary,root,cxx,compileFlags,linkFlags,incrementalEnabled,options.cacheDirectory,unity);if(fingerprintPath!=""){let inputs:string[]=[];for(const file of analyzedFiles)inputs.push(file);if(configPath!="")inputs.push(configPath);for(let k:number=0;k+1<flags.length;k=k+1)if(flags[k]=="-include"&&exists(flags[k+1]))inputs.push(flags[k+1]);checkedWrite(fingerprintPath,fingerprintText(fingerprintKey,inputs,[output,binary]));}}
  progressSummary(output,(build||jsonAsBool(jsonObjectGet(compiler,"enabled")))?binary:"");if(run){let command:string[]=[normalizePath(binary)];for(const arg of programArgs)command.push(arg);exitProcess(execute(command));}
 }
 main();

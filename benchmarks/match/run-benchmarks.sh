@@ -59,11 +59,9 @@ EOF
 
 for b in B1-value-pattern B2-discriminator B3-when-type B4-v2-exhaustive B5-iife-overhead; do
     echo "=== Compilando $b ==="
-    # .ets -> .cpp
-    node --experimental-strip-types --no-warnings src/cli.ts \
-        benchmarks/match/$b.ets -o .scratch/bench/$b.cpp 2>/dev/null
-    # .cpp (generado por V23) -> binario
-    g++ -O2 -std=c++20 -I. .scratch/bench/$b.cpp -o .scratch/bench/$b 2>&1 | grep -E "error" || true
+    # .ets -> binario con el compilador nativo (#140): $ETSC o `etsc`.
+    ESTC_ROOT="${ESTC_ROOT:-$PWD}" "${ETSC:-etsc}" build benchmarks/match/$b.ets -o .scratch/bench/$b.cpp \
+        --binary .scratch/bench/$b --cxx-flag -O2 --no-progress 2>&1 | grep -E "error" || true
     # .cpp (nativo escrito a mano) -> binario
     g++ -O2 -std=c++20 -I. benchmarks/match/$b.cpp -o .scratch/bench/$b-native 2>&1 | grep -E "error" || true
 done
