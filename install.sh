@@ -281,8 +281,11 @@ fi
 version="$(cd "$stage" && find . -type f | LC_ALL=C sort | while IFS= read -r file; do printf '%s %s\n' "$file" "$(hash_file "$file")"; done | hash_stdin)"
 version="${version:0:24}"
 
-printf '{\n  "format": "estc-install-1",\n  "version": "%s",\n  "compiler": "%s",\n  "native": true,\n  "frontend": "native/frontend",\n  "commandHash": "%s"\n}\n' \
-  "$version" "$cxx" "$command_hash" > "$stage/installation.json"
+# Versión del paquete para `etsc --version` (#143).
+package_version="$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$repo_dir/package.json" | head -1)"
+package_revision="$(sed -n 's/^[[:space:]]*"estaticRevision"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$repo_dir/package.json" | head -1)"
+printf '{\n  "format": "estc-install-1",\n  "version": "%s",\n  "packageVersion": "%s",\n  "revision": "%s",\n  "compiler": "%s",\n  "native": true,\n  "frontend": "native/frontend",\n  "commandHash": "%s"\n}\n' \
+  "$version" "$package_version" "$package_revision" "$cxx" "$command_hash" > "$stage/installation.json"
 
 mkdir -p "$library/releases" "$(dirname "$destination")"
 release="$library/releases/$version-$$"
