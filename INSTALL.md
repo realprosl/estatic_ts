@@ -81,6 +81,14 @@ sus fuentes) coincide con el checkout; si no hay para la plataforma o está
 desfasado, se compila automáticamente. Son binarios autocontenidos: estáticos
 en Linux y, en macOS, sin más dependencias que las del sistema.
 
+En el caso normal no hace falta la semilla: `install.sh` descarga primero
+**solo el compilador de tu plataforma** (`prebuilt/<plataforma>/compiler/`, con
+un clon parcial) y, si su huella coincide con las fuentes, lo instala
+directamente, sin descargar ni preparar la semilla. Solo si no coincide (por
+ejemplo, en una rama con cambios en `compiler/` o en el runtime), o con
+`--force-compiler`, `--seed-only` o `--seed`, se descarga la semilla de tu
+plataforma y se sigue el camino completo.
+
 ```sh
 ./install.sh                    # usa los precompilados
 ./install.sh --force-seed       # recompila solo la semilla

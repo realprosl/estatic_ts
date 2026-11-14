@@ -507,9 +507,9 @@ comparación reproducible, caso a caso, está en
 | El backend C++ rechaza las capacidades que no implementa | `IR_CPP_UNSUPPORTED` |
 | Ownership: un argumento owner exige `move(identifier)`, el acceso opcional no puede copiar un campo con ownership y un cast no puede borrar ni fabricar ownership | `E4101` (14 variantes) |
 | Un cast no puede cambiar un contrato de memoria | `E4301` |
-| `move` requiere un lvalue con ownership y un campo con ownership necesita inicialización en el constructor | `E4100` |
-| Uso de un owner movido, de un agregado movido parcialmente o escritura a través de un padre movido | `E4102` |
-| Uso de un owner posiblemente movido | `E4103` |
+| `move` requiere un lvalue con ownership, o una variable `let` o un parámetro de tipo string, array, `Map`, `Set` o clase (no escalares, `const`, préstamos ni campos de valores sin ownership); un campo con ownership necesita inicialización en el constructor | `E4100` |
+| Uso de un valor movido con `move()` (owner o no; el mensaje indica la línea del move), de un agregado movido parcialmente o escritura a través de un padre movido | `E4102` |
+| Uso de un valor posiblemente movido en algún camino | `E4103` |
 | Procedencia o efectos no demostrados: lvalue que no se puede estabilizar, resumen recursivo con callbacks simbólicos, efectos opacos sobre globals o durante un préstamo activo | `E4104` |
 | Un préstamo no puede almacenarse ni retornarse, y una instancia genérica no puede retornar un préstamo sin contrato de lifetime | `E4203` |
 | Suspensión y `spawn`: efectos de la tarea demostrados, duración del constructor y retención de globals con ownership | `E4204` |

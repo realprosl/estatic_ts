@@ -50,10 +50,10 @@ export class SafetyAnalyzer {
   graph: ModuleGraph; binding: BindingResult; result: CheckResult; effects: EffectAnalyzer; arguments: SafetyArgument[];
   offsets: number[]; nodes: number; edges: SafetyEdge[]; seeds: number[]; escapes: EscapeSite[]; owners: number[]; trace: boolean; resourceTypes: Map<string,boolean>; valueTypes: Map<string,boolean>; carrierTypes: Map<string,boolean>; plainTypes: Map<string,boolean>; defaultReads: Map<number,boolean>; valueDefaults: Map<number,boolean>;
   substitutions: string[]; substitutionTypes: string[]; memoryPath: string[]; borrowSources: number[]; leases: BorrowLease[]; breaks: SafetyState[]; continues: SafetyState[]; returns: SafetyState[]; sites: SafetyCallSite[];
-  visits: number; collectFlow:boolean; findings:FlowFinding[];
+  visits: number; collectFlow:boolean; findings:FlowFinding[]; moveLines: number[];
   constructor(graph: ModuleGraph, binding: BindingResult, result: CheckResult) {
     this.graph = graph; this.binding = binding; this.result = result; this.effects = new EffectAnalyzer(graph,binding,result); this.arguments = []; this.offsets = []; this.nodes = 0;
-    this.substitutions = []; this.substitutionTypes = []; this.edges = []; this.seeds = []; this.escapes = []; this.memoryPath = []; this.borrowSources = []; this.leases = []; this.breaks = []; this.continues = []; this.returns = []; this.sites = []; this.arguments = [];
+    this.substitutions = []; this.substitutionTypes = []; this.edges = []; this.seeds = []; this.escapes = []; this.memoryPath = []; this.borrowSources = []; this.leases = []; this.breaks = []; this.continues = []; this.returns = []; this.sites = []; this.arguments = []; this.moveLines = []; for (let k: number = 0; k < binding.symbols.length; k = k + 1) this.moveLines.push(-1);
     for (const m of graph.modules) { this.offsets.push(this.nodes); this.nodes = this.nodes + m.cached.result.ast.nodes.length; }
     for (const s of binding.symbols) this.borrowSources.push(-1);
     this.owners = []; for (const scope of binding.scopes) this.owners.push(-2); this.trace = false; this.resourceTypes = new Map<string,boolean>(); this.valueTypes = new Map<string,boolean>(); this.carrierTypes = new Map<string,boolean>(); this.plainTypes = new Map<string,boolean>();
@@ -435,7 +435,9 @@ export class SafetyAnalyzer {
       if (n.kind == NodeKind.VariableDeclaration || n.kind == NodeKind.UsingDeclaration) {
         const sid: number = this.binding.files[m].declarations[id]; const value: number = bindingChild(n,EdgeRole.Initializer);
         if (sid >= 0 && value >= 0) { this.edge(this.vertex(m,value),this.symbolVertex(sid)); stores.push(new LifetimeStore(m,id,this.vertex(m,value),this.binding.symbols[sid].scope)); }
-        if (sid >= 0 && this.owner(this.binding.symbols[sid].scope) < 0 && value >= 0) { const pendingPush = new EscapeSite(m,id,this.vertex(m,value),"almacenamiento global"); this.escapes.push(pendingPush); }
+        // #172: solo es almacenamiento global una declaración del ámbito del módulo;
+        // la de un bloque de nivel superior (cuerpo de un for, {}) vive lo que el bloque.
+        if (sid >= 0 && this.owner(this.binding.symbols[sid].scope) < 0 && this.binding.scopes[this.binding.symbols[sid].scope].kind == "module" && value >= 0) { const pendingPush = new EscapeSite(m,id,this.vertex(m,value),"almacenamiento global"); this.escapes.push(pendingPush); }
         for (const edge of n.edges) if (edge.role == EdgeRole.ArrayBindings || edge.role == EdgeRole.ObjectBindings) {
           const target: number = this.binding.files[m].declarations[edge.node]; const fallback: number = bindingChild(this.node(m,edge.node),EdgeRole.DefaultValue);
           if (target >= 0) {
@@ -623,7 +625,12 @@ export class SafetyAnalyzer {
     if (sid < 0 || (this.binding.symbols[sid].module) < 0) return;
     const s: BindingSymbol = this.binding.symbols[sid]; if (!localBinding(s.kind) && !["Parameter","receiver"].includes(s.kind)) return;
     if (state.slots[sid] == 0) this.report(module,id,"E4001: uso antes de inicializar '" + s.name + "'");
-    if (state.slots[sid] == 2 || state.slots[sid] == 3) this.report(module,id,state.slots[sid] == 2 ? "E4102: uso de owner movido '" + s.name + "'" : "E4103: uso de owner posiblemente movido '" + s.name + "'");
+    if (state.slots[sid] == 2 || state.slots[sid] == 3) {
+      // #153: señalar dónde se movió (la última transferencia vista de ese símbolo).
+      const site: string = this.moveLines[sid] >= 0 ? " en la línea " + numberToString(this.moveLines[sid]) : "";
+      const help: string = "\nayuda: si necesitas los dos valores, copia antes de mover, o reasigna '" + s.name + "' antes de usarla";
+      this.report(module,id,state.slots[sid] == 2 ? "E4102: '" + s.name + "' ya no se puede usar: se transfirió con move()" + site + help : "E4103: '" + s.name + "' puede haberse transferido con move() en algún camino" + (site == "" ? "" : " (" + "línea " + numberToString(this.moveLines[sid]) + ")") + help);
+    }
     if (this.borrowSources[sid] < 0) this.access(module,id,sid,"read");
   }
   callBorrows(module: number, id: number): void {
@@ -1041,7 +1048,7 @@ export class SafetyAnalyzer {
       for (const edge of n.edges) if (edge.role == EdgeRole.Args) this.expression(module,edge.node,state,active);
       if (this.helper(module,id) == "move") {
         const arg: number = bindingChild(n,EdgeRole.Args); const sid: number = this.root(module,arg); this.access(module,id,sid,"move");
-        if (this.node(module,arg).kind == NodeKind.IdentifierExpression) { if (sid >= 0) state.slots[sid] = 2; }
+        if (this.node(module,arg).kind == NodeKind.IdentifierExpression) { if (sid >= 0) { state.slots[sid] = 2; this.moveLines[sid] = this.node(module,id).start.line; } }
         else { const projectionKey: string = this.projectionKey(module,arg); if (projectionKey == "") this.report(module,arg,"E4104: move requiere una procedencia de campo demostrada"); else this.setPath(state,projectionKey,2); }
       } else if (this.helper(module,id) != "ref" && this.helper(module,id) != "constRef") {
         this.callBorrows(module,id);
