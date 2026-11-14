@@ -128,7 +128,8 @@ assert(!diagnosed.stderr.includes("\x1b["),"Sin terminal no hay colores");
   const builtAt=statSync(join(project,"build/app")).mtimeMs;
   p=run(["build"],project);assert.equal(p.status,0,p.stderr);assert.equal(statSync(join(project,"build/app")).mtimeMs,builtAt,"Un build sin cambios no vuelve a enlazar");
   const programObjects=()=>readdirSync(join(project,".build/cache/objects")).filter(file=>file.startsWith("program-"));
-  const programObject=programObjects();assert.equal(programObject.length,1);
+  // Una unidad por módulo más __main.cpp (#178).
+  const programObject=programObjects();assert.ok(programObject.length>=1);
   writeFileSync(join(project,"src/main.ts"),readFileSync(join(project,"src/main.ts"),"utf8")+"\n// comentario\n");
   p=run(["run"],project);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");assert.deepEqual(programObjects(),programObject);
   // La cabecera precompilada de esta combinacion queda en la cache del usuario.

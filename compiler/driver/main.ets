@@ -122,7 +122,7 @@ function linkCommand(plan:constRef<CppPlan>,objects:string[],links:string[],bina
 // existe, el programa se compila sin ella y la PCH se crea en paralelo para el
 // siguiente build.
 function generatedIncludes(cpp:string):string[]{
- let lines:string[]=[];for(const line of readText(cpp).split("\n")){if(line.startsWith("#include")){lines.push(line);continue;}if(line==""||line.startsWith("//"))continue;break;}return lines;
+ let lines:string[]=[];for(const line of readText(cpp).split("\n")){if(line.startsWith("#include")){lines.push(line);continue;}if(line==""||line.startsWith("//")||line=="#pragma once")continue;break;}return lines;
 }
 function pchArtifact(header:string,compiler:string):string{return header+(compiler.includes("clang",0)?".pch":".gch");}
 // Deja solo las `keep` PCH usadas más recientemente en la caché del usuario.
