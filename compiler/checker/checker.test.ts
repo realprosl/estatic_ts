@@ -193,6 +193,8 @@ const safetyValid:Record<string,string>={
  breakOnce:box+'let p:ptr<Box> = new Box(); while(true){const q=move(p);break;}',
  concatPrimitives:'enum E{A="a"} enum N{X,Y} const s:string="x"+1.5+true+E.A+N.Y; print(s);',
  concatOptionalDefault:'let m=new Map<number,string>(); const s:string="x"+(m.get(1)??"none"); print(s);',
+ topLevelBlockClosure:'let acc=0;for(let i=0;i<3;i=i+1){let counts:number[]=[0,0];const inc=(k:number):void=>{counts[k]=counts[k]+1;};inc(1);acc=acc+counts[1];} print(acc);',
+ topLevelBareBlockClosure:'{let x=0;const g=():number=>{x+=1;return x;};print(g());}',
  borrowedParameter:box+'function f(b:ref<Box>):void{b.value=2;} let b=new Box();f(b);',
  sharedParameter:box+'function f(b:constRef<Box>):number{return b.value;} const b=new Box();print(f(b));',
  localBorrow:box+'function f():void{let b=new Box(); const r:ref<Box> = ref(b); r.value=2;print(r.value);}',
@@ -249,6 +251,7 @@ const safetyInvalid:[string,string,RegExp][]=[
  ['pushEscape','type Reader=()=>number;function f():Reader[]{let x=0;const g=():number=>{x+=1;return x;};let a:Reader[]=[];a.push(g);return a;}',/E4210/],
  ['transitiveEscape','function f():()=>number{let x=0;const g=():number=>{x+=1;return x;};return ():number=>g();}',/E4210/],
  ['globalEscape','let global:()=>number=():number=>1;function f():void{let x=0;const g=():number=>{x+=1;return x;};global=g;}',/E4210/],
+ ['topLevelBlockToGlobal','let global:()=>number=():number=>1;for(let i=0;i<2;i=i+1){let x=0;const g=():number=>{x+=1;return x;};global=g;}',/E4210/],
 
  ['indirectTdz','const n=f();let x=1;function f():number{return x;}',/E4001/],
  ['defaultTdz','function f(x:number=y,y:number=1):number{return x;}',/E4001/],
