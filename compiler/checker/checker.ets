@@ -1711,7 +1711,15 @@ export class NativeChecker {
       let left: string = memoryValue(this.expression(module,leftId,expected == "i64" || expected == "u64" ? expected : ""));
       const right: string = memoryValue(this.expression(module,rightId,(left == "i64" || left == "u64") && this.integerLiteral(module,rightId) ? left : "")); const op: string = n.get(AttributeKind.Operator);
       if ((right == "i64" || right == "u64") && this.integerLiteral(module,leftId)) left = this.expression(module,leftId,right);
-      if (op == "+" && (left == "string" || right == "string")) return "string";
+      if (op == "+" && (left == "string" || right == "string")) {
+        // #171: solo se concatenan a un string valores primitivos o enums; el
+        // resto (Optional, arrays, colecciones, clases) no tiene conversión.
+        const other: string = left == "string" ? right : left; const otherId: number = left == "string" ? rightId : leftId;
+        const otherSymbol: number = this.nominalSymbol(other);
+        if (other != "!error" && (!primitiveType(other) || other == "void") && !(otherSymbol >= 0 && this.binding.symbols[otherSymbol].kind == "EnumDeclaration"))
+          this.report(module,otherId,"E3001: No se puede concatenar un valor de tipo '" + this.displayType(other) + "' con un string" + (genericBase(other) == "Optional" ? "\nayuda: el valor puede no existir: usa 'valor ?? \"por defecto\"' o comprueba antes que existe" : "\nayuda: conviértelo antes a string (por ejemplo, con un método que devuelva su texto)"));
+        return "string";
+      }
       if (["==","!=","===","!==","<",">","<=",">="].includes(op)) {
         if (numericType(left) && numericType(right)) {
           const promoted: string = nativeBinaryPromotion(left,right,op);
