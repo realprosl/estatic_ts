@@ -7,11 +7,10 @@ BUILD_DIR="${ROOT_DIR}/build/todo-project"
 
 mkdir -p "${BUILD_DIR}"
 
-node --experimental-strip-types "${ROOT_DIR}/src/cli.ts" \
-  "${SCRIPT_DIR}/main.ets" -o "${BUILD_DIR}/main.cpp"
-
-g++ -std=c++20 -O2 -DNDEBUG -pthread -fno-exceptions \
-  -I"${ROOT_DIR}" "${BUILD_DIR}/main.cpp" -o "${BUILD_DIR}/todo-project"
+# Compilador nativo (#140): el `etsc` instalado o el indicado en $ETSC.
+ETSC="${ETSC:-etsc}"
+ESTC_ROOT="${ESTC_ROOT:-${ROOT_DIR}}" "${ETSC}" build "${SCRIPT_DIR}/main.ets" \
+  -o "${BUILD_DIR}/main.cpp" --binary "${BUILD_DIR}/todo-project" --no-progress
 
 OUTPUT="$("${BUILD_DIR}/todo-project")"
 printf '%s\n' "${OUTPUT}"

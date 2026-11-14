@@ -21,12 +21,9 @@ for src in "$BENCH_DIR"/*.ets; do
     name="$(basename "$src" .ets)"
     echo "--- $name ---"
 
-    # Generar .cpp del dialecto
-    node --experimental-strip-types --no-warnings \
-        "$ROOT_DIR/src/cli.ts" "$src" -o "$SCRATCH/$name.cpp" 2>&1 | head -3
-
-    # Compilar binario del dialecto
-    g++ -O2 -std=c++20 -I"$ROOT_DIR" "$SCRATCH/$name.cpp" -o "$SCRATCH/$name" 2>&1 | head -3
+    # Binario del dialecto con el compilador nativo (#140): $ETSC o `etsc`.
+    ESTC_ROOT="${ESTC_ROOT:-$ROOT_DIR}" "${ETSC:-etsc}" build "$src" -o "$SCRATCH/$name.cpp" \
+        --binary "$SCRATCH/$name" --cxx-flag -O2 --no-progress 2>&1 | head -8
 
     # Compilar binario nativo
     g++ -O2 -std=c++20 -I"$ROOT_DIR" "$BENCH_DIR/$name.cpp" -o "$SCRATCH/$name-native" 2>&1 | head -3

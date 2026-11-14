@@ -5,6 +5,7 @@
 #
 # Uso: native-cpp/build-compiler.sh --seed DIR --out BINARIO
 #                                   [--force] [--static] [--update-prebuilt]
+#                                   [--prebuilt-only]
 #
 #   --seed DIR         semilla ya construida (DIR/etsc)
 #   --out BINARIO      dónde dejar el compilador
@@ -13,6 +14,9 @@
 #                      librerías del sistema)
 #   --update-prebuilt  compila con --static y -O2 y guarda el resultado y su
 #                      huella en native-cpp/prebuilt/<plataforma>/compiler/
+#   --prebuilt-only    solo usa el precompilado: si no vale, sale con 3 sin
+#                      compilar (no hace falta --seed). Lo usa install.sh para
+#                      saltarse la semilla cuando no hace falta (#151).
 #
 # Si native-cpp/prebuilt/<plataforma>/compiler/ existe y su huella (sha256 de
 # la semilla, compiler/ y runtime/) coincide con el checkout, se copia en vez
@@ -23,7 +27,7 @@ root="$(cd "$seed_dir/.." && pwd)"
 source "$root/compiler/native/progress.sh"
 ETSC_CLI_SCOPE=${ETSC_CLI_SCOPE:-compiler}
 
-seed="" out="" force=0 static=0 update_prebuilt=0 opt=-O1
+seed="" out="" force=0 static=0 update_prebuilt=0 prebuilt_only=0 opt=-O1
 while (($#)); do
   case "$1" in
     --seed) seed="$2"; shift 2 ;;
@@ -31,7 +35,8 @@ while (($#)); do
     --force) force=1; shift ;;
     --static) static=1; shift ;;
     --update-prebuilt) update_prebuilt=1; static=1; force=1; opt=-O2; shift ;;
-    --help) sed -n '2,20p' "$0"; exit 0 ;;
+    --prebuilt-only) prebuilt_only=1; shift ;;
+    --help) sed -n '2,24p' "$0"; exit 0 ;;
     *) echo "Opción desconocida: $1" >&2; exit 2 ;;
   esac
 done
@@ -58,8 +63,9 @@ if ((!force)) && [[ -f $prebuilt/inputs.sha256 ]]; then
     etsc_info "✓ Compilador precompilado ($platform) · --force-compiler para recompilarlo"
     exit 0
   fi
-  etsc_info "El compilador precompilado ($platform) no coincide con las fuentes; se compila"
+  ((prebuilt_only)) || etsc_info "El compilador precompilado ($platform) no coincide con las fuentes; se compila"
 fi
+((prebuilt_only)) && exit 3
 
 [[ -x $seed/etsc ]] || { echo "Falta la semilla en $seed (--seed)" >&2; exit 1; }
 work="$(mktemp -d "${TMPDIR:-/tmp}/etsc-compiler.XXXXXX")"
