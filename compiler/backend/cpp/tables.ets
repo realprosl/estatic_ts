@@ -94,6 +94,6 @@ if(base=="!Date")return ["now", "utc"].includes(method);
 if(base=="!JSON")return ["parse", "stringify", "parseValue", "stringifyBool", "stringifyNumber", "stringifyValue"].includes(method);
 if(base=="!path")return ["dirname", "basename", "extname", "join", "resolve", "normalize", "isAbsolute"].includes(method);
 if(base=="!fs")return ["readFile", "writeFile", "appendFile", "copyFile", "rename", "unlink", "readFileSync", "writeFileSync", "appendFileSync", "copyFileSync", "renameSync", "unlinkSync", "existsSync"].includes(method);
-if(base=="!process")return ["cwd", "exit", "argv", "argc"].includes(method);
+if(base=="!process")return ["cwd", "exit"].includes(method);
 if(base=="Console")return ["log", "info", "debug", "trace", "warn", "error"].includes(method);
 return false;}
