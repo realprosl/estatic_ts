@@ -133,9 +133,16 @@ export class IrLowering {
     return index;
   }
   valueType(value: number): number { return value >= 0 ? this.result.functions[this.currentFunction].values[value] : -1; }
+  // process.argv y process.argc son valores que calcula el runtime, no lugares
+  // de memoria: indexarlos o prestarlos materializa primero el valor en un temporal.
+  processProperty(id: number): boolean {
+    const n = this.node(id);
+    return n.kind == NodeKind.MemberExpression && this.resolved(this.checked.files[this.module].receivers[id]) == "!process" && ["argv","argc"].includes(n.get(AttributeKind.Member));
+  }
   // Identifier/member chains whose place can be computed again without side effects.
   purePlace(id: number): boolean {
     const n = this.node(id);
+    if (this.processProperty(id)) return false;
     if (n.kind == NodeKind.IdentifierExpression) return true;
     if (n.kind == NodeKind.MemberExpression) return this.purePlace(bindingChild(n,EdgeRole.Object));
     return false;
@@ -160,6 +167,7 @@ export class IrLowering {
   rootPlace(id: number): number {
     for (let at: number = this.overrideNodes.length-1; at >= 0; at = at-1) if (this.overrideNodes[at] == id) return this.overridePlaces[at];
     const n = this.node(id);
+    if (this.processProperty(id)) { const value: number = this.expression(id); const p: number = this.local(-1,this.valueType(value),false,id); this.emit("store",-1,[value],p,-1,"",id); this.track(p); return p; }
     if (n.kind == NodeKind.IdentifierExpression) {
       let p: number = this.place(this.reference(id),id); if (p < 0) return p;
       const actual: number = this.result.functions[this.currentFunction].places[p].typeId; const expected: number = this.typeId(this.checked.files[this.module].types[id],id);
@@ -903,6 +911,7 @@ export class IrLowering {
     if (symbol >= 0 && this.globalSymbols.includes(symbol)) return this.emit("load",typeId,[],this.place(symbol,id),-1,"",id);
     const name: string = n.get(AttributeKind.Member); const receiver: string = this.resolved(this.checked.files[this.module].receivers[id]);
     if (receiver == "!process" && ["stdin","stdout","stderr"].includes(name)) return this.runtime("process."+name,typeId,[],id,["runtime","read"]);
+    if (receiver == "!process" && ["argv","argc"].includes(name)) return this.runtime("process."+name,typeId,[],id,["runtime","read"]);
     if (receiver == "ChildProcess" && ["stdin","stdout","stderr"].includes(name)) return this.runtime("ChildProcess."+name,typeId,[this.expression(bindingChild(n,EdgeRole.Object))],id,["runtime","read"]);
     if (receiver == "Request" && ["method","path","rawQuery","body"].includes(name)) return this.runtime("Request.property."+name,typeId,[this.expression(bindingChild(n,EdgeRole.Object))],id,["runtime","read"]);
     if (["length","size","kind","ok"].includes(name) && (receiver == "string" || receiver.endsWith("[]") || fixedArraySize(receiver) >= 0 || semanticTuple(receiver) || ["Map","Set","Optional","Result"].includes(genericBase(receiver)))) { const input: number = bindingChild(n,EdgeRole.Object); const actual: number = this.typeId(this.checked.files[this.module].types[input],input); let value: number = -1; if (this.result.typeDefinitions[actual].resource) value = this.emit("borrow",this.typeId("constRef<"+this.result.types[actual]+">",id),[],this.rootPlace(input),-1,"constRef",id); else value = this.expression(input); return this.emit("property",typeId,[value],-1,-1,name,id); }

@@ -36,6 +36,7 @@ function execute(source:string,files:Record<string,string>={},flags:string[]=[])
  buildIrCpp(result,cpp,binary,undefined,flags);const p=spawnSync(binary,[],{encoding:"utf8",timeout:15000,env:flags.some(f=>f.includes("sanitize"))?{...process.env,ASAN_OPTIONS:"detect_leaks=0",LSAN_OPTIONS:"detect_leaks=0"}:process.env});assert.ifError(p.error);assert.equal(p.status,0,p.stderr);return p.stdout;
 }
 for(const [name,source,expected] of [
+ ["process argv and argc as Node properties",'print(process.argc);print(process.argv.length);print(process.argv[0]==process.argv[1]?"igual":"distinto");print(process.argv.slice(2).length);',"2\n2\nigual\n0\n"],
  ["update comptime exact integers",'const n:u64=comptime(():u64=>{let value:u64=9007199254740993;const old:u64=value++;const next:u64=++value;return old+(next-value);});print(n);',"9007199254740993\n"],
  ["update references fields and closures",'function inc(n:ref<number>):number{return n++;}let n=4;print(inc(n));print(n);class C{x:number=1;inc():number{return ++this.x;}}let c=new C();print(c.inc());function run():number{let value=0;const bump=():number=>++value;bump();return bump();}print(run());',"4\n5\n2\n2\n"],
  ["update numeric widths and exact integers",'let small:i8=126;print(small++);print(++small);let exact:u64=9007199254740993;print(exact++);print(++exact);let single:f32=1.5;print(single++);print(single);',"126\n-128\n9007199254740993\n9007199254740995\n1.5\n2.5\n"],

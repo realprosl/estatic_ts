@@ -175,6 +175,8 @@ if (existsSync(SCRATCH_DIR)) {
 }
 
 const skipList = await loadSkipList();
+// Ejemplos que solo compila el compilador nativo (campo `nativeOnly` de skip-network.json).
+const nativeOnly: Set<string> = new Set((JSON.parse(await readFile(SKIP_FILE, "utf8")) as { nativeOnly?: string[] }).nativeOnly ?? []);
 const examples = await discoverExamples();
 
 // Cabecera de contexto: una sola vez, antes de los tests.
@@ -224,6 +226,13 @@ async function processDemo(name: string, isSkipNetwork: boolean, workerId: numbe
       child.once("exit", code => { resolvePromise({ code: code ?? -1, stdout, stderr }); });
     });
   };
+
+  // Solo compilador nativo: la etapa 0 no soporta su sintaxis (p. ej. process.argv
+  // como propiedad, #186). Se informan como pasados con una nota.
+  if (nativeOnly.has(name)) {
+    diagnostics.push("native-only: la etapa 0 no lo transpila; lo cubre el compilador nativo");
+    return { name, ok: true, durationMs: Date.now() - started, diagnostics };
+  }
 
   // Transpile.
   const transpile = await localCli();

@@ -749,6 +749,8 @@ for(const [name,source] of Object.entries({
   wrongChildProcess:'child_process.spawn(1,[]);',
   wrongProcessStreamCallback:'process.stdin.on("data",(chunk:number):void=>{});',
  }))test(`native builtin contracts reject ${name}`,()=>run(fixture(source),1));
+test("process.argv y process.argc son propiedades como en Node",()=>{const g=check('const args:string[]=process.argv;const n:number=process.argc;for(let i:number=0;i<process.argc;i++)print(process.argv[i]);const user:string[]=process.argv.slice(2);print(user.length);print([1,2,3].slice(1,2).length);');assert.equal(g.diagnostics.length,0);});
+for(const member of ["argv","argc"])test(`process.${member}() se rechaza: es una propiedad`,()=>error(`print(process.${member}());`,/es una propiedad, no una función/));
 test("retained Node stream callbacks reject mutable stack captures",()=>error('function f():void{let count=0;process.stdin.on("data",(chunk:string):void=>{count=count+1;});}',/E4210/));
 test("retained ChildProcess callbacks reject mutable stack captures",()=>error('function f():void{let codeOut=0;const child=child_process.spawn("cat",[]);child.on("close",(code:number):void=>{codeOut=code;});}',/E4210/));
 test('native effects preserve external effects separately from symbol reads',()=>{
@@ -1800,7 +1802,7 @@ for(const [name,source] of Object.entries({
  asyncFiles:'async function f():Promise<void>{const a:Result<string> =await readFileAsync("x");const b:Result<boolean> =await writeFileAsync("x","y");}',
  cancellation:'const source=createCancellation();const token=cancellationToken(source);cancel(source);const done:boolean=isCancelled(token);',
  network:'async function f():Promise<void>{const listener:Result<TcpListener> =listenTcp("localhost",80);const r:Result<TcpConnection> =await acceptTcp(listener.value());}',
- fs:'const r:Result<string> =fs.readFileSync("x");const n:string=path.basename("x");const args:string[]=process.argv();',
+ fs:'const r:Result<string> =fs.readFileSync("x");const n:string=path.basename("x");const args:string[]=process.argv;',
  legacyOut:'let text="";let error="";const ok:boolean=readFile("x",text,error);const written:boolean=writeFile("x",text,error);',
  timer:'const callback=():void=>{};const timer:Timer=setTimeout(callback,1);cancelTimer(timer);const alive:boolean=timer.valid();',
  http:'const app=http.express();app.get("/",(req:Request,res:Response):void=>{res.status(200).send(req.path());});app.listen(8080);',

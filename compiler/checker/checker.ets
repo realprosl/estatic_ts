@@ -840,7 +840,11 @@ export class NativeChecker {
       if (name == "pop") return "()=>void";
       if (name == "includes") return "(" + element + ")=>boolean";
       if (name == "join" && element == "string") return "(string)=>string";
-      if (name == "slice") return "(number,number)=>" + valueType;
+      if (name == "slice") {
+        // Como en JavaScript, slice(start) llega hasta el final: process.argv.slice(2).
+        let count: number = 0; for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Args) count = count + 1;
+        return (count == 1 ? "(number)=>" : "(number,number)=>") + valueType;
+      }
     }
     const container: string = genericBase(valueType); const parts: string[] = genericArguments(valueType);
     if (container == "Map" || container == "Set") {
@@ -861,6 +865,12 @@ export class NativeChecker {
       if (name == "valueOr") return "(" + parts[0] + ")=>" + parts[0];
       if ((container == "Optional" && ["isPresent","isEmpty"].includes(name)) || (container == "Result" && name == "isOk")) return "()=>boolean";
       if (container == "Result" && name == "error") return "()=>" + parts[1];
+    }
+    // process.argv y process.argc son propiedades, como en Node (process.argv es
+    // string[]). argc es una extensión del dialecto: process.argv.length.
+    if (valueType == "!process" && ["argv","argc"].includes(name)) {
+      if (this.node(module,id).kind == NodeKind.MemberCallExpression) { this.report(module,id,"process."+name+" es una propiedad, no una función (como en Node)\nayuda: escribe process."+name+" sin paréntesis"); return "!error"; }
+      return name == "argv" ? "string[]" : "number";
     }
     if (valueType == "!process" && ["stdin"].includes(name)) return "ProcessReadable";
     if (valueType == "!process" && ["stdout","stderr"].includes(name)) return "ProcessWritable";
