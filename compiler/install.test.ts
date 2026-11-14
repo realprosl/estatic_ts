@@ -213,6 +213,18 @@ test("install builds compiler/ with the seed and publishes that executable",asyn
   // El runtime y las librerias que lo acompanan siguen en la distribucion.
   assert(existsSync(join(home,"native/frontend")));
   assert(existsSync(join(home,"runtime")));
+  // #178: C++ por módulo. examples/modules da la misma salida con --unity y por
+  // módulo, y un cambio de cuerpo en math.ets solo recompila su unidad.
+  {const env={...process.env,ESTC_ROOT:home};const project=join(dir,"modules178");mkdirSync(project,{recursive:true});
+   for(const name of ["main.ets","math.ets"])writeFileSync(join(project,name),readFileSync(join(root,"examples/modules",name),"utf8"));
+   const run=(args:string[])=>spawnSync(bin,[...args,"--no-progress"],{cwd:project,encoding:"utf8",env,timeout:600000});
+   let p=run(["run","main.ets","--unity","-o","build/unity.cpp","--binary","build/unity"]);assert.equal(p.status,0,p.stderr);const expected=p.stdout;
+   p=run(["run","main.ets","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);
+   const units=readdirSync(join(project,"build/app.cpp.units")).sort();assert.ok(units.includes("program.hpp")&&units.includes("__main.cpp")&&units.some(u=>u.endsWith("math.cpp")),units.join(","));
+   const objects=()=>readdirSync(join(project,".cache/objects")).filter(f=>f.startsWith("program-")).sort();const before=objects();assert.equal(before.length,units.length-1);
+   writeFileSync(join(project,"math.ets"),readFileSync(join(project,"math.ets"),"utf8").replace("total = total + index;","total = total + index * 1;"));
+   p=run(["run","main.ets","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);
+   const after=objects();assert.equal(after.length,before.length);assert.equal(after.filter(o=>!before.includes(o)).length,1,"solo se recompila la unidad de math");}
    const source=join(dir,"node-streams.ets"),app=join(dir,"node-streams-app");
    writeFileSync(source,`process.stdin.on("data",(chunk:string):void=>{process.stdout.write("parent:"+chunk);});
 const childArgs:string[]=["-c","printf child-out; printf child-err >&2; cat"];

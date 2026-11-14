@@ -4,7 +4,7 @@ import {analyzeProject,formatModuleInterface} from "../checker/index";
 import { lowerProject, IrProject, IrIssue, IrSource, formatIr } from "../ir/index";
 import { generateCppFromIr, IrCppResult, parseIrProject, formatCppResult } from "../backend/cpp/index";
 import {parseConfig,configStrings} from "./config";
-import { canonicalFile, environment, exists, readText, stdinText, writeText, hostError, launch, poll, pause, files, compilerHome, objectKeys, directories, remove, rename, now, executable, contentHash, fileMetadata, configureProgress, progressInteractive, progressStart, progressDetail, progressTick, progressFinish, progressSummary } from "../platform/index";
+import { canonicalFile, processors, environment, exists, readText, stdinText, writeText, hostError, launch, poll, pause, files, compilerHome, objectKeys, directories, remove, rename, now, executable, contentHash, fileMetadata, configureProgress, progressInteractive, progressStart, progressDetail, progressTick, progressFinish, progressSummary } from "../platform/index";
 import {renderDiagnostic,renderSummary,setDiagnosticCatalog,explainCode} from "./diagnostics";
 function driverError(message:string,status:number=1):void{progressFinish(false);printError(message);exitProcess(status);}
 function checkedWrite(path:string,text:string):void{if(!writeText(path,text))driverError(hostError());}
@@ -93,11 +93,23 @@ function runtimeIdentity(root:string):string{
 }
 // Lanza todos los comandos a la vez y espera a que acaben. Devuelve el primer
 // estado distinto de cero (o 0).
+// Ejecuta los comandos en paralelo, con como mucho `compileJobs()` a la vez
+// (#178: con una unidad por módulo puede haber decenas de g++).
 function executeAll(commands:string[][]):number{
- let pids:number[]=[];for(const command of commands){progressDetail(command.join(" "));const pid=launch(command);if(pid<0)driverError(hostError());pids.push(pid);}
- let statuses:number[]=[];for(const pid of pids)statuses.push(-1);let pending=pids.length;
- while(pending>0){pending=0;for(let k:number=0;k<pids.length;k=k+1){if(statuses[k]<0){statuses[k]=poll(pids[k]);if(statuses[k]<0)pending=pending+1;}}if(pending>0){progressTick();pause(40);}}
+ const limit:number=compileJobs();let pids:number[]=[];let statuses:number[]=[];for(const command of commands){pids.push(-1);statuses.push(-1);}
+ let next:number=0;let running:number=0;let done:number=0;
+ while(done<commands.length){
+  while(running<limit&&next<commands.length){progressDetail(commands[next].join(" "));const pid=launch(commands[next]);if(pid<0)driverError(hostError());pids[next]=pid;next=next+1;running=running+1;}
+  let finished:boolean=false;
+  for(let k:number=0;k<next;k=k+1){if(statuses[k]<0){const status=poll(pids[k]);if(status>=0){statuses[k]=status;running=running-1;done=done+1;finished=true;}}}
+  if(!finished){progressTick();pause(40);}
+ }
  for(const status of statuses)if(status!=0)return status;return 0;
+}
+// Procesos de compilación en paralelo: ETSC_CXX_JOBS o el número de procesadores.
+function compileJobs():number{
+ const text=environment("ETSC_CXX_JOBS");if(text!=""){const value=JSON.parseValue(text);if(jsonIsNumber(value)&&jsonAsNumber(value)>=1)return Math.floor(jsonAsNumber(value));}
+ const cores=processors();return cores>=1?cores:1;
 }
 function linkCommand(plan:constRef<CppPlan>,objects:string[],links:string[],binary:string):string[]{
  let command:string[]=[];for(const flag of plan.flags)command.push(flag);for(const flag of plan.programFlags)command.push(flag);for(const object of objects)command.push(object);for(const library of plan.libraries)command.push(library);for(const link of links)command.push(link);command.push("-o");command.push(binary);return command;
@@ -138,9 +150,13 @@ function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:s
  // cada unidad es un objeto con su propia clave. --unity compila solo `cpp`.
  let units:string[]=[cpp];let includeSource:string=cpp;
  if(!unity&&result.units.length>0){
+  // Copias locales: escribir archivos es un efecto opaco y no puede ocurrir
+  // mientras se presta `result`.
+  let header:string=result.header;let unitNames:string[]=[];let unitTexts:string[]=[];
+  for(const unit of result.units){unitNames.push(unit.name);unitTexts.push(unit.text);}
   const directory=cpp+".units";if(!directories(directory))driverError(hostError());
-  writeIfChanged(directory+"/program.hpp",result.header);units=[];includeSource=directory+"/program.hpp";
-  let keep:string[]=["program.hpp"];for(const unit of result.units){writeIfChanged(directory+"/"+unit.name,unit.text);units.push(directory+"/"+unit.name);keep.push(unit.name);}
+  writeIfChanged(directory+"/program.hpp",header);units=[];includeSource=directory+"/program.hpp";
+  let keep:string[]=["program.hpp"];for(let k:number=0;k<unitNames.length;k=k+1){writeIfChanged(directory+"/"+unitNames[k],unitTexts[k]);units.push(directory+"/"+unitNames[k]);keep.push(unitNames[k]);}
   for(const file of files(directory))if(!keep.includes(file))remove(directory+"/"+file);
   plan.programUnits=units.length;
  }
@@ -162,7 +178,7 @@ function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:s
  const headerText:string=includeSource!=cpp?readText(includeSource):"";
  for(let k:number=0;k<sources.length;k=k+1){
   if(k<plan.programUnits){
-   if(programCache!=""){const object=programCache+"/program-"+contentHash(identity+"\n"+plan.programFlags.join("\n")+"\n"+headerText+"\n"+readText(sources[k]))+".o";targets.push(object);build.push(!exists(object));publish.push(object);drop.push(false);}
+   if(programCache!=""){const object=programCache+"/program-"+contentHash(identity+"\n"+plan.programFlags.join("\n")+"\n"+sources[k]+"\n"+headerText+"\n"+readText(sources[k]))+".o";targets.push(object);build.push(!exists(object));publish.push(object);drop.push(false);}
    else{targets.push(binary+".unit"+numberToString(k)+".o");build.push(true);publish.push("");drop.push(true);}
    continue;
   }

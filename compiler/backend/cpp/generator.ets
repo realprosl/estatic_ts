@@ -1250,16 +1250,16 @@ let capabilities:string[]=uniqueStrings(_cppLoop50Result);capabilities.sort();
     result.header=["#pragma once",...lead,...includes,...forwards,...printerPrototypes,declarations,...printers,...externs,...prototypes,""].join("\n");
     let modules:string[]=[];let grouped:string[][]=[];
     for(let k:number=0;k<this.project.functions.length;k=k+1){
-      const file:string=this.project.functions[k].source.file;let at:number=modules.indexOf(file);
+      const file:string=this.project.functions[k].source.file;let at:number=-1;for(let m:number=0;m<modules.length;m=m+1)if(modules[m]==file){at=m;break;}
       if(at<0){modules.push(file);let empty:string[]=[];grouped.push(empty);at=modules.length-1;}
       grouped[at].push(bodies[k]);
     }
-    let names:string[]=[];
+    let names:string[]=["__main"];
     for(let m:number=0;m<modules.length;m=m+1){
       let name:string=unitName(modules[m]);if(names.includes(name)){let n:number=2;while(names.includes(name+"-"+numberToString(n)))n=n+1;name=name+"-"+numberToString(n);}names.push(name);
       result.units.push(new IrCppUnit(name+".cpp",modules[m],["// Generated from verified ets-ir-2 (unidad por módulo).","#include \"program.hpp\"",...grouped[m],""].join("\n")));
     }
-    result.units.push(new IrCppUnit("main.cpp","",["// Generated from verified ets-ir-2 (globales y main).","#include \"program.hpp\"",...globals,main,""].join("\n")));
+    result.units.push(new IrCppUnit("__main.cpp","",["// Generated from verified ets-ir-2 (globales y main).","#include \"program.hpp\"",...globals,main,""].join("\n")));
     return result;
   }
 }
@@ -1268,9 +1268,9 @@ let capabilities:string[]=uniqueStrings(_cppLoop50Result);capabilities.sort();
 function unitName(file:string):string{
   if(file=="")return "module";
   let path:string=file;const marks:string[]=["/compiler/","/src/"];for(const mark of marks){const at:number=path.lastIndexOf(mark);if(at>=0){path=path.slice(at+mark.length,path.length);break;}}
-  const slash:number=path.lastIndexOf("/");if(slash>=0&&path.indexOf("/")==0)path=path.slice(slash+1,path.length);
+  const slash:number=path.lastIndexOf("/");if(slash>=0&&path.startsWith("/"))path=path.slice(slash+1,path.length);
   const dot:number=path.lastIndexOf(".");if(dot>0)path=path.slice(0,dot);
-  let out:string="";for(let k:number=0;k<path.length;k=k+1){const c:number=path.charCodeAt(k);out=out+((c>=48&&c<=57)||(c>=65&&c<=90)||(c>=97&&c<=122)||c==45||c==95?path.slice(k,k+1):"_");}
-  return out==""?"module":out;
+  let cleaned:string="";for(let k:number=0;k<path.length;k=k+1){const c:number=path.charCodeAt(k);cleaned=cleaned+((c>=48&&c<=57)||(c>=65&&c<=90)||(c>=97&&c<=122)||c==45||c==95?path.slice(k,k+1):"_");}
+  return cleaned==""?"module":cleaned;
 }
 export function generateCppFromIr(project:IrProject):IrCppResult{let generator=new IrCppGenerator(project);return generator.generate();}
