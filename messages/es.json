@@ -75,6 +75,14 @@
     "mensaje": "Tipos incompatibles: se esperaba '{esperado}' y se encontró '{encontrado}'",
     "explicacion": "El valor no es del tipo que se pide en esta posición (una variable con tipo, un parámetro, un retorno...). Convierte el valor o cambia el tipo declarado."
   },
+  "E3001/concatenacion": {
+    "mensaje": "No se puede concatenar un valor de tipo '{tipo}' con un string",
+    "ayuda": "solo se concatenan strings, números, booleanos y enums: conviértelo antes a string"
+  },
+  "E3001/concatenacion-opcional": {
+    "mensaje": "No se puede concatenar un valor de tipo '{tipo}' con un string",
+    "ayuda": "el valor puede no existir: usa 'valor ?? \"por defecto\"' o comprueba antes que existe"
+  },
   "E3002": {
     "mensaje": "El tipo '{tipo}' no declara el miembro '{miembro}'",
     "explicacion": "El campo o método no existe en ese tipo. Los tipos del runtime están en types/estatic.d.ts de tu proyecto (etsc update-types lo actualiza)."
