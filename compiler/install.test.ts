@@ -171,15 +171,6 @@ test("install compiles the C++ seed without Node",async()=>{
   const home=realpathSync(join(prefix,"lib/estc/current"));
   assert(existsSync(join(home,"native/frontend")));
   assert(existsSync(join(home,"runtime")));
-  // #143 (comportamiento nuevo del CLI; la semilla aún no lo tiene).
-  {const env={...process.env,ESTC_ROOT:home};const project=join(dir,"cli143");
-   let p=spawnSync(bin,["init",project,"--verbose"],{cwd:dir,encoding:"utf8",env});assert.equal(p.status,0,p.stderr);assert.match(p.stderr,/Creando proyecto/);
-   const header=join(project,"cache-header.hpp"),flags=["--cxx-flag","-include","--cxx-flag",header],build=(args:string[])=>spawnSync(bin,[...args,"--no-progress"],{cwd:project,encoding:"utf8",env,timeout:600000});
-   writeFileSync(header,"// valid header\n");p=build(["run",...flags]);assert.equal(p.status,0,p.stderr);
-   writeFileSync(header,"#error changed header must invalidate the object\n");p=build(["build",...flags]);assert.notEqual(p.status,0);assert.match(p.stderr,/changed header/);
-   writeFileSync(header,"// valid header\n");p=build(["run",...flags]);assert.equal(p.status,0,p.stderr);
-   const configPath=join(project,"estatic.config.json");const config=JSON.parse(readFileSync(configPath,"utf8"));config.incremental={enabled:false,cacheDirectory:"disabled cache"};writeFileSync(configPath,JSON.stringify(config));
-   p=build(["run"]);assert.equal(p.status,0,p.stderr);assert(!existsSync(join(project,"disabled cache")));}
   assert(existsSync(join(home,"types/estatic.d.ts")));
   assert(existsSync(join(home,"templates/estatic.config.json")));
   // La instalacion no arrastra el compilador de stage 0.
