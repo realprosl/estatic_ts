@@ -1717,7 +1717,7 @@ export class NativeChecker {
         const other: string = left == "string" ? right : left; const otherId: number = left == "string" ? rightId : leftId;
         const otherSymbol: number = this.nominalSymbol(other);
         if (other != "!error" && (!primitiveType(other) || other == "void") && !(otherSymbol >= 0 && this.binding.symbols[otherSymbol].kind == "EnumDeclaration"))
-          this.report(module,otherId,"E3001: No se puede concatenar un valor de tipo '" + this.displayType(other) + "' con un string" + (genericBase(other) == "Optional" ? "\nayuda: el valor puede no existir: usa 'valor ?? \"por defecto\"' o comprueba antes que existe" : "\nayuda: conviértelo antes a string (por ejemplo, con un método que devuelva su texto)"));
+          this.report(module,otherId,"E3001: No se puede concatenar un valor de tipo '" + this.displayType(other) + "' con un string" + (genericBase(other) == "Optional" ? "\nayuda: el valor puede no existir: usa 'valor ?? \"por defecto\"' o comprueba antes que existe" + catalogVariant("concatenacion-opcional") : "\nayuda: conviértelo antes a string (por ejemplo, con un método que devuelva su texto)" + catalogVariant("concatenacion")) + catalogArg("tipo", this.displayType(other)));
         return "string";
       }
       if (["==","!=","===","!==","<",">","<=",">="].includes(op)) {

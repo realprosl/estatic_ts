@@ -40,6 +40,14 @@
   "E2101/raiz": { "mensaje": "cannot find module '{modulo}'", "ayuda": "imports without './' are looked up in the roots and aliases of estatic.config.json" },
 
   "E3001": { "mensaje": "mismatched types: expected '{esperado}', found '{encontrado}'", "explicacion": "The value does not have the type required here (a typed variable, a parameter, a return...). Convert the value or change the declared type." },
+  "E3001/concatenacion": {
+    "mensaje": "Cannot concatenate a value of type '{tipo}' with a string",
+    "ayuda": "only strings, numbers, booleans and enums can be concatenated: convert it to a string first"
+  },
+  "E3001/concatenacion-opcional": {
+    "mensaje": "Cannot concatenate a value of type '{tipo}' with a string",
+    "ayuda": "the value may be missing: use 'value ?? \"default\"' or check that it exists first"
+  },
   "E3002": { "mensaje": "type '{tipo}' has no member '{miembro}'", "explicacion": "The field or method does not exist on that type. Runtime types are in your project's types/estatic.d.ts (refresh it with etsc update-types)." },
   "E3002/sugerencia": { "mensaje": "type '{tipo}' has no member '{miembro}'", "ayuda": "did you mean '{sugerencia}'?" },
   "E3002/lista": { "mensaje": "type '{tipo}' has no member '{miembro}'", "nota": "members of '{tipo}': {miembros}" },
