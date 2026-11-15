@@ -232,7 +232,11 @@ test("install builds compiler/ with the seed and publishes that executable",asyn
    const objects=()=>readdirSync(join(project,".cache/objects")).filter(f=>f.startsWith("program-")).sort();const before=objects();assert.equal(before.length,units.length-1);
    writeFileSync(join(project,"math.ets"),readFileSync(join(project,"math.ets"),"utf8").replace("total = total + index;","total = total + index * 1;"));
    p=run(["run","main.ets","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);
-   const after=objects();assert.equal(after.length,before.length);assert.equal(after.filter(o=>!before.includes(o)).length,1,"solo se recompila la unidad de math");}
+   const after=objects();assert.equal(after.length,before.length);assert.equal(after.filter(o=>!before.includes(o)).length,1,"solo se recompila la unidad de math");
+   // Nombres C++ estables: una función nueva en math.ets no cambia el C++ de main.
+   const mainUnit=()=>readFileSync(join(project,"build/app.cpp.units/main.cpp"),"utf8");const mainBefore=mainUnit();assert.doesNotMatch(mainBefore,/ir_f\d/);
+   writeFileSync(join(project,"math.ets"),"function helperNuevo(): number { return 7; }\n"+readFileSync(join(project,"math.ets"),"utf8"));
+   p=run(["run","main.ets","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);assert.equal(mainUnit(),mainBefore);}
   // #143 (comportamiento nuevo del CLI; la semilla aún no lo tiene).
   {const env={...process.env,ESTC_ROOT:home};const project=join(dir,"cli143");
    let p=spawnSync(bin,["init",project,"--verbose"],{cwd:dir,encoding:"utf8",env});assert.equal(p.status,0,p.stderr);assert.match(p.stderr,/Creando proyecto/);
