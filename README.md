@@ -302,6 +302,14 @@ apunta en `estatic.config.json`:
 - **Sus dependencias:** las `dependencies` de la librería se instalan también y
   se apuntan en el proyecto con `"indirect": true`. Una sola versión por nombre:
   manda la instalada directamente; entre indirectas, la más alta (con aviso).
+- **Compilada una vez:** cada librería tiene su propia cabecera C++
+  (`lib_<nombre>_<hash>.hpp`, solo sus tipos, prototipos y globales) y sus
+  unidades no incluyen `program.hpp`. Sus `.o` se guardan en
+  `<librería>/.estatic-cache/objects/` con una clave que solo depende de su
+  cabecera, su C++, el compilador y los flags: cambiar tu proyecto no la
+  recompila y, instalada con `-g`, la comparten todos tus proyectos. (Si la usas
+  con tipos tuyos, p. ej. `Pila<MiClase>` o una interfaz que implementan tus
+  clases, esa parte cambia con tu proyecto y se recompila, como en C++.)
 - **Editor:** en cada `build`, `run` y `--check` los alias se copian a
   `compilerOptions.paths` de `tsconfig.json` (`"mi-libreria/*"`), conservando
   los `paths` escritos a mano y sin tocar el archivo si no cambia nada.

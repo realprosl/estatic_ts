@@ -2,11 +2,11 @@ import {configureAnalysisJobs,configureAnalysisProfile} from "../analysis/index"
 import {ModuleLoader,LoaderOptions,PathAlias} from "../modules/index";
 import {analyzeProject,formatModuleInterface} from "../checker/index";
 import { lowerProject, IrProject, IrIssue, IrSource, formatIr } from "../ir/index";
-import { generateCppFromIr, IrCppResult, parseIrProject, formatCppResult } from "../backend/cpp/index";
+import { generateCppFromIr, generateCppWithLibraries, IrCppResult, parseIrProject, formatCppResult } from "../backend/cpp/index";
 import {parseConfig,configStrings} from "./config";
 import {updateCommand} from "./update";
 import {initializeLibrary} from "./library";
-import {installCommand,dependencyAliases,dependencyLinkFlags,syncTsconfig} from "./packages";
+import {installCommand,dependencyAliases,dependencyLinkFlags,dependencyRoots,syncTsconfig} from "./packages";
 import { canonicalFile, processors, environment, exists, readText, stdinText, writeText, hostError, launch, poll, pause, files, compilerHome, objectKeys, directories, remove, rename, now, executable, contentHash, fileMetadata, configureProgress, progressInteractive, progressStart, progressDetail, progressTick, progressFinish, progressSummary } from "../platform/index";
 import {renderDiagnostic,renderSummary,setDiagnosticCatalog,explainCode} from "./diagnostics";
 function driverError(message:string,status:number=1):void{progressFinish(false);printError(message);exitProcess(status);}
@@ -159,14 +159,18 @@ function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:s
  // Modo por módulo (#178): cabecera común + una unidad por módulo en <cpp>.units/;
  // cada unidad es un objeto con su propia clave. --unity compila solo `cpp`.
  let units:string[]=[cpp];let includeSource:string=cpp;
+ // Paso 3b (#192): cabecera de cada unidad y cabeceras propias de las librerías.
+ let unitHeaders:string[]=[];let libraryNames:string[]=[];let libraryRoots:string[]=[];let libraryTexts:string[]=[];
  if(!unity&&result.units.length>0){
   // Copias locales: escribir archivos es un efecto opaco y no puede ocurrir
   // mientras se presta `result`.
   let header:string=result.header;let unitNames:string[]=[];let unitTexts:string[]=[];
-  for(const unit of result.units){unitNames.push(unit.name);unitTexts.push(unit.text);}
+  for(const unit of result.units){unitNames.push(unit.name);unitTexts.push(unit.text);unitHeaders.push(unit.header);}
+  for(const library of result.libraries){libraryNames.push(library.name);libraryRoots.push(library.root);libraryTexts.push(library.text);}
   const directory=cpp+".units";if(!directories(directory))driverError(hostError());
   writeIfChanged(directory+"/program.hpp",header);units=[];includeSource=directory+"/program.hpp";
-  let keep:string[]=["program.hpp"];for(let k:number=0;k<unitNames.length;k=k+1){writeIfChanged(directory+"/"+unitNames[k],unitTexts[k]);units.push(directory+"/"+unitNames[k]);keep.push(unitNames[k]);}
+  let keep:string[]=["program.hpp"];for(let k:number=0;k<libraryNames.length;k=k+1){writeIfChanged(directory+"/"+libraryNames[k],libraryTexts[k]);keep.push(libraryNames[k]);}
+  for(let k:number=0;k<unitNames.length;k=k+1){writeIfChanged(directory+"/"+unitNames[k],unitTexts[k]);units.push(directory+"/"+unitNames[k]);keep.push(unitNames[k]);}
   for(const file of files(directory))if(!keep.includes(file))remove(directory+"/"+file);
   plan.programUnits=units.length;
  }
@@ -188,6 +192,14 @@ function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:s
  const headerText:string=includeSource!=cpp?readText(includeSource):"";
  for(let k:number=0;k<sources.length;k=k+1){
   if(k<plan.programUnits){
+   // Unidad de una librería: su clave solo depende de su cabecera y su texto (no
+   // de la ruta ni del resto del proyecto) y el objeto se guarda junto a la
+   // librería, así se reutiliza entre compilaciones y proyectos.
+   let libraryIndex:number=-1;if(k<unitHeaders.length)for(let m:number=0;m<libraryNames.length;m=m+1)if(libraryNames[m]==unitHeaders[k])libraryIndex=m;
+   if(cacheObjects&&libraryIndex>=0&&directories(libraryRoots[libraryIndex]+"/.estatic-cache/objects")){
+    const object=libraryRoots[libraryIndex]+"/.estatic-cache/objects/lib-"+contentHash(identity+"\n"+plan.programFlags.join("\n")+"\n"+libraryTexts[libraryIndex]+"\n"+readText(sources[k]))+".o";
+    targets.push(object);build.push(!exists(object));publish.push(object);drop.push(false);continue;
+   }
    if(programCache!=""){const object=programCache+"/program-"+contentHash(identity+"\n"+plan.programFlags.join("\n")+"\n"+sources[k]+"\n"+headerText+"\n"+readText(sources[k]))+".o";targets.push(object);build.push(!exists(object));publish.push(object);drop.push(false);}
    else{targets.push(binary+".unit"+numberToString(k)+".o");build.push(true);publish.push("");drop.push(true);}
    continue;
@@ -271,7 +283,7 @@ function main():void{
   let directory=".";let sources=true;let positional=0;let initVerbose=false;
   for(let k:number=1;k<args.length;k=k+1){if(args[k]=="--no-src"&&args[0]=="init")sources=false;else if(args[k]=="--verbose")initVerbose=true;else if(args[k].startsWith("-")||positional>0)driverError(help(),2);else{directory=args[k];positional=positional+1;}}
   configureProgress(initVerbose,true);progressStart(args[0]=="init"?"Creando proyecto":"Actualizando tipos");initialize(root,directory,args[0]=="update-types",sources);progressSummary();return;}
- let build:boolean=false;let run:boolean=false;let check:boolean=false;let verbose:boolean=false;let animate:boolean=true;let entry:string="";let output:string="";let binary:string="";let fromIr:string="";let emitIr:string="";let emitInterface:boolean=false;let unity:boolean=false;let configPath:string="";let cxx:string="";let options=new LoaderOptions();let flags:string[]=[];let links:string[]=[];let programArgs:string[]=[];
+ let build:boolean=false;let run:boolean=false;let check:boolean=false;let verbose:boolean=false;let animate:boolean=true;let entry:string="";let output:string="";let binary:string="";let fromIr:string="";let emitIr:string="";let emitInterface:boolean=false;let unity:boolean=false;let configPath:string="";let cxx:string="";let options=new LoaderOptions();let flags:string[]=[];let links:string[]=[];let libraryRoots:string[]=[];let programArgs:string[]=[];
  let at:number=0;if(args.length>0&&(args[0]=="build"||args[0]=="run")){build=true;run=args[0]=="run";at=1;}
  for(;at<args.length;at=at+1){const arg=args[at];if(arg=="--"){for(let k:number=at+1;k<args.length;k=k+1)programArgs.push(args[k]);break;}if(arg=="--profile-analysis"){if(!configureAnalysisProfile())driverError(hostError());continue;}if(arg=="--jobs"){at=at+1;if(at>=args.length||!configureAnalysisJobs(args[at]))driverError("--jobs requiere un entero entre 1 y 32",2);continue;}if(arg=="--verbose"){verbose=true;continue;}if(arg=="--no-progress"){animate=false;continue;}if(arg=="--build"){build=true;continue;}if(arg=="--run"){run=true;build=true;continue;}if(arg=="--check"){check=true;continue;}if(arg=="--emit-interface"){emitInterface=true;continue;}if(arg=="--unity"){unity=true;continue;}
  if(["-o","--binary","--from-ir","--emit-ir","--config","--cxx","--root","--cache","--alias","--cxx-flag","--link-flag"].includes(arg)){at+=1;if(at>=args.length)driverError("Falta un valor para "+arg,2);const value=args[at];if(value.startsWith("-")&&arg!="--cxx-flag"&&arg!="--link-flag")driverError("Falta un valor para "+arg,2);if(arg=="-o")output=value;else if(arg=="--binary")binary=value;else if(arg=="--from-ir")fromIr=value;else if(arg=="--emit-ir")emitIr=value;else if(arg=="--config")configPath=value;else if(arg=="--cxx")cxx=value;else if(arg=="--cache")options.cacheDirectory=value;else if(arg=="--root")options.roots.push(normalizePath(value));else if(arg=="--cxx-flag")flags.push(value);else if(arg=="--link-flag")links.push(value);else if(arg=="--alias"){at+=1;if(at>=args.length)driverError("Falta la ruta del alias",2);options.aliases.push(new PathAlias(value,args[at]));}continue;}
@@ -284,7 +296,7 @@ function main():void{
  const cacheEnabled=!jsonIsBool(jsonObjectGet(incremental,"enabled"))||jsonAsBool(jsonObjectGet(incremental,"enabled"));if(options.cacheDirectory==""&&cache!=""&&cacheEnabled)options.cacheDirectory=pathAt(base,cache);
  for(const path of configStrings(jsonObjectGet(config,"moduleRoots")))options.roots.push(pathAt(base,path));const aliases=jsonObjectGet(config,"aliases");for(const name of objectKeys(aliases))options.aliases.push(new PathAlias(name,pathAt(base,jsonAsString(jsonObjectGet(aliases,name)))));
  // #192: alias de las librerías de `dependencies`, sus linkFlags y paths de tsconfig.json.
- if(configPath!=""){for(const alias of dependencyAliases(config,base,options.aliases))options.aliases.push(alias);for(const flag of dependencyLinkFlags(config,base))links.push(flag);syncTsconfig(base,config);}
+ if(configPath!=""){for(const alias of dependencyAliases(config,base,options.aliases))options.aliases.push(alias);for(const flag of dependencyLinkFlags(config,base))links.push(flag);syncTsconfig(base,config);libraryRoots=dependencyRoots(config,base);}
  if(emitInterface){emitModuleInterface(entry,options);return;}
  // Fase 3 de #149: con una huella vigente no se analiza ni se compila.
  const compilerConfig=jsonObjectGet(config,"compiler");const outputConfig=jsonObjectGet(config,"output");
@@ -305,7 +317,7 @@ function main():void{
  }
  if(fingerprintPath!=""&&exists(fingerprintPath))remove(fingerprintPath);
  options.verbose=verbose||progressInteractive();progressStart(fromIr==""?"Analizando fuentes y verificando IR":"Leyendo IR");const ir:IrProject=fromIr==""?sourceIr(entry,options,verbose):parseIrProject(checkedRead(fromIr));if(emitIr!="")checkedWrite(emitIr,formatIr(ir)+"\n");if(check){progressSummary();return;}
- progressStart("Generando C++ desde IR verificado");const generated=generateCppFromIr(ir);const outConfig=jsonObjectGet(config,"output");const compiler=jsonObjectGet(config,"compiler");if(output==""){const configured=jsonAsString(jsonObjectGet(outConfig,"cpp"));output=(configured!=""?pathAt(base,configured):"build/"+stem(fromIr==""?entry:fromIr)+".cpp");}progressStart("Guardando resultados");checkedWrite(output,generated.cpp);
+ progressStart("Generando C++ desde IR verificado");const generated=generateCppWithLibraries(ir,libraryRoots);const outConfig=jsonObjectGet(config,"output");const compiler=jsonObjectGet(config,"compiler");if(output==""){const configured=jsonAsString(jsonObjectGet(outConfig,"cpp"));output=(configured!=""?pathAt(base,configured):"build/"+stem(fromIr==""?entry:fromIr)+".cpp");}progressStart("Guardando resultados");checkedWrite(output,generated.cpp);
  if(build||jsonAsBool(jsonObjectGet(compiler,"enabled"))){if(binary==""){const configured=jsonAsString(jsonObjectGet(outConfig,"binary"));binary=(configured!=""?pathAt(base,configured):output+".bin");}if(cxx=="")cxx=jsonAsString(jsonObjectGet(compiler,"command"));if(cxx=="")cxx=environment("CXX");if(cxx=="")cxx="g++";let compileFlags=configStrings(jsonObjectGet(compiler,"flags"));for(const flag of flags)compileFlags.push(flag);let linkFlags=configStrings(jsonObjectGet(compiler,"linkFlags"));for(const flag of links)linkFlags.push(flag);for(const library of configStrings(jsonObjectGet(config,"linkLibraries")))linkFlags.push("-l"+library);compileCpp(generated,output,binary,root,cxx,compileFlags,linkFlags,incrementalEnabled,options.cacheDirectory,unity);if(fingerprintPath!=""){let inputs:string[]=[];for(const file of analyzedFiles)inputs.push(file);if(configPath!="")inputs.push(configPath);for(let k:number=0;k+1<flags.length;k=k+1)if(flags[k]=="-include"&&exists(flags[k+1]))inputs.push(flags[k+1]);checkedWrite(fingerprintPath,fingerprintText(fingerprintKey,inputs,[output,binary]));}}
  progressSummary(output,(build||jsonAsBool(jsonObjectGet(compiler,"enabled")))?binary:"");if(run){let command:string[]=[normalizePath(binary)];for(const arg of programArgs)command.push(arg);exitProcess(execute(command));}
 }

@@ -9,22 +9,32 @@ export class RuntimeBackends {
 // Una unidad de compilación del modo por módulo (#178): `name` es el archivo
 // (.cpp) y `module` el archivo fuente cuyas funciones contiene ("" = main).
 export class IrCppUnit {
- name:string;module:string;text:string;
- constructor(name:string,module:string,text:string){this.name=name;this.module=module;this.text=text;}
+ // header (#192): cabecera que incluye la unidad: "program.hpp" o la de su librería.
+ name:string;module:string;text:string;header:string;
+ constructor(name:string,module:string,text:string,header:string="program.hpp"){this.name=name;this.module=module;this.text=text;this.header=header;}
+}
+// Cabecera propia de una librería instalada (#192, paso 3b): solo sus tipos,
+// prototipos y globales extern. Sus unidades la incluyen a ella y no a
+// program.hpp, así que su C++ no depende del resto del proyecto y sus .o se
+// pueden reutilizar entre compilaciones y proyectos.
+export class IrCppLibrary {
+ name:string;root:string;text:string;
+ constructor(name:string,root:string,text:string){this.name=name;this.root=root;this.text=text;}
 }
 export class IrCppResult {
  cpp:string;headers:string[];runtimeBackends:RuntimeBackends;capabilities:string[];
  // Modo por módulo (#178): cabecera común (tipos, prototipos y globales extern)
  // y una unidad por módulo fuente con los cuerpos de sus funciones; `cpp` sigue
  // siendo el programa entero en un único archivo (modo unity).
- header:string;units:IrCppUnit[];
+ header:string;units:IrCppUnit[];libraries:IrCppLibrary[];
  constructor(cpp:string,headers:string[],backends:RuntimeBackends,capabilities:string[]){
- this.cpp=cpp;this.headers=headers;this.runtimeBackends=backends;this.capabilities=capabilities;this.header="";this.units=[];}
+ this.cpp=cpp;this.headers=headers;this.runtimeBackends=backends;this.capabilities=capabilities;this.header="";this.units=[];this.libraries=[];}
 }
 export class HeaderSet {
- values:string[];
- constructor(){this.values=["runtime/ets_runtime.hpp","runtime/ets_ir.hpp"];}
- add(value:string):void{if(!this.values.includes(value))this.values.push(value);}
+ // log: cada add(), repetido o no, para saber qué cabeceras usa cada tipo o función.
+ values:string[];log:string[];
+ constructor(){this.values=["runtime/ets_runtime.hpp","runtime/ets_ir.hpp"];this.log=[];}
+ add(value:string):void{this.log.push(value);if(!this.values.includes(value))this.values.push(value);}
 }
 const recordKinds:string[]=["record","interface","intersection","variant"];
 const sumKinds:string[]=["sum","union"];
@@ -42,7 +52,10 @@ export class IrCppGenerator {
   // programa. Así una unidad no cambia porque otro módulo gane o pierda
   // funciones, y una librería genera el mismo C++ en cualquier proyecto.
   functionNames:string[];typeNames:string[];globalNames:string[];usedNames:Map<string,number>;
-  constructor(project: IrProject) { this.project=project;this.headers=new HeaderSet();this.backends=new RuntimeBackends();this.processIo=false;this.consuming=[];this.cppGenerators=[];this.layoutDone=[];this.layoutActive=[];this.layoutOutput=[];this.functionNames=[];this.typeNames=[];this.globalNames=[];this.usedNames = new Map<string,number>();this.assignNames(); }
+  // Paso 3b: carpetas de librerías y, para separarlas, qué cabeceras usó cada
+  // tipo emitido (layoutIds/layoutHeaders, paralelos a layoutOutput) y cada función.
+  libraryRoots:string[];layoutIds:number[];layoutHeaders:string[][];functionHeaders:string[][];
+  constructor(project: IrProject) { this.project=project;this.headers=new HeaderSet();this.backends=new RuntimeBackends();this.processIo=false;this.consuming=[];this.cppGenerators=[];this.layoutDone=[];this.layoutActive=[];this.layoutOutput=[];this.functionNames=[];this.typeNames=[];this.globalNames=[];this.usedNames = new Map<string,number>();this.libraryRoots=[];this.layoutIds=[];this.layoutHeaders=[];this.functionHeaders=[];this.assignNames(); }
   assignNames():void{
     // Acceso directo a los campos: copiar un IrFunction entero copiaría su cuerpo.
     for(let k:number=0;k<this.project.functions.length;k=k+1){
@@ -815,7 +828,7 @@ ${[...locals,...values,...awaited,...initialize,"goto b0;",...blocks].join("\n")
   layoutEmit(id:number):void {
     if(this.layoutDone.includes(id))return;
     if(this.layoutActive.includes(id))this.fail("Ciclo de layout por valor en tipos IR");
-    this.layoutActive.push(id);const s=this.shape(id);
+    this.layoutActive.push(id);const s=this.shape(id);const headerMark:number=this.headers.log.length;
     if(this.isInterface(id)){const text=`struct ${this.typeName(id)}{${this.interfaceVariant(id)} data;bool operator==(const ${this.typeName(id)}&)const=default;};`;this.layoutOutput.push(text);}
     else if(this.record(id)){for(const f of s.fields)this.layoutDependency(f);
 let _cppLoop36Result:string[]=[];
@@ -833,12 +846,16 @@ const t:number=_cppLoop65Input[_cppLoop65Index];
 _cppLoop65Result.push(this.cppTypeId(t));continue;
 }
 const text=`struct ${this.typeName(id)}{std::variant<${_cppLoop65Result.join(",")}> data;bool operator==(const ${this.typeName(id)}&)const=default;};`;this.layoutOutput.push(text);}
+    const usedHeaders:string[]=this.headers.log.slice(headerMark,this.headers.log.length);this.layoutIds.push(id);this.layoutHeaders.push(usedHeaders);
     this.layoutActive.pop();this.layoutDone.push(id);
   }
   declarations():string{
-    this.layoutDone=[];this.layoutActive=[];this.layoutOutput=[];
+    this.layoutDone=[];this.layoutActive=[];this.layoutOutput=[];this.layoutIds=[];this.layoutHeaders=[];
     for(let id:number=0;id<this.project.typeDefinitions.length;id=id+1)if(this.record(id)||sumKinds.includes(this.shape(id).kind))this.layoutEmit(id);
-    return this.layoutOutput.join("\n");
+    // Con guarda: la misma definición puede llegar por program.hpp y por la
+    // cabecera de una librería (los nombres son estables, la guarda también).
+    let guarded:string[]=[];for(let k:number=0;k<this.layoutOutput.length;k=k+1)guarded.push(typeGuard(this.typeName(this.layoutIds[k]),this.layoutOutput[k]));
+    return guarded.join("\n");
   }
   dispatch(receiver:number,concrete:number,name:string,signature:number):IrDispatch {
     for(const d of this.project.dispatches)if(d.interfaceType==receiver&&d.concreteType==concrete&&d.name==name&&d.signature==signature)return d;
@@ -1156,6 +1173,54 @@ if(i.op!="load"||i.result!=b.value||i.result<0||i.result>=f.values.length||f.val
   }
   return "{\n"+bridges+"{\n"+aliases+code.text+"\n}\n}";
  }
+  // Tipos alcanzables desde un conjunto de tipos (campos, argumentos, variantes).
+  reachType(id:number,out seen:Set<number>):void{
+    if(id<0||id>=this.project.typeDefinitions.length||seen.has(id))return;seen.add(id);
+    const s=this.shape(id);for(const t of s.fields)this.reachType(t,seen);for(const t of s.arguments)this.reachType(t,seen);for(const t of s.variants)this.reachType(t,seen);for(const t of s.methodTypes)this.reachType(t,seen);
+    if(s.discriminatorType>=0)this.reachType(s.discriminatorType,seen);
+  }
+  signatureTypes(k:number,out seen:Set<number>):void{
+    for(const t of this.project.functions[k].parameterTypes)this.reachType(t,seen);for(const t of this.project.functions[k].captureTypes)this.reachType(t,seen);
+    this.reachType(this.project.functions[k].returns,seen);this.reachType(this.project.functions[k].bodyReturns,seen);this.reachType(this.project.functions[k].receiverType,seen);
+  }
+  // Cabecera de una librería: lo que necesitan sus funciones y nada más del
+  // proyecto (salvo tipos que sus funciones usan, p. ej. implementaciones de
+  // una interfaz; entonces su texto cambia y la caché lo nota).
+  libraryHeader(libraryRoot:string,lead:string[],forwards:string[],printable:number[],printerPrototypes:string[],printers:string[],declarations:string):string{
+    let seen:Set<number> = new Set<number>();let callees:number[]=[];let own:number[]=[];let globalsUsed:number[]=[];let used:string[]=[];
+    for(let k:number=0;k<this.project.functions.length;k=k+1){
+      if(!this.project.functions[k].source.file.startsWith(libraryRoot+"/"))continue;
+      own.push(k);this.signatureTypes(k,seen);
+      for(const t of this.project.functions[k].values)this.reachType(t,seen);
+      for(const place of this.project.functions[k].places){this.reachType(place.typeId,seen);if(place.global>=0&&!globalsUsed.includes(place.global))globalsUsed.push(place.global);}
+      for(const block of this.project.functions[k].blocks)for(const i of block.instructions){
+        this.reachType(i.typeId,seen);
+        if(i.callee>=0&&!callees.includes(i.callee))callees.push(i.callee);
+        if(i.op=="interfaceCall"&&i.operands.length>0){const receiver:number=this.inner(this.project.functions[k].values[i.operands[0]]);for(const concrete of this.shape(receiver).variants){const d=this.dispatch(receiver,concrete,i.text,i.signature);if(d.callee>=0&&!callees.includes(d.callee))callees.push(d.callee);}}
+      }
+      if(k<this.functionHeaders.length)for(const h of this.functionHeaders[k])if(!used.includes(h))used.push(h);
+    }
+    for(const c of callees)this.signatureTypes(c,seen);
+    for(const g of globalsUsed)this.reachType(this.project.globals[g].typeId,seen);
+    // Prototipos (generarlos registra las cabeceras de sus tipos).
+    const mark:number=this.headers.log.length;let prototypes:string[]=[];
+    // Copia local de la función: pasar this.project.functions[k] a un método que
+    // modifica `this` da IR_INVALID (#195).
+    for(const k of own){const fn:IrFunction=this.project.functions[k];const text:string=this.signature(fn,k);prototypes.push(text+";");}
+    for(const k of callees)if(!own.includes(k)){const fn:IrFunction=this.project.functions[k];const text:string=this.signature(fn,k);prototypes.push(text+";");}
+    let externs:string[]=[];for(const g of globalsUsed)externs.push(`extern ets::ir::Slot<${this.cppTypeId(this.project.globals[g].typeId)}> ${this.globalName(g)};`);
+    for(let k:number=mark;k<this.headers.log.length;k=k+1)if(!used.includes(this.headers.log[k]))used.push(this.headers.log[k]);
+    let types:string[]=[];
+    for(let k:number=0;k<this.layoutIds.length;k=k+1)if(seen.has(this.layoutIds[k])){for(const h of this.layoutHeaders[k])if(!used.includes(h))used.push(h);types.push(typeGuard(this.typeName(this.layoutIds[k]),this.layoutOutput[k]));}
+    for(const a of this.project.annotations)if(["include","cpp_include"].includes(a.name)&&a.source.file.startsWith(libraryRoot+"/")&&a.arguments.length==1&&!used.includes(a.arguments[0]))used.push(a.arguments[0]);
+    let includes:string[]=["#include \"runtime/ets_runtime.hpp\"","#include \"runtime/ets_ir.hpp\""];let rest:string[]=[];
+    for(const h of used)if(h!="runtime/ets_runtime.hpp"&&h!="runtime/ets_ir.hpp"&&!rest.includes(h))rest.push(h);rest.sort();
+    for(const h of rest)includes.push(`#include ${quoteCpp(h)}`);
+    let forward:string[]=[];let printerDecls:string[]=[];let printerDefs:string[]=[];
+    for(let k:number=0;k<this.project.typeDefinitions.length;k=k+1)if(seen.has(k)&&(this.record(k)||sumKinds.includes(this.shape(k).kind)))forward.push(`struct ${this.typeName(k)};`);
+    for(let k:number=0;k<printable.length;k=k+1)if(seen.has(printable[k])){printerDecls.push(printerPrototypes[k]);printerDefs.push(printers[k]);}
+    return ["#pragma once",...lead,...includes,...forward,...printerDecls,...types,...printerDefs,...externs,...prototypes,""].join("\n");
+  }
   generate():IrCppResult {
     this.validateAnnotations();
     this.validateBoundary();
@@ -1189,7 +1254,7 @@ let _cppLoop41Result:string[]=[];
 const _cppLoop41Input:IrFunction[]=this.project.functions;
 for(let k:number=0;k<_cppLoop41Input.length;k=k+1){
 const f:IrFunction=_cppLoop41Input[k];
-_cppLoop41Result.push(this.functionBody(f,k));continue;
+const bodyMark:number=this.headers.log.length;_cppLoop41Result.push(this.functionBody(f,k));const bodyHeaders:string[]=this.headers.log.slice(bodyMark,this.headers.log.length);this.functionHeaders.push(bodyHeaders);continue;
 }
 const bodies=_cppLoop41Result;
     
@@ -1252,7 +1317,7 @@ let _cppLoop9Result:string[]=[];
 const _cppLoop9Input:number[]=printable;
 for(let _cppLoop9Index:number=0;_cppLoop9Index<_cppLoop9Input.length;_cppLoop9Index=_cppLoop9Index+1){
 const k:number=_cppLoop9Input[_cppLoop9Index];
-_cppLoop9Result.push(`inline std::ostream& operator<<(std::ostream& out,const ${this.typeName(k)}& value){${this.shape(k).kind=="variant"?`return out<<${quoteCpp(this.shape(k).tag)};`:`std::visit([&](const auto& x){if constexpr(requires{out<<x;})out<<x;else std::abort();},value.data);return out;`}}`);continue;
+_cppLoop9Result.push(`#ifndef ETS_PRINT_${this.typeName(k)}\n#define ETS_PRINT_${this.typeName(k)}\ninline std::ostream& operator<<(std::ostream& out,const ${this.typeName(k)}& value){${this.shape(k).kind=="variant"?`return out<<${quoteCpp(this.shape(k).tag)};`:`std::visit([&](const auto& x){if constexpr(requires{out<<x;})out<<x;else std::abort();},value.data);return out;`}}\n#endif`);continue;
 }
 const printers=_cppLoop9Result;
     
@@ -1291,14 +1356,32 @@ let capabilities:string[]=uniqueStrings(_cppLoop50Result);capabilities.sort();
       if(at<0){modules.push(file);let empty:string[]=[];grouped.push(empty);at=modules.length-1;}
       grouped[at].push(bodies[k]);
     }
+    // Paso 3b (#192): cabecera propia por librería.
+    let libraryHeaders:string[]=[];
+    for(let r:number=0;r<this.libraryRoots.length;r=r+1){
+      const libraryRoot:string=this.libraryRoots[r];let inside:boolean=false;
+      for(const file of modules)if(file.startsWith(libraryRoot+"/"))inside=true;
+      if(!inside){libraryHeaders.push("");continue;}
+      const headerName:string=libraryHeaderName(libraryRoot);libraryHeaders.push(headerName);
+      const text:string=this.libraryHeader(libraryRoot,lead,forwards,printable,printerPrototypes,printers,declarations);
+      result.libraries.push(new IrCppLibrary(headerName,libraryRoot,text));
+    }
     let names:string[]=["__main"];
     for(let m:number=0;m<modules.length;m=m+1){
       let name:string=unitName(modules[m]);if(names.includes(name)){let n:number=2;while(names.includes(name+"-"+numberToString(n)))n=n+1;name=name+"-"+numberToString(n);}names.push(name);
-      result.units.push(new IrCppUnit(name+".cpp",modules[m],["// Generated from verified ets-ir-2 (unidad por módulo).","#include \"program.hpp\"",...grouped[m],""].join("\n")));
+      let header:string="program.hpp";for(let r:number=0;r<this.libraryRoots.length;r=r+1)if(libraryHeaders[r]!=""&&modules[m].startsWith(this.libraryRoots[r]+"/"))header=libraryHeaders[r];
+      result.units.push(new IrCppUnit(name+".cpp",modules[m],["// Generated from verified ets-ir-2 (unidad por módulo).","#include \""+header+"\"",...grouped[m],""].join("\n"),header));
     }
     result.units.push(new IrCppUnit("__main.cpp","",["// Generated from verified ets-ir-2 (globales y main).","#include \"program.hpp\"",...globals,main,""].join("\n")));
     return result;
   }
+}
+function typeGuard(name:string,text:string):string{return "#ifndef ETS_TYPE_"+name+"\n#define ETS_TYPE_"+name+"\n"+text+"\n#endif";}
+// lib_<carpeta>_<hash8 de la ruta>.hpp
+function libraryHeaderName(libraryRoot:string):string{
+  const base:string=libraryRoot.slice(libraryRoot.lastIndexOf("/")+1,libraryRoot.length);
+  let cleaned:string="";for(let k:number=0;k<base.length;k=k+1){const c:number=base.charCodeAt(k);cleaned=cleaned+((c>=48&&c<=57)||(c>=65&&c<=90)||(c>=97&&c<=122)?base.slice(k,k+1):"_");}
+  return "lib_"+cleaned+"_"+contentHash(libraryRoot).slice(0,8)+".hpp";
 }
 // Nombre de archivo de la unidad de un módulo: su ruta sin extensión, con '/'
 // convertido en '_' y solo [A-Za-z0-9_-] (p. ej. "checker_safety").
@@ -1311,3 +1394,5 @@ function unitName(file:string):string{
   return cleaned==""?"module":cleaned;
 }
 export function generateCppFromIr(project:IrProject):IrCppResult{let generator=new IrCppGenerator(project);return generator.generate();}
+// Con las carpetas (canónicas) de las librerías instaladas (#192, paso 3b).
+export function generateCppWithLibraries(project:IrProject,libraryRoots:string[]):IrCppResult{let generator=new IrCppGenerator(project);generator.libraryRoots=libraryRoots;return generator.generate();}

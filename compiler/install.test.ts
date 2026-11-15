@@ -300,7 +300,13 @@ test("install builds compiler/ with the seed and publishes that executable",asyn
    const app=join(libs,"app");p=etsc(libs,"init","app");assert.equal(p.status,0,p.stderr);
    writeFileSync(join(app,"src/main.ts"),'import { saludar } from "saludos/saludo";\nimport { saludar as otro } from "otra/saludo";\nprint(saludar("mundo"));\nprint(otro("MUNDO"));\n');
    for(const name of ["saludos","otra"]){p=etsc(app,"install","file://"+join(libs,name));assert.equal(p.status,0,p.stderr+p.stdout);}
-   p=etsc(app,"run","--no-progress");assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"Hola, MUNDO\nHola, mundo\n");}
+   p=etsc(app,"run","--no-progress");assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"Hola, MUNDO\nHola, mundo\n");
+   // Paso 3b: cada librería tiene su cabecera y sus .o en <librería>/.estatic-cache/objects;
+   // cambiar los tipos del proyecto no los recompila.
+   const libObjects=join(app,".build/deps/saludos@v0.1.0/.estatic-cache/objects"),stamp=()=>readdirSync(libObjects).sort().map(f=>f+":"+statSync(join(libObjects,f)).mtimeMs).join(",");
+   const first=stamp();assert.ok(first.includes(".o"),first);
+   writeFileSync(join(app,"src/main.ts"),"class Punto { x: number = 1; }\n"+readFileSync(join(app,"src/main.ts"),"utf8")+"print(new Punto().x);\n");
+   p=etsc(app,"run","--no-progress");assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"Hola, MUNDO\nHola, mundo\n1\n");assert.equal(stamp(),first);}
    const source=join(dir,"node-streams.ets"),app=join(dir,"node-streams-app");
    writeFileSync(source,`process.stdin.on("data",(chunk:string):void=>{process.stdout.write("parent:"+chunk);});
 const childArgs:string[]=["-c","printf child-out; printf child-err >&2; cat"];
