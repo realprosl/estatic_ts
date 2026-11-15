@@ -227,7 +227,7 @@ const safetyInvalid:[string,string,RegExp][]=[
  ['doubleMove',box+'let p:ptr<Box> = new Box(); const q=move(p);const r=move(p);',/E4102/],
  ['copyOwner',box+'let p:ptr<Box> = new Box(); const q=p;',/E4101/],
  ['movePlain','let n=1;move(n);',/E4100/],
- ['concatOptional','let m=new Map<number,string>(); const s:string="x"+m.get(1);',/E3001.*Optional.*\?\?/s],
+ ['concatOptional','let m=new Map<number,string>(); const s:string="x"+m.get(1);',/E3001.*undefined.*\?\?/s],
  ['concatArray','const a:number[]=[1]; const s:string="x"+a;',/E3001.*concatenar/],
  ['concatClass','class K{v:number=1;} const k=new K(); const s:string=k+"x";',/E3001.*concatenar/],
  ['moveBoolean','let b=true;const c=move(b);',/E4100/],
@@ -849,7 +849,7 @@ test('native Map.get returns Optional<T> and never a T|void union',()=>{
   assert.deepEqual(types(g,"MemberCallExpression"),["Optional<number>"]);
 });
 test('native Map.get result cannot be used as a bare value',()=>{
-  error('let m=new Map<string,number>();const v:number = m.get("a");',/Optional/);
+  error('let m=new Map<string,number>();const v:number = m.get("a");',/number \| undefined/);
 });
 test('native diagnostics name nominal types instead of leaking internal ids',()=>{
   const g=error('class Point{v:number;constructor(v:number){this.v=v;}} function f(x:Point):number{return x.zzz;}',/El tipo 'Point' no declara el miembro 'zzz'/);

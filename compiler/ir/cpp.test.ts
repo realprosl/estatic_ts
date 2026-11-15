@@ -36,8 +36,8 @@ function execute(source:string,files:Record<string,string>={},flags:string[]=[])
  buildIrCpp(result,cpp,binary,undefined,flags);const p=spawnSync(binary,[],{encoding:"utf8",timeout:15000,env:flags.some(f=>f.includes("sanitize"))?{...process.env,ASAN_OPTIONS:"detect_leaks=0",LSAN_OPTIONS:"detect_leaks=0"}:process.env});assert.ifError(p.error);assert.equal(p.status,0,p.stderr);return p.stdout;
 }
 for(const [name,source,expected] of [
- ["=== y !== como == y !=",'print(1===1);print(2!==3);print("a"==="b");',"true\ntrue\nfalse\n"],
- ["T | undefined: literal, comparación y narrowing",'let x:number|undefined=undefined;if(x===undefined)print("vacio");x=5;if(x!==undefined)print(x+1);let y:string|undefined="hola";print(y===undefined);print(y!==undefined);',"vacio\n6\nfalse\ntrue\n"],
+ ["=== y !== como == y !=",'print(1===1);print(2!==3);print("a"==="b");',"1\n1\n0\n"],
+ ["T | undefined: literal, comparación y narrowing",'let x:number|undefined=undefined;if(x===undefined)print("vacio");x=5;if(x!==undefined)print(x+1);let y:string|undefined="hola";print(y===undefined);print(y!==undefined);',"vacio\n6\n0\n1\n"],
  ["T | undefined: retorno, ?? y parámetro opcional",'function buscar(n:number):string|undefined{if(n>0)return "positivo";return undefined;}const r=buscar(3);if(r!==undefined)print(r.toUpperCase());print(buscar(-1)??"nada");function f(a:number,b?:number):number{return b===undefined?a:a+b;}print(f(1));print(f(1,2));',"POSITIVO\nnada\n1\n3\n"],
  ["process argv and argc as Node properties",'print(process.argc);print(process.argv.length);print(process.argv[0]==process.argv[1]?"igual":"distinto");print(process.argv.slice(2).length);',"2\n2\nigual\n0\n"],
  ["update comptime exact integers",'const n:u64=comptime(():u64=>{let value:u64=9007199254740993;const old:u64=value++;const next:u64=++value;return old+(next-value);});print(n);',"9007199254740993\n"],

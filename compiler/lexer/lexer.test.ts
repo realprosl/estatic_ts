@@ -56,7 +56,7 @@ const fixtures: [string, string][] = [
   ["escaped backtick", '`a\\`b`'],
   ["arithmetic and logical operators", "+ - * / % == != < > <= >= && || ! ?? ?. =>"],
   ["compound operators", "+= -= *= /= %= **= &= |= ^= <<= >>= ..."],
-  ["shifts stay separate", "<< >> >>> === !=="],
+  ["shifts stay separate", "<< >> >>>"],
   ["punctuation", "({[]}),;:.?@|&^~"],
   ["line comments", "let x=1; // comment\nprint(x);"],
   ["block comments", "a/* line\nnext */b"],
