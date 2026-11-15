@@ -134,8 +134,16 @@ jobs:
     # Los binarios NO van a main: se publican en la rama `prebuilt`, que se
     # sobrescribe con un único commit (force-push) para no acumular historial.
     # native-cpp/fetch-prebuilt.sh la descarga con --depth 1.
+    # También desde las PRs del propio repositorio (#201): se guardan bajo la
+    # huella de sus fuentes, así al fusionar ya hay binario para la versión
+    # nueva. Solo main actualiza además <plataforma>/ (el «último»).
     needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name != 'pull_request' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+    concurrency:
+      group: prebuilt-publish
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -152,11 +160,24 @@ jobs:
           if git fetch --depth 1 origin refs/heads/prebuilt 2>/dev/null; then
             git archive FETCH_HEAD | tar -x -C "$tree"
           fi
+          keep=12
           for d in "$RUNNER_TEMP"/seeds/seed-*; do
             platform="${d##*/seed-}"
-            rm -rf "$tree/$platform"
-            mkdir -p "$tree/$platform"
-            cp -R "$d"/. "$tree/$platform/"
+            if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+              rm -rf "$tree/$platform"
+              mkdir -p "$tree/$platform"
+              cp -R "$d"/. "$tree/$platform/"
+            fi
+            # Por huella de fuentes (la del compilador): fetch-prebuilt.sh baja
+            # la que corresponde a cada versión. Se conservan las $keep últimas.
+            inputs="$(cat "$d/compiler/inputs.sha256")"
+            store="$tree/by-inputs/$platform"; mkdir -p "$store"
+            rm -rf "$store/$inputs"; mkdir -p "$store/$inputs"; cp -R "$d"/. "$store/$inputs/"
+            { echo "$inputs"; grep -vx "$inputs" "$store/index.txt" 2>/dev/null || true; } | head -n "$keep" > "$store/index.tmp"
+            mv "$store/index.tmp" "$store/index.txt"
+            for old in "$store"/*/; do
+              old="$(basename "$old")"; grep -qx "$old" "$store/index.txt" || rm -rf "$store/$old"
+            done
           done
           rm -f "$tree/README.md"
           {
@@ -166,7 +187,9 @@ jobs:
             echo "No se fusiona con main: se sobrescribe con un único commit en cada actualización."
             echo "\`native-cpp/fetch-prebuilt.sh\` (llamado por \`install.sh\`) la descarga."
             echo
-            for p in "$tree"/*/; do p="$(basename "$p")"; echo "- \`$p\`: $(ls "$tree/$p" | tr '\n' ' ')"; done
+            for p in "$tree"/*/; do p="$(basename "$p")"; [ "$p" = by-inputs ] && continue; echo "- \`$p\`: $(ls "$tree/$p" | tr '\n' ' ')"; done
+            echo
+            echo "\`by-inputs/<plataforma>/<huella>/\`: las últimas compilaciones por huella de fuentes (más reciente primero en index.txt)."
           } > "$tree/README.md"
           find "$tree" -type f -name etsc -exec chmod +x {} +
           git config user.name 'github-actions[bot]'
@@ -176,6 +199,6 @@ jobs:
           git clean -fdxq
           cp -R "$tree"/. .
           git add -A .
-          git commit -q -m "prebuilt: semilla y compilador para main@${GITHUB_SHA::7}"
+          git commit -q -m "prebuilt: semilla y compilador para ${GITHUB_REF_NAME}@${GITHUB_SHA::7}"
           git push --force origin HEAD:refs/heads/prebuilt
           echo "Rama prebuilt actualizada para main@${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"

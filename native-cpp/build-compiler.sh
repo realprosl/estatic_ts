@@ -46,18 +46,13 @@ arch="$(uname -m)"; [[ $arch == aarch64 ]] && arch=arm64
 platform="$os-$arch"
 prebuilt="$seed_dir/prebuilt/$platform/compiler"
 
-sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
-# Todo lo que determina el binario: la semilla que lo genera, las fuentes ETS y
-# nativas de compiler/ y el runtime que incluye.
-compiler_inputs() {
-  (cd "$root" && find native-cpp/compiler/unity.cpp runtime compiler \
-      -type f \( -name '*.ets' -o -name '*.hpp' -o -name '*.h' -o -name '*.cpp' -o -name '*.c' \) \
-      | LC_ALL=C sort | while IFS= read -r f; do sha256 "$f"; done) | sha256 | cut -d' ' -f1
-}
+# Todo lo que determina el binario: native-cpp/prebuilt-inputs.sh.
+source "$seed_dir/prebuilt-inputs.sh"
+sha256() { prebuilt_sha256 "$@"; }
 
 mkdir -p "$(dirname "$out")"
 if ((!force)) && [[ -f $prebuilt/inputs.sha256 ]]; then
-  if [[ "$(cat "$prebuilt/inputs.sha256")" == "$(compiler_inputs)" ]] \
+  if [[ "$(cat "$prebuilt/inputs.sha256")" == "$(compiler_inputs "$root")" ]] \
      && "$prebuilt/etsc" --version >/dev/null 2>&1; then
     cp "$prebuilt/etsc" "$out"; chmod +x "$out"
     etsc_info "✓ Compilador precompilado ($platform) · --force-compiler para recompilarlo"
@@ -90,6 +85,6 @@ if ((update_prebuilt)); then
   mkdir -p "$prebuilt"
   cp "$work/etsc" "$prebuilt/etsc"
   strip "$prebuilt/etsc" 2>/dev/null || true
-  compiler_inputs > "$prebuilt/inputs.sha256"
+  compiler_inputs "$root" > "$prebuilt/inputs.sha256"
   etsc_info "Compilador precompilado actualizado en native-cpp/prebuilt/$platform/compiler"
 fi

@@ -102,7 +102,14 @@ para no acumular binarios en el historial, e `install.sh` la descarga
 
 `--force` fuerza las dos. Cada precompilado solo se usa si su huella (sha256 de
 sus fuentes) coincide con el checkout; si no hay para la plataforma o está
-desfasado, se compila automáticamente. Son binarios autocontenidos: estáticos
+desfasado, se compila automáticamente.
+
+La rama guarda, además del último `main`, las **12 últimas compilaciones por
+huella de fuentes** (`by-inputs/<plataforma>/<huella>/`), y el CI las publica ya
+desde cada PR. `fetch-prebuilt.sh` calcula la huella del checkout
+(`native-cpp/prebuilt-inputs.sh`) y baja justo esa: instalar o hacer
+`etsc update` a una versión recién fusionada, o a una de las anteriores, usa su
+binario sin compilar. Son binarios autocontenidos: estáticos
 en Linux y, en macOS, sin más dependencias que las del sistema.
 
 En el caso normal no hace falta la semilla: `install.sh` descarga primero
