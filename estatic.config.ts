@@ -1,7 +1,7 @@
 import type { EstaticConfig } from "./src/config/project-config.ts";
 
 export default {
-  entry: "examples/modules/main.ets",
+  entry: "examples/modules/main.ts",
   moduleRoots: ["examples/modules"],
   aliases: { "@modules": "examples/modules" },
   output: { cpp: "build/configured-app.cpp", binary: "build/configured-app" },

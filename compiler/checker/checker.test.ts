@@ -11,7 +11,7 @@ import {TypeChecker} from "../../src/semantic/type-checker.ts";
 import {DiagnosticError} from "../../src/core/diagnostic.ts";
 import {buildLoader,root} from "../modules/build.ts";
 const directory=mkdtempSync(join(root,"build-checker-test-")); let binary:string;
-before(async()=>{binary=await buildLoader(join(directory,"binary"),"compiler/checker/demo.ets",true);});
+before(async()=>{binary=await buildLoader(join(directory,"binary"),"compiler/checker/demo.ts",true);});
 after(()=>rmSync(directory,{recursive:true,force:true}));
 function fixture(source:string,files:Record<string,string>={}){const dir=mkdtempSync(join(directory,"project-"));for(const[name,text]of Object.entries({"main.ets":source,...files})){mkdirSync(dirname(join(dir,name)),{recursive:true});writeFileSync(join(dir,name),text);}return{entry:join(dir,"main.ets"),cache:join(dir,"cache")};}
 function run(f:ReturnType<typeof fixture>,status=0){const p=spawnSync(binary,[f.entry,"--cache",f.cache],{encoding:"utf8",timeout:60000,maxBuffer:64*1024*1024});assert.ifError(p.error);assert.equal(p.status,status,p.stderr+p.stdout.slice(-3000));if(process.env.ESTATIC_TEST_COMPARE_JOBS==="1") {
@@ -138,7 +138,7 @@ test('checker: type-only typeof query',()=>check('import type {f} from "./lib"; 
 test('checker: upstream errors short circuit type tables',()=>{for(const source of ['import "./absent";','const x=;','print(missing);']){const g=run(fixture(source),1);assert.equal(g.files.length,0);assert.equal(g.symbolTypes.length,0);assert.ok(g.diagnostics.every((d:any)=>d.phase!=='checker'));}});
 test('checker: Unicode CRLF positions survive',()=>{const g=error('const s="🙂";\r\nconst n:number="x";',/incompatible/);assert.equal(g.diagnostics[0].line,2);assert.equal(g.diagnostics[0].column,16);assert.equal(g.diagnostics[0].offset,'const s="🙂";\r\nconst n:number='.length);});
 test('checker: cold/warm processes preserve complete typed output',()=>{const f=fixture('import {f} from "./lib"; const n=f(1);',{'lib.ets':'export function f(n:number):number{return n+1;}'});const first=run(f);const second=run(f);assert.deepEqual(second,first);writeFileSync(join(dirname(f.entry),'lib.ets'),'export function f(n:number):string{return "x";}');const third=run(f);assert.deepEqual(types(third,'CallExpression'),['string']);});
-test('checker: real hello example checks natively',()=>{const g=check(readFileSync(join(root,'examples/hello.ets'),'utf8'));assert.ok(types(g,'CallExpression').includes('number'));});
+test('checker: real hello example checks natively',()=>{const g=check(readFileSync(join(root,'examples/hello.ts'),'utf8'));assert.ok(types(g,'CallExpression').includes('number'));});
 
 test('checker: interface construction is stopped by binding',()=>{const g=run(fixture('interface I{x:number;} new I();'),1);assert.equal(g.diagnostics[0].phase,'binder');assert.equal(g.files.length,0);});
 
@@ -1925,14 +1925,14 @@ test('frontend closure etsgen overload publication must be uniform',()=>error('@
 test('frontend closure etsgen publishes separate lexical order ranges',()=>{const g=check('@etsgen function make():string{return "const x=1;print(x);";}make();');const f=g.files[0];assert.equal(f.analysisRanges.length,f.ast.nodes.length);assert.ok(f.analysisRanges.some((r:number[])=>r[0]>=0&&r[1]>r[0]));});
 
 test('frontend closure checks every repository example with native module loading',t=>{
- const files=readdirSync(join(root,'examples'),{recursive:true}).map(String).filter(f=>f.endsWith('.ets')).sort();let accepted=0;
+ const files=readdirSync(join(root,'examples'),{recursive:true}).map(String).filter(f=>f.endsWith('.ts')&&!f.startsWith('notification-app/')).sort();let accepted=0;
  for(const file of files){
-  const invalid=file==='expected-errors/private-bad.ets';
+  const invalid=file==='expected-errors/private-bad.ts';
   const g=run({entry:join(root,'examples',file),cache:join(directory,'example-cache')},invalid?1:0);
   if(invalid)assert.ok(g.diagnostics.some((d:any)=>d.phase==='checker'&&/privad/.test(d.message)),file);
   else {assert.deepEqual(g.diagnostics,[],file);accepted++;}
  }
- t.diagnostic(`${accepted}/${files.length} examples accepted; expected-errors/private-bad.ets rejected for private access`);
+ t.diagnostic(`${accepted}/${files.length} examples accepted; expected-errors/private-bad.ts rejected for private access`);
 });
 test('frontend closure pack overload ranking includes fixed parameters',()=>{
  const g=check('function f<...Ts>(x:number,...values:Ts):number{return 1;}function f<T>(...values:T[]):string{return "rest";}const n:number=f(1,2);');

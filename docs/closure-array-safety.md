@@ -46,7 +46,7 @@ válido tras retornar su fábrica.
 Ejemplo reproducible (salida `8`, `8`, en líneas separadas):
 
 ```bash
-node --experimental-strip-types src/cli.ts examples/closure-array-safety/main.ets -o build/closure-array-safety.cpp
+node --experimental-strip-types src/cli.ts examples/closure-array-safety/main.ts -o build/closure-array-safety.cpp
 g++ -std=c++20 -O2 -pthread -fno-exceptions -I. build/closure-array-safety.cpp -o build/closure-array-safety
 ./build/closure-array-safety
 ```

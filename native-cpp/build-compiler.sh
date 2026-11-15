@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Construye el compilador de compiler/ (generación 2): la semilla (un etsc
-# completo) analiza compiler/driver/main.ets y compila el C++ resultante. Es el ÚNICO sitio que
+# completo) analiza compiler/driver/main.ts y compila el C++ resultante. Es el ÚNICO sitio que
 # lo construye; lo usan install.sh y el CI.
 #
 # Uso: native-cpp/build-compiler.sh --seed DIR --out BINARIO
@@ -73,7 +73,7 @@ fi
 export ESTC_ROOT="${ESTC_ROOT:-$root}"
 # Análisis y compilación C++ en pasos separados: así no están los dos en memoria
 # a la vez (el análisis de compiler/ ocupa varios GB).
-etsc_spin "Semilla · analizar compiler/" "$seed/etsc" "$root/compiler/driver/main.ets" \
+etsc_spin "Semilla · analizar compiler/" "$seed/etsc" "$root/compiler/driver/main.ts" \
   --check --emit-ir "$work/driver.ir.json" --no-progress
 etsc_spin "Semilla · construir el compilador" "$seed/etsc" \
   --from-ir "$work/driver.ir.json" --build -o "$work/etsc.cpp" --binary "$work/etsc" \

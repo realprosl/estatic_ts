@@ -55,7 +55,7 @@ crea un parser nuevo; una instancia de `Parser` se usa para un único parseo.
 El AST es una arena: cada `AstNode` tiene `kind`, span, atributos escalares y
 aristas `{role,node}` hacia índices de la misma arena. No utiliza fragmentos de
 código ni referencias circulares. El vocabulario cerrado está en
-[`ast-schema.ets`](./ast-schema.ets): `AstNode.kind` usa `NodeKind`,
+[`ast-schema.ts`](./ast-schema.ts): `AstNode.kind` usa `NodeKind`,
 `AstEdge.role` usa `EdgeRole` y `AstAttribute.name` usa `AttributeKind`.
 Los constructores y accesores reciben esos enums, por ejemplo:
 

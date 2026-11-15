@@ -10,7 +10,7 @@ del dialecto Ts2cpp para validar la pipeline completa (analyze + codegen
   isPrime, gcd, pow). Demuestra `@comptime`, recursion comptime, y bucles
   comptime.
 
-- **`app_basic/`** — App que importa `comptime_lib/math.ets` y usa
+- **`app_basic/`** — App que importa `comptime_lib/math.ts` y usa
   cross-module `@comptime`. Demuestra comptime cross-module, captura
   de globals, y `comptime()` inline.
 

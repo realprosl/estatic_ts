@@ -2,7 +2,7 @@
 
 > ℹ️ **Versión verídica.** Cada ejemplo de este tutorial es un test e2e
 > real que se compila, ejecuta y produce el output indicado. El código
-> vive en `test/e2e/<categoría>/<nombre>/source.ets` y se ejecuta
+> vive en `test/e2e/<categoría>/<nombre>/source.ts` y se ejecuta
 > automáticamente con `npm run test:e2e`. Si un ejemplo de este
 > tutorial falla, el test correspondiente también falla.
 >
@@ -707,11 +707,11 @@ y se compilan a corutinas C++20 sobre el event loop. Sin embargo,
 proporcionan un roundtrip determinista y libre de timing.
 
 > **Estado V30.6.0:** la API async (`readTcp`/`writeTcp` en
-> `examples/http-server.ets`, `examples/tls-server.ets`) **funciona y
+> `examples/http-server.ts`, `examples/tls-server.ts`) **funciona y
 > compila**, pero los tests e2e verifican la API sync. Ambos
-> coexisten; los ejemplos `examples/*.ets` muestran el uso async
-> (ver `examples/http-server.ets`, `examples/tls-server.ets`,
-> `examples/async-await.ets`).
+> coexisten; los ejemplos `examples/*.ts` muestran el uso async
+> (ver `examples/http-server.ts`, `examples/tls-server.ts`,
+> `examples/async-await.ts`).
 
 **TCP básico** ([`test/e2e/networking/tcp-port-error/`](test/e2e/networking/tcp-port-error/)):
 
@@ -818,9 +818,9 @@ main();
 Para ver el uso async real (servidor que acepta conexiones, escribe
 respuesta, etc.) revisa:
 
-- `examples/http-server.ets` — servidor HTTP estilo Express (33 líneas, V30.3+).
-- `examples/tls-server.ets` — servidor TLS sobre TCP (V30.5).
-- `examples/fs-demo.ets` — `watchFs` y async/await sobre libuv.
+- `examples/http-server.ts` — servidor HTTP estilo Express (33 líneas, V30.3+).
+- `examples/tls-server.ts` — servidor TLS sobre TCP (V30.5).
+- `examples/fs-demo.ts` — `watchFs` y async/await sobre libuv.
 
 Estos ejemplos **funcionan y se compilan** (los pasa el `test/runner.ts`),
 aunque no tienen test e2e automatizado que verifique el roundtrip.

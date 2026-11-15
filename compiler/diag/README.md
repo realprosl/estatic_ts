@@ -7,7 +7,7 @@ templates también ocurre en ETS; Node no tokeniza ni construye ASTs.
 ```bash
 npm run bootstrap:frontend
 npm run bootstrap:frontend -- 'const greeting=`Hola ${name}, total=${1+2}`;'
-npm run bootstrap:frontend -- --file examples/todo-project/main.ets
+npm run bootstrap:frontend -- --file examples/todo-project/main.ts
 npm run test:bootstrap:frontend
 ```
 

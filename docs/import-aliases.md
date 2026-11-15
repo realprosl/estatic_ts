@@ -99,4 +99,4 @@ C++20 enlazando unidades separadas. Cubren aliases, namespaces, tipos, genérico
 sobrecargas, parámetros, propiedades, etiquetas, sombras, errores, caché,
 expansiones hijas y referencias explícitas al módulo de definición.
 
-Ejemplo: `examples/imports-as/main.ets`, salida `8`, `8`, `7`.
+Ejemplo: `examples/imports-as/main.ts`, salida `8`, `8`, `7`.

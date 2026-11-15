@@ -1,7 +1,7 @@
 # Evaluación comptime del frontend nativo
 
 El checker valida tipos, efectos y seguridad antes de evaluar constantes. El
-intérprete `comptime.ets` consume el AST expandido y su binding; `constant.ets`
+intérprete `comptime.ts` consume el AST expandido y su binding; `constant.ts`
 implementa los valores y operaciones numéricas. El driver no delega esta fase
 al evaluador TypeScript. Esto no conecta todavía las tablas al backend.
 

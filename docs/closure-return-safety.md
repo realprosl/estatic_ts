@@ -63,7 +63,7 @@ comprobar que siguen funcionando mutaciones locales y lectores devueltos.
 Ejemplo reproducible (salida `1`, `2`, `2`, `8`, `8`, en líneas separadas):
 
 ```bash
-node --experimental-strip-types src/cli.ts examples/closure-return-safety/main.ets -o build/closure-return-safety.cpp
+node --experimental-strip-types src/cli.ts examples/closure-return-safety/main.ts -o build/closure-return-safety.cpp
 g++ -std=c++20 -O2 -pthread -fno-exceptions -I. build/closure-return-safety.cpp -o build/closure-return-safety
 ./build/closure-return-safety
 ```

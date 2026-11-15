@@ -134,5 +134,5 @@ Estas muestras no constituyen una equivalencia formal para cualquier entrada.
   directo se distinguen de la sintaxis y del contrato público vigente.
 
 La aceptación semántica completa se prueba separadamente con el checker: el
-corpus actual acepta 130 ejemplos y rechaza expected-errors/private-bad.ets por
+corpus actual acepta 130 ejemplos y rechaza expected-errors/private-bad.ts por
 acceso privado. El estado de cierre y sus obligaciones están en [PENDING.md](PENDING.md).

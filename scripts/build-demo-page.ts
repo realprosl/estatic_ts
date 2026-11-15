@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Genera una página HTML con todos los ejemplos del dialecto como demos.
-// Cada demo muestra el archivo .ets y su salida golden (si existe).
+// Cada demo muestra el archivo .ts y su salida golden (si existe).
 // Estilo minimalista con CSS embebido (sin deps).
 //
 // Uso: node scripts/build-demo-page.ts [salida.html]
@@ -89,7 +89,7 @@ interface Demo {
 }
 
 async function loadDemo(name: string, category: string, icon: string): Promise<Demo> {
-  const sourcePath = join("examples", `${name}.ets`);
+  const sourcePath = join("examples", `${name}.ts`);
   const goldenPath = join("test", "golden", `${name}.expected.txt`);
   const source = await readFile(sourcePath, "utf8");
   let output: string | null = null;
@@ -141,7 +141,7 @@ async function main(): Promise<void> {
 
   // Detecta demos huérfanos (no listados en categorías) para mostrarlos al final.
   const listedNames = new Set(demos.map(d => d.name));
-  const allExamples = (await readdir("examples")).filter(f => f.endsWith(".ets")).map(f => basename(f, ".ets"));
+  const allExamples = (await readdir("examples")).filter(f => f.endsWith(".ts")).map(f => basename(f, ".ts"));
   const orphans = allExamples.filter(name => !listedNames.has(name));
   if (orphans.length > 0) {
     console.warn(`⚠ ${orphans.length} demo(s) no listados en CATEGORIES:`);
@@ -313,7 +313,7 @@ footer a { color: var(--accent); }
 <body>
 <header class="banner">
   <h1>Estatic TS → C++ · Demos</h1>
-  <p>${demos.length} ejemplos del dialecto, organizados por categoría. Cada demo incluye el código fuente (en <code>.ets</code>) y la salida esperada (golden file). Los demos marcados con <code>⚠ sin golden</code> abren puertos de red o tienen salida no determinista; verifica manualmente.</p>
+  <p>${demos.length} ejemplos del dialecto, organizados por categoría. Cada demo incluye el código fuente (en <code>.ts</code>) y la salida esperada (golden file). Los demos marcados con <code>⚠ sin golden</code> abren puertos de red o tienen salida no determinista; verifica manualmente.</p>
 </header>
 <nav class="toc">
   ${CATEGORIES.filter(c => c.examples.some(n => demos.find(d => d.name === n))).map(c => `<a href="#cat-${c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}">${c.icon} ${escapeHtml(c.name)}</a>`).join("\n  ")}

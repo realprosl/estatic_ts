@@ -14,7 +14,7 @@ restricciones explícitas y obligaciones pendientes.
 | Obligaciones de referencia | 83/83; salida 0 |
 | Gramática | 75/75 contratos; cero formas eliminadas |
 | Corpus físico de sintaxis | 132/132 archivos aceptados por cada pipeline |
-| Corpus semántico del checker | 131/132 aceptados; `expected-errors/private-bad.ets` rechazado por acceso privado |
+| Corpus semántico del checker | 131/132 aceptados; `expected-errors/private-bad.ts` rechazado por acceso privado |
 | Autoanálisis del proyecto checker | `success: true`, 23 módulos, 6594 símbolos, 75596 nodos tipados, cero diagnósticos |
 | Catálogo de builtins | 216 contratos sincronizados |
 | Suite global `npm test` | No repetida en esta revisión |
@@ -70,13 +70,13 @@ propias fuentes.
 
 | Capa | Código | Salida/contrato observado |
 |---|---|---|
-| Lexer | `lexer/lexer.ets` | Tokens con `kind` y `lexeme` string, posiciones UTF-16 y diagnósticos; recorrido interno en bytes UTF-8 |
-| Parser | `parser/parser.ets`, `parser/ast-schema.ets` | Arena `nodes[]`; `NodeKind`, `EdgeRole` y `AttributeKind` numéricos; atributos con valores string y enlaces por índice |
-| Frontend por archivo | `diag/source.ets` | `SourceResult`: archivo, tokens, AST y diagnósticos |
-| Cargador y caché | `modules/loader.ets`, `syntax-cache.ets` | Grafo de archivos y dependencias; caché persistente de sintaxis, no de semántica |
-| Expansión | `checker/expansion.ets` | Copia del grafo con AST generado, higiene y procedencia; nuevos ciclos de binding/checking |
-| Binder | `binder/binder.ets` | Ámbitos, símbolos, referencias, exports y tablas de padres/declaraciones por archivo |
-| Checker | `checker/checker.ets`, `model.ets` | Tipos canónicos string y tablas laterales de miembros, firmas, conversiones, argumentos y constantes |
+| Lexer | `lexer/lexer.ts` | Tokens con `kind` y `lexeme` string, posiciones UTF-16 y diagnósticos; recorrido interno en bytes UTF-8 |
+| Parser | `parser/parser.ts`, `parser/ast-schema.ts` | Arena `nodes[]`; `NodeKind`, `EdgeRole` y `AttributeKind` numéricos; atributos con valores string y enlaces por índice |
+| Frontend por archivo | `diag/source.ts` | `SourceResult`: archivo, tokens, AST y diagnósticos |
+| Cargador y caché | `modules/loader.ts`, `syntax-cache.ets` | Grafo de archivos y dependencias; caché persistente de sintaxis, no de semántica |
+| Expansión | `checker/expansion.ts` | Copia del grafo con AST generado, higiene y procedencia; nuevos ciclos de binding/checking |
+| Binder | `binder/binder.ts` | Ámbitos, símbolos, referencias, exports y tablas de padres/declaraciones por archivo |
+| Checker | `checker/checker.ts`, `model.ets` | Tipos canónicos string y tablas laterales de miembros, firmas, conversiones, argumentos y constantes |
 | Seguridad/efectos | `safety.ets`, `effects.ets`, `ownership.ets` | Estados por rutas, movimientos, préstamos, capturas, procedencia y resúmenes conservadores |
 | Comptime | `comptime.ets`, `constant.ets` | Intérprete ETS con estados y valores constantes tipados |
 | Procedencia | `module-records.ets`, `format.ets` | `ets-checked-2`, IDs persistentes, hashes y dependencias semánticas |

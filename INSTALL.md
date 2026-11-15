@@ -167,8 +167,8 @@ y conservando el código de salida:
 
 ```sh
 etsc run -- argumento1 argumento2
-etsc build src/main.ets -o build/main.cpp --binary build/main
-etsc run src/main.ets -- argumento1
+etsc build src/main.ts -o build/main.cpp --binary build/main
+etsc run src/main.ts -- argumento1
 etsc update-types .
 etsc run --verbose  # fases, comandos, cachés y tiempos
 etsc build --verbose --no-progress  # progreso sin animaciones

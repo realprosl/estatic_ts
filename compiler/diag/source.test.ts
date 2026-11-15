@@ -21,12 +21,12 @@ let graph: Awaited<ReturnType<typeof loadModuleGraph>>;
 type NativeResult = { file: string; parsed: boolean; success: boolean; tokens: any[]; ast: { root: number; nodes: any[]; diagnostics: any[] }; diagnostics: any[] };
 
 before(async () => {
-  const entry = join(root, "compiler/diag/demo.ets");
+  const entry = join(root, "compiler/diag/demo.ts");
   graph = await loadModuleGraph(entry);
   // Complete asynchronous source reads before building executable fixtures.
   const frontend = await compileFile(entry, { baseDirectory: root });
-  const parser = await compileFile(join(root,"compiler/parser/demo.ets"), { baseDirectory: root });
-  assert.deepEqual(frontend.moduleNames.map(file => relative(root,file)), ["compiler/lexer/lexer.ets","compiler/lexer/index.ets","compiler/parser/ast-schema.ets","compiler/parser/parser.ets","compiler/parser/index.ets","compiler/diag/source.ets","compiler/diag/demo.ets"]);
+  const parser = await compileFile(join(root,"compiler/parser/demo.ts"), { baseDirectory: root });
+  assert.deepEqual(frontend.moduleNames.map(file => relative(root,file)), ["compiler/lexer/lexer.ts","compiler/lexer/index.ts","compiler/parser/ast-schema.ts","compiler/parser/parser.ts","compiler/parser/index.ts","compiler/diag/source.ts","compiler/diag/demo.ts"]);
   assert.equal(parser.moduleNames.length, 3);
   for (const [name, result, executable] of [["frontend",frontend,binary],["parser",parser,parserBinary]] as const) {
     const build = join(directory,name); mkdirSync(build);
@@ -103,18 +103,18 @@ test("bootstrap frontend preserves module syntax without resolving files or merg
   assert.ok(!results[0].ast.nodes.some(n=>n.kind==="VariableDeclaration"));
   assert.equal(results[1].ast.nodes.filter(n=>n.kind==="VariableDeclaration").length,1);
 });
-for(const file of ['compiler/lexer/lexer.ets','compiler/parser/ast-schema.ets','compiler/parser/parser.ets','compiler/diag/source.ets','compiler/diag/demo.ets'])
+for(const file of ['compiler/lexer/lexer.ts','compiler/parser/ast-schema.ts','compiler/parser/parser.ts','compiler/diag/source.ts','compiler/diag/demo.ts'])
   test(`bootstrap frontend parses real source with exact token/AST parity: ${file}`,()=>{assert.deepEqual(parity(readFileSync(join(root,file),"utf8"),file).diagnostics,[]);});
-test("bootstrap frontend graph integrates exactly seven ETS modules (with the lexer and parser index.ets) and leaves isolated phases independent",()=>{
-  assert.equal(graph.modules.length,7);const module=(suffix:string)=>graph.modules.find((m:any)=>m.file.endsWith(suffix));assert.deepEqual(module("/lexer/lexer.ets").dependencies,[]);assert.deepEqual(module("/parser/ast-schema.ets").dependencies,[]);
+test("bootstrap frontend graph integrates exactly seven ETS modules (with the lexer and parser index.ts) and leaves isolated phases independent",()=>{
+  assert.equal(graph.modules.length,7);const module=(suffix:string)=>graph.modules.find((m:any)=>m.file.endsWith(suffix));assert.deepEqual(module("/lexer/lexer.ts").dependencies,[]);assert.deepEqual(module("/parser/ast-schema.ts").dependencies,[]);
   const host=readFileSync(join(root,'compiler/diag/run.ts'),'utf8');assert.doesNotMatch(host,/src\/(?:lexer|parser)|template-tokens|token-transport/);
 });
 test("bootstrap frontend accepts repository examples accepted by the direct stage 0 parser",t=>{
-  const files=readdirSync(join(root,"examples"),{recursive:true}).map(String).filter(f=>f.endsWith('.ets')).sort();let count=0;const excluded:string[]=[],failures:string[]=[];
+  const files=readdirSync(join(root,"examples"),{recursive:true}).map(String).filter(f=>f.endsWith('.ts')).sort();let count=0;const excluded:string[]=[],failures:string[]=[];
   for(const file of files){const source=readFileSync(join(root,"examples",file),'utf8');try{new Parser(new Lexer(source).tokenize()).parseProgram();}catch(error){if(!(error instanceof DiagnosticError))throw error;excluded.push(file);continue;}
     const result=native(source,file);if(!result.success)failures.push(file+': '+JSON.stringify(result.diagnostics.slice(0,3)));count++;
   }
-  assert.deepEqual(excluded,["exports-demo.ets","generated-module-exports/index.ets","generated-module-exports/main.ets","generated-module-exports/producer.ets","imports-as/main.ets","module-exports/counter.ets","module-exports/index.ets","module-exports/main.ets"]);
+  assert.deepEqual(excluded,["exports-demo.ts","generated-module-exports/index.ts","generated-module-exports/main.ts","generated-module-exports/producer.ts","imports-as/main.ts","module-exports/counter.ts","module-exports/index.ts","module-exports/main.ts"]);
   assert.ok(count>=120);assert.deepEqual(failures,[]);t.diagnostic(`${count}/${files.length} examples accepted directly by stage 0 also pass the native chain`);
 });
 test("bootstrap frontend lexical and parser nesting remain bounded",()=>{

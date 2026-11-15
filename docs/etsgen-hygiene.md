@@ -79,4 +79,4 @@ módulos compilado y enlazado. Incluyen expansiones repetidas, shadowing, closur
 bucles, destructuring, clases, aliases, genéricos, argumentos nombrados, errores
 con procedencia y límites de expansión recursiva.
 
-Ejemplo: examples/etsgen-hygiene/main.ets. Imprime 8 cuatro veces y después 99.
+Ejemplo: examples/etsgen-hygiene/main.ts. Imprime 8 cuatro veces y después 99.

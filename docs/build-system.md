@@ -138,7 +138,7 @@ cd Ts2cpp && npm install
 # 2. Crear proyecto de prueba
 etsc init /tmp/test
 cd /tmp/test
-cp /ruta/a/Ts2cpp/examples/http-server.ets src/main.ts
+cp /ruta/a/Ts2cpp/examples/http-server.ts src/main.ts
 
 # 3. Compilar
 etsc --build

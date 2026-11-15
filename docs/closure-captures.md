@@ -48,7 +48,7 @@ no certifican ausencia general de fugas ni seguridad concurrente.
 Ejemplo reproducible (salida: `18`, `1`, `2`, `3`, en líneas separadas):
 
 ```bash
-node --experimental-strip-types src/cli.ts examples/closure-captures/main.ets -o build/closure-captures.cpp
+node --experimental-strip-types src/cli.ts examples/closure-captures/main.ts -o build/closure-captures.cpp
 g++ -std=c++20 -O2 -pthread -fno-exceptions -I. build/closure-captures.cpp -o build/closure-captures
 ./build/closure-captures
 ```

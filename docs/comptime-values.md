@@ -69,7 +69,7 @@ Ejemplo nativo verificado:
 
 ```bash
 mkdir -p build
-node --experimental-strip-types src/cli.ts examples/comptime-values/main.ets -o build/comptime-values.cpp
+node --experimental-strip-types src/cli.ts examples/comptime-values/main.ts -o build/comptime-values.cpp
 g++ -std=c++20 -O2 -DNDEBUG -pthread -fno-exceptions -I. build/comptime-values.cpp -o build/comptime-values
 ./build/comptime-values
 ```

@@ -101,13 +101,13 @@ jobs:
           set -euo pipefail
           dir="native-cpp/prebuilt/${{ matrix.platform }}"
           "$dir/etsc" --version
-          ESTC_ROOT="$GITHUB_WORKSPACE" "$dir/etsc" examples/hello.ets --check --emit-ir "$RUNNER_TEMP/hello.ir.json" --no-progress
+          ESTC_ROOT="$GITHUB_WORKSPACE" "$dir/etsc" examples/hello.ts --check --emit-ir "$RUNNER_TEMP/hello.ir.json" --no-progress
           test -s "$RUNNER_TEMP/hello.ir.json"
           # build-all.sh must now pick the precompiled seed (inputs match).
           bash native-cpp/build-all.sh --out "$RUNNER_TEMP/picked/native" 2>&1 | tee "$RUNNER_TEMP/picked.log"
           grep -q 'Semilla precompilada' "$RUNNER_TEMP/picked.log"
           if [ "$RUNNER_OS" = Linux ]; then
-            ESTC_ROOT="$GITHUB_WORKSPACE" "$RUNNER_TEMP/picked/native/etsc" build examples/hello.ets \
+            ESTC_ROOT="$GITHUB_WORKSPACE" "$RUNNER_TEMP/picked/native/etsc" build examples/hello.ts \
               -o "$RUNNER_TEMP/hello.cpp" --binary "$RUNNER_TEMP/hello" --no-progress
             "$RUNNER_TEMP/hello" | grep -q 'Hola, mundo'
           fi
@@ -117,7 +117,7 @@ jobs:
             bash native-cpp/build-compiler.sh --seed "$RUNNER_TEMP/seed" --out "$RUNNER_TEMP/picked-compiler" 2>&1 | tee "$RUNNER_TEMP/picked-compiler.log"
             grep -q 'Compilador precompilado' "$RUNNER_TEMP/picked-compiler.log"
             if [ "$RUNNER_OS" = Linux ]; then
-              ESTC_ROOT="$GITHUB_WORKSPACE" "$dir/compiler/etsc" build examples/hello.ets \
+              ESTC_ROOT="$GITHUB_WORKSPACE" "$dir/compiler/etsc" build examples/hello.ts \
                 --binary "$RUNNER_TEMP/hello2" --no-progress
               "$RUNNER_TEMP/hello2" | grep -q 'Hola, mundo'
             fi

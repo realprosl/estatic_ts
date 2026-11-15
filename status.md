@@ -257,38 +257,38 @@ la última ejecución; para el estado de las filas se usa `compiler/PENDING.md`.
   unions y destructuring. Ver `docs/module-symbols.md`.
 - Veinticinco regresiones verifican selección semántica de sobrecargas en los
   evaluadores, arrays vacíos, aliases, genéricos, recursión, decoradores por
-  firma y las APIs directas. El ejemplo `examples/comptime-overloads/main.ets`
+  firma y las APIs directas. El ejemplo `examples/comptime-overloads/main.ts`
   se transpiló, compiló con `g++` y ejecutó con salida `11, 99, 33, 77, 88`.
 - Dieciséis regresiones verifican presupuestos por evaluación raíz,
   aislamiento de intentos preliminares fallidos y límites compartidos por los
   helpers. Diez fallan al ejecutarlas contra v18. El ejemplo
-  `examples/comptime-budgets/main.ets` se transpiló, compiló con `g++` y ejecutó
+  `examples/comptime-budgets/main.ts` se transpiló, compiló con `g++` y ejecutó
   con salida verificada `1400`.
 - Veintiocho regresiones cubren payload UTF-8, resultados y argumentos,
   crecimiento de arrays, índices dispersos, claves, ciclos y `array.length`.
   Veinticuatro fallan contra v19. El ejemplo
-  `examples/comptime-values/main.ets` se transpiló, compiló con `g++` y ejecutó
+  `examples/comptime-values/main.ts` se transpiló, compiló con `g++` y ejecutó
   con salida verificada `España 🙂` y `100`.
 - Diecisiete regresiones verifican posiciones de diagnósticos `comptime`,
   CRLF, Unicode, formato del fragmento y remapeo de archivos/offsets en entry
   y dependencias. Todas fallaban antes; ver `docs/comptime-diagnostics.md`.
 - Veinte regresiones verifican límites de `@etsgen`: recursión, instrucciones,
   valores UTF-8, texto generado, raíces independientes y opciones inválidas.
-  Dieciséis fallan contra v21. El ejemplo `examples/etsgen-limits/main.ets`
+  Dieciséis fallan contra v21. El ejemplo `examples/etsgen-limits/main.ts`
   se transpiló, compiló con `g++` y ejecutó con salida verificada `7` y `8`.
 - Veintidós regresiones verifican semántica de fragmentos `@etsgen` en contexto,
   emisión tipada, capturas y dependencias generadas. Dieciséis fallan contra
-  v22. `examples/etsgen-semantics/main.ets` se transpiló, compiló con `g++` y
+  v22. `examples/etsgen-semantics/main.ts` se transpiló, compiló con `g++` y
   ejecutó con salida verificada `12`.
 - Nueve regresiones de pipelines de arrays verifican la ruta eager; todas
   fallan contra v23. Tres compilan y ejecutan C++20 para comprobar orden de
   callbacks, capturas, fuente intacta, vacíos, cambio de tipo y anidamiento con
-  callbacks nombrados. `examples/array-pipeline-semantics/main.ets` se transpiló,
+  callbacks nombrados. `examples/array-pipeline-semantics/main.ts` se transpiló,
   compiló con `g++` y ejecutó con salida verificada `55, 1, 2, 3`. La fusión
   insegura se retiró; no hay mejora de rendimiento medida.
 - Dieciséis regresiones de capturas léxicas verifican sombreado, parámetros
   interiores, callbacks locales y propagación transitiva. Nueve fallan contra
-  v24; cinco compilan y ejecutan C++20. `examples/closure-captures/main.ets`
+  v24; cinco compilan y ejecutan C++20. `examples/closure-captures/main.ts`
   se transpiló, compiló y ejecutó con salida verificada `18, 1, 2, 3`. El
   análisis de escape/lifetimes de closures por referencia sigue pendiente;
   ver `docs/closure-captures.md`.
@@ -296,17 +296,17 @@ la última ejecución; para el estado de las filas se usa `compiler/PENDING.md`.
   por referencia (`E4210`); trece fallan contra v25. Incluyen aliases,
   reasignaciones, ciclos, condicionales, capturas transitivas, retornos implícitos
   y diagnósticos modulares. Una compila y ejecuta C++20; el ejemplo
-  `examples/closure-return-safety/main.ets` también se transpiló, compiló y
+  `examples/closure-return-safety/main.ts` también se transpiló, compiló y
   ejecutó con salida `1, 2, 2, 8, 8`. No cubre escapes por contenedores,
   campos ni callbacks retenidos; ver `docs/closure-return-safety.md`.
 - Diecisiete regresiones nuevas amplían E4210 a rutas de arrays dinámicos y
   validación de argumentos de push; quince fallan contra v26. Una compila y
-  ejecuta C++20. El ejemplo `examples/closure-array-safety/main.ets` también se
+  ejecuta C++20. El ejemplo `examples/closure-array-safety/main.ts` también se
   transpiló, compiló y ejecutó con salida `8, 8`. No prueba escapes completos;
   ver `docs/closure-array-safety.md`.
 - Doce regresiones verifican aliases bajo arrays anidados, ciclos y E4210;
   once fallan contra v27. Una compila y ejecuta C++20. El ejemplo
-  `examples/nested-array-aliases/main.ets` verifica matrices y lectores
+  `examples/nested-array-aliases/main.ts` verifica matrices y lectores
   devueltos por valor; ver `docs/nested-array-aliases.md`.
 - Veintiuna regresiones verifican operaciones i64/u64 del evaluador principal:
   desplazamientos, bits, división entera, wrap unsigned y diagnósticos de
@@ -315,7 +315,7 @@ la última ejecución; para el estado de las filas se usa `compiler/PENDING.md`.
 - Veintiocho regresiones amplían la ruta tipada i64/u64 a valores exactos
   fuera de 53 bits, literales, bases, intermedios, arrays, templates y AST JSON.
   Veinticinco fallan contra v28; una ejecuta C++20 con límites exactos, llamadas,
-  concatenación y comparación. El ejemplo `examples/comptime-exact64/main.ets`
+  concatenación y comparación. El ejemplo `examples/comptime-exact64/main.ts`
   se transpiló, compiló y ejecutó; ver `docs/comptime-exact64.md`.
 
 Estos resultados no certifican seguridad de memoria del runtime. Para ello

@@ -10,7 +10,7 @@ física. La concatenación unity se realiza antes de calcular esos retornos.
 
 ```sh
 node --experimental-strip-types src/cli.ts \
-  examples/generated-module-exports/main.ets -o build/generated.cpp
+  examples/generated-module-exports/main.ts -o build/generated.cpp
 
 g++ -std=c++20 -pthread -fno-exceptions -I. build/generated.cpp -o build/generated
 build/generated

@@ -1,6 +1,6 @@
 # Compilador completo en ETS
 
-`main.ets` reúne el cargador de módulos, expansión, binder, checker, análisis de
+`main.ts` reúne el cargador de módulos, expansión, binder, checker, análisis de
 seguridad, lowering a `ets-ir-2`, backend C++ y coordinador de construcción. El
 proceso no ejecuta Node, `src/`, el frontend auxiliar ni el generador C++ anterior.
 Invoca el compilador C++ del sistema para construir el programa final.
@@ -17,7 +17,7 @@ Desde la raíz del repositorio:
 ```sh
 bash scripts/build-ets-compiler.sh stage1
 bash scripts/check-ets-compiler.sh
-build/ets-compiler/etsc build examples/modules/main.ets --binary build/example --verbose
+build/ets-compiler/etsc build examples/modules/main.ts --binary build/example --verbose
 ```
 
 Para que el compilador ETS se compile a sí mismo:

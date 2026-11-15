@@ -5,14 +5,14 @@
 #                                      [--out DIR] [--no-change] [--keep]
 #
 # Repite las tres fases de native-cpp/build-compiler.sh por separado:
-#   1. análisis  : etsc compiler/driver/main.ets --check --emit-ir
+#   1. análisis  : etsc compiler/driver/main.ts --check --emit-ir
 #   2. codegen   : etsc --from-ir IR -o etsc.cpp           (IR → C++)
 #   3. g++       : etsc --from-ir IR --build --binary ...   (codegen + g++ +
 #                  enlace); el tiempo de g++ es (3) − (2)
 # y lo hace dos veces:
 #   - en frío: caché de análisis vacía y sin objetos del programa;
 #   - tras cambiar una línea del cuerpo de una función de
-#     compiler/checker/safety.ets (se añade una sentencia sin efecto y se
+#     compiler/checker/safety.ts (se añade una sentencia sin efecto y se
 #     deshace al terminar), reutilizando la caché de la medición en frío.
 #
 #   --seed RUTA   ejecutable con el que se compila compiler/ (por defecto, la
@@ -51,8 +51,8 @@ if [ -z "$seed" ]; then
 fi
 if [ -z "$out" ]; then out="$(mktemp -d "${TMPDIR:-/tmp}/etsc-bench.XXXXXX")"; else mkdir -p "$out"; fi
 
-target="$repo/compiler/checker/safety.ets"
-backup="$out/safety.ets.orig"
+target="$repo/compiler/checker/safety.ts"
+backup="$out/safety.ts.orig"
 restore() { [ -f "$backup" ] && cp "$backup" "$target"; [ "$keep" -eq 1 ] || rm -rf "$out"; }
 trap restore EXIT
 
@@ -70,7 +70,7 @@ measure() {
   local ir="$out/$label.ir.json" cpp="$out/$label.cpp" bin="$out/$label-etsc"
   echo "[$label] análisis…" >&2
   t0="$(now)"
-  "$seed" "$repo/compiler/driver/main.ets" --check --emit-ir "$ir" --cache "$out/analysis-cache" \
+  "$seed" "$repo/compiler/driver/main.ts" --check --emit-ir "$ir" --cache "$out/analysis-cache" \
     --jobs "$jobs" --no-progress >"$out/$label.analysis.log" 2>&1
   t1="$(now)"
   echo "[$label] codegen…" >&2
@@ -101,7 +101,7 @@ import sys
 p = sys.argv[1]; s = open(p).read()
 anchor = "  owner(scope: number): number {\n"
 if anchor not in s:
-    sys.exit("compiler-build-bench: no encuentro SafetyAnalyzer.owner() en safety.ets")
+    sys.exit("compiler-build-bench: no encuentro SafetyAnalyzer.owner() en safety.ts")
 s = s.replace(anchor, anchor + "    const benchmarkLine: number = scope + 0;\n", 1)
 open(p, "w").write(s)
 EOF
@@ -117,7 +117,7 @@ cxx="$("${CXX:-g++}" --version 2>/dev/null | head -1)"
 echo
 echo "Commit \`$commit\` · $os-$arch · $cpu CPU · $mem · $cxx · g++ \`$opt\` · análisis con --jobs $jobs"
 echo
-echo "| Fase | En frío | Tras cambiar 1 línea de safety.ets |"
+echo "| Fase | En frío | Tras cambiar 1 línea de safety.ts |"
 echo "|---|---|---|"
 row() { printf '| %s | %s | %s |\n' "$1" "$(fmt "${cold[$2]}")" "$( [ "$change" -eq 1 ] && fmt "${changed[$2]}" || echo "—")"; }
 row "Análisis (\`--check --emit-ir\`)" 0

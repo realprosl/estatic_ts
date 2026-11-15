@@ -43,7 +43,7 @@ Una compila y ejecuta C++ para contrastar los resultados plegados con los de
 funciones runtime. El ejemplo imprime `shift`, `exact`, `-3`, `-3`:
 
 ```bash
-node --experimental-strip-types src/cli.ts examples/comptime-integer64/main.ets -o build/comptime-integer64.cpp
+node --experimental-strip-types src/cli.ts examples/comptime-integer64/main.ts -o build/comptime-integer64.cpp
 g++ -std=c++20 -O2 -pthread -fno-exceptions -I. build/comptime-integer64.cpp -o build/comptime-integer64
 ./build/comptime-integer64
 ```

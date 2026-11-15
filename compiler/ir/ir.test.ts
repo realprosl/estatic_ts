@@ -6,7 +6,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { buildLoader, root } from "../modules/build.ts";
 const directory = mkdtempSync(join(root, "build-ir-test-"));
 let binary: string;
-before(async () => { binary = await buildLoader(join(directory, "binary"), "compiler/ir/test-driver.ets", true); });
+before(async () => { binary = await buildLoader(join(directory, "binary"), "compiler/ir/test-driver.ts", true); });
 after(() => rmSync(directory, { recursive: true, force: true }));
 test("child process runtime streams stdout/stderr and process stdin through libuv", { skip: process.platform === "win32" }, () => {
   const source = join(directory, "child-process-streams.cpp"), binary = join(directory, "child-process-streams");

@@ -1,6 +1,6 @@
 // Harness de tests del Bloque F.
 //
-// Ejecuta los ejemplos `examples/*.ets` (los 34, sin recursión) contra los
+// Ejecuta los ejemplos `examples/*.ts` (los 34, sin recursión) contra los
 // golden files en `test/golden/<name>.expected.txt`. Los ejemplos listados en
 // `test/skip-network.json` solo se compilan y enlazan; el resto se ejecutan y
 // se compara stdout+exit-code con su golden.
@@ -98,8 +98,8 @@ async function loadSkipList(): Promise<Set<string>> {
 async function discoverExamples(): Promise<string[]> {
   const entries = await readdir(EXAMPLES_DIR, { withFileTypes: true });
   return entries
-    .filter(entry => entry.isFile() && entry.name.endsWith(".ets"))
-    .map(entry => entry.name.replace(/\.ets$/, ""))
+    .filter(entry => entry.isFile() && entry.name.endsWith(".ts"))
+    .map(entry => entry.name.replace(/\.ts$/, ""))
     .sort();
 }
 
@@ -203,7 +203,7 @@ async function processDemo(name: string, isSkipNetwork: boolean, workerId: numbe
   await mkdir(workerScratch, { recursive: true });
   const cppPath = join(workerScratch, `${name}.cpp`);
   const binPath = join(workerScratch, name);
-  const sourcePath = join(EXAMPLES_DIR, `${name}.ets`);
+  const sourcePath = join(EXAMPLES_DIR, `${name}.ts`);
   const localCli = async (): Promise<{ code: number; stdout: string; stderr: string }> => {
     return new Promise(resolvePromise => {
       const child = spawn("node", ["--experimental-strip-types", CLI_PATH, sourcePath, "-o", cppPath, "--unity"], { cwd: workerScratch });

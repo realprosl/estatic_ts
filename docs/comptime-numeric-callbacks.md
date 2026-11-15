@@ -88,13 +88,13 @@ C++ independientes. Otras dos verificaciones nativas comparan operaciones
 y pipelines de callbacks, y un caso de doble redondeo u64->f32 con llamada
 runtime. También se cubren rangos, overflow, cero negativo y magnitudes grandes.
 
-Ejemplo: `examples/comptime-numeric-callbacks/main.ets` combina map con
+Ejemplo: `examples/comptime-numeric-callbacks/main.ts` combina map con
 conversión i64->u8->f32, reduce f32 y comparación runtime/comptime.
 
 Para reproducir el ejemplo:
 
 ```bash
-node --experimental-strip-types src/cli.ts examples/comptime-numeric-callbacks/main.ets -o build/comptime-numeric-callbacks.cpp
+node --experimental-strip-types src/cli.ts examples/comptime-numeric-callbacks/main.ts -o build/comptime-numeric-callbacks.cpp
 g++ -std=c++20 -Werror=narrowing -O2 -pthread -fno-exceptions -I. build/comptime-numeric-callbacks.cpp -o build/comptime-numeric-callbacks
 ./build/comptime-numeric-callbacks
 ```

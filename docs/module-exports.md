@@ -93,4 +93,4 @@ proyectos con unidades C++ separadas: defaults, snapshot/binding vivo,
 reexports en diamante, namespaces anidados y generación ETS mediante barrels.
 Incluyen errores de exports y posiciones tras imports multilínea.
 
-Ejemplo: `examples/module-exports/main.ets`, imprime `8`, `8`, `9`.
+Ejemplo: `examples/module-exports/main.ts`, imprime `8`, `8`, `9`.

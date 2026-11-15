@@ -9,7 +9,7 @@
 #   --cxx CXX        compilador C++ (por defecto $CXX o g++; clang++ en macOS)
 #   --max-rounds N   iteraciones máximas hasta el punto fijo (por defecto 3)
 #
-# Cada ronda: el compilador actual analiza compiler/driver/main.ets, emite su
+# Cada ronda: el compilador actual analiza compiler/driver/main.ts, emite su
 # IR y su C++, y ese C++ se compila para obtener el compilador de la ronda
 # siguiente. Solo se publica cuando dos rondas seguidas emiten EXACTAMENTE el
 # mismo IR y el mismo C++ (punto fijo del self-hosting). Análisis y compilación
@@ -46,7 +46,7 @@ fi
 
 current="$compiler" previous=""
 for ((round = 1; round <= max_rounds; round++)); do
-  etsc_spin "Ronda $round · analizar compiler/" "$current" "$root/compiler/driver/main.ets" \
+  etsc_spin "Ronda $round · analizar compiler/" "$current" "$root/compiler/driver/main.ts" \
     --check --emit-ir "$work/round$round.ir.json" --no-progress
   etsc_spin "Ronda $round · emitir C++" "$current" --from-ir "$work/round$round.ir.json" \
     -o "$work/round$round.cpp" --no-progress

@@ -56,7 +56,7 @@ test("installed etsc compiles bootstrap native headers outside the checkout",asy
   assert.equal(installed.status,0,installed.stderr+installed.stdout);
   const moved=join(dir,"moved-prefix");renameSync(prefix,moved);
   const boundary=join(dir,"platform.ets"),probe=join(dir,"bootstrap-header.ets");
-  writeFileSync(boundary,readFileSync(join(root,"compiler/platform/platform.ets"),"utf8"));
+  writeFileSync(boundary,readFileSync(join(root,"compiler/platform/platform.ts"),"utf8"));
   writeFileSync(probe,'import {contentHash} from "./platform"; print(contentHash("abc"));');
   // Neither the working directory nor include flags point at the checkout.
   const p=spawnSync(join(moved,"bin/etsc"),["run",probe,"--binary",join(dir,"bootstrap-header")],{cwd:dir,encoding:"utf8",timeout:120000,env:{...process.env,ESTC_ROOT:""}});
@@ -84,7 +84,7 @@ test("installed etsc initializes, builds and runs independently of the clone wit
   const nativeEnv={...process.env,PATH:poison+":"+process.env.PATH,NATIVO_NODE:"/missing/node",NODE:"/missing/node",XDG_CACHE_HOME:cache,ESTC_RUNTIME_CACHE:"",ESTATIC_RUNTIME_CACHE:""};
   const run=(args:string[],cwd=dir)=>spawnSync(bin,args,{cwd,encoding:"utf8",timeout:120000,env:nativeEnv});
   // La semilla es el compilador ETS (compiler/unity.cpp): su CLI es la de
-  // compiler/driver/main.ets, no la del CLI de la etapa 0. Hasta que la semilla
+  // compiler/driver/main.ts, no la del CLI de la etapa 0. Hasta que la semilla
   // se regenere con #143 todavía imprime la etiqueta antigua.
   for(const flag of ["--version","-version","-v","-V","/V"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/^etsc (\d+\.\d+\.\d+ \(v\d+\)|bootstrap ETS \(ets-ir-2\))\n$/);}
   for(const flag of ["--help","-h","-H"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/Uso: etsc build\|run/);assert.match(p.stdout,/init \[directorio\]/);assert.match(p.stdout,/--version/);}
@@ -222,21 +222,21 @@ test("install builds compiler/ with the seed and publishes that executable",asyn
   assert(existsSync(join(home,"native/frontend")));
   assert(existsSync(join(home,"runtime")));
   // #178: C++ por módulo. examples/modules da la misma salida con --unity y por
-  // módulo, y un cambio de cuerpo en math.ets solo recompila su unidad.
+  // módulo, y un cambio de cuerpo en math.ts solo recompila su unidad.
   {const env={...process.env,ESTC_ROOT:home};const project=join(dir,"modules178");mkdirSync(project,{recursive:true});
-   for(const name of ["main.ets","math.ets"])writeFileSync(join(project,name),readFileSync(join(root,"examples/modules",name),"utf8"));
+   for(const name of ["main.ts","math.ts"])writeFileSync(join(project,name),readFileSync(join(root,"examples/modules",name),"utf8"));
    const run=(args:string[])=>spawnSync(bin,[...args,"--no-progress"],{cwd:project,encoding:"utf8",env,timeout:600000});
-   let p=run(["run","main.ets","--unity","-o","build/unity.cpp","--binary","build/unity"]);assert.equal(p.status,0,p.stderr);const expected=p.stdout;
-   p=run(["run","main.ets","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);
+   let p=run(["run","main.ts","--unity","-o","build/unity.cpp","--binary","build/unity"]);assert.equal(p.status,0,p.stderr);const expected=p.stdout;
+   p=run(["run","main.ts","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);
    const units=readdirSync(join(project,"build/app.cpp.units")).sort();assert.ok(units.includes("program.hpp")&&units.includes("__main.cpp")&&units.some(u=>u.endsWith("math.cpp")),units.join(","));
    const objects=()=>readdirSync(join(project,".cache/objects")).filter(f=>f.startsWith("program-")).sort();const before=objects();assert.equal(before.length,units.length-1);
-   writeFileSync(join(project,"math.ets"),readFileSync(join(project,"math.ets"),"utf8").replace("total = total + index;","total = total + index * 1;"));
-   p=run(["run","main.ets","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);
+   writeFileSync(join(project,"math.ts"),readFileSync(join(project,"math.ts"),"utf8").replace("total = total + index;","total = total + index * 1;"));
+   p=run(["run","main.ts","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);
    const after=objects();assert.equal(after.length,before.length);assert.equal(after.filter(o=>!before.includes(o)).length,1,"solo se recompila la unidad de math");
-   // Nombres C++ estables: una función nueva en math.ets no cambia el C++ de main.
+   // Nombres C++ estables: una función nueva en math.ts no cambia el C++ de main.
    const mainUnit=()=>readFileSync(join(project,"build/app.cpp.units/main.cpp"),"utf8");const mainBefore=mainUnit();assert.doesNotMatch(mainBefore,/ir_f\d/);
-   writeFileSync(join(project,"math.ets"),"function helperNuevo(): number { return 7; }\n"+readFileSync(join(project,"math.ets"),"utf8"));
-   p=run(["run","main.ets","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);assert.equal(mainUnit(),mainBefore);}
+   writeFileSync(join(project,"math.ts"),"function helperNuevo(): number { return 7; }\n"+readFileSync(join(project,"math.ts"),"utf8"));
+   p=run(["run","main.ts","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);assert.equal(mainUnit(),mainBefore);}
   // #143 (comportamiento nuevo del CLI; la semilla aún no lo tiene).
   {const env={...process.env,ESTC_ROOT:home};const project=join(dir,"cli143");
    let p=spawnSync(bin,["init",project,"--verbose"],{cwd:dir,encoding:"utf8",env});assert.equal(p.status,0,p.stderr);assert.match(p.stderr,/Creando proyecto/);

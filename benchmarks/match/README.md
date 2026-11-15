@@ -8,11 +8,11 @@ escrito a mano** para los mismos patrones lógicos.
 
 ```
 benchmarks/match/
-├── B1-value-pattern.ets / .cpp       match por valor (5 ramas)
-├── B2-discriminator.ets / .cpp       match con discriminator de string
-├── B3-when-type.ets     / .cpp       match con whenType sobre union
-├── B4-v2-exhaustive.ets / .cpp       match V2 destructurado exhaustivo
-├── B5-iife-overhead.ets / .cpp       overhead puro del IIFE (1 rama)
+├── B1-value-pattern.ts / .cpp       match por valor (5 ramas)
+├── B2-discriminator.ts / .cpp       match con discriminator de string
+├── B3-when-type.ts     / .cpp       match con whenType sobre union
+├── B4-v2-exhaustive.ts / .cpp       match V2 destructurado exhaustivo
+├── B5-iife-overhead.ts / .cpp       overhead puro del IIFE (1 rama)
 ├── run-benchmarks.sh                 compila + ejecuta hyperfine
 ├── parse-results.py                  genera la tabla resumen
 └── RESULTS.md                        reporte final

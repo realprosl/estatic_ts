@@ -69,7 +69,7 @@ jobs:
           native-cpp/native/etsc --version
           export ESTC_ROOT="$GITHUB_WORKSPACE"
           mkdir -p "$RUNNER_TEMP/native-smoke"
-          native-cpp/native/etsc build examples/hello.ets \
+          native-cpp/native/etsc build examples/hello.ts \
             -o "$RUNNER_TEMP/native-smoke/hello.cpp" \
             --binary "$RUNNER_TEMP/native-smoke/hello" --no-progress
           printf 'Hola, mundo\n120\n' > "$RUNNER_TEMP/native-smoke/expected"

@@ -1,8 +1,8 @@
 # Cargador nativo y registro sintáctico por archivo (v60)
 
 ```bash
-npm run bootstrap:modules -- examples/todo-project/main.ets --cache build/project-cache
-npm run bootstrap:modules -- examples/todo-project/main.ets --cache build/project-cache
+npm run bootstrap:modules -- examples/todo-project/main.ts --cache build/project-cache
+npm run bootstrap:modules -- examples/todo-project/main.ts --cache build/project-cache
 npm run test:bootstrap:modules
 ```
 
@@ -126,7 +126,7 @@ identidad, archivo, hash, coordenadas, raíz, aristas, ciclos o framing inválid
 La imposibilidad de persistir es recuperable. El binario analiza además
 su propio proyecto. Las 663 regresiones anteriores de bootstrap siguen pasando.
 
-La demo pública con `examples/todo-project/main.ets` carga seis archivos sin
+La demo pública con `examples/todo-project/main.ts` carga seis archivos sin
 diagnósticos: primera ejecución `{hits:0,misses:6,writes:6}` y otro proceso
 `{hits:6,misses:0,writes:0}` usando los mismos registros.
 

@@ -107,7 +107,7 @@ C++ (cuatro usan PTY). Comprueban inclusión condicional, firmas, rechazos,
 UTF-8, alias/sombras, pipes, ANSI, dimensiones, defaults de salida, argumentos
 inválidos, restauración, ODR entre unidades y módulos ETS separados. La cabecera
 standalone también se compila con `-Wall -Wextra -Werror` y sin excepciones.
-Ejemplo: `examples/terminal/main.ets`.
+Ejemplo: `examples/terminal/main.ts`.
 
 Los métodos de logging siguen disponibles en el mismo objeto. Un handle como
 `const output = console` puede usar ambos grupos. Los controles son métodos estáticos del mismo `ets_console` de C++. Sus

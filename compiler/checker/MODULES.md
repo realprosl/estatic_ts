@@ -78,12 +78,12 @@ a esta carga; no se usan como identidades persistentes ni hashes de interfaz.
 
 ## Interfaz pública de un módulo (#177, épica #174)
 
-### API pública: `index.ets`
+### API pública: `index.ts`
 
 Dentro del compilador, cada módulo-directorio (`checker/`, `parser/`, `backend/cpp/`…)
-tiene un `index.ets` que reexporta solo lo que usan otras capas. Desde otro directorio
-solo se importa ese `index.ets`, y `compiler/audit/layers.ts` lo comprueba. La única
-excepción es `backend/` → `ir/model.ets`, que es el formato wire del IR.
+tiene un `index.ts` que reexporta solo lo que usan otras capas. Desde otro directorio
+solo se importa ese `index.ts`, y `compiler/audit/layers.ts` lo comprueba. La única
+excepción es `backend/` → `ir/model.ts`, que es el formato wire del IR.
 
 ### Decisión: efectos y ownership se **infieren** y forman parte de la interfaz
 
@@ -109,7 +109,7 @@ Los genéricos, `comptime` y las constantes siguen marcando `requiresBody`. En C
 genéricos son templates que viven en el `.hpp`, así que su cuerpo cuenta como parte
 de la interfaz para quien los usa.
 
-### Granularidad de `index.ets`
+### Granularidad de `index.ts`
 
 Quien importa algo de un módulo depende del `interfaceHash` de **todo** su `index`. Un
 cambio de **firma** invalida a todos los que importan ese módulo, no solo a quienes
@@ -127,7 +127,7 @@ Analiza el módulo como entrada e imprime su interfaz en JSON estable
 (`ets-interface-1`):
 
 ```json
-{"format":"ets-interface-1","file":"…/lib.ets","id":"module:…",
+{"format":"ets-interface-1","file":"…/lib.ts","id":"module:…",
  "interfaceHash":"…","implementationHash":"…","requiresBody":false,
  "dependencies":["module:…"],
  "exports":[{"name":"f","kind":"value","declaration":"FunctionDeclaration",

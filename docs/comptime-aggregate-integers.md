@@ -48,7 +48,7 @@ destinos flotantes y promociones tipadas se cubren en
 Ejemplo nativo verificado:
 
 ```bash
-node --experimental-strip-types src/cli.ts examples/comptime-aggregate-integers/main.ets -o build/comptime-aggregate-integers.cpp
+node --experimental-strip-types src/cli.ts examples/comptime-aggregate-integers/main.ts -o build/comptime-aggregate-integers.cpp
 g++ -std=c++20 -Werror=narrowing -O2 -pthread -fno-exceptions -I. build/comptime-aggregate-integers.cpp -o build/comptime-aggregate-integers
 ./build/comptime-aggregate-integers
 ```

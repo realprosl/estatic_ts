@@ -5,7 +5,7 @@ el grafo de módulos, binding y `CheckResult` de `analyzeProject`. El proceso
 nativo comprueba y baja el fuente; Node sólo adapta construcción y E/S.
 
 ```sh
-npm run bootstrap:ir -- examples/hello.ets
+npm run bootstrap:ir -- examples/hello.ts
 npm run test:bootstrap:ir
 node --experimental-strip-types compiler/ir/audit.ts
 ```

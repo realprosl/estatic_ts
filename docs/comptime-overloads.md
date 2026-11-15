@@ -57,7 +57,7 @@ El ejemplo nativo cubre cinco resultados verificables:
 
 ```bash
 mkdir -p build
-node --experimental-strip-types src/cli.ts examples/comptime-overloads/main.ets -o build/comptime-overloads.cpp
+node --experimental-strip-types src/cli.ts examples/comptime-overloads/main.ts -o build/comptime-overloads.cpp
 g++ -std=c++20 -O2 -DNDEBUG -pthread -fno-exceptions -I. build/comptime-overloads.cpp -o build/comptime-overloads
 ./build/comptime-overloads
 ```

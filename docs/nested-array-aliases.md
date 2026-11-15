@@ -16,7 +16,7 @@ Una compila y ejecuta matrices numéricas y arrays anidados de lectores por valo
 El ejemplo imprime `4`, `8`, `8`:
 
 ```bash
-node --experimental-strip-types src/cli.ts examples/nested-array-aliases/main.ets -o build/nested-array-aliases.cpp
+node --experimental-strip-types src/cli.ts examples/nested-array-aliases/main.ts -o build/nested-array-aliases.cpp
 g++ -std=c++20 -O2 -pthread -fno-exceptions -I. build/nested-array-aliases.cpp -o build/nested-array-aliases
 ./build/nested-array-aliases
 ```

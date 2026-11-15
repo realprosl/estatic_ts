@@ -50,8 +50,8 @@ stderr las fases reales, sus duraciones, la entrada, el frontend, las opciones
 de módulos, las rutas generadas y el compilador con sus flags:
 
 ```sh
-npm run bootstrap -- run examples/hello.ets --verbose
-npm run bootstrap -- examples/hello.ets --check --verbose
+npm run bootstrap -- run examples/hello.ts --verbose
+npm run bootstrap -- examples/hello.ts --check --verbose
 npm run bootstrap -- build --config estatic.config.ts --verbose --no-progress
 ```
 

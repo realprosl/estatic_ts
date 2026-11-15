@@ -523,8 +523,8 @@ comparación reproducible, caso a caso, está en
 
 Cada fila cita los casos representativos del diagnóstico, no su catálogo
 completo: `E4101` tiene 14 variantes, `E4204` ocho y `E4300` siete. El conjunto
-exacto de mensajes está en `compiler/checker/checker.ets` y
-`compiler/checker/safety.ets`.
+exacto de mensajes está en `compiler/checker/checker.ts` y
+`compiler/checker/safety.ts`.
 
 `COMPTIME_OVERLOAD_UNRESOLVED` y `MODULE_SYMBOL_COLLISION` pertenecen a stage 0
 (`src/codegen/comptime-functions.ts` y `src/modules/module-symbols.ts`): no los
@@ -538,7 +538,7 @@ valores no literales, coincidencias de `match` sin cubrir y miembros o
 contenedores inválidos; `ETSGEN_*` cubre los límites de expansión, generación
 y recursión, la higiene, el parseo del texto generado y el contexto o
 generador inválidos. El nombre exacto de cada código aparece en
-`compiler/checker/comptime.ets` y `compiler/checker/expansion.ets`.
+`compiler/checker/comptime.ts` y `compiler/checker/expansion.ts`.
 
 El frontend nativo también rechaza, con un contrato conservado, la extracción
 genérica sin llamada que instancie los argumentos, los literales de objeto sin
@@ -599,7 +599,7 @@ sección.
 
 - Nodos AST exportados en `src/ast/nodes.ts`.
 - `TokenKind` y `KEYWORDS` en `src/lexer/token.ts`.
-- Ejemplos en `examples/*.ets`.
+- Ejemplos en `examples/*.ts`.
 - Afirmaciones en este `LIMITATIONS.md`.
 
 El check detecta algunas contradicciones y referencias rotas, pero no puede

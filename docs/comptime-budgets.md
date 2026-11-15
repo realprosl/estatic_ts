@@ -46,13 +46,13 @@ ejecutarlas contra v18. Comprueban evaluaciones independientes, contaminación
 desde inicializadores, limpieza tras errores, límites anidados, bucles
 infinitos, recursión excesiva y 100 constantes en el pipeline completo.
 
-El ejemplo `examples/comptime-budgets/main.ets` ejecuta cuatro evaluaciones
+El ejemplo `examples/comptime-budgets/main.ts` ejecuta cuatro evaluaciones
 estáticas independientes. Cada una cabe en el límite individual; su suma ya
 no causa un error por un supuesto presupuesto compartido del programa.
 
 ```bash
 mkdir -p build
-node --experimental-strip-types src/cli.ts examples/comptime-budgets/main.ets -o build/comptime-budgets.cpp
+node --experimental-strip-types src/cli.ts examples/comptime-budgets/main.ts -o build/comptime-budgets.cpp
 g++ -std=c++20 -O2 -DNDEBUG -pthread -fno-exceptions -I. build/comptime-budgets.cpp -o build/comptime-budgets
 ./build/comptime-budgets
 ```
