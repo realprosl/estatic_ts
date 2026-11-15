@@ -66,7 +66,7 @@ Ejemplo nativo con una captura local y `map` generado:
 
 ```bash
 mkdir -p build
-node --experimental-strip-types src/cli.ts examples/etsgen-semantics/main.ets -o build/etsgen-semantics.cpp
+node --experimental-strip-types src/cli.ts examples/etsgen-semantics/main.ts -o build/etsgen-semantics.cpp
 g++ -std=c++20 -O2 -DNDEBUG -pthread -fno-exceptions -I. build/etsgen-semantics.cpp -o build/etsgen-semantics
 ./build/etsgen-semantics
 ```

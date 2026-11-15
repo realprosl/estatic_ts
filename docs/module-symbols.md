@@ -69,4 +69,4 @@ enlazan y ejecutan unidades C++ separadas para comprobar estado mutable,
 closures, sobrecargas, comptime, tipos homónimos, enums, unions, destructuring,
 generadores y helpers de definición, y plantillas exportadas con helpers privados.
 
-Ejemplo ejecutable: `examples/module-private-symbols/main.ets`.
+Ejemplo ejecutable: `examples/module-private-symbols/main.ts`.

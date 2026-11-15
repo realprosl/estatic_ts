@@ -92,4 +92,4 @@ enlazan y ejecutan unidades C++ separadas. Cubren publicaciones importadas,
 tipos, genéricos, estado mutable, hijos, generadores generados, errores,
 visibilidad y confirmación obligatoria de exports no utilizados.
 
-Ejemplo: `examples/generated-module-exports/main.ets`, salida `7`, `ok`.
+Ejemplo: `examples/generated-module-exports/main.ts`, salida `7`, `ok`.

@@ -67,7 +67,7 @@ La regresión antigua que rechazaba 9007199254740993 ahora exige conservarlo.
 Ejemplo reproducible:
 
 ```bash
-node --experimental-strip-types src/cli.ts examples/comptime-exact64/main.ets -o build/comptime-exact64.cpp
+node --experimental-strip-types src/cli.ts examples/comptime-exact64/main.ts -o build/comptime-exact64.cpp
 g++ -std=c++20 -O2 -pthread -fno-exceptions -I. build/comptime-exact64.cpp -o build/comptime-exact64
 ./build/comptime-exact64
 ```

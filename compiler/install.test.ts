@@ -56,7 +56,7 @@ test("installed etsc compiles bootstrap native headers outside the checkout",asy
   assert.equal(installed.status,0,installed.stderr+installed.stdout);
   const moved=join(dir,"moved-prefix");renameSync(prefix,moved);
   const boundary=join(dir,"platform.ets"),probe=join(dir,"bootstrap-header.ets");
-  writeFileSync(boundary,readFileSync(join(root,"compiler/platform/platform.ets"),"utf8"));
+  writeFileSync(boundary,readFileSync(join(root,"compiler/platform/platform.ts"),"utf8"));
   writeFileSync(probe,'import {contentHash} from "./platform"; print(contentHash("abc"));');
   // Neither the working directory nor include flags point at the checkout.
   const p=spawnSync(join(moved,"bin/etsc"),["run",probe,"--binary",join(dir,"bootstrap-header")],{cwd:dir,encoding:"utf8",timeout:120000,env:{...process.env,ESTC_ROOT:""}});
@@ -84,7 +84,7 @@ test("installed etsc initializes, builds and runs independently of the clone wit
   const nativeEnv={...process.env,PATH:poison+":"+process.env.PATH,NATIVO_NODE:"/missing/node",NODE:"/missing/node",XDG_CACHE_HOME:cache,ESTC_RUNTIME_CACHE:"",ESTATIC_RUNTIME_CACHE:""};
   const run=(args:string[],cwd=dir)=>spawnSync(bin,args,{cwd,encoding:"utf8",timeout:120000,env:nativeEnv});
   // La semilla es el compilador ETS (compiler/unity.cpp): su CLI es la de
-  // compiler/driver/main.ets, no la del CLI de la etapa 0. Hasta que la semilla
+  // compiler/driver/main.ts, no la del CLI de la etapa 0. Hasta que la semilla
   // se regenere con #143 todavía imprime la etiqueta antigua.
   for(const flag of ["--version","-version","-v","-V","/V"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/^etsc (\d+\.\d+\.\d+ \(v\d+\)|bootstrap ETS \(ets-ir-2\))\n$/);}
   for(const flag of ["--help","-h","-H"]){const p=run([flag]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/Uso: etsc build\|run/);assert.match(p.stdout,/init \[directorio\]/);assert.match(p.stdout,/--version/);}

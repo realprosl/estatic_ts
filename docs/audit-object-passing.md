@@ -43,7 +43,7 @@ el problema es puramente de **rendimiento**.
 
 ## 2. El caso caliente: `AstNode`
 
-`AstNode` (`compiler/parser/parser.ets:22`) es el tipo que más se copia del compilador:
+`AstNode` (`compiler/parser/parser.ts:22`) es el tipo que más se copia del compilador:
 
 ```ts
 export class AstNode {
@@ -60,7 +60,7 @@ vector: **≈6 asignaciones de heap por copia**.
 ### 2.1 `bindingChild` — 307 copias por compilación
 
 ```ts
-// compiler/binder/binder.ets:47
+// compiler/binder/binder.ts:47
 export function bindingChild(node: AstNode, role: EdgeRole): number {
   for (const edge of node.edges) { if (edge.role == role) return edge.node; } return -1;
 }
@@ -83,12 +83,12 @@ Los accesores que devuelven un nodo del AST lo devuelven **por valor**:
 
 | Método | Fichero | Call sites |
 |---|---|---:|
-| `NativeChecker.node()` | `compiler/checker/checker.ets:24` | 194 |
-| `SafetyAnalyzer.node()` | `compiler/checker/safety.ets:58` | 122 |
-| `IrLowering.node()` | `compiler/ir/lower.ets:46` | 70 |
-| `EffectAnalyzer.node()` | `compiler/checker/effects.ets:29` | 57 |
-| `NativeComptime.node()` | `compiler/checker/comptime.ets:35` | 51 |
-| `Parser.node()` | `compiler/parser/parser.ets:126` | 39 |
+| `NativeChecker.node()` | `compiler/checker/checker.ts:24` | 194 |
+| `SafetyAnalyzer.node()` | `compiler/checker/safety.ts:58` | 122 |
+| `IrLowering.node()` | `compiler/ir/lower.ts:46` | 70 |
+| `EffectAnalyzer.node()` | `compiler/checker/effects.ts:29` | 57 |
+| `NativeComptime.node()` | `compiler/checker/comptime.ts:35` | 51 |
+| `Parser.node()` | `compiler/parser/parser.ts:126` | 39 |
 
 ```ts
 node(module: number, id: number): AstNode { return this.graph.modules[module].cached.result.ast.nodes[id]; }
@@ -104,24 +104,24 @@ lvalue** (`const n = this.node(id);`) — ahí hay copia o movimiento completo d
 
 | Firma | Fichero:línea | Tipo | Call sites | Qué hace el callee |
 |---|---|---|---:|---|
-| `bindingChild(node: AstNode, role)` | `binder/binder.ets:47` | `AstNode` | **307** | lee `node.edges` |
-| `IrVerifier.error(source: IrSource, message)` | `ir/verify.ets:18` | `IrSource` | 90 | lo copia dentro de un `IrIssue` |
-| `Parser.add(kind, start: ParserToken, end: ParserToken)` | `parser/parser.ets:123` | `ParserToken` | **65 + 60** | lo guarda en el `AstNode` |
-| `bindingNumbers(values: number[])` | `binder/format.ets:6` | `number[]` | 36 | recorre el array |
-| `SafetyAnalyzer.expression(active: number[])` | `checker/safety.ets:933` | `number[]` | 29 | recorre el array |
-| `Parser.reportAt(token: ParserToken)` | `parser/parser.ets:107` | `ParserToken` | 28 | lee el token |
-| `NativeComptime.put(value: ConstantValue)` | `checker/comptime.ets:59` | `ConstantValue` | 27 | lo guarda |
-| `Parser.setEnd(cursor, end: ParserToken)` | `parser/parser.ets:130` | `ParserToken` | 11 | lo asigna |
-| `formatDiagnostic(diagnostic: SourceDiagnostic)` | `diag/source.ets:78` | `SourceDiagnostic` | 5 | lo formatea |
-| `formatIr(project: IrProject)` | `ir/format.ets:6` | `IrProject` | 4 | lo recorre entero |
+| `bindingChild(node: AstNode, role)` | `binder/binder.ts:47` | `AstNode` | **307** | lee `node.edges` |
+| `IrVerifier.error(source: IrSource, message)` | `ir/verify.ts:18` | `IrSource` | 90 | lo copia dentro de un `IrIssue` |
+| `Parser.add(kind, start: ParserToken, end: ParserToken)` | `parser/parser.ts:123` | `ParserToken` | **65 + 60** | lo guarda en el `AstNode` |
+| `bindingNumbers(values: number[])` | `binder/format.ts:6` | `number[]` | 36 | recorre el array |
+| `SafetyAnalyzer.expression(active: number[])` | `checker/safety.ts:933` | `number[]` | 29 | recorre el array |
+| `Parser.reportAt(token: ParserToken)` | `parser/parser.ts:107` | `ParserToken` | 28 | lee el token |
+| `NativeComptime.put(value: ConstantValue)` | `checker/comptime.ts:59` | `ConstantValue` | 27 | lo guarda |
+| `Parser.setEnd(cursor, end: ParserToken)` | `parser/parser.ts:130` | `ParserToken` | 11 | lo asigna |
+| `formatDiagnostic(diagnostic: SourceDiagnostic)` | `diag/source.ts:78` | `SourceDiagnostic` | 5 | lo formatea |
+| `formatIr(project: IrProject)` | `ir/format.ts:6` | `IrProject` | 4 | lo recorre entero |
 
 Detalle de dos casos típicos:
 
 ```ts
-// compiler/ir/verify.ets:18  — IrSource se copia DOS veces: al entrar y al construir IrIssue
+// compiler/ir/verify.ts:18  — IrSource se copia DOS veces: al entrar y al construir IrIssue
 error(source: IrSource, message: string): void { this.issues.push(new IrIssue("IR_INVALID", message, source)); }
 
-// compiler/parser/parser.ets:123 — cada ParserToken copiado trae 2 std::string (2 heap) cada uno
+// compiler/parser/parser.ts:123 — cada ParserToken copiado trae 2 std::string (2 heap) cada uno
 add(kind: NodeKind, start: ParserToken, end: ParserToken): number {
   this.nodes.push(new AstNode(kind, start, end)); return this.nodes.length - 1;
 }
@@ -131,9 +131,9 @@ Y las funciones que **devuelven** colecciones por valor, copiando el vector en c
 
 | Firma | Fichero:línea | Call sites |
 |---|---|---:|
-| `genericArguments(text)` → `string[]` | `checker/types.ets:159` | 64 |
-| `splitTypes(text)` → `string[]` | `checker/types.ets:3` | 61 |
-| `functionParams(text)` → `string[]` | `checker/types.ets:28` | 52 |
+| `genericArguments(text)` → `string[]` | `checker/types.ts:159` | 64 |
+| `splitTypes(text)` → `string[]` | `checker/types.ts:3` | 61 |
+| `functionParams(text)` → `string[]` | `checker/types.ts:28` | 52 |
 
 ---
 
@@ -142,17 +142,17 @@ Y las funciones que **devuelven** colecciones por valor, copiando el vector en c
 No todo está mal. Estas firmas ya evitan la copia y sirven de referencia del estilo deseado:
 
 ```ts
-// compiler/checker/ownership.ets:10  — el grafo, el binding y el resultado por CONST REF
+// compiler/checker/ownership.ts:10  — el grafo, el binding y el resultado por CONST REF
 export function resourceType(graph: constRef<ModuleGraph>, binding: constRef<BindingResult>,
                               checked: constRef<CheckResult>, text: string, history: string[]): boolean
 
-// compiler/ir/verify-shapes.ets:3
+// compiler/ir/verify-shapes.ts:3
 export function irAssignable(project: constRef<IrProject>, from: number, to: number, depth: number): boolean
 
-// compiler/ir/verify-borrows.ets:4
+// compiler/ir/verify-borrows.ts:4
 export function verifyBorrowRoutes(project: constRef<IrProject>, f: IrFunction): IrIssue[]
 
-// compiler/checker/safety.ets:1172  — el resultado se escribe con `out`, que ya es T&
+// compiler/checker/safety.ts:1172  — el resultado se escribe con `out`, que ya es T&
 export function validateSafety(graph: ModuleGraph, binding: BindingResult, out result: CheckResult, trace: boolean = false): void
 ```
 
@@ -208,7 +208,7 @@ punteros para el interior del IR. El slot del parámetro guarda el puntero al re
 | `out T` | `T&` | `T*` | **`T&`** |
 
 Los parámetros `out` también se alinean: el checker nativo reescribe `out T` a `ref<T>`
-(`compiler/checker/checker.ets:437`), así que antes emitían `T*` cuando stage 0 emite `T&`.
+(`compiler/checker/checker.ts:437`), así que antes emitían `T*` cuando stage 0 emite `T&`.
 
 El contrato llega también a los **callbacks**: el shape `function` del IR construye el
 `std::function` de una lambda, y ese tipo es observable. Un callback `(x: constRef<T>) => void`

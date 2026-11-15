@@ -43,10 +43,10 @@ y retornos con la evaluación comptime. Incluye 64 bits exactos, aliases,
 sombreado, globals, campos, índices, llamadas y bloques anidados, y rechazo de
 conversiones flotantes fuera de rango.
 
-Ejemplo nativo verificado: `examples/comptime-implicit-integers/main.ets`.
+Ejemplo nativo verificado: `examples/comptime-implicit-integers/main.ts`.
 
 ```bash
-node --experimental-strip-types src/cli.ts examples/comptime-implicit-integers/main.ets -o build/comptime-implicit-integers.cpp
+node --experimental-strip-types src/cli.ts examples/comptime-implicit-integers/main.ts -o build/comptime-implicit-integers.cpp
 g++ -std=c++20 -O2 -pthread -fno-exceptions -I. build/comptime-implicit-integers.cpp -o build/comptime-implicit-integers
 ./build/comptime-implicit-integers
 ```

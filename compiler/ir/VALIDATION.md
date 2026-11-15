@@ -11,8 +11,8 @@ sin estar conectado a estas tablas.
 |---|---|
 | `npm run test:bootstrap:ir`, repetida sobre el código final | **128/128**, cero fallos, cancelaciones y skips |
 | `node --experimental-strip-types compiler/ir/audit.ts` | **131/132**; todos los ejemplos válidos producen IR verificado |
-| Autoanálisis nativo de `compiler/ir/demo.ets` | **36 módulos, 8296 símbolos, 99626 nodos tipados, cero diagnósticos** |
-| Ejemplo negativo esperado | `expected-errors/private-bad.ets` rechazado |
+| Autoanálisis nativo de `compiler/ir/demo.ts` | **36 módulos, 8296 símbolos, 99626 nodos tipados, cero diagnósticos** |
+| Ejemplo negativo esperado | `expected-errors/private-bad.ts` rechazado |
 | `npm test` | **3558/3646**, 88 fallos, cero cancelaciones y skips; 517962 ms |
 | `git diff --check` | Sin errores |
 
@@ -27,16 +27,16 @@ ausencia de `uv.h` o `-luv`, igual que en el registro anterior. No se modificó
 el runtime, instalaron dependencias del sistema ni omitieron pruebas.
 
 El autoanálisis se construyó con el adaptador `buildLoader`, entrada
-`compiler/audit/self.ets`, unity y `-O2`; el ejecutable recibió
-`compiler/ir/demo.ets`. Se puede repetir desde la raíz:
+`compiler/audit/self-check.ts`, unity y `-O2`; el ejecutable recibió
+`compiler/ir/demo.ts`. Se puede repetir desde la raíz:
 
 ```sh
 node --experimental-strip-types --input-type=module <<'JS'
 import { buildLoader, root } from "./compiler/modules/build.ts";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-const binary = await buildLoader(join(root, "build/ir-self"), "compiler/audit/self.ets", true, "-O2");
-execFileSync(binary, [join(root, "compiler/ir/demo.ets")], { stdio: "inherit" });
+const binary = await buildLoader(join(root, "build/ir-self"), "compiler/audit/self-check.ts", true, "-O2");
+execFileSync(binary, [join(root, "compiler/ir/demo.ts")], { stdio: "inherit" });
 JS
 ```
 
@@ -68,8 +68,8 @@ La ampliación está implementada en bootstrap; no conecta un backend productivo
 |---|---|
 | `npm run test:bootstrap:ir` | 90/90; cero fallos, cancelaciones y skips |
 | Auditoría nativa de `examples/` | 131/132 aceptados; los 131 fuentes válidos producen IR verificado |
-| Ejemplo negativo esperado | `expected-errors/private-bad.ets` se rechaza |
-| Autoanálisis nativo de `compiler/ir/demo.ets` | 35 módulos, 8164 símbolos, 97285 nodos tipados, cero diagnósticos |
+| Ejemplo negativo esperado | `expected-errors/private-bad.ts` se rechaza |
+| Autoanálisis nativo de `compiler/ir/demo.ts` | 35 módulos, 8164 símbolos, 97285 nodos tipados, cero diagnósticos |
 | `npm test` | 3524/3612; 88 fallos, cero cancelaciones y skips; 691946 ms |
 | `git diff --check` | Sin errores |
 

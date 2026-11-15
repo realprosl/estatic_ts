@@ -21,7 +21,7 @@ Desde la raíz del repositorio:
 bash examples/todo-project/run.sh
 ```
 
-La prueba transpila `main.ets`, compila el C++ y ejecuta ocho comprobaciones.
+La prueba transpila `main.ts`, compila el C++ y ejecuta ocho comprobaciones.
 Debe terminar con:
 
 ```text
@@ -34,7 +34,7 @@ Con Drogon y sus dependencias instaladas:
 
 ```bash
 node --experimental-strip-types src/cli.ts \
-  examples/todo-project/server.ets \
+  examples/todo-project/server.ts \
   -o build/todo-project-server.cpp
 
 g++ -std=c++20 -O3 -DNDEBUG -pthread -fexceptions -I. \

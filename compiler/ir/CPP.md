@@ -9,8 +9,8 @@ El frontend es ETS compilado y el backend/driver C++20; no se anuncia que todo
 el compilador esté escrito en ETS.
 
 ```sh
-npm run bootstrap:ir:cpp -- examples/hello.ets -o build/hello-ir.cpp --run
-npm run bootstrap:ir:cpp -- examples/async-await.ets --build --binary build/async-ir
+npm run bootstrap:ir:cpp -- examples/hello.ts -o build/hello-ir.cpp --run
+npm run bootstrap:ir:cpp -- examples/async-await.ts --build --binary build/async-ir
 # Entrada alternativa: JSON de un productor nativo de confianza ya verificado.
 npm run bootstrap:ir:cpp -- --from-ir build/project.ir.json -o build/app-ir.cpp
 npm run test:bootstrap:ir:cpp
@@ -67,8 +67,8 @@ ambos comportamientos reales en loopback, no un sustituto del runtime.
 El [CLI general de bootstrap](../CLI.md) conecta el recorrido completo:
 
 ```sh
-estc run examples/interface.ets
-estc build examples/express-style-server.ets
+estc run examples/interface.ts
+estc build examples/express-style-server.ts
 estc run --config estatic.config.json
 ```
 

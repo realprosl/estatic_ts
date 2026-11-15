@@ -12,8 +12,8 @@ pasa **83/83**. El autoanálisis nativo del checker termina con **23 módulos,
 no certifican por sí solas todas las composiciones del lenguaje ni un backend.
 
 ```bash
-npm run bootstrap:checker -- examples/hello.ets --cache build/project-cache
-npm run bootstrap:checker -- examples/native-semantics/main.ets --cache build/project-cache
+npm run bootstrap:checker -- examples/hello.ts --cache build/project-cache
+npm run bootstrap:checker -- examples/native-semantics/main.ts --cache build/project-cache
 npm run test:bootstrap:checker
 ```
 
@@ -33,11 +33,11 @@ del programa solicitado; ese recorrido está documentado en
 
 ## Contrato
 
-`checker.ets` consume `ModuleGraph` y su `BindingResult` de la misma carga.
-`types.ets` contiene operaciones sobre tipos canónicos; no hace binding.
-v63 añade la pasada independiente [`safety.ets`](./safety.ets). Su
+`checker.ts` consume `ModuleGraph` y su `BindingResult` de la misma carga.
+`types.ts` contiene operaciones sobre tipos canónicos; no hace binding.
+v63 añade la pasada independiente [`safety.ts`](./safety.ts). Su
 [contrato de flujo, memoria, escapes y API pública](./SAFETY.md) describe las
-reglas, tablas y restricciones conservadoras. `model.ets` contiene las estructuras
+reglas, tablas y restricciones conservadoras. `model.ts` contiene las estructuras
 compartidas, evitando dependencias circulares. `CheckResult` devuelve:
 
 - `files[m].types[node]`: tipo de expresiones y declaraciones comprobadas.

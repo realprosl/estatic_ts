@@ -91,7 +91,7 @@ acceso de definición explícito y no promete higiene modular completa.
 ## 4. Guardar los fragmentos ETS para depurarlos
 
 ```bash
-node --experimental-strip-types src/cli.ts examples/etsgen-publication/main.ets \
+node --experimental-strip-types src/cli.ts examples/etsgen-publication/main.ts \
   -o build/publication.cpp --emit-etsgen build/generated-ets
 ```
 

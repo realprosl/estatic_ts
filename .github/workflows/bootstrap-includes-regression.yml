@@ -29,9 +29,9 @@ jobs:
           mkdir -p /tmp/estatic-includes
           compile_case() {
             local name="$1" expected="$2" source="$3"
-            printf '%s\n' "$source" > "/tmp/estatic-includes/$name.ets"
+            printf '%s\n' "$source" > "/tmp/estatic-includes/$name.ts"
             echo "::group::$name ($expected)"
-            if native-cpp/native/etsc build "/tmp/estatic-includes/$name.ets" --binary "/tmp/estatic-includes/$name" --no-progress > "/tmp/estatic-includes/$name.log" 2>&1; then
+            if native-cpp/native/etsc build "/tmp/estatic-includes/$name.ts" --binary "/tmp/estatic-includes/$name" --no-progress > "/tmp/estatic-includes/$name.log" 2>&1; then
               if [[ "$expected" != pass ]]; then
                 cat "/tmp/estatic-includes/$name.log"
                 echo "::error::Invalid case $name was accepted"

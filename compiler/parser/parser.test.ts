@@ -16,7 +16,7 @@ import { DiagnosticError } from "../../src/core/diagnostic.ts";
 import type { Token } from "../../src/lexer/token.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const entry = join(root, "compiler/parser/demo.ets");
+const entry = join(root, "compiler/parser/demo.ts");
 const directory = mkdtempSync(join(tmpdir(), "estatic-bootstrap-parser-"));
 const binary = join(directory, "parser-demo");
 let graph: Awaited<ReturnType<typeof loadModuleGraph>>;
@@ -26,7 +26,7 @@ type NativeResult = { root: number; nodes: NativeNode[]; diagnostics: { message:
 before(async () => {
   graph = await loadModuleGraph(entry);
   const result = await compileFile(entry, { baseDirectory: root });
-  assert.deepEqual(result.moduleNames.map(file => relative(root, file)), ["compiler/parser/ast-schema.ets", "compiler/parser/parser.ets", "compiler/parser/demo.ets"]);
+  assert.deepEqual(result.moduleNames.map(file => relative(root, file)), ["compiler/parser/ast-schema.ts", "compiler/parser/parser.ts", "compiler/parser/demo.ts"]);
   writeFileSync(join(directory, "estatic_common.hpp"), result.header);
   const units = result.modules.map((module, index) => {
     const file = join(directory, `unit-${index}.cpp`); writeFileSync(file, module.cpp); return file;
@@ -539,9 +539,9 @@ test("bootstrap parser: every expression span matches stage 0", () => {
   const sort = (a: any, b: any) => JSON.stringify(a).localeCompare(JSON.stringify(b));
   assert.deepEqual(actual.sort(sort), spans.sort(sort));
 });
-test("bootstrap parser: parses the complete isolated lexer source", () => { parity(readFileSync(join(root, "compiler/lexer/lexer.ets"), "utf8")); });
+test("bootstrap parser: parses the complete isolated lexer source", () => { parity(readFileSync(join(root, "compiler/lexer/lexer.ts"), "utf8")); });
 test("bootstrap parser: parses its own complete ETS source", () => {
-  const source = readFileSync(join(root, "compiler/parser/parser.ets"), "utf8");
+  const source = readFileSync(join(root, "compiler/parser/parser.ts"), "utf8");
   assert.deepEqual(native(source).diagnostics, []);
   // Stage 0 erases imports into placeholders; compare the same module-free
   // source in both parsers. Import metadata has its own native tests below.
@@ -558,7 +558,7 @@ test("bootstrap parser: accepts repository examples accepted by the stage 0 gram
     if (result.diagnostics.length) failures.push(`${file}: ${JSON.stringify(result.diagnostics.slice(0, 3))}`);
   }
   t.diagnostic(`${accepted}/${files.length} examples accepted by stage 0; excluded with stage 0 diagnostics: ${excluded.join(", ")}`);
-  assert.deepEqual(excluded, ["exports-demo.ets", "generated-module-exports/index.ets", "generated-module-exports/main.ets", "generated-module-exports/producer.ets", "imports-as/main.ets", "module-exports/counter.ets", "module-exports/index.ets", "module-exports/main.ets"], "a new stage 0 rejection must not silently remove an example from the audit");
+  assert.deepEqual(excluded, ["exports-demo.ets", "generated-module-exports/index.ts", "generated-module-exports/main.ts", "generated-module-exports/producer.ts", "imports-as/main.ts", "module-exports/counter.ts", "module-exports/index.ts", "module-exports/main.ts"], "a new stage 0 rejection must not silently remove an example from the audit");
   assert.ok(accepted >= 120); assert.deepEqual(failures, []);
 });
 test("bootstrap parser: graph contains only schema, parser and its driver", () => {
@@ -930,7 +930,7 @@ test("bootstrap parser: module spans include aliases and preserve following stat
   assert.equal(fields(nodes[2]).name, "after");
 });
 test("bootstrap parser: both complete drivers now parse their import statements", () => {
-  for (const path of ["compiler/lexer/demo.ets", "compiler/parser/demo.ets"]) {
+  for (const path of ["compiler/lexer/demo.ts", "compiler/parser/demo.ts"]) {
     const result = native(readFileSync(join(root, path), "utf8")); assert.deepEqual(result.diagnostics, [], path);
     assert.equal(statements(result)[0].kind, "ImportDeclaration");
   }

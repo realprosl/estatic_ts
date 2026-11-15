@@ -65,7 +65,7 @@ const kwRe = /\b([a-zA-Z]+):\s*"[a-zA-Z]+"/g;
 let kw: RegExpExecArray | null;
 while ((kw = kwRe.exec(kwBlock))) keywords.push(kw[1]);
 
-const examples = listDir("examples", ".ets").map((f) => f.replace(/\.ets$/, ""));
+const examples = listDir("examples", ".ts").map((f) => f.replace(/\.ts$/, ""));
 
 // ─── Inventario del doc ────────────────────────────────────────────────────
 
@@ -151,7 +151,7 @@ for (const ex of examples) {
   if (isRejected(ex)) {
     issues.push({
       rule: "contradiction",
-      symbol: `Example ${ex}.ets`,
+      symbol: `Example ${ex}.ts`,
       detail: `LIMITATIONS.md marca este ejemplo como relacionado con una feature rechazada.`,
     });
   }
@@ -164,7 +164,7 @@ for (const ref of exampleRefsInDoc) {
   if (!examples.includes(ref)) {
     issues.push({
       rule: "broken-reference",
-      symbol: `examples/${ref}.ets`,
+      symbol: `examples/${ref}.ts`,
       detail: `LIMITATIONS.md referencia este ejemplo pero no existe en examples/.`,
     });
   }

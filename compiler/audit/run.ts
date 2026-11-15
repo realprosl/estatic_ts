@@ -20,7 +20,7 @@ function option(name: string): string | undefined {
 }
 const directory=mkdtempSync(join(root,'build-native-audit-'));
 try {
-  const binary=option('--binary') ?? await buildLoader(join(directory,'binary'),'compiler/checker/demo.ets',true);
+  const binary=option('--binary') ?? await buildLoader(join(directory,'binary'),'compiler/checker/demo.ts',true);
   const results=[];
   for(const c of cases){
     const project=join(directory,c.id);

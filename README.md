@@ -110,7 +110,7 @@ y los añade solo.
 ### Compilar un ejemplo puntual sin proyecto
 
 ```bash
-etsc examples/hello.ets -o /tmp/hello.cpp --unity
+etsc examples/hello.ts -o /tmp/hello.cpp --unity
 g++ -std=c++20 -fno-exceptions -pthread -I. /tmp/hello.cpp -o /tmp/hello
 /tmp/hello
 ```
@@ -515,7 +515,7 @@ El identificador global `console` expone la misma forma que en Node, mapeado por
 | `console.warn(...)` | stderr (con salto de línea) | `printError(...)` |
 | `console.error(...)` | stderr (con salto de línea) | `printError(...)` |
 
-Todas las firmas son variádicas y aceptan `string`, `number` y `boolean` mezclados en una sola llamada. El analizador rechaza cualquier otro método con un diagnóstico explícito. Ver [examples/console-demo.ets](examples/console-demo.ets).
+Todas las firmas son variádicas y aceptan `string`, `number` y `boolean` mezclados en una sola llamada. El analizador rechaza cualquier otro método con un diagnóstico explícito. Ver [examples/console-demo.ts](examples/console-demo.ts).
 
 ```typescript
 console.log("Hola desde console.log");
@@ -544,7 +544,7 @@ El identificador global `fs` agrupa las operaciones de archivo bajo la misma for
 | `fs.unlinkSync(path)` | `Result<boolean>` | `removeFile(path)` (overload `Result`) |
 | `fs.existsSync(path)` | `boolean` | `fileExists(path)` |
 
-El analizador rechaza cualquier otro método con un diagnóstico que lista las APIs válidas. Ver [examples/fs-demo.ets](examples/fs-demo.ets).
+El analizador rechaza cualquier otro método con un diagnóstico que lista las APIs válidas. Ver [examples/fs-demo.ts](examples/fs-demo.ts).
 
 ```typescript
 if (fs.existsSync("/tmp/cache.txt")) {
@@ -812,7 +812,7 @@ El compilador configurado añade estas dos librerías automáticamente al detect
 
 Los fallos síncronos y asíncronos utilizan el mismo `Result<T>` en lugar de excepciones. Antes de llamar a `value()` debe comprobarse `isOk()`; `error()` contiene el diagnóstico. Los handles TCP son valores RAII compartidos: el descriptor se cierra explícitamente con `closeTcp` o cuando desaparece su último propietario.
 
-El backend está dirigido a POSIX. `poll`, TLS y el pool funcionan en Linux/macOS; `io_uring` se activa únicamente en Linux. Por decisión de diseño actual no se incluye backend Windows/IOCP. La capa HTTP ya está entregada en V28 (servidor Express-style + cliente fetch; backend dual cpp-httplib / Drogon; ver `docs/TUTORIAL.md` §16-17). Los ejemplos [http-server.ets](examples/http-server.ets) y [tls-server.ets](examples/tls-server.ets) muestran ambos transportes.
+El backend está dirigido a POSIX. `poll`, TLS y el pool funcionan en Linux/macOS; `io_uring` se activa únicamente en Linux. Por decisión de diseño actual no se incluye backend Windows/IOCP. La capa HTTP ya está entregada en V28 (servidor Express-style + cliente fetch; backend dual cpp-httplib / Drogon; ver `docs/TUTORIAL.md` §16-17). Los ejemplos [http-server.ets](examples/http-server.ts) y [tls-server.ets](examples/tls-server.ts) muestran ambos transportes.
 
 ## Imports y grafo de módulos
 
@@ -823,8 +823,8 @@ en [docs/import-aliases.md](./docs/import-aliases.md). Default, reexports y list
 multilínea se describen en [docs/module-exports.md](./docs/module-exports.md).
 
 ```typescript
-import { sumRange, Calculator } from "./math.ets";
-import "@core/runtime.ets";
+import { sumRange, Calculator } from "./math.ts";
+import "@core/runtime.ts";
 ```
 
 El CLI recorre dependencias en orden topológico, analiza el programa completo y genera una unidad C++ independiente por módulo. La cabecera común contiene declaraciones, tipos y cuerpos de plantillas que necesitan los consumidores. También puede incluir tipos privados y declaraciones de helpers alcanzados por `etsDefinition` o plantillas compartidas. Esto no los convierte en exports del dialecto. Las funciones privadas restantes conservan linkage interno en su módulo. Después, el compilador nativo crea un `.o` cacheado para cada unidad y el linker construye el ejecutable final. Los imports no relativos se resuelven mediante `aliases` y después `moduleRoots` de la configuración.
@@ -832,13 +832,13 @@ El CLI recorre dependencias en orden topológico, analiza el programa completo y
 Las funciones, clases, interfaces y variables son privadas al módulo por defecto. Para utilizarlas desde otro archivo deben marcarse con `export` e importarse por nombre:
 
 ```typescript
-// math.ets
+// math.ts
 export const base: number = 10;
 export function sum(value: number): number { return base + value; }
 function internalCheck(): boolean { return true; }
 
-// main.ets
-import { base, sum } from "./math.ets";
+// main.ts
+import { base, sum } from "./math.ts";
 print(sum(base));
 ```
 
@@ -860,7 +860,7 @@ El objeto global `console` ofrece salida, colores, cursor, limpieza y dimensione
 sin imports. Su header de terminal se incluye solo al usar los controles;
 el logging habitual no lo activa. El backend no necesita
 bibliotecas de terceros. Ver [terminal](docs/terminal.md) y
-`examples/terminal/main.ets`. Teclado y sesiones quedan pendientes.
+`examples/terminal/main.ts`. Teclado y sesiones quedan pendientes.
 
 
 Un cambio interno que conserva las firmas públicas solo recompila el módulo modificado. Como las declaraciones C++ todavía residen en una cabecera común, un cambio de API pública invalida conservadoramente todos los objetos. Cuando existan cabeceras C++ individuales por módulo, esa invalidación podrá limitarse a sus dependientes transitivos. Las sentencias de nivel superior se ejecutan una sola vez en orden topológico; las variables compartidas deben marcarse con `export` e importarse explícitamente.
@@ -943,9 +943,9 @@ El AST de cualquier archivo puede inspeccionarse sin Node:
 
 ```bash
 scripts/build-ast-dump.sh
-build/tools/ets-ast-dump examples/hello.ets
-build/tools/ets-ast-dump examples/hello.ets --records
-build/tools/ets-ast-dump examples/hello.ets --syntax
+build/tools/ets-ast-dump examples/hello.ts
+build/tools/ets-ast-dump examples/hello.ts --records
+build/tools/ets-ast-dump examples/hello.ts --syntax
 ```
 
 ## Próximas extensiones recomendadas
@@ -1068,9 +1068,9 @@ Más allá del dialecto en sí, el compilador incluye herramientas que mejoran l
 ### Error reporting legible
 
 ```bash
-$ etsc src/broken.ets
+$ etsc src/broken.ts
 error[semantic]: Función no definida 'gret'
-  --> src/broken.ets:4:1
+  --> src/broken.ts:4:1
 4 | gret();
   | ^^^^^^
   = hint: ¿Quisiste decir 'greet'?
@@ -1115,7 +1115,7 @@ Listo.
 ```bash
 $ npm run watch
 watch: vigilando /mi-proyecto
-cambio: src/main.ets
+cambio: src/main.ts
 → re-compilando
 Build incremental (hit): 0 módulo(s) compilado(s), 2 reutilizado(s), 45ms
 ✓ ok en 0.39s
@@ -1159,29 +1159,29 @@ npm run demos
 
 | Categoría | Ejemplos |
 |---|---|
-| **Hello world** | `hello.ets` |
-| **Constructores y clases** | `constructor-demo.ets`, `complete-demo.ets`, `composition.ets`, `interface.ets`, `mutable-borrows.ets`, `default-args-demo.ets` |
-| **Genéricos y tipos** | `generics.ets`, `overloads-variadics.ets`, `union-demo.ets`, `intersection-demo.ets`, `type-aliases.ets`, `default-type-params.ets`, `typeof-type.ets`, `typeof-value.ets`, `function-type-demo.ets` |
-| **Colecciones y arrays** | `collections.ets`, `map-set-demo.ets`, `spread-array-demo.ets`, `destructuring-demo.ets`, `destructuring-default.ets` |
-| **Async y promesas** | `async-await.ets`, `async-files.ets`, `cancellation.ets`, `for-await-demo.ets` |
-| **Closures y funciones** | `closures.ets`, `for-of-demo.ets`, `for-in-demo.ets`, `match-demo.ets`, `using-demo.ets` |
-| **Stdlib runtime** | `math-date-demo.ets`, `numeric-literal.ets`, `enum-demo.ets`, `delete-demo.ets`, `instanceof-demo.ets` |
-| **JSON y strings** | `json-tree-demo.ets`, `template-strings-demo.ets` |
-| **Tipos nullish** | `optional-demo.ets`, `nullish-coalescing-demo.ets`, `optional-chaining-demo.ets`, `optional-parameter-demo.ets` |
-| **Decoradores** | `decorator-demo.ets` |
-| **Módulos** | `exports-demo.ets` |
-| **I/O nativo** | `native-io.ets`, `fs-demo.ets`, `result-files.ets`, `node-api-demo.ets`, `console-demo.ets` |
-| **Red y TLS** | `http-server.ets`, `tls-server.ets` |
+| **Hello world** | `hello.ts` |
+| **Constructores y clases** | `constructor-demo.ts`, `complete-demo.ts`, `composition.ts`, `interface.ts`, `mutable-borrows.ts`, `default-args-demo.ts` |
+| **Genéricos y tipos** | `generics.ts`, `overloads-variadics.ts`, `union-demo.ts`, `intersection-demo.ts`, `type-aliases.ts`, `default-type-params.ts`, `typeof-type.ts`, `typeof-value.ts`, `function-type-demo.ts` |
+| **Colecciones y arrays** | `collections.ts`, `map-set-demo.ts`, `spread-array-demo.ts`, `destructuring-demo.ts`, `destructuring-default.ts` |
+| **Async y promesas** | `async-await.ts`, `async-files.ts`, `cancellation.ts`, `for-await-demo.ts` |
+| **Closures y funciones** | `closures.ts`, `for-of-demo.ts`, `for-in-demo.ts`, `match-demo.ts`, `using-demo.ts` |
+| **Stdlib runtime** | `math-date-demo.ts`, `numeric-literal.ts`, `enum-demo.ts`, `delete-demo.ts`, `instanceof-demo.ts` |
+| **JSON y strings** | `json-tree-demo.ts`, `template-strings-demo.ts` |
+| **Tipos nullish** | `optional-demo.ts`, `nullish-coalescing-demo.ts`, `optional-chaining-demo.ts`, `optional-parameter-demo.ts` |
+| **Decoradores** | `decorator-demo.ts` |
+| **Módulos** | `exports-demo.ts` |
+| **I/O nativo** | `native-io.ts`, `fs-demo.ts`, `result-files.ts`, `node-api-demo.ts`, `console-demo.ts` |
+| **Red y TLS** | `http-server.ts`, `tls-server.ts` |
 
 Para ejecutar un ejemplo:
 
 ```bash
-node --experimental-strip-types src/cli.ts examples/hello.ets -o hello.cpp --unity
+node --experimental-strip-types src/cli.ts examples/hello.ts -o hello.cpp --unity
 g++ -std=c++20 -fno-exceptions -pthread -I. hello.cpp -o hello
 ./hello
 ```
 
-O directamente con `npm start -- examples/<nombre>.ets -o <salida>.cpp` y luego compilar con `g++`.
+O directamente con `npm start -- examples/<nombre>.ts -o <salida>.cpp` y luego compilar con `g++`.
 
 ## Dirección y estado del proyecto
 
@@ -1231,8 +1231,8 @@ ETS analiza las fuentes solicitadas sin delegar ese análisis al checker TS.
 
 ```bash
 npm run bootstrap:lexer -- 'const x: number = 1;'
-npm run bootstrap:frontend -- --file examples/hello.ets
-npm run bootstrap:checker -- examples/hello.ets
+npm run bootstrap:frontend -- --file examples/hello.ts
+npm run bootstrap:checker -- examples/hello.ts
 npm run audit:bootstrap
 npm run audit:bootstrap:syntax
 npm run audit:bootstrap:self
@@ -1257,14 +1257,14 @@ El [CLI general de bootstrap](./compiler/CLI.md) conecta el frontend nativo,
 el IR verificado y C++, reutilizando el runtime existente:
 
 ```sh
-npm run bootstrap -- examples/interface.ets --run
+npm run bootstrap -- examples/interface.ts --run
 ```
 
 Incluye métodos de interfaces/intersecciones y HTTP con cpp-httplib/Drogon y
 cliente libcurl. La selección `@cpp_drogon` y los wrappers son los existentes.
 
 El backend C++20 del IR ya está disponible mediante `npm run bootstrap:ir:cpp --
-examples/hello.ets --run`. Consume las tablas verificadas de `ets-ir-2` y
+examples/hello.ts --run`. Consume las tablas verificadas de `ets-ir-2` y
 reutiliza el runtime de `src/`, con capacidades y límites documentados en
 [`compiler/ir/CPP.md`](./compiler/ir/CPP.md). El CLI histórico permanece
 separado durante la validación de este recorrido.

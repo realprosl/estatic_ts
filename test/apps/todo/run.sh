@@ -30,7 +30,7 @@ FAIL=0
 # del cpp generado (`#include "runtime/ets_runtime.hpp"`) se
 # resuelvan correctamente.
 rm -f todo.cpp todo
-${ETS} todo.ets > /tmp/etsc_out.txt 2>&1 || { echo "etsc failed"; cat /tmp/etsc_out.txt; exit 1; }
+${ETS} todo.ts > /tmp/etsc_out.txt 2>&1 || { echo "etsc failed"; cat /tmp/etsc_out.txt; exit 1; }
 if ! (cd "${ROOT_DIR}" && ${GXX} ${INCLUDE} "${SCRIPT_DIR}/todo.cpp" ${RUNTIME_OBJ} -luv -o "${SCRIPT_DIR}/todo") > /tmp/gxx_out.txt 2>&1; then
   echo "g++ failed"
   cat /tmp/gxx_out.txt

@@ -133,7 +133,7 @@ jobs:
           test -x "$RUNNER_TEMP/prefix/bin/etsc"
           test ! -e "$ESTC_ROOT/src"
           test -f "$ESTC_ROOT/compiler/modules/platform.hpp"
-          test -z "$(find "$ESTC_ROOT/compiler" -type f -name '*.ets' -print -quit)"
+          test -z "$(find "$ESTC_ROOT/compiler" -type f \( -name '*.ts' -o -name '*.ets' \) -print -quit)"
           "$RUNNER_TEMP/prefix/bin/etsc" --version
           "$RUNNER_TEMP/prefix/bin/etsc" init "$RUNNER_TEMP/proyecto"
           cd "$RUNNER_TEMP/proyecto"
@@ -156,9 +156,9 @@ jobs:
           mkdir -p /tmp/estatic-includes
           compile_case() {
             local name="$1" expected="$2" source="$3"
-            printf '%s\n' "$source" > "/tmp/estatic-includes/$name.ets"
+            printf '%s\n' "$source" > "/tmp/estatic-includes/$name.ts"
             echo "::group::$name ($expected)"
-            if native-cpp/native/etsc build "/tmp/estatic-includes/$name.ets" --binary "/tmp/estatic-includes/$name" --no-progress > "/tmp/estatic-includes/$name.log" 2>&1; then
+            if native-cpp/native/etsc build "/tmp/estatic-includes/$name.ts" --binary "/tmp/estatic-includes/$name" --no-progress > "/tmp/estatic-includes/$name.log" 2>&1; then
               if [[ "$expected" != pass ]]; then
                 cat "/tmp/estatic-includes/$name.log"
                 echo "::error::Invalid case $name was accepted"

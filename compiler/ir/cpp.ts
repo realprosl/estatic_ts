@@ -25,7 +25,7 @@ export async function buildIrFrontend(directory=join(root,"build/compiler/ir-cpp
   if(existsSync(binary)&&existsSync(stamp)&&readFileSync(stamp,"utf8")===identity){detail(`Frontend: caché reutilizada (${binary})`);return binary;}
   detail("Frontend: caché no válida; reconstruyendo");
   const {buildLoader}=await import("../modules/build.ts");
-  const built=await buildLoader(directory,"compiler/ir/demo.ets",true,"-O0",detail);writeFileSync(stamp,identity);return built;
+  const built=await buildLoader(directory,"compiler/ir/demo.ts",true,"-O0",detail);writeFileSync(stamp,identity);return built;
 }
 export function nativeIr(binary:string, entry:string,loaderArgs:string[]=[],detail:(text:string)=>void=()=>{}):IrProject {
   detail(`Comando frontend: ${JSON.stringify([binary,resolve(entry),...loaderArgs])}`);
@@ -101,7 +101,7 @@ export async function main(argv:string[]):Promise<void> {
   let entry="",fromIr=false,output="",binary="",build=false,run=false,cxx=process.env.CXX??"g++";
   for(let n=0;n<argv.length;n++) {
     const a=argv[n];
-    if(a==="--help"){console.log("etsc-ir-cpp <entry.ets | --from-ir project.json> [-o app.cpp] [--build] [--run] [--binary app] [--cxx g++]");return;}
+    if(a==="--help"){console.log("etsc-ir-cpp <entry.ts | --from-ir project.json> [-o app.cpp] [--build] [--run] [--binary app] [--cxx g++]");return;}
     if(a==="--from-ir"){fromIr=true;continue;}
     if(["-o","--binary","--cxx"].includes(a)){const value=argv[++n];if(!value)throw new Error(`Missing value for ${a}`);if(a==="-o")output=value;else if(a==="--binary")binary=value;else cxx=value;continue;}
     if(a==="--build"){build=true;continue;}if(a==="--run"){run=build=true;continue;}

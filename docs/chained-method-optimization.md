@@ -58,7 +58,7 @@ de escapes y lifetimes de capturas por referencia sigue pendiente.
 Ejemplo reproducible (salida: `55`, `1`, `2`, `3`, en líneas separadas):
 
 ```bash
-node --experimental-strip-types src/cli.ts examples/array-pipeline-semantics/main.ets -o build/array-pipeline-semantics.cpp
+node --experimental-strip-types src/cli.ts examples/array-pipeline-semantics/main.ts -o build/array-pipeline-semantics.cpp
 g++ -std=c++20 -O2 -pthread -fno-exceptions -I. build/array-pipeline-semantics.cpp -o build/array-pipeline-semantics
 ./build/array-pipeline-semantics
 ```

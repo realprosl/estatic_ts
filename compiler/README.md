@@ -38,8 +38,8 @@ que tiene debajo, y no hay ciclos entre archivos (#176, épica #174). Lo comprue
 | `diag` | `diag/` (diagnósticos, catálogo, sugerencias y la fachada `parseSource`) | syntax, platform |
 | `semantic` | `modules/`, `binder/` (con `builtins`), `checker/`, `analysis/` | diag, syntax, platform |
 | `ir` | `ir/` (bajada y verificación) | semantic y las de debajo |
-| `backend-cpp` | `backend/` | de `ir/` solo `ir/model.ets`; platform |
-| `driver` | `driver/`, `audit/` y las entradas `*/demo.ets` | todas |
+| `backend-cpp` | `backend/` | de `ir/` solo `ir/model.ts`; platform |
+| `driver` | `driver/`, `audit/` y las entradas `*/demo.ts` | todas |
 
 `syntax` va por debajo de `diag`: el lexer y el parser no dependen de nada, y los
 diagnósticos usan sus tipos (`ParserToken`, `AstNode`). Así el parser puede salir a
@@ -50,13 +50,13 @@ un repo propio (#160) sin arrastrar el resto del compilador.
 ```
 compiler/
   lexer/
-    lexer.ets       implementación y tipos locales del lexer
-    demo.ets        driver que llama a demonstrateLexer(source)
+    lexer.ts       implementación y tipos locales del lexer
+    demo.ts        driver que llama a demonstrateLexer(source)
     run.ts          adaptador host: transpilar, compilar y ejecutar
     lexer.test.ts   pruebas del ejecutable nativo y comparación con stage 0
 ```
 
-`lexer.ets` no tiene imports, código C++ inyectado ni dependencias del parser,
+`lexer.ts` no tiene imports, código C++ inyectado ni dependencias del parser,
 AST o checker. Define `Lexer`, `LexerToken`, `LexerDiagnostic`, `LexerResult`,
 `tokenize(source)` e `inspectTokens(source)`. Esta última función produce JSON
 con tokens, lexemas, posiciones y diagnósticos. Cada llamada a `tokenize` crea
@@ -80,7 +80,7 @@ También se puede hacer cada paso explícitamente:
 
 ```bash
 mkdir -p build/compiler/lexer
-node --experimental-strip-types src/cli.ts compiler/lexer/demo.ets -o build/compiler/lexer/demo.cpp
+node --experimental-strip-types src/cli.ts compiler/lexer/demo.ts -o build/compiler/lexer/demo.cpp
 g++ -std=c++20 -O0 -pthread -fno-exceptions -I. build/compiler/lexer/demo.cpp -o build/compiler/lexer/demo
 ./build/compiler/lexer/demo 'const answer: number = 42;'
 ```
@@ -96,7 +96,7 @@ y enlazan con g++ y ejecutan el binario. Incluyen palabras clave, comentarios,
 cadenas/escapes, números, operadores, templates crudos, newline significativo,
 CRLF, whitespace Unicode, recuperación tras errores y posiciones. Hay 40
 fuentes ASCII generadas de forma determinista dentro de una de las pruebas.
-Otra prueba tokeniza el propio `lexer.ets` y compara todos sus tokens con el
+Otra prueba tokeniza el propio `lexer.ts` y compara todos sus tokens con el
 lexer TypeScript de arranque. La prueba de aislamiento exige exactamente dos
 fuentes ETS en su carpeta: lexer y demo. El grafo compilado sigue teniendo
 exactamente esos dos módulos aunque haya otros pasos en `compiler/`.
@@ -146,7 +146,7 @@ ni vincula los símbolos de otros módulos.
 
 El [puente](./diag/README.md) conecta lexer ETS y parser ETS mediante una
 conversión explícita de tokens. También expande templates dentro del lexer ETS.
-`npm run bootstrap:frontend -- --file examples/todo-project/main.ets` lee el
+`npm run bootstrap:frontend -- --file examples/todo-project/main.ts` lee el
 archivo en el host y entrega el texto al binario, que produce tokens, AST y
 diagnósticos con archivo/posición. No resuelve sus imports ni ejecuta ese código.
 Lexer y parser continúan sin importarse entre sí y conservan sus suites aisladas.
@@ -169,7 +169,7 @@ La [documentación del cargador](./modules/README.md) describe el contrato vigen
 de rutas y reutilización sintáctica persistente antes de lexer/parser.
 
 ```bash
-npm run bootstrap:modules -- examples/todo-project/main.ets --cache build/project-cache
+npm run bootstrap:modules -- examples/todo-project/main.ts --cache build/project-cache
 npm run test:bootstrap:modules
 ```
 
@@ -184,7 +184,7 @@ el contrato aislado del cargador.
 de nombres/imports/exports como tablas independientes del AST sintáctico.
 
 ```bash
-npm run bootstrap:binder -- examples/todo-project/main.ets
+npm run bootstrap:binder -- examples/todo-project/main.ts
 npm run test:bootstrap:binder
 ```
 
@@ -193,10 +193,10 @@ independientes de este binding.
 
 ## Paso 6: checker inicial del proyecto (v62)
 
-[`checker/checker.ets`](./checker/checker.ets) consume el grafo y el binding,
+[`checker/checker.ts`](./checker/checker.ts) consume el grafo y el binding,
 resuelve e infiere tipos mediante tablas separadas y comprueba expresiones,
 llamadas, retornos, miembros y compatibilidades entre módulos. La demo
-`npm run bootstrap:checker -- examples/hello.ets` conserva el AST sintáctico y
+`npm run bootstrap:checker -- examples/hello.ts` conserva el AST sintáctico y
 entrega tipos, símbolos de miembros y firmas seleccionadas/instanciadas. Se
 construye el ejecutable con stage 0; el análisis solicitado se ejecuta en C++.
 
@@ -207,7 +207,7 @@ del programa solicitado. Ver el [contrato y cobertura](./checker/README.md).
 
 ## Paso 7: flujo, memoria y superficies públicas (v63)
 
-[`checker/safety.ets`](./checker/safety.ets) comprueba estados de inicialización y
+[`checker/safety.ts`](./checker/safety.ts) comprueba estados de inicialización y
 ownership por ruta, préstamos/readonly, capturas por identidad y procedencia de
 escapes. Valida la superficie exportada usando los símbolos de origen, también
 a través de aliases y barrels. Añade tablas de capturas y duraciones de préstamos,
@@ -215,7 +215,7 @@ sin anotar AST/binding ni persistir semántica. Ver [contrato y límites](./chec
 
 ## Paso 8: resúmenes de efectos y préstamos (v64)
 
-[`checker/effects.ets`](./checker/effects.ets) construye conjuntos de destinos y
+[`checker/effects.ts`](./checker/effects.ts) construye conjuntos de destinos y
 resúmenes por función mediante puntos fijos. Distingue invocar, retener y devolver
 callbacks; propaga efectos sobre símbolos originales y obligaciones de préstamos.
 La pasada de seguridad los consume para llamadas indirectas y recursivas. Ver

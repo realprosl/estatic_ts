@@ -11,7 +11,7 @@ import {TypeChecker} from "../../src/semantic/type-checker.ts";
 import {DiagnosticError} from "../../src/core/diagnostic.ts";
 import {buildLoader,root} from "../modules/build.ts";
 const directory=mkdtempSync(join(root,"build-checker-test-")); let binary:string;
-before(async()=>{binary=await buildLoader(join(directory,"binary"),"compiler/checker/demo.ets",true);});
+before(async()=>{binary=await buildLoader(join(directory,"binary"),"compiler/checker/demo.ts",true);});
 after(()=>rmSync(directory,{recursive:true,force:true}));
 function fixture(source:string,files:Record<string,string>={}){const dir=mkdtempSync(join(directory,"project-"));for(const[name,text]of Object.entries({"main.ets":source,...files})){mkdirSync(dirname(join(dir,name)),{recursive:true});writeFileSync(join(dir,name),text);}return{entry:join(dir,"main.ets"),cache:join(dir,"cache")};}
 function run(f:ReturnType<typeof fixture>,status=0){const p=spawnSync(binary,[f.entry,"--cache",f.cache],{encoding:"utf8",timeout:60000,maxBuffer:64*1024*1024});assert.ifError(p.error);assert.equal(p.status,status,p.stderr+p.stdout.slice(-3000));if(process.env.ESTATIC_TEST_COMPARE_JOBS==="1") {
@@ -138,7 +138,7 @@ test('checker: type-only typeof query',()=>check('import type {f} from "./lib"; 
 test('checker: upstream errors short circuit type tables',()=>{for(const source of ['import "./absent";','const x=;','print(missing);']){const g=run(fixture(source),1);assert.equal(g.files.length,0);assert.equal(g.symbolTypes.length,0);assert.ok(g.diagnostics.every((d:any)=>d.phase!=='checker'));}});
 test('checker: Unicode CRLF positions survive',()=>{const g=error('const s="🙂";\r\nconst n:number="x";',/incompatible/);assert.equal(g.diagnostics[0].line,2);assert.equal(g.diagnostics[0].column,16);assert.equal(g.diagnostics[0].offset,'const s="🙂";\r\nconst n:number='.length);});
 test('checker: cold/warm processes preserve complete typed output',()=>{const f=fixture('import {f} from "./lib"; const n=f(1);',{'lib.ets':'export function f(n:number):number{return n+1;}'});const first=run(f);const second=run(f);assert.deepEqual(second,first);writeFileSync(join(dirname(f.entry),'lib.ets'),'export function f(n:number):string{return "x";}');const third=run(f);assert.deepEqual(types(third,'CallExpression'),['string']);});
-test('checker: real hello example checks natively',()=>{const g=check(readFileSync(join(root,'examples/hello.ets'),'utf8'));assert.ok(types(g,'CallExpression').includes('number'));});
+test('checker: real hello example checks natively',()=>{const g=check(readFileSync(join(root,'examples/hello.ts'),'utf8'));assert.ok(types(g,'CallExpression').includes('number'));});
 
 test('checker: interface construction is stopped by binding',()=>{const g=run(fixture('interface I{x:number;} new I();'),1);assert.equal(g.diagnostics[0].phase,'binder');assert.equal(g.files.length,0);});
 
@@ -304,7 +304,7 @@ test('native safety: owner aggregate elements require explicit transfer',()=>err
 test('native safety: borrowed return inside a stored callable is rejected',()=>error(box+'type F=(x:ref<Box>)=>ref<Box>;function use(f:F):void{}',/E4203/));
 test('native safety: field initializer participates in TDZ',()=>error('class C{x:number=late;}const c=new C();let late=1;',/E4001/));
 test('native safety: direct calls propagate global ownership state',()=>error(box+'let p:ptr<Box> = new Box();function take():void{const q=move(p);}take();print(p.value);',/E4102/));
-test('native safety: hidden callee reads retain the original file',()=>{const g=error('const n=f();let late=1;function f():number{return late;}',/E4001/);assert.equal(g.diagnostics[0].file.endsWith('/main.ets'),true);});
+test('native safety: hidden callee reads retain the original file',()=>{const g=error('const n=f();let late=1;function f():number{return late;}',/E4001/);assert.equal(g.diagnostics[0].file.endsWith('/main.ts'),true);});
 test('native safety: branch with transfer and return does not poison continuation',()=>check(box+'function f(p:ptr<Box>,b:boolean):number{if(b){const q=move(p);return 1;}return p.value;}'));
 test('native safety: short circuit may transfer ownership',()=>error(box+'function consume(p:ptr<Box>):boolean{return true;}function f(p:ptr<Box>,b:boolean):number{const ok=b&&consume(move(p));return p.value;}',/E4103/));
 test('native safety: constant short circuit skips ownership transfer',()=>check(box+'function consume(p:ptr<Box>):boolean{return true;}let p:ptr<Box> = new Box();const ok=false&&consume(move(p));print(p.value);'));
@@ -397,7 +397,7 @@ test('native effects distinguishes invoked, retained and returned callback param
 test('native effects marks both members of a recursive component',()=>{const g=check('function a(n:number):number{if(n==0)return 0;return b(n-1);}function b(n:number):number{if(n==0)return 0;return a(n-1);}');assert.equal(effect(g,'a').recursive,true);assert.equal(effect(g,'b').recursive,true);});
 test('native effects keeps callback borrow obligations',()=>{const g=check(box+'function apply(b:constRef<Box>,cb:()=>number):number{return cb()+b.value;}');const s=effect(g,'apply');assert.ok(s.borrows.some((b:any)=>g.binding.symbols[b.root].name==='b'&&b.mode==='constRef'));});
 test('native effects preserves aliases and origin files across modules',()=>{
- const g=error('import {write as f} from "./barrel";let n=f();',/E4001/,{'barrel.ets':'export {write} from "./lib";','lib.ets':'export function write():number{return value;}export const early=write();let value=1;'});assert.ok(g.diagnostics.some((d:any)=>d.file.endsWith('/lib.ets')));
+ const g=error('import {write as f} from "./barrel";let n=f();',/E4001/,{'barrel.ets':'export {write} from "./lib";','lib.ets':'export function write():number{return value;}export const early=write();let value=1;'});assert.ok(g.diagnostics.some((d:any)=>d.file.endsWith('/lib.ts')));
 });
 test('native effects summaries repeat unchanged across process/cache reuse',()=>{const f=fixture('function apply(cb:()=>number):number{return cb();}print(apply(():number=>1));');assert.deepEqual(run(f),run(f));});
 test('native effects propagates borrow obligations through a wrapper',()=>{
@@ -1518,7 +1518,7 @@ test('frontend provenance: typed arenas retain module identity and source hash',
  const source='import {f} from "./lib"; const n=f();';const g=check(source,{'lib.ets':'export function f():number{return 1;}'});
  assert.equal(g.symbolIds.length,g.binding.symbols.length);
  for(const file of g.files){const record=moduleRecord(g,file.file.split('/').at(-1));assert.match(record.id,/^module:[0-9a-f]{64}$/);assert.equal(file.moduleId,record.id);assert.equal(file.sourceHash,record.sourceHash);assert.equal(record.sourceHash,createHash('sha256').update(readFileSync(file.file)).digest('hex'));assert.match(record.interfaceHash,/^[0-9a-f]{64}$/);assert.match(record.semanticKey,/^[0-9a-f]{64}$/);}
- const reference=g.binding.references.find((r:any)=>r.name==='f'&&g.files[r.module].file.endsWith('/main.ets'));assert.ok(reference);const original=g.binding.symbols[reference.target];assert.ok(g.files[original.module].file.endsWith('/lib.ets'));assert.equal(g.symbolIds[reference.symbol],g.symbolIds[reference.target]);
+ const reference=g.binding.references.find((r:any)=>r.name==='f'&&g.files[r.module].file.endsWith('/main.ts'));assert.ok(reference);const original=g.binding.symbols[reference.target];assert.ok(g.files[original.module].file.endsWith('/lib.ts'));assert.equal(g.symbolIds[reference.symbol],g.symbolIds[reference.target]);
 });
 test('frontend provenance: cold and warm loads have identical semantic records',()=>{
  const f=fixture('import {f} from "./lib";const n=f();',{'lib.ets':'export function f():number{return 1;}'});const a=run(f);const b=run(f);assert.deepEqual(a.moduleRecords,b.moduleRecords);assert.deepEqual(a.symbolIds,b.symbolIds);
@@ -1927,12 +1927,12 @@ test('frontend closure etsgen publishes separate lexical order ranges',()=>{cons
 test('frontend closure checks every repository example with native module loading',t=>{
  const files=readdirSync(join(root,'examples'),{recursive:true}).map(String).filter(f=>f.endsWith('.ets')).sort();let accepted=0;
  for(const file of files){
-  const invalid=file==='expected-errors/private-bad.ets';
+  const invalid=file==='expected-errors/private-bad.ts';
   const g=run({entry:join(root,'examples',file),cache:join(directory,'example-cache')},invalid?1:0);
   if(invalid)assert.ok(g.diagnostics.some((d:any)=>d.phase==='checker'&&/privad/.test(d.message)),file);
   else {assert.deepEqual(g.diagnostics,[],file);accepted++;}
  }
- t.diagnostic(`${accepted}/${files.length} examples accepted; expected-errors/private-bad.ets rejected for private access`);
+ t.diagnostic(`${accepted}/${files.length} examples accepted; expected-errors/private-bad.ts rejected for private access`);
 });
 test('frontend closure pack overload ranking includes fixed parameters',()=>{
  const g=check('function f<...Ts>(x:number,...values:Ts):number{return 1;}function f<T>(...values:T[]):string{return "rest";}const n:number=f(1,2);');

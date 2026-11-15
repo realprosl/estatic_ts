@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { compileFile } from "../../src/modules/module-loader.ts";
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-export async function buildLoader(directory: string, entry = "compiler/modules/demo.ets", unity = false, optimization: "-O0" | "-O2" = "-O0", detail: (text:string)=>void = ()=>{}): Promise<string> {
+export async function buildLoader(directory: string, entry = "compiler/modules/demo.ts", unity = false, optimization: "-O0" | "-O2" = "-O0", detail: (text:string)=>void = ()=>{}): Promise<string> {
   mkdirSync(directory, { recursive: true });
   // Bind persisted syntax to all stage-0/native sources used by this build.
   const hash = createHash("sha256");

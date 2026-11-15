@@ -1,6 +1,6 @@
 // E2E test harness — Issue #7.
 //
-// Ejecuta programas .ets completos contra su `expected.txt` (positive tests)
+// Ejecuta programas .ts completos contra su `expected.txt` (positive tests)
 // o `expected.error.json` (negative tests, issue #15). Por programa:
 //   1. Transpila a C++ con el CLI.
 //   2. Compila con g++ a binario.
@@ -9,7 +9,7 @@
 //
 // Layout de un test E2E:
 //   test/e2e/<bucket>/<name>/
-//     ├── source.ets
+//     ├── source.ts
 //     ├── expected.txt                 (positive: stdout esperado)
 //     ├── expected.error.json          (negative: diagnósticos esperados, JSON)
 //     └── expected.exit.txt            (opcional: exit code esperado, default 0)
@@ -84,7 +84,7 @@ async function loadSkipList(): Promise<Set<string>> {
 
 /**
  * Lista todos los tests E2E de un bucket. Cada test es un directorio
- * con `source.ets`.
+ * con `source.ts`.
  */
 async function listE2ETests(bucket: Bucket): Promise<string[]> {
   const dir = join(E2E_DIR, bucket);
@@ -94,7 +94,7 @@ async function listE2ETests(bucket: Bucket): Promise<string[]> {
   for (const entry of entries) {
     const fullPath = join(dir, entry);
     const s = await stat(fullPath);
-    if (s.isDirectory() && existsSync(join(fullPath, "source.ets"))) {
+    if (s.isDirectory() && existsSync(join(fullPath, "source.ts"))) {
       tests.push(entry);
     }
   }
@@ -122,7 +122,7 @@ interface E2EResult {
 async function processE2E(bucket: Bucket, name: string, skipNetwork: boolean): Promise<E2EResult> {
   const start = Date.now();
   const testDir = join(E2E_DIR, bucket, name);
-  const sourcePath = join(testDir, "source.ets");
+  const sourcePath = join(testDir, "source.ts");
   const workerScratch = join(SCRATCH_DIR, `w${(process.pid % CONCURRENCY)}`);
   await mkdir(workerScratch, { recursive: true });
 

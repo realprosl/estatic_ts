@@ -25,7 +25,7 @@ test_strong() {
   rm -f main.cpp test_app
   local actual
   set +e
-  $ETS main.ets > /tmp/etsc_out.txt 2>&1
+  $ETS main.ts > /tmp/etsc_out.txt 2>&1
   if [[ $? -ne 0 ]]; then
     echo "etsc failed:"
     cat /tmp/etsc_out.txt

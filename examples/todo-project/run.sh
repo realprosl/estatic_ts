@@ -9,7 +9,7 @@ mkdir -p "${BUILD_DIR}"
 
 # Compilador nativo (#140): el `etsc` instalado o el indicado en $ETSC.
 ETSC="${ETSC:-etsc}"
-ESTC_ROOT="${ESTC_ROOT:-${ROOT_DIR}}" "${ETSC}" build "${SCRIPT_DIR}/main.ets" \
+ESTC_ROOT="${ESTC_ROOT:-${ROOT_DIR}}" "${ETSC}" build "${SCRIPT_DIR}/main.ts" \
   -o "${BUILD_DIR}/main.cpp" --binary "${BUILD_DIR}/todo-project" --no-progress
 
 OUTPUT="$("${BUILD_DIR}/todo-project")"

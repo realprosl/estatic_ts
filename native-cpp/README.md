@@ -38,7 +38,7 @@ autocontenido), `--force` (ignora la precompilada; alias `--no-prebuilt`),
 `--help`.
 
 `build-compiler.sh --seed DIR --out BIN` construye el compilador de
-`compiler/`: la semilla analiza `compiler/driver/main.ets` y después compila
+`compiler/`: la semilla analiza `compiler/driver/main.ts` y después compila
 el C++, en dos pasos para que el análisis (varios GB) y la compilación C++ no
 estén en memoria a la vez. Opciones: `--static`, `--force`, `--update-prebuilt`
 (estático, `-O2`) y `--help`. `install.sh` lo invoca; `--force-compiler` le
@@ -79,7 +79,7 @@ bash native-cpp/regenerate.sh                 # parte de la semilla actual
 bash native-cpp/regenerate.sh --compiler ETSC # parte de otro compilador
 ```
 
-Cada ronda: el compilador actual analiza `compiler/driver/main.ets`, emite su
+Cada ronda: el compilador actual analiza `compiler/driver/main.ts`, emite su
 IR y su C++, y ese C++ se compila para la ronda siguiente. **Solo se publica
 cuando dos rondas seguidas emiten exactamente el mismo IR y el mismo C++**
 (punto fijo del self-hosting); si no se alcanza en `--max-rounds` (3), la

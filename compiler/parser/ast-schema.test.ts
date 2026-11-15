@@ -7,8 +7,8 @@ import { root, buildLoader } from "../modules/build.ts";
 import { compile } from "../../src/compiler.ts";
 import { DiagnosticError } from "../../src/core/diagnostic.ts";
 
-const schema = readFileSync(join(root, "compiler/parser/ast-schema.ets"), "utf8");
-const parser = readFileSync(join(root, "compiler/parser/parser.ets"), "utf8").replace(/^import .*\n/, "");
+const schema = readFileSync(join(root, "compiler/parser/ast-schema.ts"), "utf8");
+const parser = readFileSync(join(root, "compiler/parser/parser.ts"), "utf8").replace(/^import .*\n/, "");
 const vocabularies = [
   ["NodeKind", "nodeKindName", "parseNodeKind"],
   ["EdgeRole", "edgeRoleName", "parseEdgeRole"],

@@ -6,9 +6,9 @@ import {buildLoader,root} from '../modules/build.ts';
 const directory=mkdtempSync(join(root,'build-native-self-'));
 try {
   const buildStart=performance.now();
-  const binary=await buildLoader(join(directory,'binary'),'compiler/audit/self.ets',true,'-O2');
+  const binary=await buildLoader(join(directory,'binary'),'compiler/audit/self-check.ts',true,'-O2');
   const buildMs=Math.round(performance.now()-buildStart),analysisStart=performance.now();
-  const run=spawnSync(binary,[join(root,'compiler/checker/demo.ets')],{
+  const run=spawnSync(binary,[join(root,'compiler/checker/demo.ts')],{
     cwd:root,encoding:'utf8',timeout:600000,maxBuffer:16*1024*1024,stdio:['ignore','pipe','inherit'],
   });
   if(run.error)throw run.error;

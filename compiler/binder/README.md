@@ -1,8 +1,8 @@
 # Binding nativo del proyecto (v61)
 
 ```bash
-npm run bootstrap:binder -- examples/todo-project/main.ets --cache build/project-cache
-npm run bootstrap:binder -- compiler/binder/demo.ets
+npm run bootstrap:binder -- examples/todo-project/main.ts --cache build/project-cache
+npm run bootstrap:binder -- compiler/binder/demo.ts
 npm run test:bootstrap:binder
 ```
 
@@ -12,7 +12,7 @@ compilado a C++20. No se usa el binder ni el checker TypeScript para vincular
 los nombres del proyecto solicitado. La demo compila nueve módulos ETS como
 una unidad C++; el adaptador de módulos conserva su modo separado por defecto.
 
-`binder.ets` contiene el binding y sus estructuras. `format.ets` serializa el
+`binder.ts` contiene el binding y sus estructuras. `format.ts` serializa el
 resultado de demostración. **Todavía no se infieren ni comprueban tipos**: el
 [checker inicial v62](../checker/README.md) consume estas tablas y el AST sintáctico original.
 

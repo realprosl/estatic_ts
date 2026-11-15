@@ -1,7 +1,7 @@
 # Resúmenes nativos de efectos y préstamos (v64)
 
-`effects.ets` consume el grafo, binding y tipos de la misma carga, junto a las
-capturas y préstamos locales de `safety.ets`. Construye tablas independientes;
+`effects.ts` consume el grafo, binding y tipos de la misma carga, junto a las
+capturas y préstamos locales de `safety.ts`. Construye tablas independientes;
 no modifica el AST, los símbolos ni la caché de sintaxis. Los IDs sólo tienen
 sentido dentro de ese resultado. `CheckResult.effects` y el JSON del driver
 publican resúmenes por función, arrow, método o constructor comprobado. Las

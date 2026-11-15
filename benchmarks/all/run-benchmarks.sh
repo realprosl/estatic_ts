@@ -1,7 +1,7 @@
 #!/bin/bash
 # run-benchmarks-all.sh — bateria de benchmarks V23 dialecto vs C++ nativo.
 #
-# Compila cada par (.ets vs .cpp) y los ejecuta con hyperfine. El
+# Compila cada par (.ts vs .cpp) y los ejecuta con hyperfine. El
 # objetivo es medir el OVERHEAD del codegen V23 (y de todo el dialecto)
 # respecto a C++ nativo escrito a mano.
 #
@@ -15,10 +15,10 @@ SCRATCH="$ROOT_DIR/.scratch/bench"
 
 mkdir -p "$SCRATCH"
 
-# Compila cada par .ets/.cpp a binarios
+# Compila cada par .ts/.cpp a binarios
 echo "=== Compilando ==="
-for src in "$BENCH_DIR"/*.ets; do
-    name="$(basename "$src" .ets)"
+for src in "$BENCH_DIR"/*.ts; do
+    name="$(basename "$src" .ts)"
     echo "--- $name ---"
 
     # Binario del dialecto con el compilador nativo (#140): $ETSC o `etsc`.
@@ -32,8 +32,8 @@ done
 # Ejecutar hyperfine
 echo ""
 echo "=== Ejecutando hyperfine ==="
-for src in "$BENCH_DIR"/*.ets; do
-    name="$(basename "$src" .ets)"
+for src in "$BENCH_DIR"/*.ts; do
+    name="$(basename "$src" .ts)"
     echo ""
     echo "--- $name ---"
     hyperfine -N --warmup 3 --runs 10 \

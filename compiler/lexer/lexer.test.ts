@@ -12,7 +12,7 @@ import { DiagnosticError } from "../../src/core/diagnostic.ts";
 import { templateCases, invalidTemplateCases } from "../../test/fixtures/templates.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const entry = join(root, "compiler/lexer/demo.ets");
+const entry = join(root, "compiler/lexer/demo.ts");
 const directory = mkdtempSync(join(tmpdir(), "estatic-bootstrap-lexer-"));
 const binary = join(directory, "lexer-demo");
 let graph: Awaited<ReturnType<typeof loadModuleGraph>>;
@@ -22,7 +22,7 @@ before(async () => {
   // The only ETS modules are lexer + its tiny demo. Native compilation is
   // mandatory: evaluating the lexer as JavaScript would not test self-hosting.
   const result = await compileFile(entry, { baseDirectory: root });
-  assert.deepEqual(result.moduleNames.map(file => relative(root, file)), ["compiler/lexer/lexer.ets", "compiler/lexer/demo.ets"]);
+  assert.deepEqual(result.moduleNames.map(file => relative(root, file)), ["compiler/lexer/lexer.ts", "compiler/lexer/demo.ts"]);
   writeFileSync(join(directory, "estatic_common.hpp"), result.header);
   const files = result.modules.map((module, index) => {
     const file = join(directory, `unit-${index}.cpp`); writeFileSync(file, module.cpp); return file;
@@ -134,14 +134,14 @@ test("bootstrap lexer: demo calls the inspection function with its default examp
   assert.deepEqual(native().tokens, new Lexer("const answer: number = 42;\nprint(answer);").tokenize());
 });
 test("bootstrap lexer: implementation tokenizes its own ETS source", () => {
-  const source = readFileSync(join(root, "compiler/lexer/lexer.ets"), "utf8");
+  const source = readFileSync(join(root, "compiler/lexer/lexer.ts"), "utf8");
   const result = native(source);assert.deepEqual(result.diagnostics, []);assert.deepEqual(result.tokens, new Lexer(source).tokenize());
 });
 test("bootstrap lexer: isolated graph has no other compiler modules", () => {
   assert.equal(graph.modules.length, 2);assert.deepEqual(graph.modules[0].dependencies, []);
-  const sources = readdirSync(join(root, "compiler/lexer")).filter(file => file.endsWith(".ets")).sort();
-  // index.ets es la API pública del módulo (#177).
-  assert.deepEqual(sources, ["demo.ets", "index.ets", "lexer.ets"]);
+  const sources = readdirSync(join(root, "compiler/lexer")).filter(file => (file.endsWith(".ts")&&!file.endsWith(".test.ts")&&file!=="run.ts")).sort();
+  // index.ts es la API pública del módulo (#177).
+  assert.deepEqual(sources, ["demo.ts", "index.ts", "lexer.ts"]);
 });
 test("bootstrap lexer: deterministic generated ASCII corpus", () => {
   const pieces = ["alpha", "123", '"hello"', "const", "=>", "+=", "...", "0xFF", ";", "/*x*/", "//x\n", " ", "\n", "(", ")", "[", "]", "{", "}"];

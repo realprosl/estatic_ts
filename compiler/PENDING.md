@@ -27,7 +27,7 @@ no es correcto describir todo lo listado aquí como funcionalidad ausente.
 | Lexer, esquema, parser, frontend, módulos, binder y checker | 2182/2182; cero fallos, cancelaciones y skips |
 | Audit de obligaciones de referencia | 83/83; salida 0 |
 | Audit de sintaxis | 75/75 contratos; 132/132 archivos del corpus en ambos pipelines; cero formas eliminadas |
-| Corpus semántico nativo | 131/132 aceptados; `expected-errors/private-bad.ets` rechazado por acceso privado, como exige la prueba |
+| Corpus semántico nativo | 131/132 aceptados; `expected-errors/private-bad.ts` rechazado por acceso privado, como exige la prueba |
 | Autoanálisis nativo | 23 módulos, 6594 símbolos, 75596 nodos tipados; cero diagnósticos |
 | Catálogo estático de builtins | 216 contratos verificados por el generador |
 | npm test global | No repetido en esta revisión; no se publica un total global nuevo |
@@ -89,7 +89,7 @@ declarados.
 | L04 | I | ?? y ?. implementados con receptor, firma y cortocircuito; no son pendientes por las entradas antiguas. | `receivers, expressionInner, safety.walk`; [frontend closure optional call publishes unwrapped receiver and signature](./checker/checker.test.ts#L1578) |
 | A01 | I | Async, firmas internas/externas, await y for-await con resultados propietarios implementados. | `asynchronous, awaitContext, taskSources`; [native async; frontend closure](./checker/checker.test.ts#L1050) |
 | A02 | R | Préstamos vivos, frames y efectos de creación/cuerpo se comprueban conservadoramente. No se habilitan lifetimes a través de suspensión ni contratos opacos sin prueba. | `taskSources, safety, effects`; [native async; frontend closure](./checker/checker.test.ts#L1050) |
-| S01 | I | Catálogo y contratos estáticos presentes; se verifica sincronización con stage 0 y declaraciones canónicas. | `binder/builtins.ets, generate-native-builtins.ts`; [binder: native builtin contracts match their generated stage 0 data](./binder/binder.test.ts#L88) |
+| S01 | I | Catálogo y contratos estáticos presentes; se verifica sincronización con stage 0 y declaraciones canónicas. | `binder/builtins.ts, generate-native-builtins.ts`; [binder: native builtin contracts match their generated stage 0 data](./binder/binder.test.ts#L88) |
 | S02 | R | Efectos de builtins implementados; externos desconocidos permanecen opacos y no se interpretan como puros. | `EffectAnalyzer.builtin, canRetain`; [native effects preserve external effects separately from symbol reads](./checker/checker.test.ts#L697) |
 | X01 | I | Decoradores, objetivos, argumentos y metadatos frontend implementados; los desconocidos se diagnostican. | `decorator, decorators`; [native comptime; frontend closure](./checker/checker.test.ts#L1226) |
 | X02 | P | Clases, métodos, enums, match, ámbitos y valores exactos ya se evalúan. Persisten contratos de memoria sin materializar: un parámetro constRef durante comptime produce COMPTIME_UNSUPPORTED. | `NativeComptime.invoke, containsMemory`; [native comptime; caso reproducible en la revisión](./checker/checker.test.ts#L1239) |
@@ -106,29 +106,29 @@ declarados.
 | V02 | I | Se separa estado actual de historial y de límites de stage 0; se registra evidencia y alcance de cada fila. | `PENDING.md, FRONTEND-REVIEW.md`; [revisión documental 2026-10-24](./audit/FRONTEND-REVIEW.md) |
 | V03 | P | Validación focalizada actualizada y verde. npm test completo no se ha repetido en esta revisión; las cifras globales anteriores se archivan. | `package.json`; [comandos y resultados de esta revisión](./audit/FRONTEND-REVIEW.md) |
 
-| T09 | P | `keyof T`: conjunto de claves de un tipo de clase o interfaz. Es la base de los mapped types, las conditional types y los utility types. | `checker/checker.ets` (operaciones de nivel de tipo) |
-| T10 | P | Mapped types (`{ [K in keyof T]: V }`). Depende de T09. | `checker/checker.ets`, `ir/lower.ets` |
-| T11 | P | Conditional types (`T extends U ? X : Y`). Depende de T12 para `infer`. | `checker/checker.ets` |
-| T12 | P | `infer U` en conditional types. Depende de T11. | `checker/checker.ets` |
-| T13 | P | Utility types (`Partial`, `Pick`, `Record`, `Required`, `Omit`). Dependen de T09, T10 y T11. | `binder/builtins.ets`, `checker/checker.ets` |
-| T14 | P | Template literal types (`` `prefix_${T}` ``). Depende de los tipos de literal generales de T18. | `checker/checker.ets` |
-| T15 | P | Type predicates (`x is T`) con narrowing por el predicado. | `parser/parser.ets`, `checker/checker.ets` |
-| T16 | P | Index signatures `[key: string]: T` con semantica de diccionario. | `checker/checker.ets`, `runtime/ets_runtime.hpp` |
-| T17 | P | Tuplas variadicas (`[...T, ...U]`) y tuplas con spread (`[T, ...U]`). Relacionado con los packs de tipo. | `parser/parser.ets`, `checker/checker.ets` |
-| T18 | P | `as const`: los literales conservan su tipo exacto. La base de tipos literales ya existe (T30): un literal puede declararse en un alias `type` y un valor solo satisface el literal si coincide exactamente. Falta la sintaxis `as const` y la propagacion del tipo exacto a la expresion. | `parser/parser.ets`, `checker/checker.ets` |
+| T09 | P | `keyof T`: conjunto de claves de un tipo de clase o interfaz. Es la base de los mapped types, las conditional types y los utility types. | `checker/checker.ts` (operaciones de nivel de tipo) |
+| T10 | P | Mapped types (`{ [K in keyof T]: V }`). Depende de T09. | `checker/checker.ts`, `ir/lower.ts` |
+| T11 | P | Conditional types (`T extends U ? X : Y`). Depende de T12 para `infer`. | `checker/checker.ts` |
+| T12 | P | `infer U` en conditional types. Depende de T11. | `checker/checker.ts` |
+| T13 | P | Utility types (`Partial`, `Pick`, `Record`, `Required`, `Omit`). Dependen de T09, T10 y T11. | `binder/builtins.ts`, `checker/checker.ts` |
+| T14 | P | Template literal types (`` `prefix_${T}` ``). Depende de los tipos de literal generales de T18. | `checker/checker.ts` |
+| T15 | P | Type predicates (`x is T`) con narrowing por el predicado. | `parser/parser.ts`, `checker/checker.ts` |
+| T16 | P | Index signatures `[key: string]: T` con semantica de diccionario. | `checker/checker.ts`, `runtime/ets_runtime.hpp` |
+| T17 | P | Tuplas variadicas (`[...T, ...U]`) y tuplas con spread (`[T, ...U]`). Relacionado con los packs de tipo. | `parser/parser.ts`, `checker/checker.ts` |
+| T18 | P | `as const`: los literales conservan su tipo exacto. La base de tipos literales ya existe (T30): un literal puede declararse en un alias `type` y un valor solo satisface el literal si coincide exactamente. Falta la sintaxis `as const` y la propagacion del tipo exacto a la expresion. | `parser/parser.ts`, `checker/checker.ts` |
 
-| T30 | I | Tipos literales en alias `type`: `type option = "Hola" | "Adios"` acepta literales de string, number y boolean. El valor concreto se comprueba en el checker y se materializa como su primitivo en C++, sin tocar el runtime. | `literalType` en `checker/types.ets`; [native literal type aliases](./parser/parser.test.ts); [checker accepts literalTypeAlias](./checker/checker.test.ts) |
+| T30 | I | Tipos literales en alias `type`: `type option = "Hola" | "Adios"` acepta literales de string, number y boolean. El valor concreto se comprueba en el checker y se materializa como su primitivo en C++, sin tocar el runtime. | `literalType` en `checker/types.ts`; [native literal type aliases](./parser/parser.test.ts); [checker accepts literalTypeAlias](./checker/checker.test.ts) |
 
-| G05 | P | `const` type parameters (`<const T>`): el tipo inferido se conserva como literal. Depende de T18. El parser ya tiene la ranura del prefijo (`...` de los packs); falta aceptar `const` y la inferencia de literal. | `parser/parser.ets`, `checker/checker.ets` |
-| O04 | P | Getters y setters (`get`/`set`): acceso a propiedad que ejecuta un metodo. | `parser/parser.ets`, `checker/checker.ets`, `src/codegen/cpp-generator.ts`, `ir/lower.ets` |
-| T21 | P | `===` y `!==`: igualdad estricta sin coercion. | `src/lexer/token.ts`, `compiler/lexer/lexer.ets`, ambos parsers y checkers |
-| T22 | P | `>>>`: unsigned shift. | `src/lexer/token.ts`, `compiler/lexer/lexer.ets`, ambos parsers y checkers |
+| G05 | P | `const` type parameters (`<const T>`): el tipo inferido se conserva como literal. Depende de T18. El parser ya tiene la ranura del prefijo (`...` de los packs); falta aceptar `const` y la inferencia de literal. | `parser/parser.ts`, `checker/checker.ts` |
+| O04 | P | Getters y setters (`get`/`set`): acceso a propiedad que ejecuta un metodo. | `parser/parser.ts`, `checker/checker.ts`, `src/codegen/cpp-generator.ts`, `ir/lower.ts` |
+| T21 | P | `===` y `!==`: igualdad estricta sin coercion. | `src/lexer/token.ts`, `compiler/lexer/lexer.ts`, ambos parsers y checkers |
+| T22 | P | `>>>`: unsigned shift. | `src/lexer/token.ts`, `compiler/lexer/lexer.ts`, ambos parsers y checkers |
 | T23 | P | Exponenciacion numerica: el operador `**` y la notacion `1.5e2`. | ambos lexers, parsers y checkers; el runtime ya define `ets::ir::pow` para enteros |
 | T24 | P | Object spread (`{ ...obj }`). | `parser.ets`, `parser.ts`, ambos checkers |
 | T25 | P | Regex literales (`/patron/flags`). Requiere un tipo de regex en el runtime; `runtime/ets_regex.hpp` ya existe. | ambos lexers, parsers y el runtime |
 | T26 | P | Destructuring anidado y destructuring rest. | `parser.ets`, `parser.ts`, ambos checkers |
 | T27 | P | Tagged templates (`tag\`...\``). | ambos lexers, parsers y checkers |
-| T28 | P | Dynamic imports (`import("...")`). El grafo de modulos se resuelve hoy estaticamente en compilacion. | `modules/loader.ets`, `module-loader.ts`, ambos binders |
+| T28 | P | Dynamic imports (`import("...")`). El grafo de modulos se resuelve hoy estaticamente en compilacion. | `modules/loader.ts`, `module-loader.ts`, ambos binders |
 | T29 | P | `function*` (generadores). | ambos lexers, parsers, checkers y el runtime |
 | T31 | P | `arguments`. | ambos lexers, parsers y checkers |
 | T32 | P | `<T>x` type assertions en forma angle-bracket. La forma `expr as T` ya esta soportada. | ambos lexers y parsers |

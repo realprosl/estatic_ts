@@ -1,9 +1,9 @@
 # Flujo, memoria, capturas y API pública nativos (v64)
 
-`safety.ets` ejecuta una pasada ETS después de la comprobación de tipos. Consume
+`safety.ts` ejecuta una pasada ETS después de la comprobación de tipos. Consume
 el grafo, el binding y las tablas tipadas de **la misma carga**. No modifica
 fuentes, AST, binding ni tablas de tipos. Añade diagnósticos y las tablas
-`captures`, `borrows` y `effects` de `model.ets`. Los errores de tipos impiden iniciarla;
+`captures`, `borrows` y `effects` de `model.ts`. Los errores de tipos impiden iniciarla;
 no se interpretan tablas parciales como un programa correcto.
 
 ## Flujo y ownership

@@ -81,7 +81,7 @@ Ejemplo nativo verificado:
 
 ```bash
 mkdir -p build
-node --experimental-strip-types src/cli.ts examples/etsgen-limits/main.ets -o build/etsgen-limits.cpp
+node --experimental-strip-types src/cli.ts examples/etsgen-limits/main.ts -o build/etsgen-limits.cpp
 g++ -std=c++20 -O2 -DNDEBUG -pthread -fno-exceptions -I. build/etsgen-limits.cpp -o build/etsgen-limits
 ./build/etsgen-limits
 ```

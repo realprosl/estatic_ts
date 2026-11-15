@@ -25,7 +25,7 @@ function buildIrCpp(result:ReturnType<typeof referenceCpp>,cpp:string,binary:str
  // Sanitizer test's environment exception remains test-only.
 }
 const directory=mkdtempSync(join(root,"build-ir-cpp-test-"));let lower:string;
-before(async()=>{lower=process.env.ESTATIC_IR_BINARY??await buildLoader(join(directory,"lower"),"compiler/ir/demo.ets",true);});
+before(async()=>{lower=process.env.ESTATIC_IR_BINARY??await buildLoader(join(directory,"lower"),"compiler/ir/demo.ts",true);});
 after(()=>rmSync(directory,{recursive:true,force:true}));
 function ir(source:string,files:Record<string,string>={}) {
  const dir=mkdtempSync(join(directory,"case-"));for(const [name,text]of Object.entries({"main.ets":source,...files})){mkdirSync(dirname(join(dir,name)),{recursive:true});writeFileSync(join(dir,name),text);}return nativeIr(lower,join(dir,"main.ets"));

@@ -47,7 +47,7 @@ npm run test:memory
 npm run init -- ./mi-proyecto
 
 # Transpilar un archivo a una unidad C++ inspeccionable
-node --experimental-strip-types src/cli.ts examples/hello.ets \
+node --experimental-strip-types src/cli.ts examples/hello.ts \
   -o build/hello.cpp --unity
 ```
 

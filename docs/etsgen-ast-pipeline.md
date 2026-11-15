@@ -70,10 +70,10 @@ Cubren AST real, fragmentos vacíos, identidades independientes, fuente intacta,
 errores de parser y checker, CRLF/Unicode, excerpts largos, revalidación y
 atribución entre módulos. Una compila y ejecuta una función generada en C++20.
 
-Ejemplo ejecutable: `examples/etsgen-ast-pipeline/main.ets`.
+Ejemplo ejecutable: `examples/etsgen-ast-pipeline/main.ts`.
 
 ```bash
-node --experimental-strip-types src/cli.ts examples/etsgen-ast-pipeline/main.ets -o build/etsgen-ast-pipeline.cpp
+node --experimental-strip-types src/cli.ts examples/etsgen-ast-pipeline/main.ts -o build/etsgen-ast-pipeline.cpp
 g++ -std=c++20 -O2 -pthread -fno-exceptions -I. build/etsgen-ast-pipeline.cpp -o build/etsgen-ast-pipeline
 ./build/etsgen-ast-pipeline
 ```

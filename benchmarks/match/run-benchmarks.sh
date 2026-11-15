@@ -1,6 +1,6 @@
 # run-benchmarks.sh — bateria de benchmarks V23 match vs C++ nativo.
 #
-# Compila cada par (.ets vs .cpp) y los ejecuta con hyperfine. El
+# Compila cada par (.ts vs .cpp) y los ejecuta con hyperfine. El
 # objetivo es medir el OVERHEAD del codegen V23 respecto a C++ nativo
 # escrito a mano, NO comparar el rendimiento absoluto (el .cpp nativo
 # no linkea con ets_runtime.hpp, asi que el .ets paga un overhead
@@ -60,7 +60,7 @@ EOF
 for b in B1-value-pattern B2-discriminator B3-when-type B4-v2-exhaustive B5-iife-overhead; do
     echo "=== Compilando $b ==="
     # .ets -> binario con el compilador nativo (#140): $ETSC o `etsc`.
-    ESTC_ROOT="${ESTC_ROOT:-$PWD}" "${ETSC:-etsc}" build benchmarks/match/$b.ets -o .scratch/bench/$b.cpp \
+    ESTC_ROOT="${ESTC_ROOT:-$PWD}" "${ETSC:-etsc}" build benchmarks/match/$b.ts -o .scratch/bench/$b.cpp \
         --binary .scratch/bench/$b --cxx-flag -O2 --no-progress 2>&1 | grep -E "error" || true
     # .cpp (nativo escrito a mano) -> binario
     g++ -O2 -std=c++20 -I. benchmarks/match/$b.cpp -o .scratch/bench/$b-native 2>&1 | grep -E "error" || true
