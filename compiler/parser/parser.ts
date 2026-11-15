@@ -707,7 +707,9 @@ export class Parser {
     const kind: NodeKind = keyword.kind == "using" ? NodeKind.UsingDeclaration : NodeKind.VariableDeclaration;
     const result: number = this.add(kind, keyword, name); this.attr(result, AttributeKind.Name, name.lexeme);
     if (kind == NodeKind.VariableDeclaration) this.attr(result, AttributeKind.Mutable, keyword.kind == "let" ? "true" : "false");
-    if (this.accept(":")) this.attr(result, AttributeKind.DeclaredType, this.typeName());
+    const typed: boolean = this.accept(":"); if (typed) this.attr(result, AttributeKind.DeclaredType, this.typeName());
+    // `let x: T | undefined;` empieza sin valor (el checker exige que T admita undefined).
+    if (typed && kind == NodeKind.VariableDeclaration && keyword.kind == "let" && !this.check("=")) { this.setEnd(result, terminated ? this.terminator() : this.previous()); return result; }
     this.expect("="); this.edge(result, EdgeRole.Initializer, this.expression());
     this.setEnd(result, terminated ? this.terminator() : this.previous()); return result;
   }

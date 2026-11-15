@@ -350,6 +350,7 @@ const branches=_cppLoop5Result.join("");
     const parent=f.places[p.base];const  raw=`${this.place(f,p.base)}.get()`;
     if(p.kind=="field")return this.field(raw,parent.typeId,p.field);
     if(p.kind=="deref")return this.shape(parent.typeId).kind=="readonly"?`ets::ir::view(${raw})`:`ets::ir::view(*(${raw}))`;
+    if(p.kind=="checkedView"&&this.shape(parent.typeId).kind=="Optional")return `ets::ir::view(${raw}.value())`;
     if(p.kind=="checkedView")return sumKinds.includes(this.shape(parent.typeId).kind)?`ets::ir::view(std::get<${arrayIndex(this.choices(parent.typeId),p.typeId)}>(${raw}.data))`:this.place(f,p.base);
     if(p.kind=="index") {
       const s=this.shape(parent.typeId);

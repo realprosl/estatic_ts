@@ -2124,3 +2124,8 @@ test('analysis rejects invalid job counts instead of silently disabling checks',
  const f=fixture('function a():void{}function b():void{}');for(const count of ['0','33','1.5','abc']){const p=spawnSync(binary,[f.entry,'--jobs',count],{encoding:'utf8'});assert.equal(p.status,2,p.stderr);assert.match(p.stderr,/--jobs/);}
  const p=spawnSync(binary,[f.entry],{encoding:'utf8',env:{...process.env,ESTATIC_ANALYSIS_JOBS:'invalid'}});assert.equal(p.status,1,p.stderr);assert.equal(JSON.parse(p.stdout).success,false);
 });
+// T | undefined es Optional<T> (sin excepciones ni valor especial).
+test('checker: T | undefined acepta T y undefined y se estrecha con !== undefined',()=>check('let x:number|undefined=undefined;x=3;if(x!==undefined){const y:number=x+1;print(y);}'));
+test('checker: solo un T | undefined se compara con undefined',()=>error('const n:number=1;print(n===undefined);',/siempre tiene valor/));
+test('checker: undefined no es un tipo por sí solo',()=>error('let x:undefined=undefined;',/solo como parte de un tipo/));
+test('checker: fuera del if, x sigue siendo T | undefined',()=>error('let x:number|undefined=2;if(x!==undefined){print(x);}const y:number=x;',/E3001/));
