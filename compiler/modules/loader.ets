@@ -4,8 +4,11 @@ import { AttributeKind, NodeKind, nodeKindName, ParserToken, AstNode, ParseResul
 import { SyntaxCache, CachedSource, FileRecord } from "./syntax-cache";
 
 export class PathAlias {
-  name: string; target: string;
-  constructor(name: string, target: string) { this.name = name; this.target = normalizePath(target); }
+  // scope: si no es "", el alias solo vale para los ficheros de esa carpeta
+  // (alias internos de una librería instalada: dos librerías pueden usar el
+  // mismo nombre sin pisarse ni pisar los del proyecto).
+  name: string; target: string; scope: string;
+  constructor(name: string, target: string, scope: string = "") { this.name = name; this.target = normalizePath(target); this.scope = scope; }
 }
 export class LoaderOptions {
   verbose: boolean; roots: string[]; aliases: PathAlias[]; cacheDirectory: string; syntaxKey: string;
@@ -71,8 +74,10 @@ export function resolveRequest(file: string, specifier: string, options: LoaderO
   if (specifier.startsWith(".") || specifier.startsWith("/")) return resolveSourceFile(requestedPath(pathDirectory(file), specifier));
   let selected: number = -1; let longest: number = -1;
   for (let i: number = 0; i < options.aliases.length; i = i + 1) {
-    const name: string = options.aliases[i].name;
-    if ((specifier == name || specifier.startsWith(name + "/")) && name.length > longest) { selected = i; longest = name.length; }
+    const name: string = options.aliases[i].name; const scope: string = options.aliases[i].scope;
+    if (scope != "" && !file.startsWith(scope + "/")) continue;
+    // A igual longitud gana el alias con ámbito (el interno de la librería).
+    if ((specifier == name || specifier.startsWith(name + "/")) && (name.length > longest || (name.length == longest && scope != ""))) { selected = i; longest = name.length; }
   }
   if (selected >= 0) {
     const alias: PathAlias = options.aliases[selected];

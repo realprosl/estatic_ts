@@ -15,7 +15,7 @@
 // apuntan en el proyecto con "indirect": true (como `// indirect` de go.mod),
 // así todo el árbol queda fijado en un solo sitio. Una sola versión por nombre:
 // manda la directa del proyecto; entre indirectas, la más alta (con aviso).
-import { temporaryDirectory, environment, exists, readText, writeText, rename, directories, currentDirectory, objectKeys, hostError, now } from "../platform/index";
+import { canonicalFile, temporaryDirectory, environment, exists, readText, writeText, rename, directories, currentDirectory, objectKeys, hostError, now } from "../platform/index";
 import { PathAlias } from "../modules/index";
 import { parseConfig, configStrings } from "./config";
 import { parseVersionTags, versionParts, versionBefore, run } from "./update";
@@ -158,7 +158,9 @@ export function dependencyAliases(config: JsonValue, base: string, known: PathAl
     if (target == "" || !exists(target)) packageError("Falta la dependencia '" + name + "' (" + jsonAsString(jsonObjectGet(info, "url")) + " " + jsonAsString(jsonObjectGet(info, "version")) + ")\nayuda: etsc install descarga las dependencias que falten", 1);
     if (!exists(target + "/estatic.config.json")) continue;
     const library: JsonValue = parseConfig(readText(target + "/estatic.config.json")); const aliases: JsonValue = jsonObjectGet(library, "aliases");
-    for (const inner of objectKeys(aliases)) if (!names.includes(inner) && !jsonAsString(jsonObjectGet(aliases, inner)).startsWith("/") && !jsonIsObject(jsonObjectGet(jsonObjectGet(library, "dependencies"), inner))) { names.push(inner); result.push(new PathAlias(inner, joinPath(target, jsonAsString(jsonObjectGet(aliases, inner))))); }
+    // Ámbito = carpeta real de la librería (los ficheros llegan al loader canónicos).
+    const canonicalConfig: string = canonicalFile(target + "/estatic.config.json"); const scope: string = canonicalConfig.slice(0, canonicalConfig.lastIndexOf("/"));
+    for (const inner of objectKeys(aliases)) if (!jsonAsString(jsonObjectGet(aliases, inner)).startsWith("/") && !jsonIsObject(jsonObjectGet(jsonObjectGet(library, "dependencies"), inner))) result.push(new PathAlias(inner, joinPath(target, jsonAsString(jsonObjectGet(aliases, inner))), scope));
   }
   return result;
 }

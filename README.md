@@ -296,8 +296,9 @@ apunta en `estatic.config.json`:
   `import { parse } from "mi-libreria/parser"`. Solo se compilan los módulos
   importados.
 - **Su `estatic.config.json`:** da el nombre (`name`; si no, el de la URL), sus
-  alias internos (rutas relativas a su carpeta) y sus `linkFlags` /
-  `linkLibraries`, que se añaden al enlazar el proyecto.
+  alias internos (rutas relativas a su carpeta; solo valen para sus propios
+  ficheros, así que dos librerías pueden usar el mismo nombre de alias) y sus
+  `linkFlags` / `linkLibraries`, que se añaden al enlazar el proyecto.
 - **Sus dependencias:** las `dependencies` de la librería se instalan también y
   se apuntan en el proyecto con `"indirect": true`. Una sola versión por nombre:
   manda la instalada directamente; entre indirectas, la más alta (con aviso).
@@ -308,6 +309,28 @@ apunta en `estatic.config.json`:
   vuelve a descargar desde `url` + `version` y reescribe el alias. Si falta una
   descarga, `etsc build` lo dice. Nunca se ejecuta código de la librería al
   instalarla.
+
+### Crear una librería
+
+```bash
+etsc init lib mi-libreria
+```
+
+```
+mi-libreria/
+├── estatic.config.json   name, aliases internos, dependencies, linkFlags
+├── tsconfig.json
+├── saludo.ts             público: import { saludar } from "mi-libreria/saludo"
+├── internal/formato.ts   interno (alias @interno)
+├── types/estatic.d.ts
+├── README.md
+└── .gitignore            .build/ y build/
+```
+
+La raíz del repositorio es la raíz de los imports y no hay punto de entrada.
+Las dependencias de la librería van en su `dependencies` (`{ "url", "version" }`)
+y se importan por su nombre. Cada versión es una etiqueta git:
+`git tag v0.1.0 && git push --tags`. No subas `.build/` ni rutas absolutas.
 
 ## Lenguaje implementado
 

@@ -282,6 +282,21 @@ test("install builds compiler/ with the seed and publishes that executable",asyn
    assert.ok(existsSync(join(dir,"home192/.local/share/estatic/deps/libb@v1.1.0/util.ts")));
    p=etsc("install","file://"+liba,"0.3.0");assert.equal(p.status,0,p.stderr);assert.match(p.stderr,/se usa v1\.1\.0 \(instalada directamente\)/);
    p=etsc("install","file://"+liba,"9.9.9");assert.equal(p.status,1);assert.match(p.stderr,/No existe la versión 9\.9\.9/);}
+  // etsc init lib: dos librerías con el mismo alias interno (@interno) no chocan.
+  {const libs=join(dir,"libs-init"),env={...process.env,ESTC_ROOT:home,HOME:join(dir,"home-init"),XDG_DATA_HOME:""};mkdirSync(libs,{recursive:true});
+   const etsc=(cwd:string,...args:string[])=>spawnSync(bin,args,{cwd,encoding:"utf8",env,timeout:600000});
+   const git=(repo:string,...args:string[])=>{const r=spawnSync("git",["-C",repo,"-c","user.name=t","-c","user.email=t@t",...args],{encoding:"utf8"});assert.equal(r.status,0,r.stderr);};
+   for(const name of ["saludos","otra"]){let p=etsc(libs,"init","lib",name);assert.equal(p.status,0,p.stderr);
+    for(const file of ["estatic.config.json","tsconfig.json","saludo.ts","internal/formato.ts","README.md",".gitignore","types/estatic.d.ts"])assert.ok(existsSync(join(libs,name,file)),file);
+    assert.equal(JSON.parse(readFileSync(join(libs,name,"estatic.config.json"),"utf8")).name,name);}
+   writeFileSync(join(libs,"otra/internal/formato.ts"),readFileSync(join(libs,"otra/internal/formato.ts"),"utf8").replace("toUpperCase","toLowerCase"));
+   let p=etsc(join(libs,"saludos"),"saludo.ts","--check","--config","estatic.config.json","--no-progress");assert.equal(p.status,0,p.stderr);
+   for(const name of ["saludos","otra"]){git(join(libs,name),"init","-q");git(join(libs,name),"add",".");git(join(libs,name),"commit","-q","-m","x");git(join(libs,name),"tag","v0.1.0");}
+   p=etsc(libs,"init","lib","saludos");assert.notEqual(p.status,0);assert.match(p.stderr,/No se sobrescribe/);
+   const app=join(libs,"app");p=etsc(libs,"init","app");assert.equal(p.status,0,p.stderr);
+   writeFileSync(join(app,"src/main.ts"),'import { saludar } from "saludos/saludo";\nimport { saludar as otro } from "otra/saludo";\nprint(saludar("mundo"));\nprint(otro("MUNDO"));\n');
+   for(const name of ["saludos","otra"]){p=etsc(app,"install","file://"+join(libs,name));assert.equal(p.status,0,p.stderr+p.stdout);}
+   p=etsc(app,"run","--no-progress");assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"Hola, MUNDO\nHola, mundo\n");}
    const source=join(dir,"node-streams.ets"),app=join(dir,"node-streams-app");
    writeFileSync(source,`process.stdin.on("data",(chunk:string):void=>{process.stdout.write("parent:"+chunk);});
 const childArgs:string[]=["-c","printf child-out; printf child-err >&2; cat"];
