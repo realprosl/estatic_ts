@@ -242,6 +242,22 @@ test("install builds compiler/ with the seed and publishes that executable",asyn
    writeFileSync(header,"// valid header\n");p=build(["run",...flags]);assert.equal(p.status,0,p.stderr);
    const configPath=join(project,"estatic.config.json");const config=JSON.parse(readFileSync(configPath,"utf8"));config.incremental={enabled:false,cacheDirectory:"disabled cache"};writeFileSync(configPath,JSON.stringify(config));
    p=build(["run"]);assert.equal(p.status,0,p.stderr);assert(!existsSync(join(project,"disabled cache")));}
+  // #190: etsc update contra un repositorio local (ESTC_REPO). La etiqueta
+  // v0.0.2 lleva un install.sh falso que solo registra sus argumentos.
+  {const installedVersion="v"+JSON.parse(readFileSync(join(home,"installation.json"),"utf8")).packageVersion;
+   const repo=join(dir,"repo190"),git=(...args:string[])=>{const r=spawnSync("git",["-C",repo,"-c","user.name=t","-c","user.email=t@t",...args],{encoding:"utf8"});assert.equal(r.status,0,r.stderr);};
+   mkdirSync(repo,{recursive:true});git("init","-q");const marker=join(dir,"update190.txt");
+   writeFileSync(join(repo,"install.sh"),`#!/usr/bin/env bash\necho "$@" > ${JSON.stringify(marker)}\n`);git("add",".");git("commit","-q","-m","fake");
+   for(const tag of ["v0.0.2","v1.99.0","v1.100.0",installedVersion,"nightly"])git("tag",tag);
+   const env={...process.env,ESTC_ROOT:home,ESTC_REPO:"file://"+repo},update=(...args:string[])=>spawnSync(bin,["update",...args],{encoding:"utf8",env,timeout:120000});
+   let p=update("--list");assert.equal(p.status,0,p.stderr);const listed=p.stdout.trim().split("\n");
+   assert.ok(listed.indexOf("v1.99.0")<listed.indexOf("v1.100.0"),p.stdout);assert.ok(!p.stdout.includes("nightly"));assert.ok(listed.includes(installedVersion+"  (instalada)"),p.stdout);
+   p=update("--dry-run");assert.equal(p.status,1,p.stderr);assert.ok(p.stdout.includes(installedVersion+" → v"),p.stdout);
+   p=update(installedVersion.slice(1));assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/ya está en/);
+   p=update("9.9.9");assert.equal(p.status,1);assert.match(p.stderr,/No existe la versión v9\.9\.9/);
+   p=update("abc");assert.equal(p.status,2);assert.match(p.stderr,/Versión no válida/);
+   p=update("0.0.2","--","--seed-only");assert.equal(p.status,0,p.stderr+p.stdout);
+   assert.equal(readFileSync(marker,"utf8").trim(),"--prefix "+realpathSync(prefix)+" --seed-only");}
    const source=join(dir,"node-streams.ets"),app=join(dir,"node-streams-app");
    writeFileSync(source,`process.stdin.on("data",(chunk:string):void=>{process.stdout.write("parent:"+chunk);});
 const childArgs:string[]=["-c","printf child-out; printf child-err >&2; cat"];

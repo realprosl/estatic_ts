@@ -10,8 +10,32 @@ curl -fsSL https://raw.githubusercontent.com/realprosl/estatic_ts/main/install.s
 
 El script clona lo mínimo (`git clone --depth 1`) en una carpeta temporal,
 ejecuta desde ahí el `install.sh` normal con las opciones que le pases y la
-borra al acabar. `ESTC_REF=<rama>` instala otra rama y `ESTC_REPO=<url>`, otro
-repositorio.
+borra al acabar. `ESTC_REF=<rama o etiqueta>` instala otra rama o una versión
+concreta (cada fusión en `main` publica una etiqueta `vX.Y.Z`) y
+`ESTC_REPO=<url>`, otro repositorio:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/realprosl/estatic_ts/v1.77.0/install.sh | ESTC_REF=v1.77.0 bash
+```
+
+## Actualizar
+
+Con `etsc` ya instalado:
+
+```sh
+etsc update            # a la última versión publicada
+etsc update 1.77.0     # a una versión concreta (también v1.77.0; sirve para volver atrás)
+etsc update --list     # versiones disponibles, marcando la instalada
+etsc update --dry-run  # dice si hay una versión nueva, sin instalar (sale con 1 si la hay)
+etsc update -- --force # lo que vaya tras `--` se pasa a install.sh
+```
+
+Consulta las etiquetas `vX.Y.Z` con `git ls-remote`, descarga la elegida
+(`git clone --depth 1`) y ejecuta su `install.sh` con el mismo prefijo que la
+instalación actual. Si la instalación está en `/usr/local`, hace falta
+`sudo etsc update`. La versión nueva se publica de golpe al final: si algo
+falla, la anterior sigue funcionando. `ESTC_REPO` cambia el repositorio.
+Después conviene ejecutar `etsc update-types` en cada proyecto.
 
 Desde un clon:
 

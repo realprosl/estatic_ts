@@ -48,7 +48,9 @@ instalar en tu usuario, sin `sudo`:
 curl -fsSL https://raw.githubusercontent.com/realprosl/estatic_ts/main/install.sh | bash -s -- --prefix "$HOME/.local"
 ```
 
-Para actualizar, se vuelve a ejecutar el mismo comando. Después conviene
+Para actualizar: `etsc update` (la última versión) o `etsc update 1.77.0`
+(una concreta; `--list` muestra las disponibles y `--dry-run` solo comprueba).
+Ver [INSTALL.md](./INSTALL.md#actualizar). Después conviene
 ejecutar `etsc update-types` en cada proyecto para refrescar
 `types/estatic.d.ts`.
 
