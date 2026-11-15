@@ -4,6 +4,7 @@
 ./compiler/unity.cpp
 ./fetch-prebuilt.sh
 ./files.txt
+./prebuilt-inputs.sh
 ./regenerate.sh
 ./templates/.gitignore
 ./templates/README.md

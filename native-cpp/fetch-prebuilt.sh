@@ -50,9 +50,17 @@ url="$(git -C "$root" remote get-url "$remote" 2>/dev/null || printf '%s' "$remo
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/etsc-prebuilt.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 # Lo que se pide de la rama: todo, una plataforma o solo su compilador.
-subset=""
+# La rama guarda las últimas compilaciones por huella de fuentes
+# (by-inputs/<plataforma>/<huella>/, #201) y, en <plataforma>/, la del último
+# main. Con --platform se busca primero la de la huella de este checkout.
+subset="" exact=""
 if [ -n "$platform" ]; then
   subset="$platform"; [ "$compiler_only" -eq 1 ] && subset="$platform/compiler"
+  source "$seed_dir/prebuilt-inputs.sh"
+  inputs="$(compiler_inputs "$root" 2>/dev/null || true)"
+  if [ -n "$inputs" ]; then
+    exact="by-inputs/$platform/$inputs"; [ "$compiler_only" -eq 1 ] && exact="$exact/compiler"
+  fi
 elif [ "$compiler_only" -eq 1 ]; then
   note "precompilados: --compiler-only necesita --platform"; exit 2
 fi
@@ -60,8 +68,14 @@ cloned=0
 if [ -n "$subset" ]; then
   # Clon parcial: solo se descargan los blobs del subconjunto pedido.
   if git clone --quiet --depth 1 --single-branch --branch "$branch" --filter=blob:none --sparse "$url" "$tmp/clone" 2>/dev/null \
-     && git -C "$tmp/clone" sparse-checkout set --no-cone "/$subset/" 2>/dev/null; then
+     && git -C "$tmp/clone" sparse-checkout set --no-cone "/$subset/" ${exact:+"/$exact/"} 2>/dev/null; then
     cloned=1
+    # La compilación exacta de estas fuentes, si está, sustituye a la del último main.
+    if [ -n "$exact" ] && [ -d "$tmp/clone/$exact" ]; then
+      rm -rf "$tmp/clone/$subset"; mkdir -p "$tmp/clone/$subset"
+      (cd "$tmp/clone/$exact" && tar -c .) | tar -x -C "$tmp/clone/$subset"
+      note "precompilados: compilación exacta de estas fuentes (${inputs:0:12})"
+    fi
   else
     rm -rf "$tmp/clone"
   fi
@@ -74,7 +88,7 @@ target="$seed_dir/prebuilt"
 if [ -z "$subset" ]; then
   rm -rf "$target"; mkdir -p "$target"
   # La rama tiene en su raíz un directorio por plataforma (linux-x86_64, ...).
-  (cd "$tmp/clone" && tar -c --exclude=.git .) | tar -x -C "$target"
+  (cd "$tmp/clone" && tar -c --exclude=.git --exclude=by-inputs .) | tar -x -C "$target"
 else
   if [ ! -d "$tmp/clone/$subset" ]; then
     note "precompilados: la rama '$branch' no tiene '$subset'; se compilará desde las fuentes"
