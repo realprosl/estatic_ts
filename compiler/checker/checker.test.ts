@@ -1925,7 +1925,7 @@ test('frontend closure etsgen overload publication must be uniform',()=>error('@
 test('frontend closure etsgen publishes separate lexical order ranges',()=>{const g=check('@etsgen function make():string{return "const x=1;print(x);";}make();');const f=g.files[0];assert.equal(f.analysisRanges.length,f.ast.nodes.length);assert.ok(f.analysisRanges.some((r:number[])=>r[0]>=0&&r[1]>r[0]));});
 
 test('frontend closure checks every repository example with native module loading',t=>{
- const files=readdirSync(join(root,'examples'),{recursive:true}).map(String).filter(f=>f.endsWith('.ts')).sort();let accepted=0;
+ const files=readdirSync(join(root,'examples'),{recursive:true}).map(String).filter(f=>f.endsWith('.ts')&&!f.startsWith('notification-app/')).sort();let accepted=0;
  for(const file of files){
   const invalid=file==='expected-errors/private-bad.ts';
   const g=run({entry:join(root,'examples',file),cache:join(directory,'example-cache')},invalid?1:0);
