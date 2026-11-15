@@ -1,5 +1,6 @@
 import {IrProject,IrType,IrFunction,IrInstruction,IrSource,IrDispatch,IrAnnotation,IrPlace,IrBlock,IrRuntimeContract} from "../../ir/model";
 import {cppType,fileCallee,regexCallee,netCallee,asyncCallee,networkCallee,globalCalls,asyncCalls,stringMethods,terminalMethods,objectMethod,backend_libuv,backend_curl,backend_tls,backend_ioUring} from "./tables";
+import {contentHash} from "../../platform/index";
 import {quoteCpp,integerIndex,uniqueStrings,parseNumber,numericBase,validNumber,validCppSymbol,validHeader,binaryHelper,arrayIndex} from "./support";
 export class RuntimeBackends {
  libuv:boolean;curl:boolean;tls:boolean;ioUring:boolean;
@@ -36,12 +37,46 @@ export class IrCppGenerator {
   processIo:boolean;
   project:IrProject;
   consuming:number[];cppGenerators:number[];layoutDone:number[];layoutActive:number[];layoutOutput:string[];
-  constructor(project: IrProject) { this.project=project;this.headers=new HeaderSet();this.backends=new RuntimeBackends();this.processIo=false;this.consuming=[];this.cppGenerators=[];this.layoutDone=[];this.layoutActive=[];this.layoutOutput=[]; }
+  // Nombres C++ estables (#192): función, tipo y global se nombran por su
+  // identidad (symbolId, firma, sustituciones) y no por su posición en el
+  // programa. Así una unidad no cambia porque otro módulo gane o pierda
+  // funciones, y una librería genera el mismo C++ en cualquier proyecto.
+  functionNames:string[];typeNames:string[];globalNames:string[];usedNames:Map<string,number>;
+  constructor(project: IrProject) { this.project=project;this.headers=new HeaderSet();this.backends=new RuntimeBackends();this.processIo=false;this.consuming=[];this.cppGenerators=[];this.layoutDone=[];this.layoutActive=[];this.layoutOutput=[];this.functionNames=[];this.typeNames=[];this.globalNames=[];this.usedNames = new Map<string,number>();this.assignNames(); }
+  assignNames():void{
+    // Acceso directo a los campos: copiar un IrFunction entero copiaría su cuerpo.
+    for(let k:number=0;k<this.project.functions.length;k=k+1){
+      const symbol:string=this.project.functions[k].symbolId;const name:string=this.project.functions[k].name;
+      const location:string=symbol==""?this.project.functions[k].source.moduleId+"@"+numberToString(this.project.functions[k].source.start):"";
+      const key:string=symbol+"|"+name+"|"+this.project.functions[k].signature+"|"+this.project.functions[k].substitutionFrom.join(",")+"|"+this.project.functions[k].substitutionTo.join(",")+"|"+location;
+      const named:string=this.stableName("ir_f",name,key);this.functionNames.push(named);
+    }
+    for(let k:number=0;k<this.project.typeDefinitions.length;k=k+1){
+      const symbol:string=this.project.typeDefinitions[k].symbolId;const text:string=k<this.project.types.length?this.project.types[k]:"";
+      const named:string=this.stableName("ir_t",symbol==""?"":text,this.project.typeDefinitions[k].kind+"|"+symbol+"|"+text);this.typeNames.push(named);
+    }
+    for(let k:number=0;k<this.project.globals.length;k=k+1){
+      const symbol:string=this.project.globals[k].symbolId;const name:string=this.project.globals[k].name;
+      const named:string=this.stableName("ir_g",name,symbol+"|"+name+"|"+(symbol==""?this.project.globals[k].source.moduleId+"@"+numberToString(this.project.globals[k].source.start):""));this.globalNames.push(named);
+    }
+  }
+  // "ir_f" + "_calc" + "_" + 12 hex del hash de la identidad (+ "_2"… si dos
+  // identidades distintas coinciden). El mapa es un campo: pasado como
+  // parámetro se copiaría en cada llamada.
+  stableName(prefix:string,label:string,key:string):string{
+    let readable:string="";for(let k:number=0;k<label.length&&readable.length<24;k=k+1){const c:number=label.charCodeAt(k);readable=readable+((c>=48&&c<=57)||(c>=65&&c<=90)||(c>=97&&c<=122)?label.slice(k,k+1):"_");}
+    const base:string=prefix+(readable==""?"":"_"+readable)+"_"+contentHash(key).slice(0,12);
+    let name:string=base;let n:number=2;while(this.usedNames.has(name)){name=base+"_"+numberToString(n);n=n+1;}
+    this.usedNames.set(name,1);return name;
+  }
+  functionName(id:number):string{return id>=0&&id<this.functionNames.length?this.functionNames[id]:"ir_f"+numberToString(id);}
+  typeName(id:number):string{return id>=0&&id<this.typeNames.length?this.typeNames[id]:"ir_t"+numberToString(id);}
+  globalName(id:number):string{return id>=0&&id<this.globalNames.length?this.globalNames[id]:"ir_g"+numberToString(id);}
   fail(message:string,source:IrSource=new IrSource("","","",-1,0,0)):string{printError("IR_CPP_UNSUPPORTED: "+source.file+":"+numberToString(source.start)+": "+message);exitProcess(1);return "";}
   shape(id:number):IrType{if(id<0||id>=this.project.typeDefinitions.length)this.fail("Tipo IR inexistente: "+numberToString(id));return this.project.typeDefinitions[id];}
   cppTypeId(id: number): string {
     const s=this.shape(id);const  a=s.arguments;
-    if(recordKinds.includes(s.kind)||sumKinds.includes(s.kind))return `ir_t${id}`;
+    if(recordKinds.includes(s.kind)||sumKinds.includes(s.kind))return `${this.typeName(id)}`;
     switch(s.kind) {
       case "scalar": return cppType(this.project.types[id]);
       // Un literal de tipo se materializa como su primitivo: en C++ el valor
@@ -296,7 +331,7 @@ const branches=_cppLoop5Result.join("");
   }
   place(f:constRef<IrFunction>,id:number):string {
     const p=f.places[id];if(id<0||id>=f.places.length)this.fail(`Place inexistente: ${id}`,f.source);
-    if(p.global>=0)return `ir_g${p.global}`;
+    if(p.global>=0)return `${this.globalName(p.global)}`;
     if(p.kind=="local")return `p${id}`;
     if(p.kind=="capture")return `ets::ir::view(${f.captureModes[p.field]=="reference"?`*c${p.field}`:`c${p.field}`})`;
     const parent=f.places[p.base];const  raw=`${this.place(f,p.base)}.get()`;
@@ -492,7 +527,7 @@ for(let k:number=0;k<_cppLoop61Input.length;k=k+1){
 const _:number=_cppLoop61Input[k];
 _cppLoop61Result.push(`c${k}`);continue;
 }
-value=`[${captures}](${args})mutable->${this.cppTypeId(target.returns)}{${this.project.types[target.returns]=="void"?"":"return "}ir_f${i.callee}(${[..._cppLoop61Result,...forwarded].join(",")});}`;}break;
+value=`[${captures}](${args})mutable->${this.cppTypeId(target.returns)}{${this.project.types[target.returns]=="void"?"":"return "}${this.functionName(i.callee)}(${[..._cppLoop61Result,...forwarded].join(",")});}`;}break;
       }
       case "call": case "taskCreate": {
         const target=this.project.functions[i.callee];
@@ -503,7 +538,7 @@ for(let k:number=0;k<_cppLoop16Input.length;k=k+1){
 const _:number=_cppLoop16Input[k];
 _cppLoop16Result.push(this.borrowArgument(f,i,k,(k<target.parameterTypes.length?target.parameterTypes[k]:-1)));continue;
 }
-value=`ir_f${i.callee}(${_cppLoop16Result.join(",")})`;}break;
+value=`${this.functionName(i.callee)}(${_cppLoop16Result.join(",")})`;}break;
       }
       case "callIndirect": {
         const formals=this.shape(i.signature).arguments.slice(0,-1);
@@ -533,7 +568,7 @@ const concrete:number=_cppLoop2Input[k];
             const formal=target.parameterTypes[n];
             args.push(this.dereferenceIfBorrowed(this.convert(this.operand(f,i,n),f.values[i.operands[n]],formal),formal));
           }
-          const call=`ir_f${d.callee}(${args.join(",")})`;
+          const call=`${this.functionName(d.callee)}(${args.join(",")})`;
           _cppLoop2Result.push(`${k>0?"else ":""}if constexpr(std::is_same_v<B,ets::ir::Box<${this.cppTypeId(concrete)}>>){${this.project.types[i.typeId]=="void"?`${call};return;`:`return ${this.convert(call,target.returns,i.typeId)};`}}`);continue;
         
 }
@@ -635,7 +670,7 @@ for(let k:number=0;k<_cppLoop40Input.length;k=k+1){
 const t:number=_cppLoop40Input[k];
 _cppLoop40Result.push(`${this.parameterType(t)} a${k}`);continue;
 }
-return `${ret} ir_f${index}(${[..._cppLoop24Result,..._cppLoop40Result].join(",")})`;}}
+return `${ret} ${this.functionName(index)}(${[..._cppLoop24Result,..._cppLoop40Result].join(",")})`;}}
   }
   nativeBinding(f:constRef<IrFunction>):string {
     
@@ -781,7 +816,7 @@ ${[...locals,...values,...awaited,...initialize,"goto b0;",...blocks].join("\n")
     if(this.layoutDone.includes(id))return;
     if(this.layoutActive.includes(id))this.fail("Ciclo de layout por valor en tipos IR");
     this.layoutActive.push(id);const s=this.shape(id);
-    if(this.isInterface(id)){const text=`struct ir_t${id}{${this.interfaceVariant(id)} data;bool operator==(const ir_t${id}&)const=default;};`;this.layoutOutput.push(text);}
+    if(this.isInterface(id)){const text=`struct ${this.typeName(id)}{${this.interfaceVariant(id)} data;bool operator==(const ${this.typeName(id)}&)const=default;};`;this.layoutOutput.push(text);}
     else if(this.record(id)){for(const f of s.fields)this.layoutDependency(f);
 let _cppLoop36Result:string[]=[];
 const _cppLoop36Input:number[]=s.fields;
@@ -789,7 +824,7 @@ for(let k:number=0;k<_cppLoop36Input.length;k=k+1){
 const t:number=_cppLoop36Input[k];
 _cppLoop36Result.push(`ets::ir::Slot<${this.cppTypeId(t)}> f${k};`);continue;
 }
-const text=`struct ir_t${id}{${_cppLoop36Result.join("")}bool operator==(const ir_t${id}&)const=default;};`;this.layoutOutput.push(text);}
+const text=`struct ${this.typeName(id)}{${_cppLoop36Result.join("")}bool operator==(const ${this.typeName(id)}&)const=default;};`;this.layoutOutput.push(text);}
     else{for(const a of this.choices(id))this.layoutDependency(a);
 let _cppLoop65Result:string[]=[];
 const _cppLoop65Input:number[]=this.choices(id);
@@ -797,7 +832,7 @@ for(let _cppLoop65Index:number=0;_cppLoop65Index<_cppLoop65Input.length;_cppLoop
 const t:number=_cppLoop65Input[_cppLoop65Index];
 _cppLoop65Result.push(this.cppTypeId(t));continue;
 }
-const text=`struct ir_t${id}{std::variant<${_cppLoop65Result.join(",")}> data;bool operator==(const ir_t${id}&)const=default;};`;this.layoutOutput.push(text);}
+const text=`struct ${this.typeName(id)}{std::variant<${_cppLoop65Result.join(",")}> data;bool operator==(const ${this.typeName(id)}&)const=default;};`;this.layoutOutput.push(text);}
     this.layoutActive.pop();this.layoutDone.push(id);
   }
   declarations():string{
@@ -1162,7 +1197,7 @@ let _cppLoop26Result:string[]=[];
 const _cppLoop26Input:IrPlace[]=this.project.globals;
 for(let k:number=0;k<_cppLoop26Input.length;k=k+1){
 const p:IrPlace=_cppLoop26Input[k];
-_cppLoop26Result.push(`ets::ir::Slot<${this.cppTypeId(p.typeId)}> ir_g${k};`);continue;
+_cppLoop26Result.push(`ets::ir::Slot<${this.cppTypeId(p.typeId)}> ${this.globalName(k)};`);continue;
 }
 const globals=_cppLoop26Result;
     
@@ -1178,14 +1213,14 @@ let _cppLoop71Result:string[]=[];
 const _cppLoop71Input:number[]=this.project.initializationOrder;
 for(let _cppLoop71Index:number=0;_cppLoop71Index<_cppLoop71Input.length;_cppLoop71Index=_cppLoop71Index+1){
 const id:number=_cppLoop71Input[_cppLoop71Index];
-_cppLoop71Result.push(this.project.functions[id].asynchronous?`ets::syncWait(ir_f${id}());`:`ir_f${id}();`);continue;
+_cppLoop71Result.push(this.project.functions[id].asynchronous?`ets::syncWait(${this.functionName(id)}());`:`${this.functionName(id)}();`);continue;
 }
 
 let _cppLoop72Result:string[]=[];
 const _cppLoop72Input:number[]=this.project.finalizationOrder;
 for(let _cppLoop72Index:number=0;_cppLoop72Index<_cppLoop72Input.length;_cppLoop72Index=_cppLoop72Index+1){
 const id:number=_cppLoop72Input[_cppLoop72Index];
-_cppLoop72Result.push(this.project.functions[id].asynchronous?`ets::syncWait(ir_f${id}());`:`ir_f${id}();`);continue;
+_cppLoop72Result.push(this.project.functions[id].asynchronous?`ets::syncWait(${this.functionName(id)}());`:`${this.functionName(id)}();`);continue;
 }
 const main=`int main(int argc,char** argv){ets_argc=argc;ets_argv=argv;${_cppLoop71Result.join("")}${this.backends.libuv?"ets::defaultEventLoop.drainDetached();":""}${_cppLoop20Result?"ets::defaultEventLoop.run();":""}${_cppLoop72Result.join("")}${this.processIo?"ets::runProcessIo();":""}return 0;}`;
     
@@ -1193,7 +1228,7 @@ let _cppLoop18Result:string[]=[];
 const _cppLoop18Input:IrType[]=this.project.typeDefinitions;
 for(let k:number=0;k<_cppLoop18Input.length;k=k+1){
 const s:IrType=_cppLoop18Input[k];
-{const _cppLoop18Part:string[]=this.record(k)||sumKinds.includes(s.kind)?[`struct ir_t${k};`]:[];for(const _cppLoop18Item of _cppLoop18Part)_cppLoop18Result.push(_cppLoop18Item);continue;}
+{const _cppLoop18Part:string[]=this.record(k)||sumKinds.includes(s.kind)?[`struct ${this.typeName(k)};`]:[];for(const _cppLoop18Item of _cppLoop18Part)_cppLoop18Result.push(_cppLoop18Item);continue;}
 }
 const forwards=_cppLoop18Result;
     
@@ -1209,7 +1244,7 @@ let _cppLoop27Result:string[]=[];
 const _cppLoop27Input:number[]=printable;
 for(let _cppLoop27Index:number=0;_cppLoop27Index<_cppLoop27Input.length;_cppLoop27Index=_cppLoop27Index+1){
 const k:number=_cppLoop27Input[_cppLoop27Index];
-_cppLoop27Result.push(`inline std::ostream& operator<<(std::ostream& out,const ir_t${k}& value);`);continue;
+_cppLoop27Result.push(`inline std::ostream& operator<<(std::ostream& out,const ${this.typeName(k)}& value);`);continue;
 }
 const printerPrototypes=_cppLoop27Result;
     
@@ -1217,7 +1252,7 @@ let _cppLoop9Result:string[]=[];
 const _cppLoop9Input:number[]=printable;
 for(let _cppLoop9Index:number=0;_cppLoop9Index<_cppLoop9Input.length;_cppLoop9Index=_cppLoop9Index+1){
 const k:number=_cppLoop9Input[_cppLoop9Index];
-_cppLoop9Result.push(`inline std::ostream& operator<<(std::ostream& out,const ir_t${k}& value){${this.shape(k).kind=="variant"?`return out<<${quoteCpp(this.shape(k).tag)};`:`std::visit([&](const auto& x){if constexpr(requires{out<<x;})out<<x;else std::abort();},value.data);return out;`}}`);continue;
+_cppLoop9Result.push(`inline std::ostream& operator<<(std::ostream& out,const ${this.typeName(k)}& value){${this.shape(k).kind=="variant"?`return out<<${quoteCpp(this.shape(k).tag)};`:`std::visit([&](const auto& x){if constexpr(requires{out<<x;})out<<x;else std::abort();},value.data);return out;`}}`);continue;
 }
 const printers=_cppLoop9Result;
     
