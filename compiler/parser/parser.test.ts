@@ -548,7 +548,7 @@ test("bootstrap parser: parses its own complete ETS source", () => {
   parity(scanModuleSyntax(source).source);
 });
 test("bootstrap parser: accepts repository examples accepted by the stage 0 grammar", t => {
-  const files = readdirSync(join(root, "examples"), { recursive: true }).map(String).filter(file => file.endsWith(".ets")).sort();
+  const files = readdirSync(join(root, "examples"), { recursive: true }).map(String).filter(file => file.endsWith(".ts")).sort();
   let accepted = 0; const failures: string[] = [], excluded: string[] = [];
   for (const file of files) {
     const source = readFileSync(join(root, "examples", file), "utf8");
@@ -558,7 +558,7 @@ test("bootstrap parser: accepts repository examples accepted by the stage 0 gram
     if (result.diagnostics.length) failures.push(`${file}: ${JSON.stringify(result.diagnostics.slice(0, 3))}`);
   }
   t.diagnostic(`${accepted}/${files.length} examples accepted by stage 0; excluded with stage 0 diagnostics: ${excluded.join(", ")}`);
-  assert.deepEqual(excluded, ["exports-demo.ets", "generated-module-exports/index.ts", "generated-module-exports/main.ts", "generated-module-exports/producer.ts", "imports-as/main.ts", "module-exports/counter.ts", "module-exports/index.ts", "module-exports/main.ts"], "a new stage 0 rejection must not silently remove an example from the audit");
+  assert.deepEqual(excluded, ["exports-demo.ts", "generated-module-exports/index.ts", "generated-module-exports/main.ts", "generated-module-exports/producer.ts", "imports-as/main.ts", "module-exports/counter.ts", "module-exports/index.ts", "module-exports/main.ts"], "a new stage 0 rejection must not silently remove an example from the audit");
   assert.ok(accepted >= 120); assert.deepEqual(failures, []);
 });
 test("bootstrap parser: graph contains only schema, parser and its driver", () => {

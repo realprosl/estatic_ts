@@ -599,7 +599,7 @@ sección.
 
 - Nodos AST exportados en `src/ast/nodes.ts`.
 - `TokenKind` y `KEYWORDS` en `src/lexer/token.ts`.
-- Ejemplos en `examples/*.ets`.
+- Ejemplos en `examples/*.ts`.
 - Afirmaciones en este `LIMITATIONS.md`.
 
 El check detecta algunas contradicciones y referencias rotas, pero no puede

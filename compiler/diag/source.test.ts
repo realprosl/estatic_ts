@@ -110,11 +110,11 @@ test("bootstrap frontend graph integrates exactly seven ETS modules (with the le
   const host=readFileSync(join(root,'compiler/diag/run.ts'),'utf8');assert.doesNotMatch(host,/src\/(?:lexer|parser)|template-tokens|token-transport/);
 });
 test("bootstrap frontend accepts repository examples accepted by the direct stage 0 parser",t=>{
-  const files=readdirSync(join(root,"examples"),{recursive:true}).map(String).filter(f=>f.endsWith('.ets')).sort();let count=0;const excluded:string[]=[],failures:string[]=[];
+  const files=readdirSync(join(root,"examples"),{recursive:true}).map(String).filter(f=>f.endsWith('.ts')).sort();let count=0;const excluded:string[]=[],failures:string[]=[];
   for(const file of files){const source=readFileSync(join(root,"examples",file),'utf8');try{new Parser(new Lexer(source).tokenize()).parseProgram();}catch(error){if(!(error instanceof DiagnosticError))throw error;excluded.push(file);continue;}
     const result=native(source,file);if(!result.success)failures.push(file+': '+JSON.stringify(result.diagnostics.slice(0,3)));count++;
   }
-  assert.deepEqual(excluded,["exports-demo.ets","generated-module-exports/index.ts","generated-module-exports/main.ts","generated-module-exports/producer.ts","imports-as/main.ts","module-exports/counter.ts","module-exports/index.ts","module-exports/main.ts"]);
+  assert.deepEqual(excluded,["exports-demo.ts","generated-module-exports/index.ts","generated-module-exports/main.ts","generated-module-exports/producer.ts","imports-as/main.ts","module-exports/counter.ts","module-exports/index.ts","module-exports/main.ts"]);
   assert.ok(count>=120);assert.deepEqual(failures,[]);t.diagnostic(`${count}/${files.length} examples accepted directly by stage 0 also pass the native chain`);
 });
 test("bootstrap frontend lexical and parser nesting remain bounded",()=>{

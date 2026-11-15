@@ -125,7 +125,7 @@ test("generated exports: publicación raíz no oculta namespace importado",async
 // must remain text rather than turning into unintended interpolations.
 test("generated exports native: ejemplo con plantilla ETS multilínea", async()=>{
   await project({}, async(_entry,dir)=>{
-    const entry=join(root,"examples/generated-module-exports/main.ets");
+    const entry=join(root,"examples/generated-module-exports/main.ts");
     const result=await compileFile(entry);
     assert.equal(native(result,dir),"7\nok\n");
     assert.match(result.ast.generatedSources![0].source, /class Box \{ value: number; \}/);

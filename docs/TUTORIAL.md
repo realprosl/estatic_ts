@@ -709,7 +709,7 @@ proporcionan un roundtrip determinista y libre de timing.
 > **Estado V30.6.0:** la API async (`readTcp`/`writeTcp` en
 > `examples/http-server.ts`, `examples/tls-server.ts`) **funciona y
 > compila**, pero los tests e2e verifican la API sync. Ambos
-> coexisten; los ejemplos `examples/*.ets` muestran el uso async
+> coexisten; los ejemplos `examples/*.ts` muestran el uso async
 > (ver `examples/http-server.ts`, `examples/tls-server.ts`,
 > `examples/async-await.ts`).
 
