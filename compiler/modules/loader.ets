@@ -58,9 +58,9 @@ function hasExtension(file: string): boolean {
   return dot > base;
 }
 export function resolveSourceFile(requested: string): string {
-  if (hasExtension(requested)) return canonicalFile(requested);
-  const ts: string = canonicalFile(requested + ".ts");
-  return ts != "" ? ts : canonicalFile(requested + ".ets");
+  if (hasExtension(requested)) { const direct: string = canonicalFile(requested); if (direct != "") return direct; }
+  const ts: string = canonicalFile(requested + ".ts"); if (ts != "") return ts;
+  return canonicalFile(requested + ".ets");
 }
 function requestedPath(base: string, specifier: string): string {
   if (specifier == "") return normalizePath(base);

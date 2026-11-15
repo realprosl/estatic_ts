@@ -258,9 +258,9 @@ export default {
 Sin argumentos, el CLI localiza la configuración y, si `compiler.enabled` es `true`, genera C++ y ejecuta directamente el compilador indicado:
 
 ```bash
-npm start
-npm start -- --config otra.config.ts --build
-npm start -- --config otra.config.ts --build --unity
+etsc build
+etsc build --config otra.config.json
+etsc build --config otra.config.json --unity
 ```
 
 Con la compilación incremental activa hay tres capas independientes de caché: sintaxis/AST por contenido de módulo, snapshot completa de transpilación y objetos C++ por unidad. Si cambia un solo archivo se vuelven a escanear y parsear únicamente sus bytes; los AST de los demás módulos se restauran. El análisis semántico combinado y el codegen se ejecutan para el programa nuevo por seguridad entre módulos, pero el `.o` sólo se recompila si cambió su C++ o la cabecera común. Si no cambió el programa, o sólo cambian flags/runtime nativos, se restaura la snapshot y se omiten parse, type-check, `comptime`, `@etsgen` y codegen. Los objetos incorporan a su clave el C++ materializado, la cabecera compartida, el runtime, el compilador y sus flags. Véase [`docs/transpilation-cache.md`](./docs/transpilation-cache.md).
@@ -270,6 +270,44 @@ Con la compilación incremental activa hay tres capas independientes de caché: 
 Desde v48, los programas dentro de la cobertura escalar pueden restaurar los cuerpos de funciones ya comprobados en módulos intactos, tanto en el checker fuente como en el final. Cambiar una implementación conserva los consumidores cuando el entorno de firmas y globals es idéntico. Clases, arrays, genéricos, closures, ownership y generación estática conservan el checker completo. Los contadores y motivos de fallback aparecen en `--verbose` y en el informe de build; véase [`docs/semantic-cache.md`](./docs/semantic-cache.md). El codegen continúa siendo global.
 
 En perfiles de release se separan funciones y datos por sección, el enlazador elimina secciones y bibliotecas no utilizadas y el binario se entrega sin símbolos internos. Tree-sitter y la gramática TypeScript solo se enlazan cuando el ejecutable utiliza las APIs de sintaxis o AST; una aplicación normal no incorpora el parser del compilador. Para conservar símbolos durante la depuración, utilice el perfil `debug` y retire `-s` de `linkFlags`.
+
+## Librerías: `etsc install`
+
+```bash
+etsc install https://github.com/usuario/mi-libreria 1.2.0   # etiqueta v1.2.0 (o 1.2.0, o una rama)
+etsc install https://gitlab.com/usuario/otra                # sin versión: la última vX.Y.Z
+etsc install https://github.com/usuario/comun 2.0.0 -g      # en la carpeta global
+etsc install                                                # descarga lo que falte (otra máquina, CI)
+```
+
+Vale cualquier servidor git (GitHub, GitLab, Gitea, propio, `file://`). La
+librería se descarga en `.build/deps/<nombre>@<versión>/` del proyecto o, con
+`-g`/`--global`, en `~/.local/share/estatic/deps/` (`$XDG_DATA_HOME`), y se
+apunta en `estatic.config.json`:
+
+```json
+"aliases": { "mi-libreria": "/ruta/absoluta/.build/deps/mi-libreria@v1.2.0" },
+"dependencies": {
+  "mi-libreria": { "url": "https://github.com/usuario/mi-libreria", "version": "v1.2.0", "commit": "…", "global": false }
+}
+```
+
+- **Sin punto de entrada:** una librería se importa módulo a módulo:
+  `import { parse } from "mi-libreria/parser"`. Solo se compilan los módulos
+  importados.
+- **Su `estatic.config.json`:** da el nombre (`name`; si no, el de la URL), sus
+  alias internos (rutas relativas a su carpeta) y sus `linkFlags` /
+  `linkLibraries`, que se añaden al enlazar el proyecto.
+- **Sus dependencias:** las `dependencies` de la librería se instalan también y
+  se apuntan en el proyecto con `"indirect": true`. Una sola versión por nombre:
+  manda la instalada directamente; entre indirectas, la más alta (con aviso).
+- **Editor:** en cada `build`, `run` y `--check` los alias se copian a
+  `compilerOptions.paths` de `tsconfig.json` (`"mi-libreria/*"`), conservando
+  los `paths` escritos a mano y sin tocar el archivo si no cambia nada.
+- La ruta absoluta es de esta máquina: en otra, `etsc install` sin argumentos
+  vuelve a descargar desde `url` + `version` y reescribe el alias. Si falta una
+  descarga, `etsc build` lo dice. Nunca se ejecuta código de la librería al
+  instalarla.
 
 ## Lenguaje implementado
 
