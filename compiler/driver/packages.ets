@@ -165,6 +165,18 @@ export function dependencyAliases(config: JsonValue, base: string, known: PathAl
   return result;
 }
 
+// Carpetas canónicas de las dependencias descargadas (las rutas de los
+// módulos llegan canónicas al IR), para darles cabecera y caché propias.
+export function dependencyRoots(config: JsonValue, base: string): string[] {
+  let roots: string[] = []; const dependencies: JsonValue = jsonObjectGet(config, "dependencies");
+  for (const name of objectKeys(dependencies)) {
+    const target: string = dependencyTarget(config, base, name); if (target == "") continue;
+    const marker: string = canonicalFile(target + "/.estatic-commit"); if (marker == "") continue;
+    const root: string = marker.slice(0, marker.lastIndexOf("/")); if (!roots.includes(root)) roots.push(root);
+  }
+  return roots;
+}
+
 // linkFlags y linkLibraries que declaran las librerías (p. ej. -lsqlite3).
 export function dependencyLinkFlags(config: JsonValue, base: string): string[] {
   let flags: string[] = []; const dependencies: JsonValue = jsonObjectGet(config, "dependencies");
