@@ -15,7 +15,7 @@ function updateError(message: string, status: number = 1): void { printError(mes
 function parentPath(path: string): string { let end: number = -1; for (let k: number = 0; k < path.length; k = k + 1) if (path.charAt(k) == "/") end = k; return end <= 0 ? "/" : path.slice(0, end); }
 
 // Ejecuta y espera; la salida va a `output` si se indica.
-function run(command: string[], output: string = "", errors: string = ""): number {
+export function run(command: string[], output: string = "", errors: string = ""): number {
   const pid: number = launch(command, output, errors); if (pid < 0) updateError(hostError());
   let status: number = poll(pid); while (status < 0) { pause(80); status = poll(pid); }
   return status;

@@ -258,6 +258,30 @@ test("install builds compiler/ with the seed and publishes that executable",asyn
    p=update("abc");assert.equal(p.status,2);assert.match(p.stderr,/Versión no válida/);
    p=update("0.0.2","--","--seed-only");assert.equal(p.status,0,p.stderr+p.stdout);
    assert.equal(readFileSync(marker,"utf8").trim(),"--prefix "+realpathSync(prefix)+" --seed-only");}
+  // #192: etsc install con repositorios git locales. liba depende de libb
+  // (indirecta); la app importa módulos sueltos ("liba/math"), sin punto de entrada.
+  {const repos=join(dir,"repos192"),commit=(repo:string,...tags:string[])=>{for(const args of [["init","-q"],["add","."],["commit","-q","-m","x"],...tags.map(t=>["tag",t])]){const r=spawnSync("git",["-C",repo,"-c","user.name=t","-c","user.email=t@t",...args],{encoding:"utf8"});assert.equal(r.status,0,r.stderr);}};
+   const libb=join(repos,"libb"),liba=join(repos,"liba");mkdirSync(libb,{recursive:true});mkdirSync(join(liba,"internal"),{recursive:true});
+   writeFileSync(join(libb,"estatic.config.json"),JSON.stringify({name:"libb"}));writeFileSync(join(libb,"util.ts"),"export function twice(x: number): number { return x * 2; }\n");commit(libb,"v1.0.0","v1.1.0");
+   writeFileSync(join(liba,"estatic.config.json"),JSON.stringify({name:"liba",aliases:{"@interno":"internal",libb:"/home/autor/libb"},dependencies:{libb:{url:"file://"+libb,version:"1.0.0"}}}));
+   writeFileSync(join(liba,"internal/consts.ts"),"export const base: number = 10;\n");
+   writeFileSync(join(liba,"math.ts"),'import { twice } from "libb/util";\nimport { base } from "@interno/consts";\nexport function calc(x: number): number { return twice(x) + base; }\n');commit(liba,"v0.3.0");
+   const project=join(dir,"app192"),env={...process.env,ESTC_ROOT:home,HOME:join(dir,"home192"),XDG_DATA_HOME:""},etsc=(...args:string[])=>spawnSync(bin,args,{cwd:project,encoding:"utf8",env,timeout:600000});
+   let p=spawnSync(bin,["init",project],{cwd:dir,encoding:"utf8",env});assert.equal(p.status,0,p.stderr);
+   writeFileSync(join(project,"src/main.ts"),'import { calc } from "liba/math";\nprint(calc(4));\n');
+   p=etsc("install","file://"+liba);assert.equal(p.status,0,p.stderr+p.stdout);assert.match(p.stdout,/libb v1\.0\.0 \(dependencia de liba\)/);
+   const config=()=>JSON.parse(readFileSync(join(project,"estatic.config.json"),"utf8"));let c=config();
+   assert.equal(c.dependencies.liba.version,"v0.3.0");assert.equal(c.dependencies.libb.indirect,true);assert.ok(!c.aliases.liba.includes("//"),c.aliases.liba);assert.ok(c.aliases.libb.startsWith(project),c.aliases.libb);
+   const ts=readFileSync(join(project,"tsconfig.json"),"utf8");assert.ok(ts.includes('"liba/*": ["'+c.aliases.liba+'/*"]'),ts);
+   p=etsc("run","--no-progress");assert.equal(p.status,0,p.stderr);assert.equal(p.stdout.trim(),"18");
+   // Otra máquina: sin las descargas, build falla con ayuda y `etsc install` las recupera.
+   rmSync(join(project,".build/deps"),{recursive:true,force:true});p=etsc("run","--no-progress");assert.notEqual(p.status,0);assert.match(p.stderr,/Falta la dependencia/);
+   p=etsc("install");assert.equal(p.status,0,p.stderr);p=etsc("run","--no-progress");assert.equal(p.status,0,p.stderr);assert.equal(p.stdout.trim(),"18");
+   // Directa manda sobre indirecta; -g instala en la carpeta global.
+   p=etsc("install","file://"+libb,"1.1.0","-g");assert.equal(p.status,0,p.stderr);c=config();assert.equal(c.dependencies.libb.version,"v1.1.0");assert.equal(c.dependencies.libb.indirect,undefined);assert.equal(c.dependencies.libb.global,true);
+   assert.ok(existsSync(join(dir,"home192/.local/share/estatic/deps/libb@v1.1.0/util.ts")));
+   p=etsc("install","file://"+liba,"0.3.0");assert.equal(p.status,0,p.stderr);assert.match(p.stderr,/se usa v1\.1\.0 \(instalada directamente\)/);
+   p=etsc("install","file://"+liba,"9.9.9");assert.equal(p.status,1);assert.match(p.stderr,/No existe la versión 9\.9\.9/);}
    const source=join(dir,"node-streams.ets"),app=join(dir,"node-streams-app");
    writeFileSync(source,`process.stdin.on("data",(chunk:string):void=>{process.stdout.write("parent:"+chunk);});
 const childArgs:string[]=["-c","printf child-out; printf child-err >&2; cat"];
