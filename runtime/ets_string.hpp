@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <cmath>
+#include <ostream>
+#include <type_traits>
 #include <cstddef>
 #include <cstring>
 #include <sstream>
@@ -321,10 +324,31 @@ inline std::string string_toString(const std::string& value) {
 // codegen de `numberToString(x)` (que se emite como llamada libre) lo
 // encuentre en el linker.
 // ----------------------------------------------------------------------------
-inline std::string string_numberToString(double value) {
+// Number.prototype.toString() de JavaScript (#204): los dígitos más cortos que
+// recuperan el double y notación decimal salvo si el exponente es < -6 o >= 21
+// (3628800 → "3628800", 0.1+0.2 → "0.30000000000000004", 1e21 → "1e+21").
+inline std::string js_number(double value) {
+    if (value != value) return "NaN";
+    if (value == 0) return "0";  // también -0
+    if (value == HUGE_VAL) return "Infinity";
+    if (value == -HUGE_VAL) return "-Infinity";
     char buffer[64];
-    const auto converted = std::to_chars(buffer, buffer + sizeof(buffer), value);
-    return converted.ec == std::errc{} ? std::string(buffer, converted.ptr) : std::string();
+    const auto converted = std::to_chars(buffer, buffer + sizeof(buffer), value, std::chars_format::scientific);
+    if (converted.ec != std::errc{}) return std::string();
+    std::string text(buffer, converted.ptr);
+    std::string sign; if (text[0] == '-') { sign = "-"; text.erase(0, 1); }
+    const std::size_t e = text.find('e');
+    std::string digits = text.substr(0, e); digits.erase(std::remove(digits.begin(), digits.end(), '.'), digits.end());
+    const int exponent = std::stoi(text.substr(e + 1));
+    const int k = static_cast<int>(digits.size()); const int n = exponent + 1;
+    if (k <= n && n <= 21) return sign + digits + std::string(static_cast<std::size_t>(n - k), '0');
+    if (0 < n && n <= 21) return sign + digits.substr(0, static_cast<std::size_t>(n)) + "." + digits.substr(static_cast<std::size_t>(n));
+    if (-6 < n && n <= 0) return sign + "0." + std::string(static_cast<std::size_t>(-n), '0') + digits;
+    const int shown = n - 1;
+    return sign + digits.substr(0, 1) + (k > 1 ? "." + digits.substr(1) : std::string()) + "e" + (shown >= 0 ? "+" : "-") + std::to_string(shown >= 0 ? shown : -shown);
+}
+inline std::string string_numberToString(double value) {
+    return js_number(value);
 }
 inline std::string numberToString(double value) {
     return string_numberToString(value);
@@ -336,9 +360,7 @@ inline std::string numberToString(double value) {
 // ets_core.hpp) para pre-reservar buffers en ets::concat.
 // ----------------------------------------------------------------------------
 inline std::size_t string_size(double value) noexcept {
-    char buffer[64];
-    const auto converted = std::to_chars(buffer, buffer + sizeof(buffer), value);
-    return converted.ec == std::errc{} ? static_cast<std::size_t>(converted.ptr - buffer) : 0;
+    return js_number(value).size();
 }
 
 // ----------------------------------------------------------------------------
@@ -350,13 +372,7 @@ namespace detail {
 inline void append_to(std::string& out, const std::string& s) { out.append(s); }
 inline void append_to(std::string& out, const char* s) { out.append(s); }
 inline void append_to(std::string& out, char c) { out.push_back(c); }
-inline void append_to(std::string& out, double v) {
-    char buffer[64];
-    const auto converted = std::to_chars(buffer, buffer + sizeof(buffer), v);
-    if (converted.ec == std::errc{}) {
-        out.append(buffer, static_cast<std::size_t>(converted.ptr - buffer));
-    }
-}
+inline void append_to(std::string& out, double v) { out.append(js_number(v)); }
 inline void append_to(std::string& out, float v) { append_to(out, static_cast<double>(v)); }
 inline void append_to(std::string& out, int v) { append_to(out, static_cast<double>(v)); }
 inline void append_to(std::string& out, long v) { append_to(out, static_cast<double>(v)); }
@@ -391,10 +407,18 @@ inline double length(const std::tuple<T...>&) {
 // emite "<unstringifiable>" para que el error sea detectable.
 // ----------------------------------------------------------------------------
 #include <sstream>
+// Escribe un valor como lo mostraría JavaScript: true/false y números con
+// js_number (#204, #208); el resto con su operator<<.
+template <typename T>
+inline void display(std::ostream& out, const T& value) {
+    if constexpr (std::is_same_v<T, bool>) out << (value ? "true" : "false");
+    else if constexpr (std::is_floating_point_v<T>) out << js_number(static_cast<double>(value));
+    else out << value;
+}
 template <typename T>
 inline std::string stringify_any(const T& value) {
     std::ostringstream oss;
-    oss << value;
+    display(oss, value);
     return oss.str();
 }
 

@@ -472,7 +472,7 @@ export class IrCppGenerator {
     const forwards=this.project.typeDefinitions.flatMap((s,k)=>this.record(k)||sumKinds.has(s.kind)?[`struct ir_t${k};`]:[]);
     const printable=this.project.typeDefinitions.flatMap((s,k)=>s.kind==="variant"||sumKinds.has(s.kind)?[k]:[]);
     const printerPrototypes=printable.map(k=>`inline std::ostream& operator<<(std::ostream& out,const ir_t${k}& value);`);
-    const printers=printable.map(k=>`inline std::ostream& operator<<(std::ostream& out,const ir_t${k}& value){${this.shape(k).kind==="variant"?`return out<<${JSON.stringify(this.shape(k).tag)};`:`std::visit([&](const auto& x){if constexpr(requires{out<<x;})out<<x;else std::abort();},value.data);return out;`}}`);
+    const printers=printable.map(k=>`inline std::ostream& operator<<(std::ostream& out,const ir_t${k}& value){${this.shape(k).kind==="variant"?`return out<<${JSON.stringify(this.shape(k).tag)};`:`std::visit([&](const auto& x){if constexpr(requires{out<<x;})ets::display(out,x);else std::abort();},value.data);return out;`}}`);
     const includes=["runtime/ets_runtime.hpp",...[...this.headers].filter(h=>h!=="runtime/ets_runtime.hpp").sort()].map(h=>`#include ${JSON.stringify(h)}`);
     return {cpp:["// Generated from verified ets-ir-2. No source AST is used.","#include <array>\n#include <tuple>\n#include <functional>\n#include <iterator>\n#include <variant>",...includes,...forwards,...printerPrototypes,declarations,...printers,...globals,...prototypes,...bodies,main,""].join("\n"),headers:[...this.headers].sort(),runtimeBackends:this.backends,capabilities:[...new Set(this.project.runtimeContracts.map(c=>c.capability))].sort()};
   }

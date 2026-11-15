@@ -1318,7 +1318,7 @@ let _cppLoop9Result:string[]=[];
 const _cppLoop9Input:number[]=printable;
 for(let _cppLoop9Index:number=0;_cppLoop9Index<_cppLoop9Input.length;_cppLoop9Index=_cppLoop9Index+1){
 const k:number=_cppLoop9Input[_cppLoop9Index];
-_cppLoop9Result.push(`#ifndef ETS_PRINT_${this.typeName(k)}\n#define ETS_PRINT_${this.typeName(k)}\ninline std::ostream& operator<<(std::ostream& out,const ${this.typeName(k)}& value){${this.shape(k).kind=="variant"?`return out<<${quoteCpp(this.shape(k).tag)};`:`std::visit([&](const auto& x){if constexpr(requires{out<<x;})out<<x;else std::abort();},value.data);return out;`}}\n#endif`);continue;
+_cppLoop9Result.push(`#ifndef ETS_PRINT_${this.typeName(k)}\n#define ETS_PRINT_${this.typeName(k)}\ninline std::ostream& operator<<(std::ostream& out,const ${this.typeName(k)}& value){${this.shape(k).kind=="variant"?`return out<<${quoteCpp(this.shape(k).tag)};`:`std::visit([&](const auto& x){if constexpr(requires{out<<x;})ets::display(out,x);else std::abort();},value.data);return out;`}}\n#endif`);continue;
 }
 const printers=_cppLoop9Result;
     

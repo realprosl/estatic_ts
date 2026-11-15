@@ -157,6 +157,12 @@ export class Lexer {
         this.advance();
         while (this.digit(this.peek(0)) || this.peek(0) == "_") this.advance();
       }
+      // Exponente como en TS: 1e21, 2.5E-3, 1e+6.
+      const marker: string = this.peek(0);
+      if ((marker == "e" || marker == "E") && (this.digit(this.peek(1)) || ((this.peek(1) == "+" || this.peek(1) == "-") && this.digit(this.peek(2))))) {
+        this.advance(); if (this.peek(0) == "+" || this.peek(0) == "-") this.advance();
+        while (this.digit(this.peek(0)) || this.peek(0) == "_") this.advance();
+      }
     }
     this.emit("number", this.source.slice(start, this.byteOffset), offset, line, column);
   }
