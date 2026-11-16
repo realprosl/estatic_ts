@@ -90,9 +90,12 @@ y borra la copia local de `prebuilt/`, que deja de corresponder a las fuentes.
 Cuando la regeneración llega a main, `seed-prebuilt.yml` recompila la semilla y
 el compilador en Linux y macOS y publica los nuevos precompilados.
 
-Hay que regenerarla cuando cambia el lowering o el backend de `compiler/` de
-forma que el IR que emite la semilla deja de coincidir con el del compilador
-nuevo: lo detecta el `cmp stage1.ir.json stage2.ir.json` de `selfhost-O2`.
+La semilla solo sirve para construir el compilador: no hace falta que su IR
+coincida con el del compilador nuevo. `selfhost-O2` comprueba el punto fijo del
+compilador nuevo (`cmp stage2.ir.json stage3.ir.json`: las generaciones 1 y 2
+emiten el mismo IR para `compiler/`). Basta con regenerarla cuando ya no puede
+compilar `compiler/` (porque usa algo del lenguaje que la semilla no conoce) o
+de vez en cuando, a mano.
 
 La Action `regenerate-native-cpp.yml` ejecuta `regenerate.sh`, comprueba que los
 scripts y las plantillas no cambian y que aquí no aparecen copias de `runtime/`,
