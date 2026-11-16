@@ -15,7 +15,7 @@ function refs(g:any,name:string){return g.references.filter((r:any)=>r.name===na
 function targets(g:any,name:string){return refs(g,name).filter((r:any)=>r.target>=0).map((r:any)=>g.symbols[r.target]);}
 function errors(source:string,pattern:RegExp,files:Record<string,string>={}){const g=bind(source,1,files);assert.ok(g.diagnostics.some((d:any)=>d.phase==="binder"&&pattern.test(d.message)),JSON.stringify(g.diagnostics));return g;}
 
-test("binder: empty module and separate builtin/module scopes",()=>{const g=bind("");assert.equal(g.files.length,1);assert.equal(g.scopes[0].kind,"builtins");assert.equal(g.scopes[g.files[0].scope].parent,0);});
+test("binder: empty module and separate builtin/prelude/module scopes",()=>{const g=bind("");assert.equal(g.files.length,1);assert.equal(g.scopes[0].kind,"builtins");const parent=g.scopes[g.files[0].scope].parent;assert.equal(g.scopes[parent].kind,"prelude");assert.equal(g.scopes[parent].parent,0);});
 test("binder: parameter shadows module variable",()=>{const g=bind('const x=1; function f(x:string):string{return x;} print(x);');const xs=targets(g,"x");assert.deepEqual(xs.map((s:any)=>s.kind),["Parameter","VariableDeclaration"]);});
 test("binder: block shadow and closure keep declaration identity",()=>{const g=bind('let x=1; {let x=2; const f=():number=>x; print(f());} print(x);');const xs=targets(g,"x");assert.equal(xs.length,2);assert.notEqual(xs[0].scope,xs[1].scope);});
 test("binder: forward and recursive functions form one symbol",()=>{const g=bind('print(f(2)); function f(n:number):number{if(n==0)return 0; return f(n-1);}');assert.equal(new Set(refs(g,"f").map((r:any)=>r.target)).size,1);assert.equal(refs(g,"f").length,2);});
