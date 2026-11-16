@@ -4,8 +4,8 @@ function runDemo(): void {
   const total: number = source.map<number>((x: number): number => [1, 2]
     .filter((n: number): boolean => n > 0)
     .map<number>((n: number): number => n * x)
-    .reduce<number>(0, (acc: number, n: number): number => acc + n))
-    .reduce<number>(0, (acc: number, n: number): number => acc + n);
+    .reduce<number>((acc: number, n: number): number => acc + n, 0))
+    .reduce<number>((acc: number, n: number): number => acc + n, 0);
   print(total);
   print(source[0]); print(source[1]); print(source[2]);
 }

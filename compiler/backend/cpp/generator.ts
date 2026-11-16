@@ -360,6 +360,12 @@ const branches=_cppLoop5Result.join("");
     return this.fail(`Place C++ desconocido: ${p.kind}`,p.source);
   }
   constantIndex(f:constRef<IrFunction>,value:number):number { for(const b of f.blocks)for(const i of b.instructions)if(i.result==value&&i.op=="constant")return parseNumber(i.text);this.fail("Índice de tupla no constante",f.source);return -1; }
+  // ",a,b,..." con los operandos desde start (argumentos opcionales o variádicos).
+  operandList(f:constRef<IrFunction>,i:constRef<IrInstruction>,start:number):string {
+    let text:string="";
+    for(let k:number=start;k<i.operands.length;k=k+1)text=text+","+this.operand(f,i,k);
+    return text;
+  }
   operand(f:constRef<IrFunction>,i:constRef<IrInstruction>,k:number,consume:boolean=true):string {
     const value=i.operands[k];const  typeId=f.values[value];if(typeId<0)this.fail("Operando IR inexistente",i.source);
     return `v${value}.${consume&&(this.shape(typeId).resource||this.consuming.includes(value))?"take":"get"}()`;
@@ -1102,8 +1108,26 @@ return `(${receiver}).${method=="delete"?"removeKey":method}(${_cppLoop49Result.
   if(base=="array") {
     this.headers.add("runtime/ets_collections.hpp");const E=this.elementType(shape.arguments[0]);
     
-    if(method=="push")return `ets_push_vec<${E}>(${receiver},${this.operand(f,i,1)})`;
-    if(method=="pop")return `ets_pop_vec<${E}>(${receiver})`;
+    if(method=="push")return i.operands.length==2?`([&]()->double{ets_push_vec<${E}>(${receiver},${this.operand(f,i,1)});return static_cast<double>((${receiver}).size());}())`:`ets_push_all_vec<${E}>(${receiver}${this.operandList(f,i,1)})`;
+    if(method=="unshift")return `ets_unshift_vec<${E}>(${receiver}${this.operandList(f,i,1)})`;
+    if(method=="pop")return `ets_pop_value_vec<${E}>(${receiver})`;
+    if(method=="shift")return `ets_shift_vec<${E}>(${receiver})`;
+    if(method=="at")return `ets_at_vec(${receiver},${this.operand(f,i,1)})`;
+    if(method=="indexOf")return `ets_index_of_vec<${E}>(${receiver}${this.operandList(f,i,1)})`;
+    if(method=="lastIndexOf")return `ets_last_index_of_vec<${E}>(${receiver}${this.operandList(f,i,1)})`;
+    if(method=="reverse")return `ets_reverse_vec(${receiver})`;
+    if(method=="fill")return `ets_fill_vec<${E}>(${receiver}${this.operandList(f,i,1)})`;
+    if(method=="toReversed")return `ets_to_reversed_vec(${receiver})`;
+    if(method=="with")return `ets_with_vec<${E}>(${receiver}${this.operandList(f,i,1)})`;
+    if(method=="toSorted")return i.operands.length==1?`ets_to_sorted_vec(${receiver})`:`ets_to_sorted_vec(${receiver},${this.callback(f,i,1)})`;
+    if(method=="findIndex")return `ets_find_index_vec(${receiver},${this.callback(f,i,1)})`;
+    if(method=="findLast")return `ets_find_last_vec(${receiver},${this.callback(f,i,1)})`;
+    if(method=="findLastIndex")return `ets_find_last_index_vec(${receiver},${this.callback(f,i,1)})`;
+    if(method=="reduce"||method=="reduceRight"){
+      // reduce(callback, inicial?): el callback es el operando 1 y el inicial, si está, el 2.
+      const right:string=method=="reduceRight"?"_right":"";
+      return i.operands.length>2?`ets_reduce${right}(${this.operand(f,i,2)},${receiver},${this.callback(f,i,1)})`:`ets_reduce${right}_first(${receiver},${this.callback(f,i,1)})`;
+    }
     if(method=="delete")return `(${receiver}).erase((${receiver}).begin()+static_cast<std::ptrdiff_t>(${this.operand(f,i,1)}))`;
     if(method=="map")return `ets_map_vec<${E},${this.elementType(this.shape(i.typeId).arguments[0])}>(${receiver},${this.callback(f,i,i.operands.length-1)})`;
     if(method=="flatMap")return `ets_flat_map_vec<${E},${this.elementType(this.shape(i.typeId).arguments[0])}>(${receiver},${this.callback(f,i,i.operands.length-1)})`;
@@ -1112,10 +1136,9 @@ return `(${receiver}).${method=="delete"?"removeKey":method}(${_cppLoop49Result.
     if(method=="some")return `ets_some_vec(${receiver},${this.callback(f,i,i.operands.length-1)})`;
     if(method=="every")return `ets_every_vec(${receiver},${this.callback(f,i,i.operands.length-1)})`;
     if(method=="find")return `ets_find_vec(${receiver},${this.callback(f,i,i.operands.length-1)})`;
-    if(method=="reduce")return `ets_reduce(${this.operand(f,i,1)},${receiver},${this.callback(f,i,i.operands.length-1)})`;
     if(method=="slice")return `ets_slice_vec(${receiver},${this.operand(f,i,1)},${i.operands.length>2?this.operand(f,i,2):`static_cast<int>((${receiver}).size())`})`;
-    if(method=="includes")return `ets_includes_vec(${receiver},${this.operand(f,i,1)})`;
-    if(method=="join")return `ets_join_vec(${receiver},${this.operand(f,i,1)})`;
+    if(method=="includes")return i.operands.length>2?`ets_includes_from_vec<${E}>(${receiver},${this.operand(f,i,1)},${this.operand(f,i,2)})`:`ets_includes_vec(${receiver},${this.operand(f,i,1)})`;
+    if(method=="join")return i.operands.length>1?`ets_join_vec(${receiver},${this.operand(f,i,1)})`:`ets_join_vec(${receiver})`;
     if(method=="concat"){
 let _cppLoop38Result:string[]=[];
 const _cppLoop38Input:number[]=i.operands;

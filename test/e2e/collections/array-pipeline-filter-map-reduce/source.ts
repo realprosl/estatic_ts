@@ -1,7 +1,7 @@
 // V7.0: pipeline filter → map → reduce sobre `T[]`.
 //
 // El dialecto reescribe `arr.filter(p)` a `ets_filter_vec<T>(arr, p)`,
-// `arr.map<U>(f)` a `ets_map_vec<T, U>(arr, f)`, y `arr.reduce<U>(init, op)`
+// `arr.map<U>(f)` a `ets_map_vec<T, U>(arr, f)`, y `arr.reduce<U>(op, init)`
 // a `ets_reduce<U, T>(init, arr, op)`. Para V7.0 se emiten llamadas
 // independientes (sin fusión); V7.1 las fusionará en un único bucle cuando
 // la cadena sea fusible.
@@ -28,17 +28,17 @@ print(strings[0]);                            // "1"
 print(strings[length(strings) - 1]);          // "10"
 
 // reduce: suma
-let total: number = arr.reduce<number>(0, (acc: number, x: number): number => acc + x);
+let total: number = arr.reduce<number>((acc: number, x: number): number => acc + x, 0);
 print(numberToString(total));                 // 55
 
 // reduce sobre array vacío respeta init
 let empty: number[] = [];
-let emptyTotal: number = empty.reduce<number>(42, (acc: number, x: number): number => acc + x);
+let emptyTotal: number = empty.reduce<number>((acc: number, x: number): number => acc + x, 42);
 print(numberToString(emptyTotal));            // 42
 
 // Cadena filter → map → reduce: suma de longitudes de los pares en string
 let sumLengths: number = arr
   .filter((x: number): boolean => x % 2 == 0)
   .map<string>((x: number): string => numberToString(x))
-  .reduce<number>(0, (acc: number, s: string): number => acc + length(s));
+  .reduce<number>((acc: number, s: string): number => acc + length(s), 0);
 print(numberToString(sumLengths));            // 1+1+1+1+2 = 6

@@ -20,11 +20,33 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
+#include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <initializer_list>
+#include <sstream>
+#include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
+#include "ets_optional.hpp"
+#include "ets_string.hpp"
+
+// Llama al callback de un método de array con (valor) o (valor, índice),
+// según lo que acepte, como en JavaScript.
+template <typename F, typename T>
+inline decltype(auto) ets_call_item(F& f, const T& item, std::size_t index) {
+    if constexpr (std::is_invocable_v<F&, const T&, double>) return f(item, static_cast<double>(index));
+    else return f(item);
+}
+template <typename F, typename A, typename T>
+inline decltype(auto) ets_call_fold(F& f, const A& acc, const T& item, std::size_t index) {
+    if constexpr (std::is_invocable_v<F&, const A&, const T&, double>) return f(acc, item, static_cast<double>(index));
+    else return f(acc, item);
+}
 
 // `ets_filter_vec<T>(src, pred)` — versión plantilla que acepta cualquier
 // callable compatible con `bool(const T&)` (incluye lambdas `[=](const T&) -> bool`).
@@ -35,8 +57,8 @@ template <typename T, typename Pred>
 inline std::vector<T> ets_filter_vec(const std::vector<T>& src, Pred&& pred) {
     std::vector<T> out;
     out.reserve(src.size());
-    for (const auto& item : src) {
-        if (pred(item)) out.push_back(item);
+    for (std::size_t i = 0; i < src.size(); ++i) {
+        if (ets_call_item(pred, src[i], i)) out.push_back(src[i]);
     }
     return out;
 }
@@ -55,8 +77,8 @@ template <typename T, typename U, typename F>
 inline std::vector<U> ets_map_vec(const std::vector<T>& src, F&& f) {
     std::vector<U> out;
     out.reserve(src.size());
-    for (const auto& item : src) {
-        out.push_back(f(item));
+    for (std::size_t i = 0; i < src.size(); ++i) {
+        out.push_back(ets_call_item(f, src[i], i));
     }
     return out;
 }
@@ -73,9 +95,37 @@ inline std::vector<U> ets_map_vec(const std::vector<T>& src, const std::function
 template <typename U, typename T, typename Op>
 inline U ets_reduce(U init, const std::vector<T>& src, Op&& op) {
     U acc = init;
-    for (const auto& item : src) {
-        acc = op(acc, item);
+    for (std::size_t i = 0; i < src.size(); ++i) {
+        acc = ets_call_fold(op, acc, src[i], i);
     }
+    return acc;
+}
+
+// reduce(op) sin valor inicial: empieza con el primer elemento. Con el array
+// vacío JavaScript lanza TypeError; aquí, sin excepciones, el programa termina
+// con ese mismo mensaje.
+[[noreturn]] inline void ets_reduce_empty() {
+    std::fputs("TypeError: Reduce of empty array with no initial value\n", stderr);
+    std::exit(1);
+}
+template <typename T, typename Op>
+inline T ets_reduce_first(const std::vector<T>& src, Op&& op) {
+    if (src.empty()) ets_reduce_empty();
+    T acc = src[0];
+    for (std::size_t i = 1; i < src.size(); ++i) acc = ets_call_fold(op, acc, src[i], i);
+    return acc;
+}
+template <typename U, typename T, typename Op>
+inline U ets_reduce_right(U init, const std::vector<T>& src, Op&& op) {
+    U acc = init;
+    for (std::size_t i = src.size(); i-- > 0;) acc = ets_call_fold(op, acc, src[i], i);
+    return acc;
+}
+template <typename T, typename Op>
+inline T ets_reduce_right_first(const std::vector<T>& src, Op&& op) {
+    if (src.empty()) ets_reduce_empty();
+    T acc = src.back();
+    for (std::size_t i = src.size() - 1; i-- > 0;) acc = ets_call_fold(op, acc, src[i], i);
     return acc;
 }
 
@@ -90,7 +140,7 @@ inline U ets_reduce(U init, const std::vector<T>& src, const std::function<U(con
 // sin producir resultado. Equivalente a `for (auto& item : src) fn(item)`.
 template <typename T, typename F>
 inline void ets_for_each_vec(const std::vector<T>& src, F&& fn) {
-    for (const auto& item : src) fn(item);
+    for (std::size_t i = 0; i < src.size(); ++i) ets_call_item(fn, src[i], i);
 }
 
 // V13: `ets_find_vec<T>(src, pred)` — devuelve `Optional<T>` con el
@@ -98,14 +148,31 @@ inline void ets_for_each_vec(const std::vector<T>& src, F&& fn) {
 // discrimina con `?.`, `match` o `value()` (que aborta si vacío).
 template <typename T, typename Pred>
 inline ets::Optional<T> ets_find_vec(const std::vector<T>& src, Pred&& pred) {
-    for (const auto& item : src) if (pred(item)) return ets::Optional<T>::some(item);
+    for (std::size_t i = 0; i < src.size(); ++i) if (ets_call_item(pred, src[i], i)) return ets::Optional<T>::some(src[i]);
     return ets::Optional<T>::none();
+}
+
+// findIndex / findLast / findLastIndex: como find, con -1 si no hay ninguno.
+template <typename T, typename Pred>
+inline double ets_find_index_vec(const std::vector<T>& src, Pred&& pred) {
+    for (std::size_t i = 0; i < src.size(); ++i) if (ets_call_item(pred, src[i], i)) return static_cast<double>(i);
+    return -1.0;
+}
+template <typename T, typename Pred>
+inline ets::Optional<T> ets_find_last_vec(const std::vector<T>& src, Pred&& pred) {
+    for (std::size_t i = src.size(); i-- > 0;) if (ets_call_item(pred, src[i], i)) return ets::Optional<T>::some(src[i]);
+    return ets::Optional<T>::none();
+}
+template <typename T, typename Pred>
+inline double ets_find_last_index_vec(const std::vector<T>& src, Pred&& pred) {
+    for (std::size_t i = src.size(); i-- > 0;) if (ets_call_item(pred, src[i], i)) return static_cast<double>(i);
+    return -1.0;
 }
 
 // V11: `ets_some_vec<T>(src, pred)` — true si AL MENOS UN elemento cumple `pred`.
 template <typename T, typename Pred>
 inline bool ets_some_vec(const std::vector<T>& src, Pred&& pred) {
-    for (const auto& item : src) if (pred(item)) return true;
+    for (std::size_t i = 0; i < src.size(); ++i) if (ets_call_item(pred, src[i], i)) return true;
     return false;
 }
 
@@ -113,7 +180,7 @@ inline bool ets_some_vec(const std::vector<T>& src, Pred&& pred) {
 // (Vacío → true, convención JS.)
 template <typename T, typename Pred>
 inline bool ets_every_vec(const std::vector<T>& src, Pred&& pred) {
-    for (const auto& item : src) if (!pred(item)) return false;
+    for (std::size_t i = 0; i < src.size(); ++i) if (!ets_call_item(pred, src[i], i)) return false;
     return true;
 }
 
@@ -164,8 +231,8 @@ inline std::vector<T>& ets_sort_vec(std::vector<T>& src, Cmp&& cmp) {
 template <typename T, typename U, typename F>
 inline std::vector<U> ets_flat_map_vec(const std::vector<T>& src, F&& f) {
     std::vector<U> out;
-    for (const auto& item : src) {
-        auto inner = f(item);
+    for (std::size_t i = 0; i < src.size(); ++i) {
+        auto inner = ets_call_item(f, src[i], i);
         for (auto& v : inner) out.push_back(std::move(v));
     }
     return out;
@@ -240,6 +307,150 @@ inline void ets_pop_vec(std::vector<T>& vec) {
 // `operator+`; para otros tipos el usuario debe asegurarse de que
 // `operator<<` este definido (limitation documentada: el type-checker
 // solo valida `T = string`; el codegen no fuerza el tipo en el template).
+// ---------------------------------------------------------------------------
+// Métodos de Array con la firma de TypeScript.
+// ---------------------------------------------------------------------------
+
+// Índice relativo de JavaScript (at, slice, fill...): trunca, cuenta desde el
+// final si es negativo y lo deja en [0, n].
+inline std::size_t ets_relative_index(double value, std::size_t n) {
+    if (std::isnan(value)) return 0;
+    value = std::trunc(value);
+    if (value < 0) { value += static_cast<double>(n); return value < 0 ? 0 : static_cast<std::size_t>(value); }
+    return value > static_cast<double>(n) ? n : static_cast<std::size_t>(value);
+}
+
+// at(i): elemento en i (negativo desde el final) o undefined.
+template <typename T>
+inline ets::Optional<T> ets_at_vec(const std::vector<T>& vec, double index) {
+    if (std::isnan(index)) index = 0;
+    index = std::trunc(index);
+    if (index < 0) index += static_cast<double>(vec.size());
+    if (index < 0 || index >= static_cast<double>(vec.size())) return ets::Optional<T>::none();
+    return ets::Optional<T>::some(vec[static_cast<std::size_t>(index)]);
+}
+
+// indexOf(x, from?) / lastIndexOf(x, from?) / includes(x, from?).
+template <typename T>
+inline double ets_index_of_vec(const std::vector<T>& vec, const T& value, double from = 0) {
+    for (std::size_t i = ets_relative_index(from, vec.size()); i < vec.size(); ++i) if (vec[i] == value) return static_cast<double>(i);
+    return -1.0;
+}
+template <typename T>
+inline double ets_last_index_of_vec(const std::vector<T>& vec, const T& value, double from = INFINITY) {
+    if (vec.empty()) return -1.0;
+    double start = std::isnan(from) ? 0 : std::trunc(from);
+    if (start < 0) start += static_cast<double>(vec.size());
+    if (start < 0) return -1.0;
+    std::size_t i = start >= static_cast<double>(vec.size()) ? vec.size() - 1 : static_cast<std::size_t>(start);
+    for (std::size_t k = i + 1; k-- > 0;) if (vec[k] == value) return static_cast<double>(k);
+    return -1.0;
+}
+template <typename T>
+inline bool ets_includes_from_vec(const std::vector<T>& vec, const T& value, double from) {
+    return ets_index_of_vec(vec, value, from) >= 0;
+}
+
+// push(...items) / unshift(...items): devuelven la nueva longitud.
+template <typename T, typename... Items>
+inline double ets_push_all_vec(std::vector<T>& vec, Items&&... items) {
+    (vec.push_back(std::forward<Items>(items)), ...);
+    return static_cast<double>(vec.size());
+}
+template <typename T, typename... Items>
+inline double ets_unshift_vec(std::vector<T>& vec, Items&&... items) {
+    std::vector<T> front;
+    front.reserve(sizeof...(items));
+    (front.push_back(std::forward<Items>(items)), ...);
+    vec.insert(vec.begin(), std::make_move_iterator(front.begin()), std::make_move_iterator(front.end()));
+    return static_cast<double>(vec.size());
+}
+
+// pop() / shift(): quitan y devuelven el último / primer elemento, o undefined.
+template <typename T>
+inline ets::Optional<T> ets_pop_value_vec(std::vector<T>& vec) {
+    if (vec.empty()) return ets::Optional<T>::none();
+    T value = std::move(vec.back());
+    vec.pop_back();
+    return ets::Optional<T>::some(std::move(value));
+}
+template <typename T>
+inline ets::Optional<T> ets_shift_vec(std::vector<T>& vec) {
+    if (vec.empty()) return ets::Optional<T>::none();
+    T value = std::move(vec.front());
+    vec.erase(vec.begin());
+    return ets::Optional<T>::some(std::move(value));
+}
+
+// reverse() / fill(v, start?, end?): modifican el array y lo devuelven.
+template <typename T>
+inline std::vector<T>& ets_reverse_vec(std::vector<T>& vec) {
+    std::reverse(vec.begin(), vec.end());
+    return vec;
+}
+template <typename T>
+inline std::vector<T>& ets_fill_vec(std::vector<T>& vec, const T& value, double start = 0, double end = INFINITY) {
+    const std::size_t from = ets_relative_index(start, vec.size());
+    const std::size_t to = ets_relative_index(end, vec.size());
+    for (std::size_t i = from; i < to; ++i) vec[i] = value;
+    return vec;
+}
+
+// Copias: toReversed(), toSorted(cmp?), with(i, v).
+template <typename T>
+inline std::vector<T> ets_to_reversed_vec(const std::vector<T>& vec) {
+    return std::vector<T>(vec.rbegin(), vec.rend());
+}
+template <typename T>
+inline std::vector<T> ets_to_sorted_vec(const std::vector<T>& vec) {
+    std::vector<T> out = vec;
+    std::sort(out.begin(), out.end());
+    return out;
+}
+template <typename T, typename Cmp>
+inline std::vector<T> ets_to_sorted_vec(const std::vector<T>& vec, Cmp&& cmp) {
+    std::vector<T> out = vec;
+    ets_sort_vec(out, std::forward<Cmp>(cmp));
+    return out;
+}
+// with(i, v): fuera de rango JavaScript lanza RangeError; sin excepciones, el
+// programa termina con ese mensaje.
+template <typename T>
+inline std::vector<T> ets_with_vec(const std::vector<T>& vec, double index, const T& value) {
+    double at = std::isnan(index) ? 0 : std::trunc(index);
+    if (at < 0) at += static_cast<double>(vec.size());
+    if (at < 0 || at >= static_cast<double>(vec.size())) { std::fputs("RangeError: Invalid index\n", stderr); std::exit(1); }
+    std::vector<T> out = vec;
+    out[static_cast<std::size_t>(at)] = value;
+    return out;
+}
+
+// join(sep = ","): cualquier array; cada elemento como lo escribe JavaScript
+// (números con su formato, booleanos true/false, undefined vacío).
+// Booleano guardado como { bool value } (ets::ir::Boolean evita vector<bool>).
+template <typename T, typename = void> struct ets_boxed_bool : std::false_type {};
+template <typename T> struct ets_boxed_bool<T, std::void_t<decltype(std::declval<const T&>().value)>>
+    : std::is_same<std::remove_cv_t<std::remove_reference_t<decltype(std::declval<const T&>().value)>>, bool> {};
+
+template <typename T>
+inline void ets_join_item(std::string& out, const T& item) {
+    if constexpr (std::is_same_v<T, std::string>) out += item;
+    else if constexpr (ets_boxed_bool<T>::value) out += item.value ? "true" : "false";
+    else if constexpr (std::is_arithmetic_v<T>) { std::ostringstream text; ets::display(text, item); out += text.str(); }
+    else if constexpr (requires { item.isPresent(); item.value(); }) { if (item.isPresent()) ets_join_item(out, item.value()); }
+    else if constexpr (requires { std::declval<std::ostream&>() << item; }) { std::ostringstream text; text << item; out += text.str(); }
+    else out += "[object Object]";
+}
+template <typename T>
+inline std::string ets_join_vec(const std::vector<T>& vec, const std::string& separator = ",") {
+    std::string out;
+    for (std::size_t i = 0; i < vec.size(); ++i) {
+        if (i > 0) out += separator;
+        ets_join_item(out, vec[i]);
+    }
+    return out;
+}
+
 inline std::string ets_join_vec(const std::vector<std::string>& vec, const std::string& separator) {
     std::string out;
     for (std::size_t i = 0; i < vec.size(); ++i) {

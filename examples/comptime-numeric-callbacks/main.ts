@@ -1,6 +1,6 @@
 function pipeline(xs: i64[]): f32 {
   const ys: f32[] = xs.map<f32>((x: u8): f32 => x);
-  return ys.reduce<f32>(0, (sum: f32, x: f32): f32 => sum + x);
+  return ys.reduce<f32>((sum: f32, x: f32): f32 => sum + x, 0);
 }
 
 const xs: i64[] = [257,258];

@@ -343,7 +343,7 @@ let nums: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 let result: number = nums
   .filter((x: number): boolean => x % 2 == 0)
   .map((x: number): number => x * x)
-  .reduce(0, (acc: number, x: number): number => acc + x);
+  .reduce((acc: number, x: number): number => acc + x, 0);
 print("even squares sum = " + result);
 ```
 

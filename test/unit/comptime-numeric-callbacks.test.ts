@@ -69,9 +69,9 @@ const callbacks = [
   ["filter", "const xs: i64[] = [257,258]; const ys: i64[] = xs.filter((x: u8): boolean => x == 1); return `${ys[0]}`;", "257"],
   ["some", "const xs: i64[] = [257,258]; return `${xs.some((x: u8): boolean => x == 1)}`;", "true"],
   ["every", "const xs: i64[] = [257,258]; return `${xs.every((x: u8): boolean => x < 3)}`;", "true"],
-  ["reduce", "const xs: i64[] = [1,2]; const total: u8 = xs.reduce<u8>(255, (acc: u8, x: u8): u8 => acc + x); return `${total}`;", "2"],
-  ["reduce vacío", "const xs: i64[] = []; const total: u8 = xs.reduce<u8>(255, (acc: u8, x: u8): u8 => acc + x); return `${total}`;", "255"],
-  ["reduce adapta acumulador", "const xs: i64[] = [257]; return `${xs.reduce<u8>(0, (acc: i64,x: i64): i64 => acc + x)}`;", "1"],
+  ["reduce", "const xs: i64[] = [1,2]; const total: u8 = xs.reduce<u8>((acc: u8, x: u8): u8 => acc + x, 255); return `${total}`;", "2"],
+  ["reduce vacío", "const xs: i64[] = []; const total: u8 = xs.reduce<u8>((acc: u8, x: u8): u8 => acc + x, 255); return `${total}`;", "255"],
+  ["reduce adapta acumulador", "const xs: i64[] = [257]; return `${xs.reduce<u8>((acc: i64,x: i64): i64 => acc + x, 0)}`;", "1"],
   ["sort dos argumentos", "let xs: i32[] = [3,1,2]; xs.sort((a: i32,b: i32): number => a - b); return `${xs[0]}/${xs[1]}/${xs[2]}`;", "1/2/3"],
   ["sort conversión", "let xs: i64[] = [258,257]; xs.sort((a: u8,b: u8): number => a - b); return `${xs[0]}/${xs[1]}`;", "257/258"],
 ] as const;
@@ -108,7 +108,7 @@ test("numeric callbacks native: promociones y callbacks coinciden con C++20", ()
     const source = comparisons + `
       function pipeline(xs: i64[]): u8 {
         const ys: u8[] = xs.map((x: u8): u8 => x);
-        return ys.reduce<u8>(255, (acc: u8,x: u8): u8 => acc + x);
+        return ys.reduce<u8>((acc: u8,x: u8): u8 => acc + x, 255);
       }
       const folded: u8 = comptime((): u8 => { const xs: i64[] = [257,258]; return pipeline(xs); });
       const xs: i64[] = [257,258];

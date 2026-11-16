@@ -302,16 +302,30 @@ S Generator::runtimeCall(const Function& f,const Instruction& i){const auto& c=p
  if(in(base,{"Map","Set"})){if(in(method,{"set","add","has","clear","size","delete"}))return "("+receiver+")."+(method=="delete"?"removeKey":method)+"("+args(1)+")";if(method=="get")return T+"::of(("+receiver+").get("+a(1)+"))";if(method=="forEach")return "("+receiver+").forEach("+callback(f,i,1)+")";}
  if(base=="array"){
   result.headers.insert("runtime/ets_collections.hpp");S E=elementType(s.arguments.at(0));auto cb=[&](){return callback(f,i,i.operands.size()-1);};
-  if(method=="push")return "ets_push_vec<"+E+">("+receiver+","+a(1)+")";
-  if(method=="pop")return "ets_pop_vec<"+E+">("+receiver+")";
+  S rest=i.operands.size()>1?","+args(1):S("");
+  if(method=="push")return i.operands.size()==2?"([&]()->double{ets_push_vec<"+E+">("+receiver+","+a(1)+");return static_cast<double>(("+receiver+").size());}())":"ets_push_all_vec<"+E+">("+receiver+rest+")";
+  if(method=="unshift")return "ets_unshift_vec<"+E+">("+receiver+rest+")";
+  if(method=="pop")return "ets_pop_value_vec<"+E+">("+receiver+")";
+  if(method=="shift")return "ets_shift_vec<"+E+">("+receiver+")";
+  if(method=="at")return "ets_at_vec("+receiver+","+a(1)+")";
+  if(method=="indexOf")return "ets_index_of_vec<"+E+">("+receiver+rest+")";
+  if(method=="lastIndexOf")return "ets_last_index_of_vec<"+E+">("+receiver+rest+")";
+  if(method=="reverse")return "ets_reverse_vec("+receiver+")";
+  if(method=="fill")return "ets_fill_vec<"+E+">("+receiver+rest+")";
+  if(method=="toReversed")return "ets_to_reversed_vec("+receiver+")";
+  if(method=="with")return "ets_with_vec<"+E+">("+receiver+rest+")";
+  if(method=="toSorted")return i.operands.size()==1?"ets_to_sorted_vec("+receiver+")":"ets_to_sorted_vec("+receiver+","+callback(f,i,1)+")";
+  if(method=="findIndex")return "ets_find_index_vec("+receiver+","+callback(f,i,1)+")";
+  if(method=="findLast")return "ets_find_last_vec("+receiver+","+callback(f,i,1)+")";
+  if(method=="findLastIndex")return "ets_find_last_index_vec("+receiver+","+callback(f,i,1)+")";
+  if(method=="reduce"||method=="reduceRight"){S right=method=="reduceRight"?"_right":"";return i.operands.size()>2?"ets_reduce"+right+"("+a(2)+","+receiver+","+callback(f,i,1)+")":"ets_reduce"+right+"_first("+receiver+","+callback(f,i,1)+")";}
   if(method=="delete")return "("+receiver+").erase(("+receiver+").begin()+static_cast<std::ptrdiff_t>("+a(1)+"))";
   if(in(method,{"map","flatMap"}))return S(method=="map"?"ets_map_vec<":"ets_flat_map_vec<")+E+","+elementType(shape(i.typeId).arguments.at(0))+">("+receiver+","+cb()+")";
   if(in(method,{"filter","some","every","find"}))return "ets_"+method+"_vec<"+E+">("+receiver+","+cb()+")";
   if(method=="forEach")return "ets_for_each_vec("+receiver+","+cb()+")";
-  if(method=="reduce")return "ets_reduce("+a(1)+","+receiver+","+cb()+")";
   if(method=="slice")return "ets_slice_vec("+receiver+","+a(1)+","+(i.operands.size()>2?a(2):"static_cast<int>(("+receiver+").size())")+")";
-  if(method=="includes")return "ets_includes_vec("+receiver+","+a(1)+")";
-  if(method=="join")return "ets_join_vec("+receiver+","+a(1)+")";
+  if(method=="includes")return i.operands.size()>2?"ets_includes_from_vec<"+E+">("+receiver+","+a(1)+","+a(2)+")":"ets_includes_vec("+receiver+","+a(1)+")";
+  if(method=="join")return i.operands.size()>1?"ets_join_vec("+receiver+","+a(1)+")":"ets_join_vec("+receiver+")";
   if(method=="concat"){V<S> values;for(int k=0;k<int(i.operands.size());k++)values.push_back(deref(a(k),f.values.at(i.operands[k])));return "ets_concat_vec<"+E+">({"+join(values)+"})";}
   if(method=="sort")return i.operands.size()==1?"([&](){std::sort(("+receiver+").begin(),("+receiver+").end());return "+(shape(i.typeId).resource?"std::move("+receiver+")":receiver)+";}())":"ets_sort_vec("+receiver+","+cb()+")";
  }

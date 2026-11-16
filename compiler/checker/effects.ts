@@ -156,10 +156,9 @@ export class EffectAnalyzer {
     const receiver: string = memoryValue(this.receiver(module,id));
     const collection: boolean = ["Map","Set"].includes(genericBase(receiver)) && n.get(AttributeKind.Method) == "forEach";
     const optional: boolean = genericBase(receiver) == "Optional" && ["map","andThen"].includes(n.get(AttributeKind.Method));
-    if (!optional && !collection && (!receiver.endsWith("[]") || !["map","filter","reduce","forEach","find","some","every","flatMap","sort"].includes(n.get(AttributeKind.Method)))) return -1;
-    let at: number = 0;
-    for (const edge of n.edges) if (edge.role == EdgeRole.Args) { if (at == (n.get(AttributeKind.Method) == "reduce" ? 1 : 0)) return edge.node; at = at + 1; }
-    return -1;
+    if (!optional && !collection && (!receiver.endsWith("[]") || !["map","filter","reduce","reduceRight","forEach","find","findIndex","findLast","findLastIndex","some","every","flatMap","sort","toSorted"].includes(n.get(AttributeKind.Method)))) return -1;
+    // El callback es siempre el primer argumento (reduce(callback, inicial?) como en TS).
+    return bindingChild(n,EdgeRole.Args);
   }
   matchCallbacks(module: number, id: number): number[] {
     let callbacks: number[] = []; if (this.helper(module,id) != "match") return callbacks;
@@ -177,9 +176,15 @@ export class EffectAnalyzer {
     const n: AstNode = this.node(module,id); let inputs: number[] = [];
     if (this.helper(module,id) == "match") return [bindingChild(n,EdgeRole.Args)];
     if (["optionalMap","optionalAndThen"].includes(this.helper(module,id))) return [bindingChild(n,EdgeRole.Args)];
-    if (n.get(AttributeKind.Method) == "reduce") inputs.push(bindingChild(n,EdgeRole.Args));
+    const method: string = n.get(AttributeKind.Method);
+    if (method == "reduce" || method == "reduceRight") {
+      // El acumulador sale del valor inicial o, sin él, del propio array.
+      let at: number = 0; let initial: number = -1;
+      for (const edge of n.edges) if (edge.role == EdgeRole.Args) { if (at == 1) initial = edge.node; at = at + 1; }
+      inputs.push(initial >= 0 ? initial : bindingChild(n,EdgeRole.Object));
+    }
     inputs.push(bindingChild(n,EdgeRole.Object));
-    if (n.get(AttributeKind.Method) == "sort" || genericBase(memoryValue(this.receiver(module,id))) == "Map") inputs.push(bindingChild(n,EdgeRole.Object));
+    if (method == "sort" || method == "toSorted" || genericBase(memoryValue(this.receiver(module,id))) == "Map") inputs.push(bindingChild(n,EdgeRole.Object));
     return inputs;
   }
   borrowedSymbol(sid: number): boolean {
@@ -372,7 +377,7 @@ export class EffectAnalyzer {
           for (const input of this.callbackInputs(callModule,callNode)) {
             if (at < summary.parameters.length) this.addEdge(this.vertex(callModule,input),this.symbol(summary.parameters[at]),true); at = at + 1;
           }
-          if (this.node(callModule,callNode).get(AttributeKind.Method) == "reduce" && summary.parameters.length > 0) this.addEdge(this.returnVertex(target),this.symbol(summary.parameters[0]),true);
+          if (["reduce","reduceRight"].includes(this.node(callModule,callNode).get(AttributeKind.Method)) && summary.parameters.length > 0) this.addEdge(this.returnVertex(target),this.symbol(summary.parameters[0]),true);
         } else if (!this.suspensionNode(callModule,callNode)) for (const e of this.node(callModule,callNode).edges) if (e.role == EdgeRole.Args) {
           const position: number = argumentParameter(this.checked.files[callModule],e.node,at);
           if (position < summary.parameters.length) this.addEdge(this.vertex(callModule,e.node),this.symbol(summary.parameters[position]),true); at = at + 1;
@@ -512,7 +517,7 @@ export class EffectAnalyzer {
         for (const source of this.taskSources(m,this.taskOperand(m,id))) if (source >= 0) { const sourceModule: number = this.sourceModule(source); if (this.helper(sourceModule,source-this.offsets[sourceModule]) == "sleep") this.summaries[owner].external = true; }
       }
       if (this.helper(m,id) == "move") this.addEffect(owner,this.root(m,bindingChild(n,EdgeRole.Args)),"move");
-      if (n.kind == NodeKind.MemberCallExpression && ["push","pop","sort","set","add","delete","clear"].includes(n.get(AttributeKind.Method))) this.addEffect(owner,this.root(m,bindingChild(n,EdgeRole.Object)),"write");
+      if (n.kind == NodeKind.MemberCallExpression && ["push","pop","sort","shift","unshift","reverse","fill","set","add","delete","clear"].includes(n.get(AttributeKind.Method))) this.addEffect(owner,this.root(m,bindingChild(n,EdgeRole.Object)),"write");
       if (n.kind == NodeKind.ReturnStatement) { const value: number = bindingChild(n,EdgeRole.Value); if (value >= 0) for (const origin of this.points[this.vertex(m,value)].origins) if (!this.summaries[owner].returned.includes(origin)) this.summaries[owner].returned.push(origin); }
       if (n.kind == NodeKind.VariableDeclaration || n.kind == NodeKind.UsingDeclaration) {
         const sid: number = this.binding.files[m].declarations[id]; const init: number = bindingChild(n,EdgeRole.Initializer);

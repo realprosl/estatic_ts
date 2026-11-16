@@ -357,12 +357,12 @@ test("codegen V7: arr.map<U> se emite como ets_map_vec<T, U>", () => {
 });
 
 test("codegen V7: arr.reduce<U> se emite como ets_reduce<U, T>", () => {
-  const out = cpp("let arr: number[] = [1, 2, 3]; let r: number = arr.reduce<number>(0, (acc: number, x: number): number => acc + x);");
+  const out = cpp("let arr: number[] = [1, 2, 3]; let r: number = arr.reduce<number>((acc: number, x: number): number => acc + x, 0);");
   assert.match(out, /ets_reduce<double,\s*double>\(/);
 });
 
 test("codegen: cadena filter → map → reduce conserva etapas eager", () => {
-  const out = cpp("let arr: number[] = [1, 2, 3]; let r: number = arr.filter((x: number): boolean => x > 0).map<string>((x: number): string => \"v\").reduce<number>(0, (acc: number, s: string): number => acc + 1);");
+  const out = cpp("let arr: number[] = [1, 2, 3]; let r: number = arr.filter((x: number): boolean => x > 0).map<string>((x: number): string => \"v\").reduce<number>((acc: number, s: string): number => acc + 1, 0);");
   assert.match(out, /ets_filter_vec<double>\(/);
   assert.match(out, /ets_map_vec<double, std::string>\(/);
   assert.match(out, /ets_reduce<double, std::string>\(/);

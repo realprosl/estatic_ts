@@ -58,8 +58,8 @@ test("closure captures native: pipelines anidados con lambdas inline", () => {
       const total: number = xs.map<number>((x: number): number => [1, 2]
         .filter((n: number): boolean => n > 0)
         .map<number>((n: number): number => n * x)
-        .reduce<number>(0, (acc: number, n: number): number => acc + n))
-        .reduce<number>(0, (acc: number, n: number): number => acc + n);
+        .reduce<number>((acc: number, n: number): number => acc + n, 0))
+        .reduce<number>((acc: number, n: number): number => acc + n, 0);
       print(total); print(xs[0]); print(xs[1]); print(xs[2]);
     }
     run();
