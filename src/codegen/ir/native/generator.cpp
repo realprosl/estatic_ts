@@ -270,6 +270,7 @@ S Generator::runtimeCall(const Function& f,const Instruction& i){const auto& c=p
   if(in(name,{"ok","resultOk","err","resultErr"}))return T+"::"+(in(name,{"err","resultErr"})?"failure":"success")+"("+a(0)+")";
   if(name=="optionalIsPresent")return "("+a(0)+").isPresent()";
   if(name=="optionalValueOr")return "("+a(0)+").valueOr("+a(1)+")";
+  if(name=="String")return "ets::stringify_any("+a(0)+")";
   if(name=="booleanToString")return "std::string("+a(0)+"?\"true\":\"false\")";
   if(name=="optionalOrElse")return "("+a(0)+").orElse("+a(1)+")";
   if(name=="resultIsOk")return "("+a(0)+").isOk()";

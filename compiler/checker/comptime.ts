@@ -509,21 +509,29 @@ export class NativeComptime {
     const text: string = this.values[receiver].text; const first: string = args.length > 0 ? this.text(args[0],module,id) : "";
     const a: number = args.length > 0 && numericType(this.values[args[0]].typeName) ? constantFloat(this.values[args[0]],false).scalar : 0; const b: number = args.length > 1 && numericType(this.values[args[1]].typeName) ? constantFloat(this.values[args[1]],false).scalar : 0;
     let result: string = "";
+    // Argumentos opcionales como en TypeScript: sin el segundo, hasta el final.
+    const end: number = args.length > 1 ? b : text.length;
+    const from: number = b < 0 ? 0 : b;
     if (name == "charCodeAt") return this.put(constantNumber(text.charCodeAt(a)),module,id);
     if (name == "indexOf") return this.put(constantNumber(text.indexOf(first,b)),module,id);
-    if (name == "lastIndexOf") return this.put(constantNumber(text.lastIndexOf(first)),module,id);
+    if (name == "lastIndexOf") return this.put(constantNumber(args.length > 1 ? text.slice(0,from+first.length).lastIndexOf(first) : text.lastIndexOf(first)),module,id);
     if (name == "localeCompare") return this.put(constantNumber(text.localeCompare(first)),module,id);
     if (name == "includes") return this.put(constantBoolean(text.indexOf(first,b) >= 0),module,id);
-    if (name == "startsWith") return this.put(constantBoolean(text.startsWith(first)),module,id);
-    if (name == "endsWith") return this.put(constantBoolean(text.endsWith(first)),module,id);
-    if (name == "split") { let v = new ConstantValue("array","string[]"); for (const part of text.split(first)) v.entries.push(this.put(constantString(part),module,id)); return this.put(v,module,id); }
+    if (name == "startsWith") return this.put(constantBoolean(text.slice(from,text.length).startsWith(first)),module,id);
+    if (name == "endsWith") return this.put(constantBoolean(text.slice(0,args.length > 1 ? from : text.length).endsWith(first)),module,id);
+    if (name == "split") {
+      let v = new ConstantValue("array","string[]"); const limit: number = args.length > 1 ? b : -1;
+      for (const part of text.split(first)) { if (limit >= 0 && v.entries.length >= limit) break; v.entries.push(this.put(constantString(part),module,id)); }
+      return this.put(v,module,id);
+    }
     if (name == "repeat" || name == "padStart" || name == "padEnd") {
       const count: number = this.index(args[0],module,id); if (count < 0) return 0;
       if (!this.charge(module,id,name == "repeat" ? text.length*count : Math.max(text.length,count))) return 0;
-      if (name == "repeat") result = text.repeat(count); else if (name == "padStart") result = text.padStart(count,this.values[args[1]].text); else result = text.padEnd(count,this.values[args[1]].text);
+      if (name == "repeat") result = text.repeat(count); else if (name == "padStart") result = text.padStart(count,args.length > 1 ? this.values[args[1]].text : " "); else result = text.padEnd(count,args.length > 1 ? this.values[args[1]].text : " ");
     } else if (name == "charAt") result = text.charAt(a);
-    else if (name == "slice") result = text.slice(a,b); else if (name == "substring") result = text.substring(a,b); else if (name == "substr") result = text.substr(a,b);
-    else if (name == "trim") result = text.trim(); else if (name == "trimStart") result = text.trimStart(); else if (name == "trimEnd") result = text.trimEnd();
+    else if (name == "slice") result = text.slice(a,end); else if (name == "substring") result = text.substring(a,end); else if (name == "substr") result = text.substr(a,end);
+    else if (name == "concat") { result = text; for (const arg of args) result = result + this.values[arg].text; }
+    else if (name == "trim") result = text.trim(); else if (name == "trimStart" || name == "trimLeft") result = text.trimStart(); else if (name == "trimEnd" || name == "trimRight") result = text.trimEnd();
     else if (name == "toUpperCase") result = text.toUpperCase(); else if (name == "toLowerCase") result = text.toLowerCase(); else if (name == "toString") result = text;
     else if (name == "replace") result = text.replace(first,this.values[args[1]].text); else if (name == "replaceAll") { if (!this.charge(module,id,text.length*(this.values[args[1]].text.length+1))) return 0; result = text.replaceAll(first,this.values[args[1]].text); }
     else return this.fail(module,id,"COMPTIME_UNSUPPORTED","método string " + name);

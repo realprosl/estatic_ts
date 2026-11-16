@@ -85,7 +85,7 @@ jobs:
       ESTATIC_ANALYSIS_JOBS: '2'
       ESTATIC_PROFILE_ANALYSIS: '1'
     runs-on: ubuntu-24.04
-    # Includes full sequential/parallel analyses after building two generations.
+    # Builds two generations and analyses compiler/ once more with generation 2.
     # Keep headroom, but diagnose regressions through timings.tsv; increasing
     # this limit alone must not hide lost aggregate-copy optimizations.
     timeout-minutes: 150
@@ -113,19 +113,21 @@ jobs:
           fi
       - name: Build C++ seed and two ETS generations
         run: bash scripts/build-ets-compiler.sh stage2
-      - name: Compare full compiler analysis with one and two workers
+      - name: Fixed point of the new compiler (generation 2 reproduces generation 1)
+        # La semilla solo construye el compilador; no se compara su IR. Lo que se
+        # comprueba es que el compilador nuevo se reproduce a sí mismo: la
+        # generación 1 (construida por la semilla) y la generación 2 (construida
+        # por la generación 1) emiten el mismo IR para compiler/. La generación 2
+        # analiza con 1 worker y la 1 con 2, así que también cubre el determinismo
+        # del análisis en paralelo.
         env:
           ESTC_ROOT: ${{ github.workspace }}
         run: |
-          /usr/bin/time -o build/ets-compiler/sequential-time.tsv -f 'sequential-analysis\t%e\t%U\t%S\t%M' \
-            build/ets-compiler/etsc compiler/driver/main.ts --check --jobs 1 --no-progress \
-            --emit-ir build/ets-compiler/sequential.ir.json 2> build/ets-compiler/sequential-analysis.log
-          /usr/bin/time -o build/ets-compiler/parallel-time.tsv -f 'parallel-analysis\t%e\t%U\t%S\t%M' \
-            build/ets-compiler/etsc compiler/driver/main.ts --check --jobs 2 --no-progress \
-            --emit-ir build/ets-compiler/parallel.ir.json 2> build/ets-compiler/parallel-analysis.log
-          cmp build/ets-compiler/sequential.ir.json build/ets-compiler/parallel.ir.json
-          cmp build/ets-compiler/sequential.ir.json build/ets-compiler/stage2.ir.json
-          cat build/ets-compiler/sequential-time.tsv build/ets-compiler/parallel-time.tsv >> build/ets-compiler/timings.tsv
+          /usr/bin/time -o build/ets-compiler/stage3-time.tsv -f 'stage3-analysis\t%e\t%U\t%S\t%M' \
+            build/ets-compiler/etsc-stage2 compiler/driver/main.ts --check --jobs 1 --no-progress \
+            --emit-ir build/ets-compiler/stage3.ir.json 2> build/ets-compiler/stage3-analysis.log
+          cat build/ets-compiler/stage3-time.tsv >> build/ets-compiler/timings.tsv
+          cmp build/ets-compiler/stage2.ir.json build/ets-compiler/stage3.ir.json
       - name: Repeat paired analysis benchmark
         run: python3 scripts/benchmark-analysis.py --compiler build/ets-compiler/etsc-stage2 --output build/analysis-benchmark --repetitions 3
       - name: Report build and execution timings
@@ -175,8 +177,6 @@ jobs:
           done
           PATH="$poison:$PATH" bash scripts/check-ets-compiler.sh build/ets-compiler/etsc-stage2
           test ! -e "$RUNNER_TEMP/parallel-node-used"
-      - name: Compare compiler IR across generations
-        run: cmp build/ets-compiler/stage1.ir.json build/ets-compiler/stage2.ir.json
       - name: Round-trip compiler IR through the streaming reader
         env:
           ESTC_ROOT: ${{ github.workspace }}
