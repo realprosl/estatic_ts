@@ -19,32 +19,28 @@
 
 template <typename... Args>
 inline void print(const Args&... args) {
-    (std::cout << ... << args) << std::endl;
+    (ets::display(std::cout, args), ...); std::cout << std::endl;
 }
 
 // V28: numberToString en el global (sin namespace ets) para que el
 // codegen del dialecto lo emita como llamada libre. Vive tambien en
 // ets::string_numberToString para uso desde C++.
-inline std::string numberToString(double value) {
-    char buffer[64];
-    const auto converted = std::to_chars(buffer, buffer + sizeof(buffer), value);
-    return converted.ec == std::errc{} ? std::string(buffer, converted.ptr) : std::string();
-}
+inline std::string numberToString(double value) { return ets::js_number(value); }
 
 template <typename... Args>
 inline void write(const Args&... args) {
-    (std::cout << ... << args);
+    (ets::display(std::cout, args), ...);
     std::cout.flush();
 }
 
 template <typename... Args>
 inline void printError(const Args&... args) {
-    (std::cerr << ... << args) << std::endl;
+    (ets::display(std::cerr, args), ...); std::cerr << std::endl;
 }
 
 template <typename... Args>
 inline void writeError(const Args&... args) {
-    (std::cerr << ... << args);
+    (ets::display(std::cerr, args), ...);
     std::cerr.flush();
 }
 
@@ -68,18 +64,25 @@ struct ets_console {
     static bool moveBy(double arg0, double arg1);
     static bool hideCursor();
     static bool showCursor();
+    // Como Node: los argumentos se separan con un espacio.
     template <typename... Args>
-    static void log(const Args&... args) { print(args...); }
+    static void spaced(std::ostream& out, const Args&... args) {
+        bool first = true;
+        ((out << (first ? "" : " "), ets::display(out, args), first = false), ...);
+        out << std::endl;
+    }
     template <typename... Args>
-    static void info(const Args&... args) { print(args...); }
+    static void log(const Args&... args) { spaced(std::cout, args...); }
     template <typename... Args>
-    static void debug(const Args&... args) { print(args...); }
+    static void info(const Args&... args) { spaced(std::cout, args...); }
     template <typename... Args>
-    static void trace(const Args&... args) { print(args...); }
+    static void debug(const Args&... args) { spaced(std::cout, args...); }
     template <typename... Args>
-    static void warn(const Args&... args) { printError(args...); }
+    static void trace(const Args&... args) { spaced(std::cout, args...); }
     template <typename... Args>
-    static void error(const Args&... args) { printError(args...); }
+    static void warn(const Args&... args) { spaced(std::cerr, args...); }
+    template <typename... Args>
+    static void error(const Args&... args) { spaced(std::cerr, args...); }
 };
 
 inline ets_console console{};

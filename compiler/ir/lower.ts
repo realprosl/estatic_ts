@@ -904,11 +904,13 @@ export class IrLowering {
       return this.call(id,typeId,declaration.get(AttributeKind.IsStatic) == "true" ? -1 : this.unwrappedPlace(receiver,this.typeId(memoryValue(this.resolved(this.checked.files[this.module].receivers[id])),id)));
     }
     const name: string = n.get(AttributeKind.Method); const receiverType: string = memoryValue(this.resolved(this.checked.files[this.module].receivers[id]));
-    let operands: number[] = []; let effects: string[] = ["runtime"];
+    let operands: number[] = []; let effects: string[] = ["runtime"]; let mutatedPlace: number = -1; let mutatedType: string = "";
     const receiverSymbol: number = this.reference(receiver);
     if (!(receiverSymbol >= 0 && (this.binding.symbols[receiverSymbol].module) < 0 && this.node(receiver).kind == NodeKind.IdentifierExpression) && receiverType != "namespace" && !receiverType.startsWith("class:") && !receiverType.startsWith("!")) {
       if (receiverType == "Server" || ["push","pop","sort","set","add","delete","clear"].includes(name)) {
-        const p: number = this.unwrappedPlace(receiver,this.typeId(receiverType,id)); operands.push(this.emit("address",this.typeId("ref<"+receiverType+">",id),[],p,-1,"",id)); effects.push("mutate");
+        // #195: el préstamo mutable del receptor se toma después de evaluar los
+        // argumentos (this.lista.push(this.metodoQueMuta()) no choca).
+        mutatedPlace = this.unwrappedPlace(receiver,this.typeId(receiverType,id)); mutatedType = receiverType; effects.push("mutate");
       } else {
         const actual: number = this.typeId(this.checked.files[this.module].types[receiver],receiver);
         // Read-only calls on collection places borrow them too: loading by value copies the whole Map/Set/array per call.
@@ -925,6 +927,7 @@ export class IrLowering {
     }
     const formals: string[] = functionParams(this.resolved(this.checked.files[this.module].signatures[id])); let at: number = 0;
     for (const e of n.edges) if (e.role == EdgeRole.Args) { let value: number = this.expression(e.node); if (at < formals.length && !formals[at].startsWith("...")) value = this.convert(value,this.typeId(formals[at],id),id); operands.push(value); if (functionClose(this.result.types[this.valueType(value)]) >= 0) effects.push("invoke"); at = at+1; }
+    if (mutatedPlace >= 0) { let ordered: number[] = [this.emit("address",this.typeId("ref<"+mutatedType+">",id),[],mutatedPlace,-1,"",id)]; for (const operand of operands) ordered.push(operand); operands = ordered; }
     const base: string = receiverType.startsWith("!") ? receiverType : genericBase(memoryValue(receiverType)) != "" ? genericBase(memoryValue(receiverType)) : receiverType.endsWith("[]") ? "array" : receiverType;
     return this.runtime(base+"."+name,typeId,operands,id,effects);
   }

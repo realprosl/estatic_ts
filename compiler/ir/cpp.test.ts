@@ -36,8 +36,12 @@ function execute(source:string,files:Record<string,string>={},flags:string[]=[])
  buildIrCpp(result,cpp,binary,undefined,flags);const p=spawnSync(binary,[],{encoding:"utf8",timeout:15000,env:flags.some(f=>f.includes("sanitize"))?{...process.env,ASAN_OPTIONS:"detect_leaks=0",LSAN_OPTIONS:"detect_leaks=0"}:process.env});assert.ifError(p.error);assert.equal(p.status,0,p.stderr);return p.stdout;
 }
 for(const [name,source,expected] of [
- ["=== y !== como == y !=",'print(1===1);print(2!==3);print("a"==="b");',"1\n1\n0\n"],
- ["T | undefined: literal, comparación y narrowing",'let x:number|undefined=undefined;if(x===undefined)print("vacio");x=5;if(x!==undefined)print(x+1);let y:string|undefined="hola";print(y===undefined);print(y!==undefined);',"vacio\n6\n0\n1\n"],
+ ["=== y !== como == y !=",'print(1===1);print(2!==3);print("a"==="b");',"true\ntrue\nfalse\n"],
+ ["print muestra los valores como JavaScript (#204, #208)",'print(true,false);print(3628800);print(0.1+0.2);print(123456789012);print("n="+0.000001);console.log(1.5,true,"x");',"truefalse\n3628800\n0.30000000000000004\n123456789012\nn=0.000001\n1.5 true x\n"],
+ ["literales con exponente (#210)",'print(1e21);print(2.5e-3);print(1E3+1);',"1e+21\n0.0025\n1001\n"],
+ ["cierre de genéricos seguido de = (#194)",'let m:Map<string,number>=new Map<string,number>();m.set("a",1);let xs:Array<Array<number>>=[[1]];print(m.size+xs.length);',"2\n"],
+ ["push con un argumento que modifica this (#195)",'class G{names:string[];used:Map<string,number>;constructor(){this.names=[];this.used=new Map<string,number>();}name(label:string):string{this.used.set(label,1);return label;}fill():void{this.names.push(this.name("a"));}}let g=new G();g.fill();print(g.names.length);',"1\n"],
+ ["T | undefined: literal, comparación y narrowing",'let x:number|undefined=undefined;if(x===undefined)print("vacio");x=5;if(x!==undefined)print(x+1);let y:string|undefined="hola";print(y===undefined);print(y!==undefined);',"vacio\n6\nfalse\ntrue\n"],
  ["T | undefined: retorno, ?? y parámetro opcional",'function buscar(n:number):string|undefined{if(n>0)return "positivo";return undefined;}const r=buscar(3);if(r!==undefined)print(r.toUpperCase());print(buscar(-1)??"nada");function f(a:number,b?:number):number{return b===undefined?a:a+b;}print(f(1));print(f(1,2));',"POSITIVO\nnada\n1\n3\n"],
  ["process argv and argc as Node properties",'print(process.argc);print(process.argv.length);print(process.argv[0]==process.argv[1]?"igual":"distinto");print(process.argv.slice(2).length);',"2\n2\nigual\n0\n"],
  ["update comptime exact integers",'const n:u64=comptime(():u64=>{let value:u64=9007199254740993;const old:u64=value++;const next:u64=++value;return old+(next-value);});print(n);',"9007199254740993\n"],
@@ -108,8 +112,8 @@ for(const [name,source,expected] of [
  ["optional callback",'const x=optionalSome(3);const y=optionalMap(x,(n:number):number=>n+1);print(optionalValueOr(y,0));',"4\n"],
  ["optional owner",'class C{x:number=5;}const p=optionalSome<ptr<C>>(new C());const q=move(p).value();print(q.x);',"5\n"],
  ["string runtime",'const s=" hello ";print(s.trim().toUpperCase());print(Math.floor(3.8));',"HELLO\n3\n"],
- ["json runtime",'const value=JSON.parseValue("true");print(jsonIsBool(value));',"1\n"],
- ["boolean places",'function yes(n:ref<boolean>):void{n=true;}let a:boolean[]=[false];yes(a[0]);print(a[0]);const b=a.map((x:boolean):boolean=>!x);print(b[0]);',"1\n0\n"],
+ ["json runtime",'const value=JSON.parseValue("true");print(jsonIsBool(value));',"true\n"],
+ ["boolean places",'function yes(n:ref<boolean>):void{n=true;}let a:boolean[]=[false];yes(a[0]);print(a[0]);const b=a.map((x:boolean):boolean=>!x);print(b[0]);',"true\nfalse\n"],
  ["variadic pack",'function f<...T>(...values:T):void{print(values);}f(1,"s");',"1s\n"],
  ["floating cast",'function f(n:number):i8{return n;}print(f(3.9));',"3\n"],
  ["deferred task drop",'class C{x:number=2;}let hits=0;async function task(p:ptr<C>):Promise<number>{hits+=1;return p.x;}function f():void{const pending=task(new C());}f();print(hits);',"0\n"],

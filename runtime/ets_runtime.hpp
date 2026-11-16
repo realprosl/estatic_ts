@@ -42,7 +42,7 @@ namespace std {
 // `operator<<` para `std::variant`: imprime el valor activo.
 template <typename... Types> requires (sizeof...(Types) > 0)
 inline std::ostream& operator<<(std::ostream& stream, const std::variant<Types...>& value) {
-    std::visit([&stream](const auto& inner) { stream << inner; }, value);
+    std::visit([&stream](const auto& inner) { ets::display(stream, inner); }, value);
     return stream;
 }
 } // namespace std

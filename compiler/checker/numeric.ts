@@ -31,6 +31,8 @@ export function nativeIntegerText(raw: string): string {
     else if (prefix == "b" || prefix == "B") { radix = 2; at = 2; }
     else if (prefix == "o" || prefix == "O") { radix = 8; at = 2; }
   }
+  // Un literal con exponente (1e3) se trata como double, no como entero exacto.
+  if (radix == 10 && (raw.indexOf("e",0) >= 0 || raw.indexOf("E",0) >= 0)) return "";
   let value: string = "0"; let fraction: boolean = false;
   for (; at < raw.length; at = at + 1) {
     const c: string = raw.charAt(at); if (c == "_") continue;
@@ -63,6 +65,15 @@ export function nativeNumericLiteral(raw: string): NativeNumericLiteral {
     } else if (c == "." && radix == 10 && !point) {
       if (at == start || numericDigit(raw.charAt(at - 1)) < 0 || numericDigit(raw.charAt(at + 1)) < 0) return new NativeNumericLiteral(0,false);
       point = true;
+    } else if ((c == "e" || c == "E") && radix == 10 && count > 0) {
+      // Exponente decimal: 1e21, 2.5e-3.
+      let at2: number = at + 1; let negative: boolean = false;
+      if (raw.charAt(at2) == "+" || raw.charAt(at2) == "-") { negative = raw.charAt(at2) == "-"; at2 = at2 + 1; }
+      let exponent: number = 0; let digits: number = 0;
+      for (; at2 < raw.length; at2 = at2 + 1) { const d: number = numericDigit(raw.charAt(at2)); if (raw.charAt(at2) == "_") continue; if (d < 0 || d > 9) return new NativeNumericLiteral(0,false); exponent = exponent * 10 + d; digits = digits + 1; }
+      if (digits == 0) return new NativeNumericLiteral(0,false);
+      const scaled: number = negative ? value / Math.pow(10,exponent) : value * Math.pow(10,exponent);
+      return new NativeNumericLiteral(scaled,scaled - scaled == 0);
     } else {
       const digit: number = numericDigit(c);
       if (digit < 0 || digit >= radix) return new NativeNumericLiteral(0,false);

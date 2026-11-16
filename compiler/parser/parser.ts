@@ -144,6 +144,19 @@ export class Parser {
     const variant: string = subject.startsWith("El método") ? catalogVariant("metodo") : (quote < 0 ? catalogVariant("anonima") : "");
     return "E1002: " + subject + " necesita un tipo de retorno: añade ': Tipo' después de los parámetros (por ejemplo ': void' o ': number')" + catalogArg("nombre", name) + variant;
   }
+  // Cierre de argumentos de tipo (#194): `Map<string,number>=x` llega como
+  // `>=` y `Array<Array<T>>=x` como `>` `>=`; se parte el token y se deja el
+  // resto (`=`, `>=`) como siguiente.
+  closeAngle(): ParserToken {
+    const token: ParserToken = this.peek(0);
+    if ((token.kind == ">=" || token.kind == ">>=") && token.endOffset > token.offset) {
+      const rest: string = token.kind.slice(1, token.kind.length);
+      const close: ParserToken = new ParserToken(">", ">", token.offset, token.line, token.column, token.offset + 1, token.line, token.column + 1);
+      this.tokens[this.current] = new ParserToken(rest, rest, token.offset + 1, token.line, token.column + 1, token.endOffset, token.endLine, token.endColumn);
+      return close;
+    }
+    return this.expect(">");
+  }
   expect(kind: string): ParserToken {
     if (this.check(kind)) return this.take();
     this.report("E1001: Se esperaba " + this.describeKind(kind) + " y se encontró " + this.found() + this.expectedArg(kind) + this.foundArg());
@@ -794,7 +807,7 @@ export class Parser {
       this.report("Se esperaba ',' o '>' después del parámetro de tipo");
       if (!this.check("identifier") && !this.check("...")) break;
     }
-    this.expect(">");
+    this.closeAngle();
   }
   functionDeclaration(allowAnonymous: boolean): number {
     const keyword: ParserToken = this.take(); const isAsync: boolean = keyword.kind == "async";
@@ -975,7 +988,7 @@ export class Parser {
     if (this.accept("<")) {
       let args: string[] = [];
       while (!this.check(">") && !this.check("eof")) { args.push(this.typeName()); if (!this.accept(",")) break; }
-      this.expect(">");
+      this.closeAngle();
       if (result == "Array" && args.length == 1) result = args[0] + "[]";
       else result = result + "<" + args.join(",") + ">";
     }
@@ -1159,7 +1172,7 @@ export class Parser {
     while (!this.check(">") && !this.check("eof")) {
       this.attr(owner, AttributeKind.TypeArgument, this.typeName()); if (!this.accept(",")) break;
     }
-    this.expect(">");
+    this.closeAngle();
   }
   argumentsInto(owner: number, role: EdgeRole, close: string): void {
     while (!this.check(close) && !this.check("eof")) {

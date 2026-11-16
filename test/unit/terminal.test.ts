@@ -59,21 +59,21 @@ for(const source of ['console.writeLine(7);','console.moveTo("1",2);','console.c
 }
 test("terminal native: pipe conserva UTF-8 y no emite controles",async()=>temporary(dir=>{
  const app=binary(dir,'console.color("red");console.style("bold");console.clear();console.hideCursor();console.moveTo(1,2);console.write("España 🙂");console.writeLine(" ok");print(console.isTTY());print(console.supportsAnsi());print(console.columns());print(console.rows());print(console.reset());console.flush();');
- assert.equal(execFileSync(app,{encoding:"utf8",env:{...process.env,TERM:"xterm"}}),"España 🙂 ok\n0\n0\n0\n0\n0\n");
+ assert.equal(execFileSync(app,{encoding:"utf8",env:{...process.env,TERM:"xterm"}}),"España 🙂 ok\nfalse\nfalse\n0\n0\nfalse\n");
 }));
 test("terminal native: alias y sombra local conservan comportamiento",async()=>temporary(dir=>{
  const app=binary(dir,'const handle=console;function local():void{const console:number=7;print(console);}local();handle.writeLine("ok");handle.flush();');assert.equal(execFileSync(app,{encoding:"utf8"}),"7\nok\n");
 }));
 test("terminal native PTY: colores, cursor, tamaño y restauración normal",async()=>temporary(dir=>{
  const app=binary(dir,'print(console.isTTY());print(console.supportsAnsi());print(console.columns());print(console.rows());console.color("red");console.background("blue");console.style("bold");console.moveTo(2,3);console.moveBy(-1,2);console.clearLine();console.clear();console.hideCursor();console.write("ok");console.flush();');
- assert.equal(tty(app),"1\r\n1\r\n80\r\n24\r\n\x1b[31m\x1b[44m\x1b[1m\x1b[2;3H\x1b[1A\x1b[2C\x1b[2K\r\x1b[2J\x1b[H\x1b[?25lok\x1b[0m\x1b[?25h");
+ assert.equal(tty(app),"true\r\ntrue\r\n80\r\n24\r\n\x1b[31m\x1b[44m\x1b[1m\x1b[2;3H\x1b[1A\x1b[2C\x1b[2K\r\x1b[2J\x1b[H\x1b[?25lok\x1b[0m\x1b[?25h");
 }));
 test("terminal native PTY: NO_COLOR y TERM=dumb degradan controles",async()=>temporary(dir=>{
  const app=binary(dir,'console.color("red");console.background("blue");console.clear();console.writeLine("ok");console.flush();');
  assert.equal(tty(app,"xterm",true),"\x1b[2J\x1b[Hok\r\n");assert.equal(tty(app,"dumb"),"ok\r\n");
 }));
 test("terminal native PTY: argumentos inválidos no inyectan secuencias",async()=>temporary(dir=>{
- const app=binary(dir,'print(console.moveTo(0,1));print(console.moveTo(1.5,1));print(console.moveBy(999999,0));print(console.color("red;99"));print(console.style("unknown"));console.flush();');assert.equal(tty(app),"0\r\n0\r\n0\r\n0\r\n0\r\n");
+ const app=binary(dir,'print(console.moveTo(0,1));print(console.moveTo(1.5,1));print(console.moveBy(999999,0));print(console.color("red;99"));print(console.style("unknown"));console.flush();');assert.equal(tty(app),"false\r\nfalse\r\nfalse\r\nfalse\r\nfalse\r\n");
 }));
 test("terminal native PTY: reset y showCursor evitan restauración duplicada",async()=>temporary(dir=>{
  const app=binary(dir,'console.color("green");console.hideCursor();console.reset();console.showCursor();');assert.equal(tty(app),"\x1b[32m\x1b[?25l\x1b[0m\x1b[?25h");

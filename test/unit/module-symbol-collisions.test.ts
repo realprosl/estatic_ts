@@ -228,6 +228,6 @@ test('module Task storage: deferred initialization keeps the coroutine lazy',asy
 });
 test('module file helpers: global readFile and writeFile use the runtime namespace',async()=>{
  await project({'main.ets':'const name:string="module-result-files.txt";const written:Result<boolean> = writeFile(name,"text");const text:Result<string> = readFile(name);print(written.isOk());print(text.value());removeFile(name);'},async(entry,dir)=>{
-  assert.equal(native(await compileFile(entry),dir,[resolve('runtime/runtime_ets_libuv.cpp'),resolve('runtime/runtime_ets_net_libuv.cpp'),'-luv']),'1\ntext\n');
+  assert.equal(native(await compileFile(entry),dir,[resolve('runtime/runtime_ets_libuv.cpp'),resolve('runtime/runtime_ets_net_libuv.cpp'),'-luv']),'true\ntext\n');
  });
 });

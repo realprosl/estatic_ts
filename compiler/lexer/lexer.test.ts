@@ -100,11 +100,15 @@ test("bootstrap lexer templates bound context depth and keep EOF in source", () 
 
 // La etapa 0 (src/) está en retirada: donde el lexer nativo ya va por delante
 // (=== y !== son == y !=), manda el nativo y no se compara con src/.
-const nativeAhead = new Set(["shifts stay separate"]);
+const nativeAhead = new Map<string, (tokens: any[]) => boolean>([
+  ["shifts stay separate", tokens => tokens.some(t => t.kind === "==") && tokens.some(t => t.kind === "!=")],
+  // #210: 1e3 es un único número.
+  ["numeric boundaries", tokens => tokens.some(t => t.kind === "number" && t.lexeme === "1e3")],
+]);
 for (const [name, source] of fixtures) test(`bootstrap lexer native parity: ${name}`, () => {
   const actual = native(source);
   assert.deepEqual(actual.diagnostics, []);
-  if (nativeAhead.has(name)) { const kinds = actual.tokens.map((token: any) => token.kind); assert.ok(kinds.includes("==") && kinds.includes("!="), JSON.stringify(kinds)); return; }
+  const ahead = nativeAhead.get(name); if (ahead) { assert.ok(ahead(actual.tokens), JSON.stringify(actual.tokens)); return; }
   assert.deepEqual(actual.tokens, new Lexer(source).tokenize());
 });
 
