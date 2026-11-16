@@ -10,7 +10,9 @@ name: Seed and compiler prebuilt (Linux + macOS)
 
 on:
   workflow_dispatch:
+  # En PRs solo con la CI completa (etiqueta `ci-completa`): tarda ~25 min.
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - native-cpp/compiler/**
       - native-cpp/build-all.sh
@@ -35,11 +37,12 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: seed-prebuilt-${{ github.ref }}
+  group: seed-prebuilt-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'ci-completa' && format('-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 jobs:
   build:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci-completa')
     strategy:
       fail-fast: false
       matrix:
