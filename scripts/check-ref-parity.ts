@@ -38,8 +38,7 @@ const FIXTURE: { fn: string; declared: string; expected: string }[] = [
   { fn: "lee", declared: "constRef<Counter>", expected: "constRef" },
   { fn: "copia", declared: "Counter", expected: "value" },
   { fn: "toma", declared: "ptr<Counter>", expected: "ptr" },
-  { fn: "tomaConst", declared: "constPtr<Counter>", expected: "constPtr" },
-  { fn: "rellena", declared: "out Counter", expected: "ref" }
+  { fn: "tomaConst", declared: "constPtr<Counter>", expected: "constPtr" }
 ];
 
 const SOURCE = [
@@ -49,7 +48,6 @@ const SOURCE = [
   "function copia(c:Counter):number{return c.value;}",
   "function toma(p:ptr<Counter>):number{return p.value;}",
   "function tomaConst(p:constPtr<Counter>):number{return p.value;}",
-  "function rellena(out c:Counter):void{c.value=7;}",
   "function main():void{let c=new Counter(1);muta(c);print(lee(c));print(copia(c));}"
 ].join("\n");
 

@@ -1,7 +1,7 @@
 # tree-sitter-estatic
 
 Gramática de Estatic derivada de `tree-sitter-typescript`. Reconoce formalmente
-los modificadores contextuales `mut` y `out` mediante el campo `modifier` de
+el modificador contextual `mut` mediante el campo `modifier` de
 `required_parameter`.
 
 ```bash

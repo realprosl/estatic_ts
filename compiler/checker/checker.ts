@@ -537,7 +537,6 @@ export class NativeChecker {
     for (const e of n.edges) if (e.role == EdgeRole.Params) {
       let value: string = this.parameterType(module,e.node); const rest: boolean = this.node(module,e.node).get(AttributeKind.Variadic) == "true";
       if (rest && genericBase(value) == "pack") value = genericArguments(value)[0];
-      if (this.node(module,e.node).get(AttributeKind.Out) == "true") value = "ref<" + value + ">";
       params.push((rest ? "..." : "") + value);
     }
     let returns: string = this.annotation(module,id,n.get(AttributeKind.ReturnType));
@@ -556,7 +555,7 @@ export class NativeChecker {
     }
     return "(" + params.join(",") + ")=>" + returns;
   }
-  inferReturns(module: number, id: number, out values: string[]): void {
+  inferReturns(module: number, id: number, values: ref<string[]>): void {
     const n: AstNode = this.node(module,id);
     // Nested callables own their returns; they cannot determine this signature.
     if (isCallableNodeKind(n.kind) || n.kind == NodeKind.ClassDeclaration) return;
@@ -1484,7 +1483,7 @@ export class NativeChecker {
       const params: string[] = functionParams(selected);
       for (let a: number = 0; a < args.length; a = a+1) {
         const value: number = this.argumentValue(module,args[a]); this.result.files[module].argumentParameters[args[a]] = a;
-        if (memoryMode(params[a]) == "ref") { if (this.node(module,value).kind != NodeKind.IdentifierExpression) this.report(module,value,"Un argumento out de builtin debe ser una variable mutable"); this.writableTarget(module,value,false); }
+        if (memoryMode(params[a]) == "ref") { if (this.node(module,value).kind != NodeKind.IdentifierExpression) this.report(module,value,"Un argumento ref de builtin debe ser una variable mutable"); this.writableTarget(module,value,false); }
         this.requireType(module,value,actual[a],params[a]);
       }
       this.result.files[module].signatures[id] = selected; return functionReturn(selected);
@@ -1536,9 +1535,7 @@ export class NativeChecker {
           const pattern: string = argumentType(parameters[p],this.node(module,args[a]).kind == NodeKind.SpreadElement);
           let inferred: string = this.inferToken(pattern,actual[a],genericNames[g]);
           if (memoryMode(pattern) == "ref" && memoryMode(actual[a]) != "ref") {
-            let isOut: boolean = false; let parameterIndex: number = 0;
-            for (const edge of declaration.edges) if (edge.role == EdgeRole.Params) { if (parameterIndex == p) isOut = this.node(ownerModule,edge.node).get(AttributeKind.Out) == "true"; parameterIndex = parameterIndex+1; }
-            inferred = this.inferToken(memoryInner(pattern),isOut ? actual[a] : memoryValue(actual[a]),genericNames[g]);
+            inferred = this.inferToken(memoryInner(pattern),memoryValue(actual[a]),genericNames[g]);
           }
           if (pattern == genericNames[g]) inferred = actual[a];
           else if (pattern == genericNames[g] + "[]" && actual[a].endsWith("[]")) inferred = semanticElement(actual[a]);
@@ -1607,14 +1604,8 @@ export class NativeChecker {
           if (genericBase(actual[a]) != "pack" && this.node(module,args[a]).kind != NodeKind.SpreadElement && offset < wanted.length) this.requireType(module,value,actual[a],wanted[offset]);
         } else {
           const target: string = wrap ? genericArguments(parameters[p])[0] : argumentType(parameters[p],this.node(module,args[a]).kind == NodeKind.SpreadElement);
-          let formal: number = -1; let index: number = 0;
-          for (const edge of this.node(ownerModule,selected).edges) if (edge.role == EdgeRole.Params) { if (index == p) formal = edge.node; index = index+1; }
-          const isOut: boolean = formal >= 0 && this.node(ownerModule,formal).get(AttributeKind.Out) == "true";
-          if (isOut) {
-            if (this.node(module,value).kind != NodeKind.IdentifierExpression) this.report(module,value,"Un argumento out debe ser una variable mutable");
-          }
           if (memoryMode(target) == "ref") this.mutableArgument(module,value,actual[a]);
-          this.requireType(module,value,actual[a],isOut ? memoryInner(target) : target);
+          this.requireType(module,value,actual[a],target);
         }
         if (wrap) this.result.files[module].conversions[value] = parameters[p];
       }
@@ -1857,7 +1848,9 @@ export class NativeChecker {
     if (kind == NodeKind.AssignmentExpression || kind == NodeKind.CompoundAssignmentExpression) {
       const target: number = bindingChild(n,EdgeRole.Target); let valueType: string = this.expression(module,target,"");
       if (this.node(module,target).kind == NodeKind.IdentifierExpression) { const sid: number = this.reference(module,target); valueType = this.symbolType(sid,module,target); this.narrowedSymbols.push(sid); this.narrowedTypes.push(valueType); this.result.files[module].types[target] = valueType; }
-      const value: string = this.expression(module,bindingChild(n,EdgeRole.Value),valueType); this.requireType(module,bindingChild(n,EdgeRole.Value),value,valueType); this.writable(module,target);
+      // Asignar a un ref<T> escribe un T a través de la referencia.
+      const assigned: string = memoryMode(valueType) == "ref" ? memoryInner(valueType) : valueType;
+      const value: string = this.expression(module,bindingChild(n,EdgeRole.Value),assigned); this.requireType(module,bindingChild(n,EdgeRole.Value),value,assigned); this.writable(module,target);
       if (kind == NodeKind.CompoundAssignmentExpression && !numericType(memoryValue(valueType)) && !(memoryValue(valueType) == "string" && n.get(AttributeKind.Operator) == "+=")) this.report(module,id,"Asignación compuesta inválida"); return valueType;
     }
     if (kind == NodeKind.ArrayLiteralExpression) {
@@ -2059,8 +2052,6 @@ export class NativeChecker {
       for (const edge of n.edges) {
         if (edge.role == EdgeRole.Params) {
           const param: AstNode = this.node(module,edge.node); const pt: string = this.parameterType(module,edge.node); if (pt == "void" || pt == "Optional<void>") this.report(module,edge.node,"Un parámetro no puede ser void"); this.result.files[module].types[edge.node] = pt;
-          if (param.get(AttributeKind.Out) == "true" && (param.get(AttributeKind.Optional) == "true" || param.get(AttributeKind.Variadic) == "true" || param.get(AttributeKind.ParameterProperty) == "true" || bindingChild(param,EdgeRole.DefaultValue) >= 0 || borrowedType(pt) || readonlyType(pt))) this.report(module,edge.node,"Un parámetro out requiere un valor mutable, sin optional, rest, propiedad ni default");
-          if (param.get(AttributeKind.Out) == "true" && this.asynchronous(module,id)) this.report(module,edge.node,"E4204: una función async no admite parámetros out");
           if (param.get(AttributeKind.Variadic) == "true") {
             let last: number = -1; for (const item of n.edges) if (item.role == EdgeRole.Params) last = item.node;
             if (last != edge.node || functionClose(pt) >= 0 || (!pt.endsWith("[]") && genericBase(pt) != "pack") || param.get(AttributeKind.Optional) == "true" || bindingChild(param,EdgeRole.DefaultValue) >= 0) this.report(module,edge.node,"Un parámetro rest requiere un array, debe ser el último y no admite default ni optional");

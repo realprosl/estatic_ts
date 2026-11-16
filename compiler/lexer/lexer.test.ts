@@ -104,6 +104,8 @@ const nativeAhead = new Map<string, (tokens: any[]) => boolean>([
   ["shifts stay separate", tokens => tokens.some(t => t.kind === "==") && tokens.some(t => t.kind === "!=")],
   // #210: 1e3 es un único número.
   ["numeric boundaries", tokens => tokens.some(t => t.kind === "number" && t.lexeme === "1e3")],
+  // `out` ya no es palabra clave del dialecto (se usa ref<T>).
+  ["all host keywords", tokens => tokens.some(t => t.kind === "identifier" && t.lexeme === "out") && !tokens.some(t => t.kind === "out")],
 ]);
 for (const [name, source] of fixtures) test(`bootstrap lexer native parity: ${name}`, () => {
   const actual = native(source);

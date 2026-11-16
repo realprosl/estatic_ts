@@ -39,11 +39,11 @@ export class NativeExpansion {
     for (const declaration of s.declarations) if (this.decorated(s.module,declaration,"etsgen")) return true;
     return false;
   }
-  set(out n: AstNode, key: AttributeKind, value: string): void {
+  set(n: ref<AstNode>, key: AttributeKind, value: string): void {
     for (let a: number = 0; a < n.attributes.length; a = a+1) if (n.attributes[a].name == key) { n.attributes[a].value = value; return; }
     n.attr(key,value);
   }
-  markers(out parsed: ModuleGraph, module: number, call: number, generatorModule: number): boolean {
+  markers(parsed: ref<ModuleGraph>, module: number, call: number, generatorModule: number): boolean {
     for (let id: number = 0; id < parsed.modules[0].cached.result.ast.nodes.length; id = id+1) {
       let n = parsed.modules[0].cached.result.ast.nodes[id]; if (n.kind != NodeKind.CallExpression || !["etsCapture","etsDefinition"].includes(n.get(AttributeKind.Callee))) continue;
       let args: number[] = []; for (const edge of n.edges) if (edge.role == EdgeRole.Args) args.push(edge.node);
@@ -74,7 +74,7 @@ export class NativeExpansion {
       } else { output = output+text.charAt(at); at = at+1; }
     } return output;
   }
-  hygiene(out fragment: ModuleGraph, module: number, call: number, generatorModule: number, sourceId: string): boolean {
+  hygiene(fragment: ref<ModuleGraph>, module: number, call: number, generatorModule: number, sourceId: string): boolean {
     const root: number = fragment.modules[0].cached.result.ast.root; let published: number[] = [];
     for (let id: number = 0; id < fragment.modules[0].cached.result.ast.nodes.length; id = id+1) {
       let n = fragment.modules[0].cached.result.ast.nodes[id]; let edges: AstEdge[] = [];

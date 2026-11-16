@@ -54,8 +54,8 @@ sigue activa incluso cuando la evaluación podría borrar una rama.
 Se materializan clases por valor, constructores explícitos y por composición,
 campos/defaults, métodos con this, enums y variantes de uniones. Match evalúa el
 sujeto una vez e invoca sólo el caso elegido. Optional admite métodos y helpers,
-incluido optionalOrElse con un Optional alternativo. Los parámetros out aliasan
-la celda mutable del argumento; no se convierten en copias locales.
+incluido optionalOrElse con un Optional alternativo. Los parámetros ref<T> no se
+evalúan en comptime (contrato de memoria).
 
 Los efectos externos, I/O, tareas async y escapes @cppgen se rechazan durante
 la evaluación estricta. Los contratos de memoria que el intérprete no puede

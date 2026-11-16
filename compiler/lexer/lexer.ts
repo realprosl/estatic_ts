@@ -70,7 +70,7 @@ export class Lexer {
   keywordKind(word: string): string {
     if (word == "number" || word == "string" || word == "boolean" || word == "void" || word == "type") return "type";
     const words: string[] = ["let", "const", "function", "interface", "class", "new", "return", "if", "else",
-      "while", "for", "break", "continue", "extends", "export", "true", "false", "out", "async", "await", "using",
+      "while", "for", "break", "continue", "extends", "export", "true", "false", "async", "await", "using",
       "satisfies", "as", "enum", "switch", "case", "default", "of", "in", "delete", "instanceof", "typeof",
       "readonly", "union", "import", "private", "public", "protected", "static"];
     if (words.includes(word)) return word;

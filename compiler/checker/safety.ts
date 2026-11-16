@@ -46,6 +46,15 @@ export class SafetyTarget {
 // A separate semantic pass: no syntax, binding or type table is annotated here.
 // Flow joins preserve possible moves; provenance is a monotone graph keyed by
 // symbol identity, independent of source order and aliases.
+
+// Estado de un path de proyección: no usa el checker, así que es una función
+// libre (un método obligaría a prestar el receptor de forma mutable).
+function setSafetyPath(state: ref<SafetyState>, projectionKey: string, value: number): void {
+  if (projectionKey == "") return;
+  for (let at: number = 0; at < state.paths.length; at = at+1) if (state.paths[at] == projectionKey) { state.resources[at] = value; return; }
+  state.paths.push(projectionKey); state.resources.push(value);
+}
+
 export class SafetyAnalyzer {
   graph: ModuleGraph; binding: BindingResult; result: CheckResult; effects: EffectAnalyzer; arguments: SafetyArgument[];
   offsets: number[]; nodes: number; edges: SafetyEdge[]; seeds: number[]; escapes: EscapeSite[]; owners: number[]; trace: boolean; resourceTypes: Map<string,boolean>; valueTypes: Map<string,boolean>; carrierTypes: Map<string,boolean>; plainTypes: Map<string,boolean>; defaultReads: Map<number,boolean>; valueDefaults: Map<number,boolean>;
@@ -157,11 +166,6 @@ export class SafetyAnalyzer {
     return true;
   }
   pathState(state: constRef<SafetyState>, projectionKey: string): number { for (let at: number = 0; at < state.paths.length; at = at+1) if (state.paths[at] == projectionKey) return state.resources[at]; return 1; }
-  setPath(out state: SafetyState, projectionKey: string, value: number): void {
-    if (projectionKey == "") return;
-    for (let at: number = 0; at < state.paths.length; at = at+1) if (state.paths[at] == projectionKey) { state.resources[at] = value; return; }
-    state.paths.push(projectionKey); state.resources.push(value);
-  }
   readPaths(module: number, id: number, state: constRef<SafetyState>): void {
     const projectionKey: string = this.projectionKey(module,id); if (projectionKey == "") return;
     for (let at: number = 0; at < state.paths.length; at = at+1) if (state.resources[at] != 1 && this.overlaps(projectionKey,state.paths[at])) this.report(module,id,state.resources[at] == 2 ? "E4102: acceso a un agregado o campo movido parcialmente" : "E4103: agregado o campo posiblemente movido parcialmente");
@@ -170,14 +174,14 @@ export class SafetyAnalyzer {
     const projectionKey: string = this.projectionKey(module,id); if (projectionKey == "") return; const depth: number = splitTypes(projectionKey,"/").length;
     for (let at: number = 0; at < state.paths.length; at = at+1) if (state.resources[at] != 1 && (splitTypes(state.paths[at],"/").length) < depth && this.overlaps(projectionKey,state.paths[at])) this.report(module,id,"E4102: escritura a través de un campo padre movido");
   }
-  initializePath(out state: SafetyState, projectionKey: string): void {
+  initializePath(state: ref<SafetyState>, projectionKey: string): void {
     if (projectionKey == "" || projectionKey.indexOf("/*",0) >= 0) return;
     for (let at: number = 0; at < state.paths.length; at = at+1) if (state.paths[at] == projectionKey || state.paths[at].startsWith(projectionKey + "/")) state.resources[at] = 1;
   }
-  restorePaths(out state: SafetyState, saved: constRef<SafetyState>, sid: number): void {
+  restorePaths(state: ref<SafetyState>, saved: constRef<SafetyState>, sid: number): void {
     const prefix: string = "s" + numberToString(sid);
     this.initializePath(state,prefix);
-    for (let at: number = 0; at < saved.paths.length; at = at+1) if (saved.paths[at] == prefix || saved.paths[at].startsWith(prefix + "/")) this.setPath(state,saved.paths[at],saved.resources[at]);
+    for (let at: number = 0; at < saved.paths.length; at = at+1) if (saved.paths[at] == prefix || saved.paths[at].startsWith(prefix + "/")) setSafetyPath(state,saved.paths[at],saved.resources[at]);
   }
   samePaths(left: constRef<SafetyState>, right: constRef<SafetyState>): boolean {
     for (let at: number = 0; at < left.paths.length; at = at+1) if (left.resources[at] != this.pathState(right,left.paths[at])) return false;
@@ -574,8 +578,8 @@ export class SafetyAnalyzer {
       const a: number = left.slots[sid]; const b: number = right.slots[sid];
       if (a == b) result.slots[sid] = a; else if (this.binding.symbols[sid].kind == "ClassField") result.slots[sid] = 3; else if (a == 0 || b == 0) result.slots[sid] = 0; else result.slots[sid] = 3;
     }
-    for (let at: number = 0; at < left.paths.length; at = at+1) { const a: number = left.resources[at]; const b: number = this.pathState(right,left.paths[at]); this.setPath(result,left.paths[at],a == b ? a : 3); }
-    for (let at: number = 0; at < right.paths.length; at = at+1) { const a: number = this.pathState(left,right.paths[at]); const b: number = right.resources[at]; this.setPath(result,right.paths[at],a == b ? a : 3); }
+    for (let at: number = 0; at < left.paths.length; at = at+1) { const a: number = left.resources[at]; const b: number = this.pathState(right,left.paths[at]); setSafetyPath(result,left.paths[at],a == b ? a : 3); }
+    for (let at: number = 0; at < right.paths.length; at = at+1) { const a: number = this.pathState(left,right.paths[at]); const b: number = right.resources[at]; setSafetyPath(result,right.paths[at],a == b ? a : 3); }
     return result;
   }
   constructorClass(module: number, id: number): number {
@@ -597,7 +601,7 @@ export class SafetyAnalyzer {
       if (s.scope == scope && s.kind == "ClassField" && this.node(s.module,s.node).get(AttributeKind.IsStatic) != "true") fields.push(sid);
     } return fields;
   }
-  initializeFields(module: number, id: number, out state: SafetyState): void {
+  initializeFields(module: number, id: number, state: ref<SafetyState>): void {
     for (const sid of this.constructorFields(module,id)) {
       const s = this.binding.symbols[sid]; const field: AstNode = this.node(s.module,s.node);
       if (field.kind == NodeKind.Parameter || bindingChild(field,EdgeRole.DefaultValue) >= 0) state.slots[sid] = 1; else state.slots[sid] = 0;
@@ -694,7 +698,7 @@ export class SafetyAnalyzer {
     if (this.binding.symbols[symbol].kind == "receiver") { const object: number = bindingChild(this.node(module,id),EdgeRole.Object); if (object >= 0) return object; }
     return id;
   }
-  summary(summaryId: number, module: number, id: number, out state: SafetyState): void {
+  summary(summaryId: number, module: number, id: number, state: ref<SafetyState>): void {
     const summary = this.effects.summaries[summaryId];
     if (summary.invokes.length > 0) { this.report(module,id,"E4104: resumen recursivo con callbacks simbólicos todavía no demostrados"); return; }
     if (summary.unknown) this.unknown(module,id,state);
@@ -802,13 +806,13 @@ export class SafetyAnalyzer {
       if (live) this.report(module,id,"E4204: un préstamo vivo no puede atravesar una suspensión");
     }
   }
-  consumeTask(module: number, id: number, out state: SafetyState): void {
+  consumeTask(module: number, id: number, state: ref<SafetyState>): void {
     const root: number = this.root(module,id); this.access(module,id,root,"move");
     if (this.helper(module,id) == "move") return;
     if (this.node(module,id).kind == NodeKind.IdentifierExpression) { if (root >= 0) state.slots[root] = 2; }
-    else if (this.node(module,id).kind == NodeKind.MemberExpression || this.node(module,id).kind == NodeKind.IndexExpression) this.setPath(state,this.projectionKey(module,id),2);
+    else if (this.node(module,id).kind == NodeKind.MemberExpression || this.node(module,id).kind == NodeKind.IndexExpression) setSafetyPath(state,this.projectionKey(module,id),2);
   }
-  awaitTasks(module: number, id: number, input: number, out state: SafetyState, active: number[], detached: boolean = false): void {
+  awaitTasks(module: number, id: number, input: number, state: ref<SafetyState>, active: number[], detached: boolean = false): void {
     const sources: number[] = this.effects.taskSources(module,input); const before: SafetyState = state; let joined: SafetyState = state; joined.exit = "unreachable";
     if (sources.length == 0) { if (!this.effects.taskCollection(module,id) && this.node(module,id).kind != NodeKind.ForOfStatement) this.unknown(module,id,state); return; }
     for (const source of sources) {
@@ -833,7 +837,7 @@ export class SafetyAnalyzer {
     }
     state = joined;
   }
-  invoke(module: number, id: number, out state: SafetyState, active: number[], repeat: boolean = true): void {
+  invoke(module: number, id: number, state: ref<SafetyState>, active: number[], repeat: boolean = true): void {
     if (this.effects.builtin(module,id)) return;
     if (repeat && this.effects.arrayCallback(module,id) >= 0) {
       const n: AstNode = this.node(module,id); let object: number = bindingChild(n,EdgeRole.Object);
@@ -875,7 +879,7 @@ export class SafetyAnalyzer {
     }
     state = joined;
   }
-  invokeTarget(module: number, id: number, target: SafetyTarget, out state: SafetyState, active: number[], phase: string = "body"): void {
+  invokeTarget(module: number, id: number, target: SafetyTarget, state: ref<SafetyState>, active: number[], phase: string = "body"): void {
     this.visits = this.visits+1;
     if (this.trace && this.visits % 10000 == 0) progressDetail("frontend: flow calls "+numberToString(this.visits)+" "+this.graph.modules[target.module].file+":"+this.node(target.module,target.node).get(AttributeKind.Name)+" depth "+numberToString(active.length));
     const owner: number = this.vertex(target.module,target.node);
@@ -961,7 +965,7 @@ export class SafetyAnalyzer {
     if (helper == "optionalNone") return "false";
     return "";
   }
-  expression(module: number, id: number, out state: SafetyState, active: number[]): void {
+  expression(module: number, id: number, state: ref<SafetyState>, active: number[]): void {
     if (id < 0) return; const n: AstNode = this.node(module,id);
     if (this.substitutions.length > 0) {
       if (n.kind == NodeKind.AsExpression) {
@@ -986,8 +990,6 @@ export class SafetyAnalyzer {
     }
     if (n.kind == NodeKind.IdentifierExpression) {
       this.read(module,id,this.reference(module,id),state);
-      const alias: number = this.reference(module,id); const aliasRoot: number = this.root(module,id);
-      if (alias >= 0) { const symbol = this.binding.symbols[alias]; if (symbol.kind == "Parameter" && this.node(symbol.module,symbol.node).get(AttributeKind.Out) == "true" && aliasRoot != alias) this.read(module,id,aliasRoot,state); }
       if (!this.projection(module,id)) this.readPaths(module,id,state);
       if (n.get(AttributeKind.Name) == "this") {
         const parent: number = this.binding.files[module].parents[id];
@@ -1030,7 +1032,8 @@ export class SafetyAnalyzer {
       const known: string = this.constant(module,left); const skip: string = n.get(AttributeKind.Operator) == "&&" ? "false" : "true";
       if (known == skip) return;
       let right: SafetyState = state; this.expression(module,bindingChild(n,EdgeRole.Right),right,active);
-      state = (known == "" ? this.join(state,right) : right); return;
+      if (known == "") state = this.join(state,right); else state = right;
+      return;
     }
     if (n.kind == NodeKind.BinaryExpression && n.get(AttributeKind.Operator) == "??") {
       const left: number = bindingChild(n,EdgeRole.Left); this.expression(module,left,state,active);
@@ -1060,7 +1063,7 @@ export class SafetyAnalyzer {
       if (this.helper(module,id) == "move") {
         const arg: number = bindingChild(n,EdgeRole.Args); const sid: number = this.root(module,arg); this.access(module,id,sid,"move");
         if (this.node(module,arg).kind == NodeKind.IdentifierExpression) { if (sid >= 0) { state.slots[sid] = 2; this.moveLines[sid] = this.node(module,id).start.line; } }
-        else { const projectionKey: string = this.projectionKey(module,arg); if (projectionKey == "") this.report(module,arg,"E4104: move requiere una procedencia de campo demostrada"); else this.setPath(state,projectionKey,2); }
+        else { const projectionKey: string = this.projectionKey(module,arg); if (projectionKey == "") this.report(module,arg,"E4104: move requiere una procedencia de campo demostrada"); else setSafetyPath(state,projectionKey,2); }
       } else if (this.helper(module,id) != "ref" && this.helper(module,id) != "constRef") {
         this.callBorrows(module,id);
         if (this.mutating(module,id) && object >= 0) { if (readonlyType(this.resolved(this.effects.receiver(module,id)))) this.report(module,id,"E4300: método mutante sobre una vista readonly"); this.access(module,object,this.root(module,object),"write"); }
@@ -1081,7 +1084,7 @@ export class SafetyAnalyzer {
     }
     for (const edge of n.edges) this.expression(module,edge.node,state,active);
   }
-  loop(module: number, id: number, out state: SafetyState, active: number[]): void {
+  loop(module: number, id: number, state: ref<SafetyState>, active: number[]): void {
     const n: AstNode = this.node(module,id); const init: number = bindingChild(n,EdgeRole.Initializer); if (init >= 0) this.walk(module,init,state,active);
     const iteration: boolean = n.kind == NodeKind.ForOfStatement || n.kind == NodeKind.ForInStatement;
     if (iteration) this.expression(module,bindingChild(n,n.kind == NodeKind.ForOfStatement ? EdgeRole.Iterable : EdgeRole.Target),state,active);
@@ -1109,7 +1112,7 @@ export class SafetyAnalyzer {
     }
     state = exits; if (state.exit == "unreachable") state.exit = "return";
   }
-  walk(module: number, id: number, out state: SafetyState, active: number[]): void {
+  walk(module: number, id: number, state: ref<SafetyState>, active: number[]): void {
     if (id < 0 || state.exit != "") return; const n: AstNode = this.node(module,id);
     if (this.substitutions.length > 0) {
       if ((n.kind == NodeKind.VariableDeclaration || n.kind == NodeKind.UsingDeclaration) && !borrowedType(this.result.files[module].types[id])) this.transferValue(module,bindingChild(n,EdgeRole.Initializer));
@@ -1290,6 +1293,6 @@ export class SafetyAnalyzer {
     this.provenance(); this.visibility(); profileEnd("provenance-visibility",provenanceProfile); if (this.trace) progressDetail("frontend: flow"); this.flow(); this.result.borrows = this.leases; return this.result;
   }
 }
-export function validateSafety(graph: ModuleGraph, binding: BindingResult, out result: CheckResult, trace: boolean = false): void {
+export function validateSafety(graph: ModuleGraph, binding: BindingResult, result: ref<CheckResult>, trace: boolean = false): void {
   let analyzer: SafetyAnalyzer = new SafetyAnalyzer(graph,binding,result); analyzer.trace = trace; result = analyzer.run();
 }

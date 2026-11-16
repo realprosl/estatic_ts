@@ -234,7 +234,7 @@ export function parseEdgeRole(text: string): EdgeRole {
   return EdgeRole.Invalid;
 }
 
-export enum AttributeKind { Invalid, Access, Alias, Anonymous, Async, Await, Callee, ClassName, Constraint, DeclaredType, Default, Exported, Field, Form, GeneratedColumn, GeneratedDefinition, GeneratedEndOffset, GeneratedExternal, GeneratedLine, GeneratedOffset, GeneratedOriginalName, GeneratedSource, Imported, IsAsync, IsStatic, Key, LiteralType, Local, Member, Method, Mutable, Name, Namespace, Operator, Optional, Out, ParameterProperty, Passing, Pattern, Payload, Property, Raw, Readonly, ReturnType, SideEffect, Source, TargetType, Type, TypeArgument, TypeOnly, Underlying, Value, Variadic, VariadicTypeParameter, Prefix }
+export enum AttributeKind { Invalid, Access, Alias, Anonymous, Async, Await, Callee, ClassName, Constraint, DeclaredType, Default, Exported, Field, Form, GeneratedColumn, GeneratedDefinition, GeneratedEndOffset, GeneratedExternal, GeneratedLine, GeneratedOffset, GeneratedOriginalName, GeneratedSource, Imported, IsAsync, IsStatic, Key, LiteralType, Local, Member, Method, Mutable, Name, Namespace, Operator, Optional, ParameterProperty, Pattern, Payload, Property, Raw, Readonly, ReturnType, SideEffect, Source, TargetType, Type, TypeArgument, TypeOnly, Underlying, Value, Variadic, VariadicTypeParameter, Prefix }
 export function attributeKindName(value: AttributeKind): string {
   if (value == AttributeKind.Prefix) return "prefix";
   if (value == AttributeKind.Access) return "access";
@@ -271,9 +271,7 @@ export function attributeKindName(value: AttributeKind): string {
   if (value == AttributeKind.Namespace) return "namespace";
   if (value == AttributeKind.Operator) return "operator";
   if (value == AttributeKind.Optional) return "optional";
-  if (value == AttributeKind.Out) return "out";
   if (value == AttributeKind.ParameterProperty) return "parameterProperty";
-  if (value == AttributeKind.Passing) return "passing";
   if (value == AttributeKind.Pattern) return "pattern";
   if (value == AttributeKind.Payload) return "payload";
   if (value == AttributeKind.Property) return "property";
@@ -328,9 +326,7 @@ export function parseAttributeKind(text: string): AttributeKind {
   if (text == "namespace") return AttributeKind.Namespace;
   if (text == "operator") return AttributeKind.Operator;
   if (text == "optional") return AttributeKind.Optional;
-  if (text == "out") return AttributeKind.Out;
   if (text == "parameterProperty") return AttributeKind.ParameterProperty;
-  if (text == "passing") return AttributeKind.Passing;
   if (text == "pattern") return AttributeKind.Pattern;
   if (text == "payload") return AttributeKind.Payload;
   if (text == "property") return AttributeKind.Property;

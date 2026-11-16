@@ -367,7 +367,7 @@ y se importan por su nombre. Cada versión es una etiqueta git:
 - Parámetros `ref<T>` y `constRef<T>` emitidos como `T&` y `const T&` (V22).
 - Parámetros `ptr<T>` y `constPtr<T>` emitidos como `std::unique_ptr<T>` y `std::unique_ptr<const T>` (V22).
 - `T` significa copia (V22): el dialecto no aplica lowering implícito a `const T&`.
-- Errores explícitos mediante `Result<T>` o parámetros `out` (deprecado, mantener por compatibilidad).
+- Errores explícitos mediante `Result<T>`.
 - Imports relativos, roots y aliases resueltos mediante un grafo de módulos.
 - Visibilidad nominal entre módulos mediante `export` e imports explícitos.
 - Informe JSON cronológico de cada transpilación y compilación.
@@ -578,7 +578,7 @@ const contents: Result<string> = await load("input.txt");
 
 Estas variantes no ejecutan una llamada de disco bloqueante en el hilo del event loop. El trabajo se envía a un pool acotado de 2 a 4 workers y su finalización despierta el `poll` mediante una tubería interna.
 
-Las variantes compatibles añaden sus salidas al final: `readFile(path, out contents, out error)` y, para las demás, `operación(..., out error)`. Retornan `boolean` y limpian `error` cuando tienen éxito.
+Las variantes compatibles añaden sus salidas al final, pasadas por referencia: `readFile(path, contents, error)` (con `contents` y `error` variables `string`) y, para las demás, `operación(..., error)`. Retornan `boolean` y limpian `error` cuando tienen éxito.
 
 `Result<T>` también puede utilizarse en cualquier función síncrona propia. `ok(value)` infiere `T` desde el valor; `err(message)` lo infiere desde el retorno o la variable destino. Sin contexto debe indicarse el tipo: `err<number>("mensaje")`.
 
@@ -610,7 +610,7 @@ child.on("close", (code: number): void => print(code));
 
 El subconjunto inicial entrega chunks como `string` UTF-8 (no `Buffer`) y aún no expone opciones de `spawn`, señales ni backpressure avanzado. Los listeners retenidos no pueden escapar capturando variables locales mutables por referencia; el checker los rechaza para evitar referencias colgantes. Los callbacks se procesan en el event loop de libuv.
 
-Las utilidades `fail(message, out error)`, `hasError(error)` y `clearError(out error)` permiten construir errores explícitos en funciones propias.
+Las utilidades `fail(message, error)`, `hasError(error)` y `clearError(error)` (con `error` por referencia) permiten construir errores explícitos en funciones propias.
 
 ### API estilo Node (`console.*`)
 
@@ -704,7 +704,6 @@ void increment(Counter& c);
 | `constRef<T>` | `const T&` (solo lectura) |
 | `ptr<T>` | `std::unique_ptr<T>` (ownership exclusivo) |
 | `constPtr<T>` | `std::unique_ptr<const T>` (ownership readonly) |
-| `out value: T` | `T&` (deprecado; preferir `Result<T>`) |
 
 > **Importante**: Estatic **nunca** cambia implícitamente un parámetro `T`
 > por una referencia para optimizar el ABI. Si se quiere evitar una copia,
@@ -1045,7 +1044,7 @@ Las reglas de arrays, tuplas, firmas de función e instancias genéricas están 
 ## Editor
 
 - `editors/neovim`: filetype `.ts`/`.ets`, registro del parser y queries de resaltado, scopes, folding, indentación y text objects.
-- `editors/vscode`: extensión de lenguaje, resaltado TypeScript con `mut`/`out`, configuración de edición y snippets.
+- `editors/vscode`: extensión de lenguaje, resaltado TypeScript con `mut`, configuración de edición y snippets.
 
 Las instrucciones de instalación se encuentran en el `README.md` de cada integración. Diagnósticos, navegación y autocompletado se compartirán más adelante mediante `estatic-lsp`.
 

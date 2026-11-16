@@ -36,7 +36,7 @@ export const syntaxCases:SyntaxCase[]=[
 
   yes('nested-functions','Funciones','function f(x:number):number{function g():number{return x;}return g();}'),
   yes('optional-default-parameters','Funciones','function f(x:number=1,y?:string):number{return x;}'),
-  yes('out-parameters','Funciones','function f(out x:number):void{x=2;}let n=1;f(n);'),
+  yes('ref-parameters','Funciones','function f(x:ref<number>):void{x=2;}let n=1;f(n);'),
   yes('overloads','Funciones','function f(x:number):number{return x;}function f(x:string):string{return x;}'),
   yes('named-arguments','Funciones','function f(a:number,b:string):void{}f(b:"x",a:1);'),
   yes('rest-spread','Funciones','function f(...xs:number[]):void{}const a=[1,2];f(0,...a);'),

@@ -657,8 +657,8 @@ module.exports = function defineGrammar(dialect) {
       override_modifier: _ => 'override',
 
       // Extensión Estatic: los parámetros son préstamos constantes por defecto.
-      // `mut` permite escritura y `out` expresa un resultado por argumento.
-      parameter_modifier: _ => choice('mut', 'out'),
+      // `mut` permite escritura.
+      parameter_modifier: _ => 'mut',
 
       required_parameter: $ => seq(
         field('modifier', optional($.parameter_modifier)),
