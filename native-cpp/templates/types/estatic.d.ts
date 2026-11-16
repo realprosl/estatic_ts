@@ -117,11 +117,10 @@ declare global {
   // 'throw new ...'. El type-checker emitira E4xxx equivalente.
   type NonThrowable = { readonly [__noThrow]?: never };
 
-  // Alias de Error y Exception que el dialecto no soporta. Si el usuario
-  // intenta usar 'Error', 'Exception' o hacer 'throw new ...', el LSP le
-  // marcara rojo inmediatamente. Estatic no tiene excepciones: los
-  // errores se modelan con 'Result<T, E>'.
-  type Error = NonThrowable & { name: "Error"; message: string };
+  // Error, TypeError, RangeError… son los de TypeScript (lib es2022): el
+  // dialecto los implementa en el prelude del runtime (runtime/prelude/error.ts)
+  // como una interfaz Error y clases que la implementan, sin excepciones
+  // (sin throw/try/catch): se usan dentro de Result<T, Error>.
 
   // ─── Envoltorios genéricos del runtime ────────────────────────────────
   // Mapean a ets::Optional / Task / Result / Map / Set en runtime/ets_*.hpp.

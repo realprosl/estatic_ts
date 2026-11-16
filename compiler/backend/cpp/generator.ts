@@ -122,13 +122,12 @@ _cppLoop62Result.push(this.parameterType(x));continue;
 return `std::function<${this.cppTypeId(a[a.length-1])}(${_cppLoop62Result.join(",")})>`;}
       case "Optional": return `ets::Optional<${this.cppTypeId(a[0])}>`;
       case "Result": {
-        if (this.project.types[a[1]] != "string") this.fail("El runtime C++ requiere Result<T,string>");
         if (this.project.types[a[0]] == "void") {
           this.fail("No se puede generar Result<void>: el runtime C++ no admite Result<void> (usa std::optional<T> internamente). Indica un tipo concreto, por ejemplo Result<boolean>, y revisa las llamadas a ok()/err() sin tipo explícito.");
         }
-        this.headers.add("runtime/ets_async.hpp");
-        this.backends.libuv = true;
-        return `ets::Result<${this.cppTypeId(a[0])}>`;
+        // Result<T, E> no necesita el bucle de eventos ni libuv (#205).
+        this.headers.add("runtime/ets_result.hpp");
+        return this.project.types[a[1]] == "string" ? `ets::Result<${this.cppTypeId(a[0])}>` : `ets::Result<${this.cppTypeId(a[0])},${this.cppTypeId(a[1])}>`;
       }
       case "Promise": this.headers.add("runtime/ets_async.hpp");this.backends.libuv=true;return `ets::Task<${this.cppTypeId(a[0])}>`;
       case "Map": case "Set": {

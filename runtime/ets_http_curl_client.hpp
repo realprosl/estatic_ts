@@ -135,27 +135,7 @@ inline CURL* makeEasyHandle(const std::string& url, long timeoutSec = 10) {
 // para mantener compatibilidad con el codegen del dialecto. El
 // `ETS_RESULT_DEFINED` evita redefinition cuando el dialecto ya
 // incluye ets_async.hpp (via ets_runtime_full.hpp).
-#ifndef ETS_RESULT_DEFINED
-#define ETS_RESULT_DEFINED 1
-namespace ets {
-template <typename T>
-class [[nodiscard]] Result {
-public:
-    static Result success(T value) { return Result{std::move(value), {}}; }
-    static Result failure(std::string error) { return Result{{}, std::move(error)}; }
-    bool isOk() const noexcept { return value_.has_value(); }
-    T& value() & { if (!value_) std::abort(); return *value_; }
-    const T& value() const & { if (!value_) std::abort(); return *value_; }
-    T&& value() && { if (!value_) std::abort(); return std::move(*value_); }
-    const std::string& error() const noexcept { return error_; }
-
-private:
-    Result(std::optional<T> value, std::string error) : value_(std::move(value)), error_(std::move(error)) {}
-    std::optional<T> value_;
-    std::string error_;
-};
-}  // namespace ets
-#endif
+#include "runtime/ets_result.hpp"
 
 namespace ets {
 

@@ -37,13 +37,12 @@ export class IrCppGenerator {
       case "function": return `std::function<${t(a.at(-1)!)}(${a.slice(0,-1).map(x=>this.parameterType(x)).join(",")})>`;
       case "Optional": return `ets::Optional<${t(a[0])}>`;
       case "Result": {
-        if (this.project.types[a[1]] !== "string") this.fail("El runtime C++ requiere Result<T,string>");
         if (this.project.types[a[0]] === "void") {
           this.fail("No se puede generar Result<void>: el runtime C++ no admite Result<void> (usa std::optional<T> internamente). Indica un tipo concreto, por ejemplo Result<boolean>, y revisa las llamadas a ok()/err() sin tipo explícito.");
         }
         this.headers.add("runtime/ets_async.hpp");
         this.backends.libuv = true;
-        return `ets::Result<${t(a[0])}>`;
+        return this.project.types[a[1]] === "string" ? `ets::Result<${t(a[0])}>` : `ets::Result<${t(a[0])},${t(a[1])}>`;
       }
       case "Promise": this.headers.add("runtime/ets_async.hpp");this.backends.libuv=true;return `ets::Task<${t(a[0])}>`;
       case "Map": case "Set": return `ets::${s.kind}<${a.map(t).join(",")}>`;

@@ -194,6 +194,23 @@ export class Binder {
     if (isExplicit || !this.sameBinding(this.result.exports[old].symbol, symbol) || this.result.exports[old].typeOnly != typeOnly)
       this.report(module, node, isExplicit ? "Export duplicado '" + name + "'" : "Reexport ambiguo '" + name + "'");
   }
+  // Un símbolo por export del prelude, como un import implícito; una
+  // declaración local o un import explícito lo tapan (lookup no cambia).
+  fillPrelude(prelude: number): void {
+    let names: string[] = [];
+    for (let m: number = 0; m < this.graph.modules.length; m = m + 1) {
+      if (!this.graph.prelude.includes(this.graph.modules[m].file)) continue;
+      for (const exported of this.result.exports) {
+        if (exported.module != m || exported.name == "default") continue;
+        const root: number = this.graph.modules[m].cached.result.ast.root;
+        if (names.includes(exported.name)) { this.report(m, root, "Dos módulos del prelude exportan '" + exported.name + "'"); continue; }
+        if (this.local(0, exported.name, "any") >= 0) { this.report(m, root, "El prelude no puede redefinir el builtin '" + exported.name + "'"); continue; }
+        names.push(exported.name); const origin: number = this.origin(exported.symbol);
+        const sid: number = this.declare(exported.name, "import", prelude, m, -1, !exported.typeOnly && this.result.symbols[origin].values, this.result.symbols[origin].types);
+        this.result.symbols[sid].target = exported.symbol; this.result.symbols[sid].typeOnly = exported.typeOnly;
+      }
+    }
+  }
   imports(module: number): void {
     const arena: AstNode[] = this.graph.modules[module].cached.result.ast.nodes;
     for (const request of this.graph.modules[module].requests) {
@@ -352,6 +369,8 @@ export class Binder {
           if (before != "" && before != "(" && before != "," && before != "[" && before != " ") space = "value";
         }
         if (name == "readonly") { previous = ""; continue; }
+        // `new Error(…)` construye el BaseError del prelude (Error es una interfaz).
+        if (name == "Error" && space == "value" && firstName && this.lookup(this.result.files[module].nodeScopes[node], "Error", "value") < 0 && this.lookup(this.result.files[module].nodeScopes[node], "BaseError", "value") >= 0) name = "BaseError";
         // T | undefined (o null) se resuelve en el checker como Optional<T>.
         if ((name == "undefined" || name == "null") && space == "type") { previous = ""; continue; }
         let receiver: number = this.reference(module, node, name, space);
@@ -424,12 +443,16 @@ export class Binder {
     this.scope(-1, -1, -1, "builtins");
     for (const name of bindingBuiltinValues()) this.declare(name, "builtin", 0, -1, -1, true, false);
     for (const name of bindingBuiltinTypes()) this.declare(name, "builtin-type", 0, -1, -1, false, true);
+    // Prelude (#165): ámbito entre los builtins y los módulos del programa. Los
+    // módulos del prelude cuelgan de los builtins (entre ellos, import a mano).
+    const prelude: number = this.scope(0, -1, -1, "prelude");
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) {
-      const scope: number = this.scope(0, m, this.graph.modules[m].cached.result.ast.root, "module");
+      const scope: number = this.scope(this.graph.prelude.includes(this.graph.modules[m].file) ? 0 : prelude, m, this.graph.modules[m].cached.result.ast.root, "module");
       this.result.files.push(new BoundFile(scope, this.graph.modules[m].cached.result.ast.nodes.length));
       this.collect(m);
     }
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) { this.imports(m); this.moduleExports(m); }
+    this.fillPrelude(prelude);
     this.duplicates();
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) this.uses(m);
     for (const ref of this.result.references) if (ref.space == "value" && !ref.deferred && this.result.files[ref.module].valueTargets[ref.node] < 0) this.result.files[ref.module].valueTargets[ref.node] = ref.target;
@@ -442,4 +465,4 @@ export function bindProject(graph: ModuleGraph): BindingResult {
 
 export function bindingBuiltinValues(): string[] { let names: string[] = ["i8", "u8", "i16", "u16", "i32", "u32", "i64", "u64", "f32", "f64", "optionalIsPresent", "optionalValueOr", "optionalOrElse", "resultOk", "resultErr", "resultIsOk", "resultValueOr", "Date", "FileReader", "JSON", "Map", "Math", "Optional", "Promise", "Result", "Server", "Set", "__noExtend", "__noThrow", "acceptTcp", "acceptTcpUntil", "acceptTls", "all", "appendFile", "appendFileAsync", "appendFileUntil", "argument", "argumentCount", "asyncIoUringRead", "asyncIoUringWrite", "cancel", "cancelTimer", "cancellationToken", "charAt", "child_process", "clearError", "closeTcp", "closeTls", "compileCpp", "compilerRoot", "comptime", "console", "constRef", "copyFile", "copyFileAsync", "copyFileUntil", "createCancellation", "createTlsServer", "ensureParentDirectory", "err", "estaticAstRecords", "estaticTypedAstJson", "estaticTypedAstRecords", "exitProcess", "fail", "fileAppend", "fileCopy", "fileExists", "fileExistsAsync", "fileMove", "fileRead", "fileRemove", "fileWrite", "fs", "hasError", "http", "indexOf", "ioUringAvailable", "ioUringRead", "ioUringWrite", "isCancelled", "jsonArrayGet", "jsonArrayLength", "jsonAsBool", "jsonAsNumber", "jsonAsString", "jsonEscape", "jsonIsArray", "jsonIsBool", "jsonIsNull", "jsonIsNumber", "jsonIsObject", "jsonIsString", "jsonObjectGet", "length", "lineAt", "lineCount", "listenTcp", "match", "move", "moveFile", "moveFileAsync", "moveFileUntil", "normalizePath", "numberToString", "ok", "openFileReader", "optionalNone", "optionalSome", "otherwise", "path", "pathDirectory", "print", "printError", "process", "promiseAll", "promiseRace", "race", "readFile", "readFileAsync", "readFileUntil", "readTcp", "readTcpUntil", "readTls", "ref", "removeFile", "removeFileAsync", "removeFileUntil", "resolveDns", "resolveImportPath", "resolveProjectPath", "retry", "setInterval", "setTimeout", "sleep", "spawn", "startsWith", "stopLoop", "substring", "syntaxTreeJson", "syntaxTreeRecords", "tcpAccept", "tcpClose", "tcpConnect", "tcpListen", "tcpRead", "tcpWrite", "timeout", "trim", "undefined", "unwatchFs", "validateSyntax", "watchFs", "when", "whenType", "write", "writeError", "writeFile", "writeFileAsync", "writeFileUntil", "writeTcp", "writeTcpUntil", "writeTls"]; for (const name of nativeBuiltinNames()) if (!names.includes(name)) names.push(name); return names; }
 
-export function bindingBuiltinTypes(): string[] { let names: string[] = ["Array", "ArrayLike", "CancellationSource", "CancellationToken", "Console", "Error", "FileReader", "FsEvent", "FsWatcher", "HttpClientResponse", "JsonValue", "Map", "MatchCase", "MatchCaseResult", "MatchDefaultCase", "MatchResult", "MatchTypeCase", "MatchValueCase", "NonThrowable", "Optional", "Phantom", "Promise", "Request", "Response", "Result", "Sealed", "Server", "Set", "StringInstance", "TcpConnection", "TcpListener", "Timer", "TlsConnection", "TlsContext", "boolean", "constPtr", "constRef", "f32", "f64", "i16", "i32", "i64", "i8", "number", "ptr", "readonly", "ref", "string", "u16", "u32", "u64", "u8", "void"]; for (const name of nativeBuiltinTypes()) if (!names.includes(name)) names.push(name); return names; }
+export function bindingBuiltinTypes(): string[] { let names: string[] = ["Array", "ArrayLike", "CancellationSource", "CancellationToken", "Console", "FileReader", "FsEvent", "FsWatcher", "HttpClientResponse", "JsonValue", "Map", "MatchCase", "MatchCaseResult", "MatchDefaultCase", "MatchResult", "MatchTypeCase", "MatchValueCase", "NonThrowable", "Optional", "Phantom", "Promise", "Request", "Response", "Result", "Sealed", "Server", "Set", "StringInstance", "TcpConnection", "TcpListener", "Timer", "TlsConnection", "TlsContext", "boolean", "constPtr", "constRef", "f32", "f64", "i16", "i32", "i64", "i8", "number", "ptr", "readonly", "ref", "string", "u16", "u32", "u64", "u8", "void"]; for (const name of nativeBuiltinTypes()) if (!names.includes(name)) names.push(name); return names; }

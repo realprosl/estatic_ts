@@ -307,6 +307,20 @@ test("install builds compiler/ with the seed and publishes that executable",asyn
    const first=stamp();assert.ok(first.includes(".o"),first);
    writeFileSync(join(app,"src/main.ts"),"class Punto { x: number = 1; }\n"+readFileSync(join(app,"src/main.ts"),"utf8")+"print(new Punto().x);\n");
    p=etsc(app,"run","--no-progress");assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"Hola, MUNDO\nHola, mundo\n1\n");assert.equal(stamp(),first);}
+  // Prelude (#165): Error y sus variantes del runtime sin import; prelude del proyecto en la config.
+  {const project=join(dir,"prelude-app"),env={...process.env,ESTC_ROOT:home};mkdirSync(join(project,"src/std"),{recursive:true});
+   const etsc=(...args:string[])=>spawnSync(bin,args,{cwd:project,encoding:"utf8",env,timeout:600000});
+   writeFileSync(join(project,"errores.ts"),['const e: Error = new Error("algo falló");','print(e.toString());','const t: Error = new TypeError("tipo malo", { cause: e });','print(t.toString());','const c = t.cause;','if (c !== undefined) print("causa: " + c.message);','function dividir(a: number, b: number): Result<number, Error> {','  if (b == 0) return resultErr<number, Error>(new RangeError("división por cero"));','  return resultOk<number, Error>(a / b);','}','const r = dividir(1, 0);','if (!r.isOk()) print(r.error().toString());','print(new Error().toString());',''].join("\n"));
+   let p=etsc("run","errores.ts","--no-progress");assert.equal(p.status,0,p.stderr);
+   assert.equal(p.stdout,"Error: algo falló\nTypeError: tipo malo\ncausa: algo falló\nRangeError: división por cero\nError\n");
+   writeFileSync(join(project,"src/std/saludo.ts"),'export function saludar(nombre: string): string { return "hola " + nombre; }\n');
+   writeFileSync(join(project,"src/main.ts"),'import "./otro";\nprint(saludar("prelude"));\n');
+   writeFileSync(join(project,"src/otro.ts"),'function saludar(nombre: string): string { return "local " + nombre; }\nprint(saludar("tapado"));\n');
+   writeFileSync(join(project,"estatic.config.json"),JSON.stringify({entry:"src/main.ts",prelude:["src/std/saludo.ts"],output:{cpp:"build/app.cpp",binary:"build/app"},compiler:{enabled:true}}));
+   p=etsc("run","--no-progress");assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"local tapado\nhola prelude\n");
+   writeFileSync(join(project,"src/std/otra.ts"),'export function saludar(): string { return "x"; }\n');
+   writeFileSync(join(project,"estatic.config.json"),JSON.stringify({entry:"src/main.ts",prelude:["src/std/saludo.ts","src/std/otra.ts"]}));
+   p=etsc("--check","--no-progress");assert.notEqual(p.status,0);assert.match(p.stderr,/Dos módulos del prelude exportan 'saludar'/);}
    const source=join(dir,"node-streams.ets"),app=join(dir,"node-streams-app");
    writeFileSync(source,`process.stdin.on("data",(chunk:string):void=>{process.stdout.write("parent:"+chunk);});
 const childArgs:string[]=["-c","printf child-out; printf child-err >&2; cat"];
