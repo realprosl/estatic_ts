@@ -916,7 +916,12 @@ export class SafetyAnalyzer {
       }
       sourcePosition = sourcePosition + 1;
     }
-    if (this.effects.synchronousCallbacks(module,id).length > 0) actualNodes = this.effects.callbackInputs(module,id);
+    if (this.effects.synchronousCallbacks(module,id).length > 0) {
+      actualNodes = this.effects.callbackInputs(module,id);
+      // El índice de (valor, índice) no tiene nodo de argumento.
+      let count: number = 0; for (const edge of this.node(target.module,target.node).edges) if (edge.role == EdgeRole.Params) count = count + 1;
+      while (actualNodes.length < count) actualNodes.push(-1);
+    }
     for (const edge of this.node(target.module,target.node).edges) if (edge.role == EdgeRole.Params) {
       if (phase != "resume" && actualNodes[parameterIndex] < 0) this.expression(target.module,bindingChild(this.node(target.module,edge.node),EdgeRole.DefaultValue),state,next);
       const parameter: number = this.binding.files[target.module].declarations[edge.node]; if (parameter >= 0) state.slots[parameter] = 1;
