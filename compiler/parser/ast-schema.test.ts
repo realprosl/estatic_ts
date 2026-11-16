@@ -34,7 +34,7 @@ after(() => rmSync(directory, { recursive: true, force: true }));
 
 test("AST schema: all enum names round-trip in native C++ and unknown names stay invalid", () => {
   const output = execFileSync(binary, [], { encoding: "utf8", timeout: 15000 });
-  assert.deepEqual(output.trim().split(/\r?\n/), checks.map(() => "1"));
+  assert.deepEqual(output.trim().split(/\r?\n/), checks.map(() => "true"));
 });
 
 for (const [name, source] of [

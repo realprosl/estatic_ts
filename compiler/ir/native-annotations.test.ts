@@ -37,8 +37,8 @@ test('native @cppgen implements all six real platform functions',()=>{
  print(contentHash("abc"));print(publishRecord(${JSON.stringify(record)},"hello"));
  print(canonicalFile(${JSON.stringify(record)}));print(fileMetadata(${JSON.stringify(record)}).length>0);
  const snap=readSnapshot(${JSON.stringify(record)});print(snap.length);print(snap[0]);print(syntaxIdentity().length>0);`);
- assert.match(out,/^ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n1\n/);
- assert(out.includes(record+'\n1\n4\nhello\n1\n'));assert.equal(readFileSync(record,'utf8'),'hello');
+ assert.match(out,/^ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\ntrue\n/);
+ assert(out.includes(record+'\ntrue\n4\nhello\ntrue\n'));assert.equal(readFileSync(record,'utf8'),'hello');
 });
 test('native @cppgen rejects dynamic input and unsupported generator bodies',()=>{
  rejected(ir(identity+'function f(s:string):void{code(s);}f("print(1);");'),/literal string/);
@@ -70,7 +70,7 @@ test('frontend rejects malformed annotations and cppgen expression uses',()=>{
 });
 test('native bootstrap path builtins have runtime contracts',()=>{
  const out=execute('print(normalizePath("sample.ets"));print(pathDirectory(normalizePath("sample.ets")));print(resolveProjectPath(normalizePath("config.json"),"source.ets"));print(resolveImportPath(normalizePath("main.ets"),"./missing"));print(compilerRoot().length>0);');
- assert.equal(out,root+'/sample.ets\n'+root+'\n'+root+'/source.ets\n'+root+'/missing.ets\n1\n');
+ assert.equal(out,root+'/sample.ets\n'+root+'\n'+root+'/source.ets\n'+root+'/missing.ets\ntrue\n');
 });
 test('native bootstrap mutates out and ref collection receivers',()=>{
  assert.equal(execute('function fill(out values:string[]):void{values.push("a");values.push("b");values.pop();}let xs:string[]=[];fill(xs);print(xs.join(","));function add(values:ref<number[]>):void{values.push(3);}let ns:number[]=[1];add(ns);print(ns.length);print(ns[1]);'),'a\n2\n3\n');

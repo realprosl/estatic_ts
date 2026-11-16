@@ -329,7 +329,8 @@ inline std::string string_toString(const std::string& value) {
 // (3628800 → "3628800", 0.1+0.2 → "0.30000000000000004", 1e21 → "1e+21").
 inline std::string js_number(double value) {
     if (value != value) return "NaN";
-    if (value == 0) return "0";  // también -0
+    // -0 se conserva (como console.log); el compilador lo necesita para sus constantes.
+    if (value == 0) return std::signbit(value) ? "-0" : "0";
     if (value == HUGE_VAL) return "Infinity";
     if (value == -HUGE_VAL) return "-Infinity";
     char buffer[64];
