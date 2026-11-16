@@ -542,34 +542,44 @@ declare global {
   interface StringInstance {
     /** Numero de bytes (= std::string::size). */
     readonly length: number;
-    /** Byte en posicion i como string (1 byte), o "" si fuera de rango. */
-    charAt(i: number): string;
-    /** Byte en posicion i como double (0-255), o -1 si fuera de rango. */
-    charCodeAt(i: number): number;
+    /** Byte en posicion i (defecto 0) como string (1 byte), o "" si fuera de rango. */
+    charAt(i?: number): string;
+    /** Byte en posicion i (defecto 0) como number (0-255), o NaN si fuera de rango. */
+    charCodeAt(i?: number): number;
+    /** Byte en i como string; i negativo cuenta desde el final. */
+    at(i: number): string | undefined;
+    /** Codigo Unicode del caracter UTF-8 que empieza en el byte i. */
+    codePointAt(i: number): number | undefined;
     /** Primera posicion de search desde start (defecto 0), o -1. */
     indexOf(search: string, start?: number): number;
-    /** Ultima posicion de search, o -1. */
-    lastIndexOf(search: string): number;
+    /** Ultima posicion de search que empieza en from o antes, o -1. */
+    lastIndexOf(search: string, from?: number): number;
     /** True si search aparece desde start. */
     includes(search: string, start?: number): boolean;
-    /** True si value empieza por prefix. */
-    startsWith(prefix: string): boolean;
-    /** True si value termina por suffix. */
-    endsWith(suffix: string): boolean;
+    /** True si value empieza por prefix en position (defecto 0). */
+    startsWith(prefix: string, position?: number): boolean;
+    /** True si los primeros endPosition bytes terminan por suffix. */
+    endsWith(suffix: string, endPosition?: number): boolean;
     /** Substring desde start hasta end (acepta negativos desde el final). */
-    slice(start: number, end?: number): string;
+    slice(start?: number, end?: number): string;
     /** Substring clampeado a [0, length]; intercambia start/end. */
     substring(start: number, end?: number): string;
     /** Substring desde start con length (defecto hasta el final). */
     substr(start: number, length?: number): string;
-    /** Vector de partes separadas por separator. */
-    split(separator: string): string[];
+    /** Partes separadas por separator (como mucho limit); "" separa cada byte. */
+    split(separator: string, limit?: number): string[];
+    /** value seguido de cada argumento. */
+    concat(...strings: string[]): string;
     /** Quita espacios al principio y al final. */
     trim(): string;
     /** Quita espacios al principio. */
     trimStart(): string;
     /** Quita espacios al final. */
     trimEnd(): string;
+    /** Alias de trimStart. */
+    trimLeft(): string;
+    /** Alias de trimEnd. */
+    trimRight(): string;
     /** ASCII lower-case (byte-level). */
     toLowerCase(): string;
     /** ASCII upper-case (byte-level). */
@@ -577,9 +587,9 @@ declare global {
     /** Repite el string count veces. */
     repeat(count: number): string;
     /** Rellena al inicio hasta targetLength con pad. */
-    padStart(targetLength: number, pad: string): string;
+    padStart(targetLength: number, pad?: string): string;
     /** Rellena al final hasta targetLength con pad. */
-    padEnd(targetLength: number, pad: string): string;
+    padEnd(targetLength: number, pad?: string): string;
     /** Reemplaza la primera ocurrencia de search por replacement. */
     replace(search: string, replacement: string): string;
     /** Reemplaza todas las ocurrencias. */

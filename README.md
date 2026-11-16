@@ -405,6 +405,31 @@ function f(a: number, b?: number): number { return b === undefined ? a : a + b; 
 - Una variable sin valor inicial solo puede ser `T | undefined`.
 - Los errores con motivo (leer un fichero, parsear) siguen yendo por `Result<T, E>`.
 
+## Métodos de `string`
+
+Mismas firmas que en TypeScript, argumentos opcionales incluidos:
+
+```ts
+const s = "hola mundo";
+s.indexOf("o", 2);        // 9       s.lastIndexOf("o", 5);  // 1
+s.slice(5);               // "mundo" s.substring(5); s.substr(-5);
+s.split("", 3);           // ["h", "o", "l"]
+s.startsWith("mundo", 5); // true    s.endsWith("hola", 4);  // true
+s.at(-1) ?? "";           // "o"     (at y codePointAt dan T | undefined)
+s.concat("!", "?");       // "hola mundo!?"
+"7".padStart(3);          // "  7"
+String(42); String(true); String.fromCharCode(72, 105); String.fromCodePoint(241);
+```
+
+También `charAt`, `charCodeAt`, `includes`, `trim`/`trimStart`/`trimEnd`
+(y los alias `trimLeft`/`trimRight`), `toUpperCase`, `toLowerCase`, `repeat`,
+`padEnd`, `replace`, `replaceAll` y `localeCompare`.
+
+- Los índices cuentan bytes UTF-8, no unidades UTF-16 como en JavaScript: en
+  texto ASCII coinciden. `charCodeAt` fuera de rango da `NaN`.
+- Aún faltan `normalize` y los métodos que usan `RegExp` (`match`, `matchAll`,
+  `search`, y `replace`/`split` con expresión regular).
+
 ## Errores: `Error` sin excepciones
 
 `Error`, `TypeError`, `RangeError`, `SyntaxError`, `ReferenceError`, `EvalError` y

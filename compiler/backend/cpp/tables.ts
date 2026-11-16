@@ -82,7 +82,7 @@ return "";
 }
 export function globalCalls(name:string):boolean{return ["normalizePath","compilerRoot","resolveImportPath","pathDirectory","resolveProjectPath","argument","argumentCount","exitProcess","length","numberToString","jsonIsNull","jsonIsString","jsonIsNumber","jsonIsBool","jsonIsArray","jsonIsObject","jsonArrayLength","jsonArrayGet","jsonObjectGet","jsonObjectKeys","jsonAsString","jsonAsNumber","jsonAsBool","jsonEscape","fileExists","readFile","writeFile","appendFile","copyFile","moveFile","removeFile","readFileAsync","writeFileAsync","appendFileAsync","copyFileAsync","moveFileAsync","removeFileAsync","fileExistsAsync","fail","hasError","clearError"].includes(name);}
 export function asyncCalls(name:string):boolean{return ["sleep","delay","spawn","cancel","cancellationToken","createCancellation","isCancelled","taskResolve","promiseAll","promiseRace","all","race","timeout","retry"].includes(name);}
-export function stringMethods(name:string):boolean{return ["charAt","charCodeAt","indexOf","lastIndexOf","includes","startsWith","endsWith","slice","substring","substr","split","trim","trimStart","trimEnd","toUpperCase","toLowerCase","repeat","padStart","padEnd","replace","replaceAll","localeCompare","toString"].includes(name);}
+export function stringMethods(name:string):boolean{return ["charAt","charCodeAt","indexOf","lastIndexOf","includes","startsWith","endsWith","slice","substring","substr","split","trim","trimStart","trimEnd","toUpperCase","toLowerCase","repeat","padStart","padEnd","replace","replaceAll","localeCompare","toString","at","codePointAt","concat","trimLeft","trimRight"].includes(name);}
 export function terminalMethods(name:string):boolean{return ["write","writeLine","flush","isTTY","supportsAnsi","columns","rows","color","background","style","reset","clear","clearLine","moveTo","moveBy","hideCursor","showCursor"].includes(name);}
 export function backend_libuv(name:string):boolean{return ["resolveDns","listenTcp","acceptTcp","acceptTcpUntil","readTcp","readTcpUntil","writeTcp","writeTcpUntil","closeTcp"].includes(name);}
 export function backend_curl(name:string):boolean{return false;}
@@ -91,6 +91,7 @@ export function backend_ioUring(name:string):boolean{return false;}
 export function objectMethod(base:string,method:string):boolean {
 if(base=="!Math")return ["floor", "ceil", "round", "abs", "sqrt", "pow", "min", "max", "random"].includes(method);
 if(base=="!Date")return ["now", "utc"].includes(method);
+if(base=="!String")return ["fromCharCode", "fromCodePoint"].includes(method);
 if(base=="!JSON")return ["parse", "stringify", "parseValue", "stringifyBool", "stringifyNumber", "stringifyValue"].includes(method);
 if(base=="!path")return ["dirname", "basename", "extname", "join", "resolve", "normalize", "isAbsolute"].includes(method);
 if(base=="!fs")return ["readFile", "writeFile", "appendFile", "copyFile", "rename", "unlink", "readFileSync", "writeFileSync", "appendFileSync", "copyFileSync", "renameSync", "unlinkSync", "existsSync"].includes(method);

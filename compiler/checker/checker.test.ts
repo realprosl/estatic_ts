@@ -2129,3 +2129,10 @@ test('checker: T | undefined acepta T y undefined y se estrecha con !== undefine
 test('checker: solo un T | undefined se compara con undefined',()=>error('const n:number=1;print(n===undefined);',/siempre tiene valor/));
 test('checker: undefined no es un tipo por sí solo',()=>error('let x:undefined=undefined;',/solo como parte de un tipo/));
 test('checker: fuera del if, x sigue siendo T | undefined',()=>error('let x:number|undefined=2;if(x!==undefined){print(x);}const y:number=x;',/E3001/));
+// string con las firmas de TypeScript: argumentos opcionales por aridad.
+test("checker: string acepta los argumentos opcionales de TypeScript",()=>{
+  check('const s="abc";const a:number=s.indexOf("b");const b:string=s.slice();const c:string=s.slice(1);const d:string[]=s.split(",",2);const e:string|undefined=s.at(-1);const f:string=s.concat("x","y");const g:string=String(1)+String(true);const h:string=String.fromCharCode(65,66);print(a,b,c,d.length,e??"",f,g,h);');
+  error('const s="abc";print(s.indexOf());',/Aridad|argument/);
+  error('const s="abc";print(s.slice(1,2,3));',/Aridad|argument/);
+  error('const n:number[]=[1];print(String(n));',/String\(x\)/);
+});

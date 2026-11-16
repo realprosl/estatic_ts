@@ -979,6 +979,7 @@ let  T=this.cppTypeId(i.typeId);
     if(["ok","resultOk","err","resultErr"].includes(name))return `${T}::${["err","resultErr"].includes(name)?"failure":"success"}(${this.operand(f,i,0)})`;
     if(name=="optionalIsPresent")return `(${this.operand(f,i,0)}).isPresent()`;
     if(name=="optionalValueOr")return `(${this.operand(f,i,0)}).valueOr(${this.operand(f,i,1)})`;
+    if(name=="String")return `ets::stringify_any(${this.operand(f,i,0)})`;
     if(name=="booleanToString")return `std::string(${this.operand(f,i,0)}?"true":"false")`;
     if(name=="optionalOrElse")return `(${this.operand(f,i,0)}).orElse(${this.operand(f,i,1)})`;
     if(name=="resultIsOk")return `(${this.operand(f,i,0)}).isOk()`;

@@ -8,10 +8,10 @@ export const globalCalls=new Set([
   "normalizePath","compilerRoot","resolveImportPath","pathDirectory","resolveProjectPath","argument","argumentCount","exitProcess","length","numberToString","jsonIsNull","jsonIsString","jsonIsNumber","jsonIsBool","jsonIsArray","jsonIsObject","jsonArrayLength","jsonArrayGet","jsonObjectGet","jsonObjectKeys","jsonAsString","jsonAsNumber","jsonAsBool","jsonEscape","fileExists","readFile","writeFile","appendFile","copyFile","moveFile","removeFile","readFileAsync","writeFileAsync","appendFileAsync","copyFileAsync","moveFileAsync","removeFileAsync","fileExistsAsync","fail","hasError","clearError",
 ]);
 export const asyncCalls=new Set(["sleep","delay","spawn","cancel","cancellationToken","createCancellation","isCancelled","taskResolve","promiseAll","promiseRace","all","race","timeout","retry"]);
-export const stringMethods=new Set(["charAt","charCodeAt","indexOf","lastIndexOf","includes","startsWith","endsWith","slice","substring","substr","split","trim","trimStart","trimEnd","toUpperCase","toLowerCase","repeat","padStart","padEnd","replace","replaceAll","localeCompare","toString"]);
+export const stringMethods=new Set(["charAt","charCodeAt","indexOf","lastIndexOf","includes","startsWith","endsWith","slice","substring","substr","split","trim","trimStart","trimEnd","toUpperCase","toLowerCase","repeat","padStart","padEnd","replace","replaceAll","localeCompare","toString","at","codePointAt","concat","trimLeft","trimRight"]);
 export const objectMethods:Record<string,Set<string>>={
   "!Math":new Set(["floor","ceil","round","abs","sqrt","pow","min","max","random"]),
-  "!Date":new Set(["now","utc"]), "!JSON":new Set(["parse","stringify","parseValue","stringifyBool","stringifyNumber","stringifyValue"]),
+  "!Date":new Set(["now","utc"]), "!String":new Set(["fromCharCode","fromCodePoint"]), "!JSON":new Set(["parse","stringify","parseValue","stringifyBool","stringifyNumber","stringifyValue"]),
   "!path":new Set(["dirname","basename","extname","join","resolve","normalize","isAbsolute"]),
   "!fs":new Set(["readFile","writeFile","appendFile","copyFile","rename","unlink","readFileSync","writeFileSync","appendFileSync","copyFileSync","renameSync","unlinkSync","existsSync"]),
   "!process":new Set(["cwd","exit"]),
@@ -46,6 +46,7 @@ export function emitRuntimeCall(g:IrCppGenerator,f:IrFunction,i:IrInstruction):s
     if(["ok","resultOk","err","resultErr"].includes(name))return `${T}::${["err","resultErr"].includes(name)?"failure":"success"}(${a(0)})`;
     if(name==="optionalIsPresent")return `(${a(0)}).isPresent()`;
     if(name==="optionalValueOr")return `(${a(0)}).valueOr(${a(1)})`;
+    if(name==="String")return `ets::stringify_any(${a(0)})`;
     if(name==="booleanToString")return `std::string(${a(0)}?"true":"false")`;
     if(name==="optionalOrElse")return `(${a(0)}).orElse(${a(1)})`;
     if(name==="resultIsOk")return `(${a(0)}).isOk()`;

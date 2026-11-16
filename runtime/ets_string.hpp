@@ -5,8 +5,11 @@
 #include <charconv>
 #include <cmath>
 #include <ostream>
+#include <limits>
+#include "ets_optional.hpp"
 #include <type_traits>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <sstream>
 #include <string>
@@ -29,41 +32,78 @@ inline double string_length(const std::string& value) {
 }
 
 // ----------------------------------------------------------------------------
-// charAt(i): string de 1 byte en la posicion i, o "" si fuera de rango.
+// charAt(i = 0): string de 1 byte en la posicion i, o "" si fuera de rango.
 // ----------------------------------------------------------------------------
-inline std::string string_charAt(const std::string& value, double index) {
-    const auto i = static_cast<std::size_t>(index < 0 ? 0 : index);
-    return i < value.size() ? std::string(1, value[i]) : std::string();
+inline std::string string_charAt(const std::string& value, double index = 0.0) {
+    if (std::isnan(index)) index = 0.0;
+    if (index < 0 || index >= static_cast<double>(value.size())) return std::string();
+    return std::string(1, value[static_cast<std::size_t>(index)]);
 }
 
 // ----------------------------------------------------------------------------
-// charCodeAt(i): byte en posicion i como double (0-255), o -1 si fuera de rango.
+// charCodeAt(i = 0): byte en posicion i como double (0-255), o NaN si fuera
+// de rango (como JavaScript).
 // ----------------------------------------------------------------------------
-inline double string_charCodeAt(const std::string& value, double index) {
-    const auto i = static_cast<std::size_t>(index < 0 ? 0 : index);
-    if (i >= value.size()) return -1.0;
-    return static_cast<unsigned char>(value[i]);
+inline double string_charCodeAt(const std::string& value, double index = 0.0) {
+    if (std::isnan(index)) index = 0.0;
+    if (index < 0 || index >= static_cast<double>(value.size())) return std::numeric_limits<double>::quiet_NaN();
+    return static_cast<unsigned char>(value[static_cast<std::size_t>(index)]);
+}
+
+// at(i): byte en i como string; i negativo cuenta desde el final. Fuera de
+// rango, undefined (Optional vacío).
+inline Optional<std::string> string_at(const std::string& value, double index) {
+    if (std::isnan(index)) index = 0.0;
+    index = std::trunc(index);
+    if (index < 0) index += static_cast<double>(value.size());
+    if (index < 0 || index >= static_cast<double>(value.size())) return {};
+    return std::string(1, value[static_cast<std::size_t>(index)]);
+}
+
+// codePointAt(i): código Unicode del carácter UTF-8 que empieza en el byte i.
+// En un byte de continuación devuelve el byte. Fuera de rango, undefined.
+inline Optional<double> string_codePointAt(const std::string& value, double index) {
+    if (std::isnan(index)) index = 0.0;
+    if (index < 0 || index >= static_cast<double>(value.size())) return {};
+    const auto at = static_cast<std::size_t>(index);
+    const auto lead = static_cast<unsigned char>(value[at]);
+    int extra = 0; std::uint32_t code = lead;
+    if (lead >= 0xF0 && lead < 0xF8) { extra = 3; code = lead & 0x07; }
+    else if (lead >= 0xE0) { extra = 2; code = lead & 0x0F; }
+    else if (lead >= 0xC0) { extra = 1; code = lead & 0x1F; }
+    if (lead >= 0xF8 || (lead >= 0x80 && lead < 0xC0) || at + extra >= value.size()) return static_cast<double>(lead);
+    for (int k = 1; k <= extra; ++k) {
+        const auto next = static_cast<unsigned char>(value[at + k]);
+        if ((next & 0xC0) != 0x80) return static_cast<double>(lead);
+        code = (code << 6) | (next & 0x3F);
+    }
+    return static_cast<double>(code);
 }
 
 // ----------------------------------------------------------------------------
 // indexOf(needle, start=0): primera posicion de needle, o -1. Si start < 0 o
 // needle vacio, devuelve 0 (TS semantics).
 // ----------------------------------------------------------------------------
-inline double string_indexOf(const std::string& value, const std::string& needle, double start) {
-    if (needle.empty()) return 0.0;
+inline double string_indexOf(const std::string& value, const std::string& needle, double start = 0.0) {
     std::size_t from = 0;
-    if (start > 0.0) from = static_cast<std::size_t>(start);
-    if (from > value.size()) return -1.0;
+    if (start > 0.0) from = start > static_cast<double>(value.size()) ? value.size() : static_cast<std::size_t>(start);
+    if (needle.empty()) return static_cast<double>(from);
     const auto found = value.find(needle, from);
     return found == std::string::npos ? -1.0 : static_cast<double>(found);
 }
 
 // ----------------------------------------------------------------------------
-// lastIndexOf(needle, start=infinito): ultima posicion de needle, o -1.
+// lastIndexOf(needle, from=infinito): ultima posicion de needle que empieza
+// en from o antes, o -1.
 // ----------------------------------------------------------------------------
-inline double string_lastIndexOf(const std::string& value, const std::string& needle) {
-    if (needle.empty()) return static_cast<double>(value.size());
-    const auto found = value.rfind(needle);
+inline double string_lastIndexOf(const std::string& value, const std::string& needle,
+                                 double from = std::numeric_limits<double>::infinity()) {
+    if (std::isnan(from)) from = std::numeric_limits<double>::infinity();
+    std::size_t limit = value.size();
+    if (from < 0) limit = 0;
+    else if (from < static_cast<double>(value.size())) limit = static_cast<std::size_t>(from);
+    if (needle.empty()) return static_cast<double>(limit);
+    const auto found = value.rfind(needle, limit);
     return found == std::string::npos ? -1.0 : static_cast<double>(found);
 }
 
@@ -79,25 +119,32 @@ inline bool string_includes(const std::string& value, const std::string& needle,
 }
 
 // ----------------------------------------------------------------------------
-// startsWith(prefix): true si value empieza por prefix.
+// startsWith(prefix, position=0): true si value empieza por prefix en position.
 // ----------------------------------------------------------------------------
-inline bool string_startsWith(const std::string& value, const std::string& prefix) {
-    return value.size() >= prefix.size() && value.compare(0, prefix.size(), prefix) == 0;
+inline bool string_startsWith(const std::string& value, const std::string& prefix, double position = 0.0) {
+    std::size_t from = 0;
+    if (position > 0.0) from = position > static_cast<double>(value.size()) ? value.size() : static_cast<std::size_t>(position);
+    return value.size() - from >= prefix.size() && value.compare(from, prefix.size(), prefix) == 0;
 }
 
 // ----------------------------------------------------------------------------
-// endsWith(suffix): true si value termina por suffix.
+// endsWith(suffix, endPosition=length): true si value[0, endPosition) termina
+// por suffix.
 // ----------------------------------------------------------------------------
-inline bool string_endsWith(const std::string& value, const std::string& suffix) {
-    return value.size() >= suffix.size() &&
-           value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+inline bool string_endsWith(const std::string& value, const std::string& suffix,
+                            double endPosition = std::numeric_limits<double>::infinity()) {
+    std::size_t end = value.size();
+    if (std::isnan(endPosition) || endPosition < 0) end = 0;
+    else if (endPosition < static_cast<double>(value.size())) end = static_cast<std::size_t>(endPosition);
+    return end >= suffix.size() && value.compare(end - suffix.size(), suffix.size(), suffix) == 0;
 }
 
 // ----------------------------------------------------------------------------
 // slice(start, end=length): substring desde start (puede ser negativo) hasta
 // end (negativo cuenta desde el final). Equivalente a JS Array.prototype.slice.
 // ----------------------------------------------------------------------------
-inline std::string string_slice(const std::string& value, double start, double end) {
+inline std::string string_slice(const std::string& value, double start = 0.0,
+                                double end = std::numeric_limits<double>::infinity()) {
     const auto size = static_cast<double>(value.size());
     auto clamp = [size](double n) {
         if (n < 0) n = size + n;
@@ -115,7 +162,8 @@ inline std::string string_slice(const std::string& value, double start, double e
 // substring(start, end=length): como slice pero clampea negativos a 0 y
 // intercambia start/end si vienen invertidos (TS semantics).
 // ----------------------------------------------------------------------------
-inline std::string string_substring(const std::string& value, double start, double end) {
+inline std::string string_substring(const std::string& value, double start,
+                                    double end = std::numeric_limits<double>::infinity()) {
     const auto size = static_cast<double>(value.size());
     auto toPos = [size](double n) {
         if (n < 0) n = 0;
@@ -132,7 +180,8 @@ inline std::string string_substring(const std::string& value, double start, doub
 // ----------------------------------------------------------------------------
 // substr(start, length=length-start): como TS legacy substr.
 // ----------------------------------------------------------------------------
-inline std::string string_substr(const std::string& value, double start, double length) {
+inline std::string string_substr(const std::string& value, double start,
+                                 double length = std::numeric_limits<double>::infinity()) {
     const auto size = static_cast<double>(value.size());
     double s = start;
     if (s < 0) s = size + s;
@@ -145,17 +194,23 @@ inline std::string string_substr(const std::string& value, double start, double 
 }
 
 // ----------------------------------------------------------------------------
-// split(separator): corta por separator (string literal) y devuelve vector.
-// Sin regex. Si separator es "", devuelve el string como vector de 1.
+// split(separator, limit?): corta por separator (string literal) y devuelve
+// como mucho limit partes. Sin regex. Con separator "" separa cada byte.
 // ----------------------------------------------------------------------------
-inline std::vector<std::string> string_split(const std::string& value, const std::string& separator) {
+inline std::vector<std::string> string_split(const std::string& value, const std::string& separator,
+                                             double limit = std::numeric_limits<double>::infinity()) {
     std::vector<std::string> result;
+    // Como JavaScript: limit se convierte a uint32 (negativo = muy grande).
+    std::size_t max = std::numeric_limits<std::size_t>::max();
+    if (!std::isnan(limit) && !std::isinf(limit)) max = static_cast<std::size_t>(static_cast<std::uint32_t>(static_cast<std::int64_t>(std::trunc(limit))));
+    else if (std::isnan(limit)) max = 0;
+    if (max == 0) return result;
     if (separator.empty()) {
-        result.push_back(value);
+        for (std::size_t at = 0; at < value.size() && result.size() < max; ++at) result.push_back(std::string(1, value[at]));
         return result;
     }
     std::size_t start = 0;
-    while (true) {
+    while (result.size() < max) {
         const auto pos = value.find(separator, start);
         if (pos == std::string::npos) {
             result.push_back(value.substr(start));
@@ -187,6 +242,27 @@ inline std::string string_trimEnd(const std::string& value) {
     const auto last = value.find_last_not_of(" \t\r\n\v\f");
     if (last == std::string::npos) return std::string();
     return value.substr(0, last + 1);
+}
+// Alias antiguos de TypeScript.
+inline std::string string_trimLeft(const std::string& value) { return string_trimStart(value); }
+inline std::string string_trimRight(const std::string& value) { return string_trimEnd(value); }
+
+// concat(...strings): value seguido de cada argumento.
+template <typename... Parts>
+inline std::string string_concat(const std::string& value, const Parts&... parts) {
+    std::string out = value;
+    (out.append(parts), ...);
+    return out;
+}
+
+// Añade a out el código Unicode code en UTF-8 (fuera de rango, U+FFFD).
+inline void append_utf8(std::string& out, double number) {
+    std::uint32_t code = 0xFFFD;
+    if (!std::isnan(number) && number >= 0 && number <= 0x10FFFF) code = static_cast<std::uint32_t>(number);
+    if (code < 0x80) out.push_back(static_cast<char>(code));
+    else if (code < 0x800) { out.push_back(static_cast<char>(0xC0 | (code >> 6))); out.push_back(static_cast<char>(0x80 | (code & 0x3F))); }
+    else if (code < 0x10000) { out.push_back(static_cast<char>(0xE0 | (code >> 12))); out.push_back(static_cast<char>(0x80 | ((code >> 6) & 0x3F))); out.push_back(static_cast<char>(0x80 | (code & 0x3F))); }
+    else { out.push_back(static_cast<char>(0xF0 | (code >> 18))); out.push_back(static_cast<char>(0x80 | ((code >> 12) & 0x3F))); out.push_back(static_cast<char>(0x80 | ((code >> 6) & 0x3F))); out.push_back(static_cast<char>(0x80 | (code & 0x3F))); }
 }
 
 // ----------------------------------------------------------------------------
@@ -227,7 +303,7 @@ inline std::string string_repeat(const std::string& value, double count) {
 // padStart(length, pad=" "): rellena al inicio hasta alcanzar length.
 // padStart(length) con 1 argumento -> pad por defecto " " (TS semantics).
 // ----------------------------------------------------------------------------
-inline std::string string_padStart(const std::string& value, double targetLength, const std::string& pad) {
+inline std::string string_padStart(const std::string& value, double targetLength, const std::string& pad = " ") {
     const auto target = static_cast<std::size_t>(targetLength < 0 ? 0 : targetLength);
     if (value.size() >= target) return value;
     if (pad.empty()) return value;  // TS devuelve value sin pad si pad vacio
@@ -249,7 +325,7 @@ inline std::string string_padStart(const std::string& value, double targetLength
 // ----------------------------------------------------------------------------
 // padEnd(length, pad=" "): rellena al final hasta alcanzar length.
 // ----------------------------------------------------------------------------
-inline std::string string_padEnd(const std::string& value, double targetLength, const std::string& pad) {
+inline std::string string_padEnd(const std::string& value, double targetLength, const std::string& pad = " ") {
     const auto target = static_cast<std::size_t>(targetLength < 0 ? 0 : targetLength);
     if (value.size() >= target) return value;
     if (pad.empty()) return value;
@@ -424,3 +500,21 @@ inline std::string stringify_any(const T& value) {
 }
 
 }  // namespace ets
+
+// `String` global: String.fromCharCode(...) y String.fromCodePoint(...).
+// Cada código se escribe en UTF-8; fromCharCode toma el código módulo 2^16.
+struct ets_string_object {
+    template <typename... Codes>
+    static std::string fromCharCode(const Codes&... codes) {
+        std::string out;
+        (ets::append_utf8(out, static_cast<double>(static_cast<std::uint16_t>(static_cast<std::int64_t>(std::isnan(static_cast<double>(codes)) ? 0.0 : static_cast<double>(codes))))), ...);
+        return out;
+    }
+    template <typename... Codes>
+    static std::string fromCodePoint(const Codes&... codes) {
+        std::string out;
+        (ets::append_utf8(out, static_cast<double>(codes)), ...);
+        return out;
+    }
+};
+inline ets_string_object String{};

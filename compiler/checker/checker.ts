@@ -739,7 +739,7 @@ export class NativeChecker {
     if (name == "exitProcess") return "(number)=>void";
     if (name == "move" || name == "ref" || name == "constRef") return "!" + name;
     if (name == "length") return "!length";
-    if (["Math","JSON","Date"].includes(name)) return "!" + name;
+    if (["Math","JSON","Date","String"].includes(name)) return "!" + name;
     if (name == "console") return "Console";
     if (["fs","path","process","http","child_process"].includes(name)) return "!"+name;
     if (nativeBuiltinSignatures(name).length > 0) return "!builtin:"+name;
@@ -763,6 +763,11 @@ export class NativeChecker {
     return "!error";
   }
   // Nombres de los miembros declarados de un tipo nominal (para sugerencias).
+  // Número de argumentos de la llamada id (0 si no es una llamada).
+  callArity(module: number, id: number): number {
+    let count: number = 0; for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Args) count = count + 1;
+    return count;
+  }
   memberNames(valueType: string): string[] {
     let names: string[] = []; let receiver: string = memoryValue(valueType); if (receiver.startsWith("class:")) receiver = receiver.slice(6,receiver.length);
     for (const part of splitTypes(receiver,"&")) {
@@ -854,19 +859,27 @@ export class NativeChecker {
     if (valueType == "Console" && ["log","info","debug","trace","warn","error"].includes(name)) return "!consoleLog";
     if (name == "length" && (valueType == "string" || valueType.endsWith("[]") || fixedArraySize(valueType) >= 0)) return "number";
     if (valueType == "string") {
-      if (name == "charAt") return "(number)=>string";
-      if (name == "charCodeAt") return "(number)=>number";
+      // Firmas de TypeScript: los argumentos opcionales se resuelven por la
+      // aridad de la llamada (el runtime C++ tiene los mismos valores por defecto).
+      const count: number = this.callArity(module,id);
+      if (name == "charAt") return count == 0 ? "()=>string" : "(number)=>string";
+      if (name == "charCodeAt") return count == 0 ? "()=>number" : "(number)=>number";
+      if (name == "at") return "(number)=>Optional<string>";
+      if (name == "codePointAt") return "(number)=>Optional<number>";
       if (name == "includes") return "!builtin:string.includes";
-      if (["startsWith","endsWith"].includes(name)) return "(string)=>boolean";
-      if (name == "indexOf") return "(string,number)=>number";
-      if (name == "lastIndexOf" || name == "localeCompare") return "(string)=>number";
-      if (["trim","trimStart","trimEnd","toUpperCase","toLowerCase","toString"].includes(name)) return "()=>string";
-      if (name == "slice" || name == "substring" || name == "substr") return "(number,number)=>string";
-      if (name == "split") return "(string)=>string[]";
+      if (["startsWith","endsWith"].includes(name)) return count == 2 ? "(string,number)=>boolean" : "(string)=>boolean";
+      if (name == "indexOf" || name == "lastIndexOf") return count == 2 ? "(string,number)=>number" : "(string)=>number";
+      if (name == "localeCompare") return "(string)=>number";
+      if (["trim","trimStart","trimEnd","trimLeft","trimRight","toUpperCase","toLowerCase","toString"].includes(name)) return "()=>string";
+      if (name == "slice") return count == 0 ? "()=>string" : count == 1 ? "(number)=>string" : "(number,number)=>string";
+      if (name == "substring" || name == "substr") return count == 1 ? "(number)=>string" : "(number,number)=>string";
+      if (name == "split") return count == 2 ? "(string,number)=>string[]" : "(string)=>string[]";
+      if (name == "concat") return "(...string[])=>string";
       if (name == "repeat") return "(number)=>string";
-      if (name == "padStart" || name == "padEnd") return "(number,string)=>string";
+      if (name == "padStart" || name == "padEnd") return count == 1 ? "(number)=>string" : "(number,string)=>string";
       if (name == "replace" || name == "replaceAll") return "(string,string)=>string";
     }
+    if (valueType == "!String" && (name == "fromCharCode" || name == "fromCodePoint")) return "(...number[])=>string";
     if (valueType.endsWith("[]")) {
       const element: string = semanticElement(valueType);
       if (["map","filter","reduce","forEach","find","some","every","flatMap","sort","concat"].includes(name)) return "!array." + name;
@@ -876,8 +889,7 @@ export class NativeChecker {
       if (name == "join" && element == "string") return "(string)=>string";
       if (name == "slice") {
         // Como en JavaScript, slice(start) llega hasta el final: process.argv.slice(2).
-        let count: number = 0; for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Args) count = count + 1;
-        return (count == 1 ? "(number)=>" : "(number,number)=>") + valueType;
+        return (this.callArity(module,id) == 1 ? "(number)=>" : "(number,number)=>") + valueType;
       }
     }
     const container: string = genericBase(valueType); const parts: string[] = genericArguments(valueType);
@@ -1432,6 +1444,13 @@ export class NativeChecker {
       this.result.files[module].signatures[id] = "(" + actual.join(",") + ")=>void"; return "void";
     }
     if (callable == "!error") return callable;
+    if (callable == "!String") {
+      // String(x): texto de un string, number, entero o boolean, como en JavaScript.
+      if (args.length != 1) { this.report(module,id,"String requiere un argumento"); return "!error"; }
+      const value: string = memoryValue(actual[0]); const input: string = literalType(value) ? literalKind(value) : value;
+      if (input != "string" && input != "boolean" && input != "number" && !numericType(input)) { this.report(module,id,"String(x) acepta string, number o boolean, no " + this.displayType(actual[0])); return "!error"; }
+      this.result.files[module].signatures[id] = "(" + input + ")=>string"; return "string";
+    }
     if (callable.startsWith("!builtin:")) {
       const signatures: string[] = nativeBuiltinSignatures(callable.slice(9,callable.length)); let selected: string = ""; let score: number = -1; let ambiguous: boolean = false;
       for (const signature of signatures) {
