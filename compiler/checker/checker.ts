@@ -1848,7 +1848,9 @@ export class NativeChecker {
     if (kind == NodeKind.AssignmentExpression || kind == NodeKind.CompoundAssignmentExpression) {
       const target: number = bindingChild(n,EdgeRole.Target); let valueType: string = this.expression(module,target,"");
       if (this.node(module,target).kind == NodeKind.IdentifierExpression) { const sid: number = this.reference(module,target); valueType = this.symbolType(sid,module,target); this.narrowedSymbols.push(sid); this.narrowedTypes.push(valueType); this.result.files[module].types[target] = valueType; }
-      const value: string = this.expression(module,bindingChild(n,EdgeRole.Value),valueType); this.requireType(module,bindingChild(n,EdgeRole.Value),value,valueType); this.writable(module,target);
+      // Asignar a un ref<T> escribe un T a través de la referencia.
+      const assigned: string = memoryMode(valueType) == "ref" ? memoryInner(valueType) : valueType;
+      const value: string = this.expression(module,bindingChild(n,EdgeRole.Value),assigned); this.requireType(module,bindingChild(n,EdgeRole.Value),value,assigned); this.writable(module,target);
       if (kind == NodeKind.CompoundAssignmentExpression && !numericType(memoryValue(valueType)) && !(memoryValue(valueType) == "string" && n.get(AttributeKind.Operator) == "+=")) this.report(module,id,"Asignación compuesta inválida"); return valueType;
     }
     if (kind == NodeKind.ArrayLiteralExpression) {

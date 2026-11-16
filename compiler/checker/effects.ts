@@ -4,7 +4,7 @@ import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, AstNode, nodeBeg
 import { nativeBuiltinSignatures, BindingResult, bindingChild, callableBinding } from "../binder/index";
 import { ModuleGraph } from "../modules/index";
 import { CheckResult, EffectSummary, EffectPoint, EffectBorrow, argumentParameter } from "./model";
-import { functionParams, borrowedType, memoryMode, memoryValue, genericBase, genericArguments, splitTypes, canonicalSymbol } from "./types";
+import { functionParams, borrowedType, memoryMode, memoryValue, genericBase, genericArguments, splitTypes, canonicalSymbol, primitiveType } from "./types";
 
 export class EffectEdge {
   source: number; target: number; callable: boolean; origins: number; targets: number; tasks: number;
@@ -525,7 +525,8 @@ export class EffectAnalyzer {
       }
       if (n.kind == NodeKind.AssignmentExpression || (n.kind == NodeKind.MemberCallExpression && ["push","set","add"].includes(n.get(AttributeKind.Method)))) {
         const root: number = this.root(m,bindingChild(n,n.kind == NodeKind.AssignmentExpression ? EdgeRole.Target : EdgeRole.Object));
-        if (root >= 0 && (this.owner(this.binding.symbols[root].scope) != owner || borrowedType(this.checked.symbolTypes[root]))) for (const e of n.edges) if (e.role == EdgeRole.Value || e.role == EdgeRole.Args) this.retain(owner,this.vertex(m,e.node));
+        // Un primitivo se copia: escribirlo a través de un ref<T> no retiene nada.
+        if (root >= 0 && (this.owner(this.binding.symbols[root].scope) != owner || borrowedType(this.checked.symbolTypes[root]))) for (const e of n.edges) if ((e.role == EdgeRole.Value || e.role == EdgeRole.Args) && !primitiveType(memoryValue(this.checked.files[m].types[e.node]))) this.retain(owner,this.vertex(m,e.node));
       }
     }
     for (const call of this.calls) if (call.owner >= 0 && !this.builtin(call.module,call.node)) {
