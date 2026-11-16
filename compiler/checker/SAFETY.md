@@ -163,7 +163,7 @@ préstamos en packs sin contrato de lifetime. Los owners se transfieren mediante
 No se anuncia paridad general ni se cambia el checker TS para ocultar diferencias.
 
 Los resúmenes de llamadas recursivas conservan la autorización del parámetro
-prestado o receptor que origina el acceso. Reenviar un parámetro out/ref permite
+prestado o receptor que origina el acceso. Reenviar un parámetro ref permite
 seguir usando ese handle; escribir directamente en la fuente global durante el
 mismo préstamo sigue rechazándose. Los packs se validan después de seleccionar
 la sobrecarga: un candidato descartado no añade errores de lifetime y un tipo

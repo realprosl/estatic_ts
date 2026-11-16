@@ -49,7 +49,7 @@ function native(source: string): NativeResult { return nativeTokens(new Lexer(so
 // Compare every supported semantic field/edge, independently of arena order.
 // Spans have dedicated tests: stage 0 has historical differences for classes
 // and synthetic nodes. This projection never evaluates or parses expressions.
-const scalarKeys = new Set(["name", "mutable", "declaredType", "async", "returnType", "type", "constraint", "default", "literalType", "raw", "operator", "prefix", "callee", "member", "method", "optional", "className", "targetType", "isAsync", "await", "out", "passing", "variadic", "readonly", "access", "isStatic", "exported", "key", "value", "underlying", "payload", "field", "property"]);
+const scalarKeys = new Set(["name", "mutable", "declaredType", "async", "returnType", "type", "constraint", "default", "literalType", "raw", "operator", "prefix", "callee", "member", "method", "optional", "className", "targetType", "isAsync", "await", "variadic", "readonly", "access", "isStatic", "exported", "key", "value", "underlying", "payload", "field", "property"]);
 const roleKinds: Record<string, string> = { params: "Parameter", typeParameters: "TypeParameter", fields: "ClassField", methods: "ClassMethod", properties: "ObjectProperty", decorators: "Decorator", members: "EnumMember", variants: "UnionVariant", discriminator: "Discriminator" };
 const excludedRoles = new Set(["span", "typeArguments", "generatedSources"]);
 function hostShape(node: any, forcedKind?: string): any {
@@ -191,7 +191,6 @@ const fixtures: [string, string][] = [
   ["fixed array constructor property", "class Box{constructor(readonly values:u8[4]){}}"],
   ["tuple constructor property", "class Box{constructor(public value:[number,string]){}}"],
   ["callable constructor property", "class Box{constructor(readonly make:(x:number)=>string=convert){}}"],
-  ["constructor property out passing", "class Box{constructor(out public value:number){}}"],
   ["readonly type ordinary constructor parameter", "class Box{constructor(values:readonly number[]){}}"],
   ["readonly type public constructor property", "class Box{constructor(public values:readonly number[]){}}"],
   ["readonly property and readonly type", "class Box{constructor(readonly values:readonly number[]){}}"],
@@ -281,7 +280,7 @@ const fixtures: [string, string][] = [
   ["ordinary functions", "function add(a:number,b:number):number{return a+b;}"],
   ["generic function", "function identity<T extends Value>(x:T):T{return x;}"],
   ["default generic type", "function identity<T=number>(x:T):T{return x;}"],
-  ["default optional rest out params", "function run(out x:number,y?:number=2,...rest:number[]):void{}"],
+  ["default optional rest ref params", "function run(x:ref<number>,y?:number=2,...rest:number[]):void{}"],
   ["forward function", "function external(x:number):number;"],
   ["async and await", "async function load():Promise<number>{return await read();}"],
   ["arrows", "const f=(x:number)=>x+1;"],
@@ -473,9 +472,9 @@ test("bootstrap parser anonymous default class keeps constructor properties", ()
   assert.equal(result.nodes.filter(n => n.kind === "Parameter" && n.attributes.some(a => a.name === "parameterProperty")).length, 1);
 });
 test("bootstrap parser ordinary parameter spans cover out, rest, defaults and arrows", () => {
-  const source = "function f(out value:number,...rest:string[]):void{} const g=(x:number=1):number=>x;";
+  const source = "function f(value:ref<number>,...rest:string[]):void{} const g=(x:number=1):number=>x;";
   const result = native(source); assert.deepEqual(result.diagnostics, []);
-  assert.deepEqual(result.nodes.filter(n => n.kind === "Parameter").map(p => source.slice(p.span.start.offset,p.span.end.offset)), ["out value:number","...rest:string[]","x:number=1"]);
+  assert.deepEqual(result.nodes.filter(n => n.kind === "Parameter").map(p => source.slice(p.span.start.offset,p.span.end.offset)), ["value:ref<number>","...rest:string[]","x:number=1"]);
 });
 for (const source of [
   "function f<>():void{}", "function f<...>():void{}", "function f<...number>():void{}",

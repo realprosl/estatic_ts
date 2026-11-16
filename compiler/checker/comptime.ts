@@ -469,12 +469,6 @@ export class NativeComptime {
     const types: string[] = functionParams(effective);
     for (let p: number = 0; p < parameters.length; p = p+1) {
       const parameter: AstNode = this.node(fn.module,parameters[p]); const sid: number = this.binding.files[fn.module].declarations[parameters[p]]; const cell: number = this.find(frame,sid);
-      if (parameter.get(AttributeKind.Out) == "true") {
-        let aliasCell: number = -1;
-        for (let a: number = 0; a < args.length; a = a+1) if ((a < positions.length ? positions[a] : a) == p && a < argumentCells.length) aliasCell = argumentCells[a];
-        if (aliasCell < 0) { this.fail(module,id,"COMPTIME_INVALID_ALIAS","Un argumento out necesita una celda mutable inicializada"); break; }
-        this.alias(frame,sid,aliasCell); continue;
-      }
       const target: string = p < types.length ? types[p] : this.checked.symbolTypes[sid]; if (containsMemory(target)) { this.fail(module,id,"COMPTIME_UNSUPPORTED","Un contrato de memoria requiere una prueba de aliasing del evaluador"); break; } let value: number = 0; let supplied: boolean = false;
       if (parameter.get(AttributeKind.Variadic) == "true") {
         let rest = new ConstantValue("array",target.startsWith("...") ? target.slice(3,target.length) : target);

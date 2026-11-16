@@ -190,11 +190,11 @@ export class EffectAnalyzer {
   borrowedSymbol(sid: number): boolean {
     if (sid < 0) return false;
     const s = this.binding.symbols[sid];
-    return borrowedType(this.checked.symbolTypes[sid]) || (s.kind == "Parameter" && s.module >= 0 && this.node(s.module,s.node).get(AttributeKind.Out) == "true");
+    return borrowedType(this.checked.symbolTypes[sid]);
   }
   borrowMode(sid: number): string {
     const s = this.binding.symbols[sid];
-    return s.kind == "Parameter" && s.module >= 0 && this.node(s.module,s.node).get(AttributeKind.Out) == "true" ? "ref" : memoryMode(this.checked.symbolTypes[sid]);
+    return memoryMode(this.checked.symbolTypes[sid]);
   }
   receiver(module: number, id: number): string {
     // TypedFile owns every semantic table for the module. Read the required

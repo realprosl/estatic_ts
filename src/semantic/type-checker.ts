@@ -3033,7 +3033,8 @@ export class TypeChecker {
         }
         const receiverType = this.expression(node.object, scope);
         const receiverInner = isGenericType(receiverType) && ["ptr", "constPtr", "ref", "constRef"].includes(genericBase(receiverType)) ? genericArguments(receiverType)[0] : undefined;
-        const objectType = receiverInner && this.resolveClass(receiverInner) ? receiverInner : receiverType;
+        // ref<T>/constRef<T> exponen los métodos de T (arrays, Map, Set, string...), como hacía `out`.
+        const objectType = receiverInner && (this.resolveClass(receiverInner) || ["ref", "constRef"].includes(genericBase(receiverType))) ? receiverInner : receiverType;
         // V1.2: `Union<T1, T2>.Variant(args)` o `Union.Variant(args)`. Si la
         // unión existe y la variante está declarada, el resultado es el tipo
         // de la unión instanciado (o simple si no hay genéricos).

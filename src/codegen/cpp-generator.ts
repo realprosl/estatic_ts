@@ -181,7 +181,15 @@ export class CppGenerator {
   private readonly sourceNames = new Set<string>();
   private readonly ownershipTypes = new Map<string, boolean>();
   constructor(expressionType?: (node: Expression) => TypeName | undefined, expressionIsVariadic?: (node: Expression) => boolean, callTypeArguments?: (node: Expression) => TypeName[], resolveTypeAlias?: (name: string) => string | undefined, resolveUnionAliasName?: (union: TypeName) => string | undefined) {
-    this.expressionType = expressionType ?? (() => undefined); this.expressionIsVariadic = expressionIsVariadic ?? (() => false);
+    // ref<T>/constRef<T> de arrays, Map, Set o string: T& / const T& en C++, así
+    // que el codegen los trata como T (métodos de array, etc.).
+    const rawExpressionType = expressionType ?? (() => undefined);
+    this.expressionType = (node) => {
+      const type = rawExpressionType(node);
+      const match = typeof type === "string" ? /^(?:ref|constRef)<(.+)>$/.exec(type) : null;
+      if (match && (match[1]!.endsWith("[]") || /^(Map|Set)</.test(match[1]!) || match[1] === "string")) return match[1] as typeof type;
+      return type;
+    }; this.expressionIsVariadic = expressionIsVariadic ?? (() => false);
     this.callTypeArguments = callTypeArguments ?? (() => []);
     this.resolveTypeAlias = resolveTypeAlias;
     this.resolveUnionAliasName = resolveUnionAliasName;

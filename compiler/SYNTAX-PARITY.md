@@ -68,7 +68,7 @@ Estas muestras no constituyen una equivalencia formal para cualquier entrada.
 | callback-asi | Funciones | Sí | Sí | conservada. Los statements de un callback se separan por salto de linea: el lexer suprime el token newline dentro de parentesis, asi que ambos parsers aplican ASI por numero de linea. |
 | nested-functions | Funciones | Sí | Sí | conservada |
 | optional-default-parameters | Funciones | Sí | Sí | conservada |
-| out-parameters | Funciones | Sí | Sí | conservada |
+| ref-parameters | Funciones | Sí | Sí | conservada |
 | overloads | Funciones | Sí | Sí | conservada |
 | named-arguments | Funciones | Sí | Sí | conservada |
 | rest-spread | Funciones | Sí | Sí | conservada |

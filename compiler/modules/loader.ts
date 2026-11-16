@@ -90,7 +90,7 @@ export function resolveRequest(file: string, specifier: string, options: LoaderO
   }
   return "";
 }
-export function readModule(file: string, out graph: ModuleGraph, out cache: SyntaxCache): LoadedFile {
+export function readModule(file: string, graph: ref<ModuleGraph>, cache: ref<SyntaxCache>): LoadedFile {
     const snapshot: string[] = readSnapshot(file); const source: string = snapshot[0];
     const error: string = snapshot[1]; const before: string = snapshot[2];
     if (error != "") {

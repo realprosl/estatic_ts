@@ -223,7 +223,7 @@ test("IR C++ rejects malformed operators at its producer boundary",()=>{
  assert.throws(()=>generateCppFromIr(p),/Operador binario inválido/);
 });
 
-test("IR C++ writes back legacy out parameters through runtime references",()=>{
+test("IR C++ writes back builtin ref parameters through runtime references",()=>{
  const path=join(directory,"out-contents.txt");writeFileSync(path,"out");
  assert.equal(execute(`let content="";let error="";if(readFile(${JSON.stringify(path)},content,error))print(content);`),"out\n");
 });

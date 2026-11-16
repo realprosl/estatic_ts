@@ -10,7 +10,7 @@
     "parameter-modifiers": {
       "patterns": [
         {
-          "match": "\\b(mut|out)\\b(?=\\s+[A-Za-z_$][A-Za-z0-9_$]*\\s*:)",
+          "match": "\\b(mut)\\b(?=\\s+[A-Za-z_$][A-Za-z0-9_$]*\\s*:)",
           "name": "storage.modifier.parameter.estatic"
         }
       ]

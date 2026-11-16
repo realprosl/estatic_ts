@@ -1,7 +1,6 @@
 ; inherits: typescript
 
 "mut" @keyword.modifier
-"out" @keyword.modifier
 
 (required_parameter
   modifier: (parameter_modifier) @keyword.modifier)

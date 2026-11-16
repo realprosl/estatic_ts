@@ -40,7 +40,7 @@ function encodeToken(token: ParserToken): string {
   return field(token.kind) + field(token.lexeme) + integer(token.offset) + integer(token.line) + integer(token.column)
     + integer(token.endOffset) + integer(token.endLine) + integer(token.endColumn);
 }
-function decodeToken(out reader: Reader, length: number): ParserToken {
+function decodeToken(reader: ref<Reader>, length: number): ParserToken {
   const kind: string = reader.take(); const lexeme: string = reader.take();
   const offset: number = reader.natural(); const line: number = reader.natural(); const column: number = reader.natural();
   const endOffset: number = reader.natural(); const endLine: number = reader.natural(); const endColumn: number = reader.natural();

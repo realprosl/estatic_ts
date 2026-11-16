@@ -1198,12 +1198,12 @@ if(i.op!="load"||i.result!=b.value||i.result<0||i.result>=f.values.length||f.val
   return "{\n"+bridges+"{\n"+aliases+code.text+"\n}\n}";
  }
   // Tipos alcanzables desde un conjunto de tipos (campos, argumentos, variantes).
-  reachType(id:number,out seen:Set<number>):void{
+  reachType(id:number,seen:ref<Set<number>>):void{
     if(id<0||id>=this.project.typeDefinitions.length||seen.has(id))return;seen.add(id);
     const s=this.shape(id);for(const t of s.fields)this.reachType(t,seen);for(const t of s.arguments)this.reachType(t,seen);for(const t of s.variants)this.reachType(t,seen);for(const t of s.methodTypes)this.reachType(t,seen);
     if(s.discriminatorType>=0)this.reachType(s.discriminatorType,seen);
   }
-  signatureTypes(k:number,out seen:Set<number>):void{
+  signatureTypes(k:number,seen:ref<Set<number>>):void{
     for(const t of this.project.functions[k].parameterTypes)this.reachType(t,seen);for(const t of this.project.functions[k].captureTypes)this.reachType(t,seen);
     this.reachType(this.project.functions[k].returns,seen);this.reachType(this.project.functions[k].bodyReturns,seen);this.reachType(this.project.functions[k].receiverType,seen);
   }

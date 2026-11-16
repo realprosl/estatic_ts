@@ -743,7 +743,7 @@ export class Parser {
     while (!this.check(")") && !this.check("eof")) {
       const before: number = this.current;
       const start: ParserToken = this.peek(0);
-      const variadic: boolean = this.accept("..."); const isOut: boolean = this.accept("out");
+      const variadic: boolean = this.accept("...");
       let access: string = ""; let isReadonly: boolean = false;
       while (this.check("public") || this.check("private") || this.check("protected") || this.check("readonly")) {
         const modifier: ParserToken = this.take();
@@ -763,7 +763,6 @@ export class Parser {
       this.expect(":"); const annotation: string = this.typeName();
       const param: number = this.add(NodeKind.Parameter, start, this.previous());
       this.attr(param, AttributeKind.Name, name.lexeme); this.attr(param, AttributeKind.Type, annotation);
-      this.attr(param, AttributeKind.Out, isOut ? "true" : "false"); this.attr(param, AttributeKind.Passing, isOut ? "out" : "value");
       if (access != "") this.attr(param, AttributeKind.Access, access);
       if (isReadonly) this.attr(param, AttributeKind.Readonly, "true");
       if (property && properties) this.attr(param, AttributeKind.ParameterProperty, "true");

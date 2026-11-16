@@ -4,7 +4,7 @@ Extensión sintáctica inicial para `.ets`:
 
 - identificación del lenguaje;
 - resaltado TypeScript reutilizado;
-- resaltado específico de `mut` y `out`;
+- resaltado específico de `mut`;
 - comentarios, brackets, indentación y folding;
 - snippets de funciones mutables y `Result<T>`.
 

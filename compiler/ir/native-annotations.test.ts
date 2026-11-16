@@ -73,7 +73,7 @@ test('native bootstrap path builtins have runtime contracts',()=>{
  assert.equal(out,root+'/sample.ets\n'+root+'\n'+root+'/source.ets\n'+root+'/missing.ets\ntrue\n');
 });
 test('native bootstrap mutates out and ref collection receivers',()=>{
- assert.equal(execute('function fill(out values:string[]):void{values.push("a");values.push("b");values.pop();}let xs:string[]=[];fill(xs);print(xs.join(","));function add(values:ref<number[]>):void{values.push(3);}let ns:number[]=[1];add(ns);print(ns.length);print(ns[1]);'),'a\n2\n3\n');
+ assert.equal(execute('function fill(values:ref<string[]>):void{values.push("a");values.push("b");values.pop();}let xs:string[]=[];fill(xs);print(xs.join(","));function add(values:ref<number[]>):void{values.push(3);}let ns:number[]=[1];add(ns);print(ns.length);print(ns[1]);'),'a\n2\n3\n');
 });
 test('native bootstrap supports string padding contracts',()=>{
  assert.equal(execute('print("x".padStart(3,"0"));print("x".padEnd(4,"ab"));'),'00x\nxaba\n');
