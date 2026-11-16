@@ -197,6 +197,14 @@ export class NativeChecker {
       } current = this.binding.scopes[current].parent;
     } return -1;
   }
+  // `new Error(…)`: Error es la interfaz del prelude; se construye su BaseError.
+  constructorName(module: number, id: number, name: string): string {
+    if (name != "Error") return name;
+    const scope: number = this.binding.files[module].nodeScopes[id];
+    const target: number = this.origin(this.lookup(scope,"Error",true)); const base: number = this.origin(this.lookup(scope,"BaseError",false));
+    if (target >= 0 && this.binding.symbols[target].kind == "InterfaceDeclaration" && base >= 0 && this.binding.symbols[base].kind == "ClassDeclaration") return "BaseError";
+    return name;
+  }
   qualifiedType(module: number, id: number, text: string): number {
     const names: string[] = splitTypes(text,"."); if (names.length == 0) return -1;
     let sid: number = this.lookup(this.binding.files[module].nodeScopes[id],names[0],true);
@@ -1691,7 +1699,7 @@ export class NativeChecker {
       return optional && result != "void" && result != "!error" ? "Optional<" + result + ">" : result;
     }
     if (kind == NodeKind.NewExpression) {
-      const raw: string = n.get(AttributeKind.ClassName); const rawSymbol: number = raw.indexOf("<",0) < 0 ? this.qualifiedType(module,id,raw) : -1;
+      const raw: string = this.constructorName(module,id,n.get(AttributeKind.ClassName)); const rawSymbol: number = raw.indexOf("<",0) < 0 ? this.qualifiedType(module,id,raw) : -1;
       let valueType: string = "";
       if (rawSymbol >= 0 && this.binding.symbols[rawSymbol].kind == "ClassDeclaration" && this.genericParameters(rawSymbol).length > 0) {
         if (this.nominalSymbol(memoryValue(expected)) == rawSymbol) valueType = memoryValue(expected);

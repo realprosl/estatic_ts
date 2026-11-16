@@ -11,8 +11,9 @@ export class PathAlias {
   constructor(name: string, target: string, scope: string = "") { this.name = name; this.target = normalizePath(target); this.scope = scope; }
 }
 export class LoaderOptions {
-  verbose: boolean; roots: string[]; aliases: PathAlias[]; cacheDirectory: string; syntaxKey: string;
-  constructor() { this.verbose = false; this.roots = []; this.aliases = []; this.cacheDirectory = ""; this.syntaxKey = ""; }
+  // prelude (#165): módulos cuyos exports ven todos los demás sin import.
+  verbose: boolean; roots: string[]; aliases: PathAlias[]; cacheDirectory: string; syntaxKey: string; prelude: string[];
+  constructor() { this.verbose = false; this.roots = []; this.aliases = []; this.cacheDirectory = ""; this.syntaxKey = ""; this.prelude = []; }
 }
 export class ModuleRequest {
   specifier: string; node: number; kind: string; typeOnly: boolean; dependency: string;
@@ -46,9 +47,9 @@ export class GeneratedSource {
   }
 }
 export class ModuleGraph {
-  generatedSources: GeneratedSource[]; entry: string; modules: LoadedFile[]; diagnostics: SourceDiagnostic[]; hits: number; misses: number; writes: number; success: boolean;
+  generatedSources: GeneratedSource[]; entry: string; modules: LoadedFile[]; diagnostics: SourceDiagnostic[]; hits: number; misses: number; writes: number; success: boolean; prelude: string[];
   constructor(entry: string) {
-    this.generatedSources = []; this.entry = entry; this.modules = []; this.diagnostics = []; this.hits = 0; this.misses = 0; this.writes = 0; this.success = true;
+    this.generatedSources = []; this.entry = entry; this.modules = []; this.diagnostics = []; this.hits = 0; this.misses = 0; this.writes = 0; this.success = true; this.prelude = [];
   }
 }
 export function originToken(): ParserToken { return new ParserToken("", "", 0, 1, 1, 0, 1, 1); }
@@ -120,7 +121,18 @@ export class ModuleLoader {
       graph.success = false; this.cache = cache; return graph;
     }
     if (this.options.verbose) progressDetail("frontend: reading/parsing "+canonical);
-    let discovered: LoadedFile[] = [readModule(canonical, graph, cache)]; let stack: number[] = [0];
+    let discovered: LoadedFile[] = [readModule(canonical, graph, cache)]; let stack: number[] = [];
+    // Prelude (#165): sus módulos se recorren primero (quedan antes en el orden
+    // topológico) y después cada módulo del programa depende de todos ellos.
+    let roots: string[] = [];
+    for (const file of this.options.prelude) { const preludeFile: string = canonicalFile(normalizePath(file)); if (preludeFile == "") { graph.diagnostics.push(new SourceDiagnostic("loader", "No se encuentra el módulo del prelude '" + file + "'", normalizePath(file), originToken())); continue; } if (!roots.includes(preludeFile) && preludeFile != canonical) roots.push(preludeFile); }
+    for (const file of roots) graph.prelude.push(file);
+    roots.push(canonical);
+    for (const rootFile of roots) {
+    let rootIndex: number = -1; for (let i: number = 0; i < discovered.length; i = i + 1) if (discovered[i].file == rootFile) rootIndex = i;
+    if (rootIndex < 0) { if (this.options.verbose) progressDetail("frontend: reading/parsing "+rootFile); discovered.push(readModule(rootFile, graph, cache)); rootIndex = discovered.length - 1; }
+    if (discovered[rootIndex].state == 2) continue;
+    stack.push(rootIndex);
     // An explicit DFS stack handles deep graphs without recursive native calls.
     // Discovery/dedup is separate from grey-node cycle detection.
     while (stack.length > 0) {
@@ -155,6 +167,13 @@ export class ModuleLoader {
           }
         }
       }
+    }
+    }
+    if (graph.prelude.length > 0) for (let m: number = 0; m < graph.modules.length; m = m + 1) {
+      if (graph.prelude.includes(graph.modules[m].file)) continue;
+      let module: LoadedFile = graph.modules[m];
+      for (const file of graph.prelude) if (!module.dependencies.includes(file)) module.dependencies.push(file);
+      graph.modules[m] = module;
     }
     graph.hits = cache.hits; graph.misses = cache.misses; graph.writes = cache.writes;
     graph.success = graph.diagnostics.length == 0; this.cache = cache; return graph;

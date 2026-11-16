@@ -297,6 +297,9 @@ function main():void{
  for(const path of configStrings(jsonObjectGet(config,"moduleRoots")))options.roots.push(pathAt(base,path));const aliases=jsonObjectGet(config,"aliases");for(const name of objectKeys(aliases))options.aliases.push(new PathAlias(name,pathAt(base,jsonAsString(jsonObjectGet(aliases,name)))));
  // #192: alias de las librerías de `dependencies`, sus linkFlags y paths de tsconfig.json.
  if(configPath!=""){for(const alias of dependencyAliases(config,base,options.aliases))options.aliases.push(alias);for(const flag of dependencyLinkFlags(config,base))links.push(flag);syncTsconfig(base,config);libraryRoots=dependencyRoots(config,base);}
+ // Prelude (#165): el del runtime (runtime/prelude/*.ts: Error…) y el del proyecto ("prelude" en la config).
+ for(const file of files(root+"/runtime/prelude"))if(file.endsWith(".ts"))options.prelude.push(root+"/runtime/prelude/"+file);
+ for(const path of configStrings(jsonObjectGet(config,"prelude")))options.prelude.push(pathAt(base,path));
  if(emitInterface){emitModuleInterface(entry,options);return;}
  // Fase 3 de #149: con una huella vigente no se analiza ni se compila.
  const compilerConfig=jsonObjectGet(config,"compiler");const outputConfig=jsonObjectGet(config,"output");
@@ -307,7 +310,7 @@ function main():void{
   if(output==""){const configured=jsonAsString(jsonObjectGet(outputConfig,"cpp"));output=(configured!=""?pathAt(base,configured):"build/"+stem(entry)+".cpp");}
   if(binary==""){const configured=jsonAsString(jsonObjectGet(outputConfig,"binary"));binary=(configured!=""?pathAt(base,configured):output+".bin");}
   if(cxx=="")cxx=jsonAsString(jsonObjectGet(compilerConfig,"command"));if(cxx=="")cxx=environment("CXX");if(cxx=="")cxx="g++";
-  let keyArgs:string[]=["entry "+entry,"output "+output,"binary "+binary,"unity "+(unity?"1":"0")];for(const flag of flags)keyArgs.push("cxx-flag "+flag);for(const link of links)keyArgs.push("link-flag "+link);for(const moduleRoot of options.roots)keyArgs.push("root "+moduleRoot);for(const alias of options.aliases)keyArgs.push("alias "+alias.name+" "+alias.target+" "+alias.scope);
+  let keyArgs:string[]=["entry "+entry,"output "+output,"binary "+binary,"unity "+(unity?"1":"0")];for(const flag of flags)keyArgs.push("cxx-flag "+flag);for(const link of links)keyArgs.push("link-flag "+link);for(const moduleRoot of options.roots)keyArgs.push("root "+moduleRoot);for(const alias of options.aliases)keyArgs.push("alias "+alias.name+" "+alias.target+" "+alias.scope);for(const preludeFile of options.prelude)keyArgs.push("prelude "+preludeFile);
   if(directories(options.cacheDirectory)){fingerprintPath=options.cacheDirectory+"/build-fingerprint";fingerprintKey=buildKey(keyArgs,configText,root,cxx,options.cacheDirectory+"/build-fingerprint");}
   if(fingerprintPath!=""&&fingerprintCurrent(fingerprintPath,fingerprintKey)){
    progressStart("Sin cambios: se reutiliza el binario");progressSummary(output,binary);

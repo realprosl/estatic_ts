@@ -22,36 +22,14 @@
 // es el unico backend soportado (ver runtime/libuv/).
 #include "ets_event_loop.hpp"
 
+#include "runtime/ets_result.hpp"
+
 namespace ets {
 
 // CancellationToken, CancellationSource y WaitResult se declaran en
 // ets_event_loop_iface.hpp y vienen incluidos vía ets_event_loop.hpp.
 
-#ifndef ETS_RESULT_DEFINED
-#define ETS_RESULT_DEFINED 1
-template <typename T>
-class [[nodiscard]] Result {
-public:
-    static Result success(T value) { return Result{std::move(value), {}}; }
-    static Result failure(std::string error) { return Result{{}, std::move(error)}; }
-    bool isOk() const noexcept { return value_.has_value(); }
-    T& value() & noexcept { if (!value_) std::abort(); return *value_; }
-    const T& value() const & noexcept { if (!value_) std::abort(); return *value_; }
-    T&& value() && noexcept { if (!value_) std::abort(); return std::move(*value_); }
-    const std::string& error() const noexcept { return error_; }
-
-private:
-    Result(std::optional<T> value, std::string error) : value_(std::move(value)), error_(std::move(error)) {}
-    std::optional<T> value_;
-    std::string error_;
-};
-#endif
-
-template <typename T>
-Result<T> ok(T value) { return Result<T>::success(std::move(value)); }
-
-template <typename T>
-Result<T> err(std::string message) { return Result<T>::failure(std::move(message)); }
+// Result<T, E>, ok() y err(): runtime/ets_result.hpp.
 
 // La clase EventLoop es un alias de LibuvEventLoop. Se declara en
 // runtime/ets_event_loop.hpp. La instancia thread_local defaultEventLoop

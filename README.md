@@ -404,6 +404,43 @@ function f(a: number, b?: number): number { return b === undefined ? a : a + b; 
 - Una variable sin valor inicial solo puede ser `T | undefined`.
 - Los errores con motivo (leer un fichero, parsear) siguen yendo por `Result<T, E>`.
 
+## Errores: `Error` sin excepciones
+
+`Error`, `TypeError`, `RangeError`, `SyntaxError`, `ReferenceError`, `EvalError` y
+`URIError` existen como en TypeScript, pero sin `throw`/`try`/`catch`: se
+devuelven dentro de `Result<T, Error>`.
+
+```ts
+function dividir(a: number, b: number): Result<number, Error> {
+  if (b == 0) return resultErr<number, Error>(new RangeError("división por cero"));
+  return resultOk<number, Error>(a / b);
+}
+const r = dividir(1, 0);
+if (!r.isOk()) print(r.error().toString());     // RangeError: división por cero
+const e = new TypeError("tipo malo", { cause: new Error("origen") });
+```
+
+Como el dialecto no tiene herencia, `Error` es una **interfaz** (`name`,
+`message`, `cause: Error | undefined`, `toString()`) y cada clase de error la
+implementa con los mismos miembros; una clase tuya con esos miembros también es
+un `Error`. `new Error(…)` construye la implementación base. Están escritas en
+ETS en `runtime/prelude/error.ts`.
+
+## Prelude: código disponible sin import
+
+Los módulos del prelude se ven en todos los demás sin `import`, como los
+builtins: el del runtime (`runtime/prelude/*.ts`, por ejemplo `Error`) y el del
+proyecto:
+
+```json
+// estatic.config.json
+"prelude": ["src/std/fetch.ts"]
+```
+
+Una declaración local o un import explícito tapan al prelude; si dos módulos del
+prelude exportan el mismo nombre es un error. Entre ellos, los módulos del
+prelude se importan a mano.
+
 ## Clases mediante composición
 
 Las clases son tipos concretos por valor. Sus argumentos de construcción corresponden, en orden, a sus campos. No existe `extends`, clase base, método virtual ni conversión descendente.

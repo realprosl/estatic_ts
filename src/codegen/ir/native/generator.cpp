@@ -37,7 +37,7 @@ public:
   // igual que stage 0 y que los overloads del runtime.
   if(k=="function"){V<S> params;for(int id:V<int>(a.begin(),a.end()-1))params.push_back(parameterType(id));return "std::function<"+type(a.back())+"("+join(params)+")>";}
   if(k=="Optional")return "ets::Optional<"+type(a.at(0))+">";
-  if(k=="Result"){if(p.types.at(a.at(1))!="string")return fail("El runtime C++ requiere Result<T,string>");result.headers.insert("runtime/ets_async.hpp");result.libuv=true;return "ets::Result<"+type(a.at(0))+">";}
+  if(k=="Result"){result.headers.insert("runtime/ets_async.hpp");result.libuv=true;return p.types.at(a.at(1))=="string"?"ets::Result<"+type(a.at(0))+">":"ets::Result<"+type(a.at(0))+","+type(a.at(1))+">";}
   if(k=="Promise"){result.headers.insert("runtime/ets_async.hpp");result.libuv=true;return "ets::Task<"+type(a.at(0))+">";}
   if(k=="Map"||k=="Set")return "ets::"+k+"<"+types(a)+">";
   if(k=="iterator")return "std::size_t";
