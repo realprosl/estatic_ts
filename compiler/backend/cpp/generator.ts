@@ -360,11 +360,11 @@ const branches=_cppLoop5Result.join("");
     return this.fail(`Place C++ desconocido: ${p.kind}`,p.source);
   }
   constantIndex(f:constRef<IrFunction>,value:number):number { for(const b of f.blocks)for(const i of b.instructions)if(i.result==value&&i.op=="constant")return parseNumber(i.text);this.fail("Índice de tupla no constante",f.source);return -1; }
-  // ",a,b,..." con los operandos desde from (argumentos opcionales o variádicos).
-  operandList(f:constRef<IrFunction>,i:constRef<IrInstruction>,from:number):string {
-    let out:string="";
-    for(let k:number=from;k<i.operands.length;k=k+1)out=out+","+this.operand(f,i,k);
-    return out;
+  // ",a,b,..." con los operandos desde start (argumentos opcionales o variádicos).
+  operandList(f:constRef<IrFunction>,i:constRef<IrInstruction>,start:number):string {
+    let text:string="";
+    for(let k:number=start;k<i.operands.length;k=k+1)text=text+","+this.operand(f,i,k);
+    return text;
   }
   operand(f:constRef<IrFunction>,i:constRef<IrInstruction>,k:number,consume:boolean=true):string {
     const value=i.operands[k];const  typeId=f.values[value];if(typeId<0)this.fail("Operando IR inexistente",i.source);
