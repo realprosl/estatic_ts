@@ -7,7 +7,7 @@ function runDemo(): void {
   const result: number = source
     .filter((x: number): boolean => x > minimum)
     .map<number>((x: number): number => x * factor)
-    .reduce<number>(initial, (total: number, x: number): number => total + x);
+    .reduce<number>((total: number, x: number): number => total + x, initial);
   print(result);
   print(source[0]); print(source[1]); print(source[2]);
 }

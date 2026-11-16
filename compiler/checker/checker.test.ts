@@ -145,11 +145,11 @@ test('checker: interface construction is stopped by binding',()=>{const g=run(fi
 test('checker: increment expression is actually checked',()=>error('for(let i=0;i<3;i="x"){}',/incompatible/));
 test('checker: receiver writes are checked inside constructor',()=>check('class C{x:number; constructor(x:number){this.x=x;}} let c=new C(1); c.x=2;'));
 test('checker: mutating method requires mutable receiver',()=>error('class C{x:number=0; set():void{this.x=1;}} const c=new C(); c.set();',/inmutable/));
-test('checker: array pop returns void as in stage zero',()=>error('let a=[1]; const n=a.pop();',/void/));
+test('checker: array pop returns T | undefined as in TypeScript',()=>{const g=check('let a=[1]; const n=a.pop(); const m:number=a.shift()??0; print(n??m);');assert.ok(types(g,'MemberCallExpression').includes('Optional<number>'));});
 // El offset de `includes` es opcional, igual que en JavaScript y TypeScript:
 // `includes("b")` y `includes("b",0)` son ambos validos.
 test('checker: string includes accepts an optional offset parameter',()=>{check('print("abc".includes("b",0));');check('print("abc".includes("b"));');});
-test('checker: join only supports string elements',()=>error('const a=[1]; print(a.join(","));',/miembro/));
+test('checker: join accepts any element type as in TypeScript',()=>{check('const a=[1]; print(a.join(","));');check('const b=[true]; print(b.join());');});
 test('checker: no string index writes',()=>error('let s="abc"; s[0]="x";',/string por índice/));
 test('checker: class name is not a runtime value',()=>error('class C{} const c=C;',/requiere new/));
 test('checker: overload context does not impose the first array element type',()=>{const g=check('function f(x:number[]):number{return 1;} function f(x:string[]):string{return "x";} const s=f(["x"]);');assert.deepEqual(types(g,'CallExpression'),['string']);});
@@ -904,7 +904,7 @@ for(const [name,source] of Object.entries({
 for(const [name,source] of Object.entries({
  map:'const a=[1,2];const b:string[]=a.map((x:number):string=>numberToString(x));',
  filter:'const a=[1,2];const b:number[]=a.filter((x:number):boolean=>x>1);',
- reduce:'const a=[1,2];const n:number=a.reduce(0,(s:number,x:number):number=>s+x);',
+ reduce:'const a=[1,2];const n:number=a.reduce((s:number,x:number):number=>s+x, 0);',
  forEach:'const a=[1,2];a.forEach((x:number):void=>{print(x);});',
  find:'const a=[1,2];const o:Optional<number> = a.find((x:number):boolean=>x>1);',
  some:'const a=[1,2];const b:boolean=a.some((x:number):boolean=>x>1);',
@@ -923,7 +923,7 @@ for(const [name,source] of Object.entries({
  result:'const a=[1,2];const b:string[]=a.map((x:number):number=>x);',
  void:'const a=[1,2];a.map((x:number):void=>{});',
  arity:'const a=[1,2];a.reduce(0);',
- reduceReturn:'const a=[1,2];a.reduce(0,(s:number,x:number):string=>"s");',
+ reduceReturn:'const a=[1,2];a.reduce((s:number,x:number):string=>"s", 0);',
  flatMap:'const a=[1,2];a.flatMap((x:number):number=>x);',
  sortConstant:'const a=[2,1];a.sort();',
  sortReturn:'let a=[2,1];a.sort((x:number,y:number):boolean=>x>y);',
@@ -1253,7 +1253,7 @@ for(const [name,body,expected] of [
  ['break','let n=0;while(true){n+=1;if(n==3)break;}return n;',3],
  ['nested return','for(let i=0;i<4;i+=1){if(i==2){{return 12;}}}return 0;',12],
  ['array map','const xs=[1,2,3].map((x:number):number=>x*2);return xs[2];',6],
- ['array reduce','return [1,2,3].reduce(0,(s:number,x:number):number=>s+x);',6],
+ ['array reduce','return [1,2,3].reduce((s:number,x:number):number=>s+x, 0);',6],
  ['callback capture','let sum=0;[1,2,3].forEach((x:number):void=>{sum+=x;});return sum;',6],
  ['callback shadow','let x=10;const xs=[1,2].map((x:number):number=>x+1);return x+xs[0];',12],
  ['array filter','const xs=[1,2,3].filter((x:number):boolean=>x>1);return xs.length;',2],

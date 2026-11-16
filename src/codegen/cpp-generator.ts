@@ -4360,7 +4360,7 @@ export class CppGenerator {
           if (method === "reduce") {
             const U = typeArguments[0] ?? this.expressionType(node);
             if (!U) return `${objStr}.reduce(${argStrs.join(", ")})`;
-            return `ets_reduce<${cppType(U)}, ${Tcpp}>(${argStrs[0]}, ${objStr}, ${argStrs[1]})`;
+            return `ets_reduce<${cppType(U)}, ${Tcpp}>(${argStrs[1]}, ${objStr}, ${argStrs[0]})`;
           }
           // V11: métodos adicionales sobre arrays.
           if (method === "forEach") {

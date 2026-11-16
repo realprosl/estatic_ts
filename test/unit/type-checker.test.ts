@@ -702,10 +702,10 @@ test("V7: arr.map reporta incompatibilidad cuando lambda devuelve tipo distinto 
   `, "number");
 });
 
-test("V7: arr.reduce<U>(init, op) deduce U del init", () => {
+test("V7: arr.reduce<U>(op, init) deduce U del init", () => {
   const { checker } = check(`
     let arr: number[] = [1, 2, 3];
-    let r: number = arr.reduce<number>(0, (acc: number, x: number): number => acc + x);
+    let r: number = arr.reduce<number>((acc: number, x: number): number => acc + x, 0);
   `);
   assert.ok(checker);
 });
@@ -713,7 +713,7 @@ test("V7: arr.reduce<U>(init, op) deduce U del init", () => {
 test("V7: arr.reduce acepta U explícito aunque init no lo sugiera", () => {
   const { checker } = check(`
     let arr: number[] = [1, 2, 3];
-    let r: string = arr.reduce<string>("", (acc: string, x: number): string => acc);
+    let r: string = arr.reduce<string>((acc: string, x: number): string => acc, "");
   `);
   assert.ok(checker);
 });
@@ -722,7 +722,7 @@ test("V7: arr.reduce respeta init cuando el array está vacío", () => {
   // Si no hay elementos, el op nunca se invoca; init es el resultado.
   const { checker } = check(`
     let arr: number[] = [];
-    let r: number = arr.reduce<number>(42, (acc: number, x: number): number => acc);
+    let r: number = arr.reduce<number>((acc: number, x: number): number => acc, 42);
   `);
   assert.ok(checker);
 });
@@ -744,7 +744,7 @@ test("V7: arr.filter sobre T[] preserva el tipo de elemento", () => {
 test("V7: cadena filter → map → reduce encadena tipos", () => {
   const { checker } = check(`
     let arr: number[] = [1, 2, 3];
-    let r: number = arr.filter((x: number): boolean => x > 0).map<string>((x: number): string => "v").reduce<number>(0, (acc: number, s: string): number => acc);
+    let r: number = arr.filter((x: number): boolean => x > 0).map<string>((x: number): string => "v").reduce<number>((acc: number, s: string): number => acc, 0);
   `);
   assert.ok(checker);
 });

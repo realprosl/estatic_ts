@@ -430,6 +430,32 @@ También `charAt`, `charCodeAt`, `includes`, `trim`/`trimStart`/`trimEnd`
 - Aún faltan `normalize` y los métodos que usan `RegExp` (`match`, `matchAll`,
   `search`, y `replace`/`split` con expresión regular).
 
+## Métodos de `Array`
+
+Mismas firmas que en TypeScript. Los callbacks reciben `(valor)` o `(valor, índice)`:
+
+```ts
+let a: number[] = [3, 1, 2];
+a.reduce((s: number, x: number): number => s + x);       // 6 (sin valor inicial)
+a.reduce((s: string, x: number): string => s + x, "r");  // "r312"
+a.reduceRight((s: number, x: number): number => s - x);  // -2
+a.map((x: number, i: number): number => x * i);          // [0, 1, 4]
+a.at(-1) ?? 0;                 // 2   (at, find, findLast, pop y shift dan T | undefined)
+a.indexOf(2); a.lastIndexOf(3, -1); a.includes(3, 1);
+a.findIndex(...); a.findLast(...); a.findLastIndex(...);
+a.push(4, 5);                  // 5: push y unshift devuelven la nueva longitud
+a.pop(); a.shift(); a.unshift(0);
+a.join(); [true, false].join("|");   // join con cualquier tipo de elemento
+a.toSorted(); a.toReversed(); a.with(0, 9);   // copias
+a.reverse(); a.fill(7, 1, -1);                // modifican el array
+```
+
+- `reduce` sin valor inicial sobre un array vacío, o `with` fuera de rango,
+  terminan el programa con el mismo mensaje que lanzaría JavaScript (`TypeError`
+  / `RangeError`): el dialecto no tiene excepciones.
+- `sort()` y `toSorted()` sin comparador ordenan números por valor (JavaScript
+  los ordena como texto).
+
 ## Errores: `Error` sin excepciones
 
 `Error`, `TypeError`, `RangeError`, `SyntaxError`, `ReferenceError`, `EvalError` y

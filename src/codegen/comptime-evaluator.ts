@@ -1115,9 +1115,10 @@ class ComptimeInterpreter {
       case "some": return arr.some((v, i) => this.truthy(this.evalCallback(args[0]!, v, i, arr, scope, node)));
       case "every": return arr.every((v, i) => this.truthy(this.evalCallback(args[0]!, v, i, arr, scope, node)));
       case "reduce": {
-        let acc = convertIntegerBinding(this.evalExpression(args[0]!, scope), node.resolvedType, args[0]!);
+        // Orden de TypeScript: reduce(callback, inicial).
+        let acc = convertIntegerBinding(this.evalExpression(args[1]!, scope), node.resolvedType, args[1]!);
         for (let i = 0; i < arr.length; i++) {
-          acc = convertIntegerBinding(this.evalReduceCallback(args[1]!, acc, arr[i]!, i, arr, scope, node), node.resolvedType, args[1]!, callbackResultType(args[1]!));
+          acc = convertIntegerBinding(this.evalReduceCallback(args[0]!, acc, arr[i]!, i, arr, scope, node), node.resolvedType, args[0]!, callbackResultType(args[0]!));
         }
         return acc;
       }

@@ -82,7 +82,7 @@ export const cases: AuditCase[] = [
   no('readonly-external-write', 'objects', 'class C{readonly x:number=1;}let c=new C();c.x=2;'),
   yes('array-map', 'collections', 'const a=[1,2];const b=a.map((x:number):number=>x+1);print(b[0]);'),
   yes('array-filter', 'collections', 'const a=[1,2];const b=a.filter((x:number):boolean=>x>1);'),
-  yes('array-reduce', 'collections', 'const a=[1,2];const n=a.reduce(0,(s:number,x:number):number=>s+x);'),
+  yes('array-reduce', 'collections', 'const a=[1,2];const n=a.reduce((s:number,x:number):number=>s+x, 0);'),
   yes('array-sort', 'collections', 'let a=[2,1];a.sort((x:number,y:number):number=>x-y);'),
   yes('array-find', 'collections', 'const a=[1,2];const n=a.find((x:number):boolean=>x>1);'),
   yes('array-spread', 'collections', 'const a=[1,2];const b=[0,...a];'),

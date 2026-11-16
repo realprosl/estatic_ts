@@ -9,7 +9,7 @@
 // API del dialecto:
 //   arr.filter((item: T) => boolean): T[]
 //   arr.map<U>((item: T) => U): U[]
-//   arr.reduce<U>(init: U, op: (acc: U, item: T) => U): U
+//   arr.reduce<U>(op: (acc: U, item: T) => U, init: U): U
 //
 // `U` debe declararse explícitamente en `map`/`reduce` (el dialecto aún no
 // infiere tipos desde lambdas en el call site; V7.1 lo relajará cuando
@@ -31,12 +31,12 @@ print("last string: ", strings[length(strings) - 1]);
 
 // --- Caso 3: reduce solo -----------------------------------------------
 // Sumar todos los elementos.
-let total: number = numbers.reduce<number>(0, (acc: number, x: number): number => acc + x);
+let total: number = numbers.reduce<number>((acc: number, x: number): number => acc + x, 0);
 print("total: ", numberToString(total));
 
 // `init` se respeta si el array está vacío.
 let empty: number[] = [];
-let emptyTotal: number = empty.reduce<number>(42, (acc: number, x: number): number => acc + x);
+let emptyTotal: number = empty.reduce<number>((acc: number, x: number): number => acc + x, 42);
 print("empty total: ", numberToString(emptyTotal));
 
 // --- Caso 4: cadena filter → map → reduce ------------------------------
@@ -45,7 +45,7 @@ print("empty total: ", numberToString(emptyTotal));
 let sumLengths: number = numbers
   .filter((x: number): boolean => x % 2 == 0)
   .map<string>((x: number): string => numberToString(x))
-  .reduce<number>(0, (acc: number, s: string): number => acc + length(s));
+  .reduce<number>((acc: number, s: string): number => acc + length(s), 0);
 print("sum of lengths: ", numberToString(sumLengths));
 
 // --- Caso 5: side effects en orden -------------------------------------
@@ -62,7 +62,7 @@ let sideEffectSum: number = [10, 20, 30, 40, 50]
     lastSeen = x;
     return x > 25;
   })
-  .reduce<number>(0, (acc: number, x: number): number => acc + x);
+  .reduce<number>((acc: number, x: number): number => acc + x, 0);
 print("side effect sum: ", numberToString(sideEffectSum));
 print("side effect count: ", numberToString(calls));
 print("side effect lastSeen: ", numberToString(lastSeen));

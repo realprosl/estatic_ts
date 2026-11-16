@@ -258,7 +258,7 @@ const SET_METHODS: Record<string, { params: (typeArgs: TypeName[]) => TypeName[]
 const ARRAY_METHODS: Record<string, { arity: number; paramKinds: ("array" | "fn" | "value")[]; returnType: (typeArgs: TypeName[]) => TypeName; userTypeArgument?: number; variadic?: boolean }> = {
   filter: { arity: 1, paramKinds: ["fn"], returnType: ([T]) => `${T}[]` },
   map:    { arity: 1, paramKinds: ["fn"], returnType: () => "void[]", userTypeArgument: 0 },
-  reduce: { arity: 2, paramKinds: ["value", "fn"], returnType: () => "void", userTypeArgument: 0 },
+  reduce: { arity: 2, paramKinds: ["fn", "value"], returnType: () => "void", userTypeArgument: 0 },
   // Métodos añadidos en V11: predicados y extracción.
   forEach: { arity: 1, paramKinds: ["fn"], returnType: () => "void" },
   // V22-gap-#2: `push` añade un elemento al final del array (muta in-place).
@@ -3359,15 +3359,16 @@ export class TypeChecker {
             // firma del operador.
             const userU = node.typeArguments[0];
             let U: TypeName | undefined = userU;
-            if (!U && node.args[0]) {
-              const initType = this.expression(node.args[0], scope);
+            // Orden de TypeScript: `arr.reduce<U>(op, init)`.
+            if (!U && node.args[1]) {
+              const initType = this.expression(node.args[1], scope);
               if (initType) U = initType;
             }
-            if (!U) this.report(node.args[0] ?? node, `Array.reduce requiere tipo del acumulador U (anota arr.reduce<U>(init, op) o da un tipo a init)`);
+            if (!U) this.report(node.args[1] ?? node, `Array.reduce requiere tipo del acumulador U (anota arr.reduce<U>(op, init) o da un tipo a init)`);
             const fnExpected = functionType([U ?? "void", T], U ?? "void");
             // V10: el operador de reduce es argumento directo, марка `singleUseSite`.
-            if (node.args[1] && node.args[1].kind === "ArrowFunctionExpression") node.args[1].singleUseSite = { kind: "MemberCallExpression", argumentIndex: 1 };
-            if (node.args[1]) this.require(this.expression(node.args[1], scope, fnExpected), fnExpected, node.args[1]);
+            if (node.args[0] && node.args[0].kind === "ArrowFunctionExpression") node.args[0].singleUseSite = { kind: "MemberCallExpression", argumentIndex: 0 };
+            if (node.args[0]) this.require(this.expression(node.args[0], scope, fnExpected), fnExpected, node.args[0]);
             if (U) this.inferredCallTypeArguments.set(node, [U]);
             result = U ?? "void";
             break;

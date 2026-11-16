@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { compile } from "../../src/compiler.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
-const chain = (source: string) => `${source}.filter((x: number): boolean => x > 0).map<number>((x: number): number => x * 2).reduce<number>(0, (a: number, x: number): number => a + x)`;
+const chain = (source: string) => `${source}.filter((x: number): boolean => x > 0).map<number>((x: number): number => x * 2).reduce<number>((a: number, x: number): number => a + x, 0)`;
 
 for (const [name, source] of [
   ["global", `const xs: number[] = [1, 2]; const result: number = ${chain("xs")};`],
@@ -46,7 +46,7 @@ test("array pipeline native: todos los filter preceden a map y reduce", () => {
     function mapper(x: number): number { print("m"); return x * 10; }
     function reducer(a: number, x: number): number { print("r"); return a + x; }
     const xs: number[] = [1, 2, 3];
-    const result: number = xs.filter(predicate).map<number>(mapper).reduce<number>(0, reducer);
+    const result: number = xs.filter(predicate).map<number>(mapper).reduce<number>(reducer, 0);
     print(result);
     print(xs[0]); print(xs[1]); print(xs[2]);
   `), "p\np\np\nm\nm\nr\nr\n50\n1\n2\n3\n");
@@ -61,7 +61,7 @@ test("array pipeline native: captura locales y conserva fuente al repetir", () =
       const initial: number = 5;
       const result: number = xs.filter((x: number): boolean => x > minimum)
         .map<number>((x: number): number => x * factor)
-        .reduce<number>(initial, (a: number, x: number): number => a + x);
+        .reduce<number>((a: number, x: number): number => a + x, initial);
       print(result);
       print(xs[0]); print(xs[1]); print(xs[2]);
       print(${chain("xs")});
@@ -81,11 +81,11 @@ test("array pipeline native: vacios, cambio de tipo y pipelines anidados", () =>
       const xs: number[] = [1, 2, 3];
       const result: string = xs.filter((x: number): boolean => x > 1)
         .map<string>((x: number): string => numberToString(x))
-        .reduce<string>("start", (a: string, x: string): string => a + x);
+        .reduce<string>((a: string, x: string): string => a + x, "start");
       print(result);
       const nested: number = xs.filter((x: number): boolean => x > 0)
-        .map<number>((x: number): number => [1, 2].filter(positive).map<number>(twice).reduce<number>(0, sum))
-        .reduce<number>(0, (a: number, x: number): number => a + x);
+        .map<number>((x: number): number => [1, 2].filter(positive).map<number>(twice).reduce<number>(sum, 0))
+        .reduce<number>((a: number, x: number): number => a + x, 0);
       print(nested);
       print(xs[0]); print(xs[1]); print(xs[2]);
     }

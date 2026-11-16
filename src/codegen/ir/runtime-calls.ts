@@ -110,8 +110,23 @@ export function emitRuntimeCall(g:IrCppGenerator,f:IrFunction,i:IrInstruction):s
   if(base==="array") {
     g.headers.add("runtime/ets_collections.hpp");const E=g.elementType(shape.arguments[0]);
     const callback=()=>g.callback(f,i,i.operands.length-1);
-    if(method==="push")return `ets_push_vec<${E}>(${receiver},${a(1)})`;
-    if(method==="pop")return `ets_pop_vec<${E}>(${receiver})`;
+    const rest=(from:number)=>i.operands.slice(from).map((_,k)=>","+a(k+from)).join("");
+    if(method==="push")return i.operands.length===2?`([&]()->double{ets_push_vec<${E}>(${receiver},${a(1)});return static_cast<double>((${receiver}).size());}())`:`ets_push_all_vec<${E}>(${receiver}${rest(1)})`;
+    if(method==="unshift")return `ets_unshift_vec<${E}>(${receiver}${rest(1)})`;
+    if(method==="pop")return `ets_pop_value_vec<${E}>(${receiver})`;
+    if(method==="shift")return `ets_shift_vec<${E}>(${receiver})`;
+    if(method==="at")return `ets_at_vec(${receiver},${a(1)})`;
+    if(method==="indexOf")return `ets_index_of_vec<${E}>(${receiver}${rest(1)})`;
+    if(method==="lastIndexOf")return `ets_last_index_of_vec<${E}>(${receiver}${rest(1)})`;
+    if(method==="reverse")return `ets_reverse_vec(${receiver})`;
+    if(method==="fill")return `ets_fill_vec<${E}>(${receiver}${rest(1)})`;
+    if(method==="toReversed")return `ets_to_reversed_vec(${receiver})`;
+    if(method==="with")return `ets_with_vec<${E}>(${receiver}${rest(1)})`;
+    if(method==="toSorted")return i.operands.length===1?`ets_to_sorted_vec(${receiver})`:`ets_to_sorted_vec(${receiver},${g.callback(f,i,1)})`;
+    if(method==="findIndex")return `ets_find_index_vec(${receiver},${g.callback(f,i,1)})`;
+    if(method==="findLast")return `ets_find_last_vec(${receiver},${g.callback(f,i,1)})`;
+    if(method==="findLastIndex")return `ets_find_last_index_vec(${receiver},${g.callback(f,i,1)})`;
+    if(method==="reduce"||method==="reduceRight"){const right=method==="reduceRight"?"_right":"";return i.operands.length>2?`ets_reduce${right}(${a(2)},${receiver},${g.callback(f,i,1)})`:`ets_reduce${right}_first(${receiver},${g.callback(f,i,1)})`;}
     if(method==="delete")return `(${receiver}).erase((${receiver}).begin()+static_cast<std::ptrdiff_t>(${a(1)}))`;
     if(method==="map")return `ets_map_vec<${E},${g.elementType(g.shape(i.typeId).arguments[0])}>(${receiver},${callback()})`;
     if(method==="flatMap")return `ets_flat_map_vec<${E},${g.elementType(g.shape(i.typeId).arguments[0])}>(${receiver},${callback()})`;
@@ -120,10 +135,9 @@ export function emitRuntimeCall(g:IrCppGenerator,f:IrFunction,i:IrInstruction):s
     if(method==="some")return `ets_some_vec(${receiver},${callback()})`;
     if(method==="every")return `ets_every_vec(${receiver},${callback()})`;
     if(method==="find")return `ets_find_vec(${receiver},${callback()})`;
-    if(method==="reduce")return `ets_reduce(${a(1)},${receiver},${callback()})`;
     if(method==="slice")return `ets_slice_vec(${receiver},${a(1)},${i.operands.length>2?a(2):`static_cast<int>((${receiver}).size())`})`;
-    if(method==="includes")return `ets_includes_vec(${receiver},${a(1)})`;
-    if(method==="join")return `ets_join_vec(${receiver},${a(1)})`;
+    if(method==="includes")return i.operands.length>2?`ets_includes_from_vec<${E}>(${receiver},${a(1)},${a(2)})`:`ets_includes_vec(${receiver},${a(1)})`;
+    if(method==="join")return i.operands.length>1?`ets_join_vec(${receiver},${a(1)})`:`ets_join_vec(${receiver})`;
     if(method==="concat")return `ets_concat_vec<${E}>({${i.operands.map((_,k)=>g.deref(a(k),f.values[i.operands[k]])).join(",")}})`;
     if(method==="sort")return i.operands.length===1?`([&](){std::sort((${receiver}).begin(),(${receiver}).end());return ${g.shape(i.typeId).resource?`std::move(${receiver})`:receiver};}())`:`ets_sort_vec(${receiver},${callback()})`;
   }

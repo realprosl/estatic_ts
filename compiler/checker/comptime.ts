@@ -109,7 +109,7 @@ export class NativeComptime {
     for (let id: number = 0; id < this.checked.files[this.rootModule].types.length; id = id+1) {
       const n: AstNode = this.node(this.rootModule,id); if (nodeBegin(n) >= nodeBegin(this.node(this.rootModule,this.rootNode)) || this.functionOwner(this.binding.files[this.rootModule].nodeScopes[id]) != rootOwner) continue;
       if ((n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression || n.kind == NodeKind.UpdateExpression || n.kind == NodeKind.DeleteStatement) && this.directRoot(this.rootModule,bindingChild(n,EdgeRole.Target)) == sid) return true;
-      if (n.kind == NodeKind.MemberCallExpression && ["push","pop","sort","set","add","delete","clear"].includes(n.get(AttributeKind.Method)) && this.directRoot(this.rootModule,bindingChild(n,EdgeRole.Object)) == sid) return true;
+      if (n.kind == NodeKind.MemberCallExpression && ["push","pop","sort","shift","unshift","reverse","fill","set","add","delete","clear"].includes(n.get(AttributeKind.Method)) && this.directRoot(this.rootModule,bindingChild(n,EdgeRole.Object)) == sid) return true;
       if ((n.kind == NodeKind.CallExpression || n.kind == NodeKind.MemberCallExpression) && this.checked.files[this.rootModule].constantStates[id] != "evaluated") {
         const selected: number = this.checked.files[this.rootModule].selected[id]; const module: number = this.checked.files[this.rootModule].selectedModules[id];
         for (const effect of this.checked.effects) if (effect.module == module && effect.node == selected && effect.phase == "body" && (effect.writes.includes(sid) || effect.moves.includes(sid) || effect.unknown)) return true;
@@ -589,10 +589,22 @@ export class NativeComptime {
     }
     if (value.kind != "array") return this.fail(module,id,mode == "input" ? "COMPTIME_VALUE_UNAVAILABLE" : "COMPTIME_UNSUPPORTED","Método de objeto no disponible");
     let result = new ConstantValue("array",this.checked.files[module].types[id]); let changed = value;
-    if (name == "push") { for (const arg of args) changed.entries.push(this.copy(arg,module,id)); this.values[receiver] = changed; return 0; }
-    if (name == "pop") { if (changed.entries.length > 0) changed.entries.pop(); this.values[receiver] = changed; return 0; }
+    if (name == "push" || name == "unshift") {
+      let added: number[] = []; for (const arg of args) added.push(this.copy(arg,module,id));
+      if (name == "push") { for (const item of added) changed.entries.push(item); } else changed.entries = added.concat(changed.entries);
+      this.values[receiver] = changed; return this.put(constantNumber(changed.entries.length),module,id);
+    }
+    if (name == "pop" || name == "shift") {
+      // Devuelve el elemento quitado como T | undefined.
+      let removed = new ConstantValue("optional",this.checked.files[module].types[id]);
+      if (changed.entries.length > 0) {
+        if (name == "pop") { removed.entries.push(changed.entries[changed.entries.length-1]); changed.entries.pop(); }
+        else { removed.entries.push(changed.entries[0]); changed.entries = changed.entries.slice(1,changed.entries.length); }
+      }
+      this.values[receiver] = changed; return this.put(removed,module,id);
+    }
     if (name == "join") {
-      let text: string = ""; const separator: string = this.values[args[0]].text;
+      let text: string = ""; const separator: string = args.length > 0 ? this.values[args[0]].text : ",";
       for (let at: number = 0; at < value.entries.length; at = at+1) { const part: string = this.text(value.entries[at],module,id); if (!this.charge(module,id,part.length+(at > 0 ? separator.length : 0))) return 0; text = (text+(at > 0 ? separator : "")+part); }
       return this.put(constantString(text),module,id);
     }
@@ -604,8 +616,12 @@ export class NativeComptime {
         while (p > 0) { const order: number = args.length == 0 ? this.binary(module,id,changed.entries[p-1],changed.entries[p],">") : this.invoke(args[0],[changed.entries[p-1],changed.entries[p]],[],module,id,mode,""); const scalar = constantFloat(this.values[order],false); if (scalar.kind == "error") return this.put(scalar,module,id); if (scalar.scalar <= 0) break; const saved: number = changed.entries[p]; changed.entries[p] = changed.entries[p-1]; changed.entries[p-1] = saved; p = p-1; }
       } this.values[receiver] = changed; return this.copy(receiver,module,id);
     }
-    let accumulator: number = name == "reduce" ? this.convert(args[0],this.checked.files[module].types[id],module,id) : 0; const callback: number = name == "reduce" ? args[1] : args[0];
+    // reduce(callback, inicial?) como en TypeScript; sin inicial empieza por el primer elemento.
+    if (name == "reduce" && args.length < 2 && value.entries.length == 0) return this.fail(module,id,"COMPTIME_REDUCE_EMPTY","reduce de un array vacío sin valor inicial");
+    let accumulator: number = name == "reduce" ? (args.length > 1 ? this.convert(args[1],this.checked.files[module].types[id],module,id) : this.copy(value.entries[0],module,id)) : 0; const callback: number = args[0];
+    let position: number = 0;
     for (const entry of value.entries) {
+      position = position + 1; if (name == "reduce" && args.length < 2 && position == 1) continue;
       if (this.failure != "") return 0; const returned: number = this.invoke(callback,name == "reduce" ? [accumulator,entry] : [entry],[],module,id,mode,""); const yes: boolean = this.values[returned].scalar != 0;
       if (name == "map") result.entries.push(this.convert(returned,semanticElement(result.typeName),module,id)); else if (name == "flatMap") for (const item of this.values[returned].entries) result.entries.push(this.convert(item,semanticElement(result.typeName),module,id));
       else if (name == "filter" && yes) result.entries.push(this.copy(entry,module,id)); else if (name == "reduce") accumulator = this.convert(returned,this.checked.files[module].types[id],module,id);

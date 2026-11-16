@@ -882,11 +882,19 @@ export class NativeChecker {
     if (valueType == "!String" && (name == "fromCharCode" || name == "fromCodePoint")) return "(...number[])=>string";
     if (valueType.endsWith("[]")) {
       const element: string = semanticElement(valueType);
-      if (["map","filter","reduce","forEach","find","some","every","flatMap","sort","concat"].includes(name)) return "!array." + name;
-      if (name == "push") return "(" + element + ")=>void";
-      if (name == "pop") return "()=>void";
-      if (name == "includes") return "(" + element + ")=>boolean";
-      if (name == "join" && element == "string") return "(string)=>string";
+      if (["map","filter","reduce","reduceRight","forEach","find","findIndex","findLast","findLastIndex","some","every","flatMap","sort","toSorted","concat"].includes(name)) return "!array." + name;
+      // Firmas de TypeScript; los argumentos opcionales se resuelven por aridad.
+      const count: number = this.callArity(module,id);
+      // Con un solo valor la firma es fija para que el valor conserve su conversión (move).
+      if (name == "push" || name == "unshift") return count == 1 ? "(" + element + ")=>number" : "(..." + valueType + ")=>number";
+      if (name == "pop" || name == "shift") return "()=>Optional<" + element + ">";
+      if (name == "at") return "(number)=>Optional<" + element + ">";
+      if (name == "includes") return count == 2 ? "(" + element + ",number)=>boolean" : "(" + element + ")=>boolean";
+      if (name == "indexOf" || name == "lastIndexOf") return count == 2 ? "(" + element + ",number)=>number" : "(" + element + ")=>number";
+      if (name == "join") return count == 0 ? "()=>string" : "(string)=>string";
+      if (name == "reverse" || name == "toReversed") return "()=>" + valueType;
+      if (name == "fill") return "(" + element + (count > 1 ? ",number" : "") + (count > 2 ? ",number" : "") + ")=>" + valueType;
+      if (name == "with") return "(number," + element + ")=>" + valueType;
       if (name == "slice") {
         // Como en JavaScript, slice(start) llega hasta el final: process.argv.slice(2).
         return (this.callArity(module,id) == 1 ? "(number)=>" : "(number,number)=>") + valueType;
@@ -978,7 +986,7 @@ export class NativeChecker {
           // Un builtin que muta un campo de `this` cambia su estado observable.
           const base: number = bindingChild(receiver,EdgeRole.Object);
           const baseNode: AstNode = this.node(s.module,base);
-          if (baseNode.kind == NodeKind.IdentifierExpression && baseNode.get(AttributeKind.Name) == "this" && ["push","pop","sort","set","add","delete","clear"].includes(name)) return true;
+          if (baseNode.kind == NodeKind.IdentifierExpression && baseNode.get(AttributeKind.Name) == "this" && ["push","pop","sort","shift","unshift","reverse","fill","set","add","delete","clear"].includes(name)) return true;
         }
         for (const edge of n.edges) work.push(edge.node);
         continue;
@@ -1128,23 +1136,32 @@ export class NativeChecker {
     if (!array.endsWith("[]")) { this.report(module,id,"El método de array requiere un receptor"); return "!error"; }
     const element: string = semanticElement(array); let args: number[] = []; let explicitTypes: string[] = [];
     for (const attr of n.attributes) if (attr.name == AttributeKind.TypeArgument) explicitTypes.push(this.annotation(module,id,attr.value));
-    if (explicitTypes.length > 1 || (explicitTypes.length > 0 && !["map","flatMap","reduce"].includes(method))) this.report(module,id,"Argumentos de tipo no admitidos para este método de array");
+    if (explicitTypes.length > 1 || (explicitTypes.length > 0 && !["map","flatMap","reduce","reduceRight"].includes(method))) this.report(module,id,"Argumentos de tipo no admitidos para este método de array");
     for (const edge of n.edges) if (edge.role == EdgeRole.Args) args.push(edge.node);
     if (method == "concat") {
       let parameters: string[] = [];
       for (const arg of args) { const actual: string = this.expression(module,arg,array); this.requireType(module,arg,actual,array); parameters.push(array); }
       this.result.files[module].signatures[id] = "(" + parameters.join(",") + ")=>" + array; return array;
     }
-    const reduce: boolean = method == "reduce"; const sort: boolean = method == "sort";
-    if (sort && args.length == 0) { if (!numericType(element) && element != "string") this.report(module,id,"sort sin comparador requiere números o strings"); this.result.files[module].signatures[id] = "()=>" + array; return array; }
-    if (args.length != (reduce ? 2 : 1)) {
+    // reduce(callback, inicial?) y reduceRight como en TypeScript.
+    const reduce: boolean = method == "reduce" || method == "reduceRight"; const sort: boolean = method == "sort" || method == "toSorted";
+    if (sort && args.length == 0) { if (!numericType(element) && element != "string") this.report(module,id,method + " sin comparador requiere números o strings"); this.result.files[module].signatures[id] = "()=>" + array; return array; }
+    if (reduce ? (args.length < 1 || args.length > 2) : args.length != 1) {
       for (const arg of args) this.expression(module,arg,""); this.report(module,id,"Aridad incorrecta del método de array"); return "!error";
     }
+    const initial: boolean = reduce && args.length == 2;
     let accumulator: string = ""; if (reduce) {
-      accumulator = this.expression(module,args[0],explicitTypes.length == 0 ? "" : explicitTypes[0]);
-      if (explicitTypes.length > 0) { this.requireType(module,args[0],accumulator,explicitTypes[0]); accumulator = explicitTypes[0]; }
+      if (initial) {
+        accumulator = this.expression(module,args[1],explicitTypes.length == 0 ? "" : explicitTypes[0]);
+        if (explicitTypes.length > 0) { this.requireType(module,args[1],accumulator,explicitTypes[0]); accumulator = explicitTypes[0]; }
+      } else {
+        // Sin valor inicial el acumulador es el primer elemento.
+        accumulator = element;
+        if (explicitTypes.length > 0) this.report(module,id,method + " sin valor inicial no admite argumento de tipo");
+        if (this.transferType(element)) this.report(module,id,"E4101: " + method + " sin valor inicial copiaría un elemento con ownership");
+      }
     }
-    const callback: number = reduce ? args[1] : args[0];
+    const callback: number = args[0];
     const signature: string = this.expression(module,callback,"");
     if (functionClose(signature) < 0) { this.report(module,callback,"El método de array requiere un callback"); return "!error"; }
     const returns: string = functionReturn(signature); let parameters: string[] = [element];
@@ -1152,10 +1169,12 @@ export class NativeChecker {
     if (sort) parameters = [element,element];
     let expectedReturn: string = returns; if (reduce) expectedReturn = accumulator;
     if (explicitTypes.length > 0 && (method == "map" || method == "flatMap")) expectedReturn = (method == "map" ? explicitTypes[0] : semanticArray(explicitTypes[0]));
-    if (["filter","find","some","every"].includes(method)) expectedReturn = "boolean";
+    if (["filter","find","findIndex","findLast","findLastIndex","some","every"].includes(method)) expectedReturn = "boolean";
     if (method == "forEach") expectedReturn = "void";
     if (sort) expectedReturn = "number";
     const inputs: string[] = functionParams(signature);
+    // Como en TypeScript, el callback puede recibir también el índice.
+    if (!sort && inputs.length == parameters.length + 1) parameters.push("number");
     if (inputs.length != parameters.length) this.report(module,callback,"Aridad incorrecta del callback de array");
     for (let at: number = 0; at < inputs.length && at < parameters.length; at = at+1) {
       if (!this.compatible(parameters[at],inputs[at])) this.report(module,callback,"Parámetro de callback incompatible con el elemento de array");
@@ -1167,18 +1186,19 @@ export class NativeChecker {
     for (let at: number = 0; at < parameters.length; at = at+1) adaptedInputs.push(at < inputs.length && borrowedType(inputs[at]) ? inputs[at] : parameters[at]);
     const adapted: string = "(" + adaptedInputs.join(",") + ")=>" + expectedReturn;
     if (signature != adapted) this.result.files[module].conversions[callback] = adapted;
-    if (["filter","find","sort"].includes(method) && this.transferType(array)) {
+    if (["filter","find","findLast","sort","toSorted"].includes(method) && this.transferType(array)) {
       const object: number = bindingChild(n,EdgeRole.Object); const call: AstNode = this.node(module,object); const target: number = this.reference(module,object);
       if (call.kind != NodeKind.CallExpression || target < 0 || this.binding.symbols[target].name != "move" || this.binding.symbols[target].module >= 0) this.report(module,id,"E4101: una operación que copia owners requiere consumir el array con move");
     }
     let result: string = array;
     if (method == "map") { if (returns == "void") this.report(module,callback,"map no admite un resultado void"); result = semanticArray(expectedReturn); }
     if (method == "flatMap") { if (!returns.endsWith("[]") || functionClose(returns) >= 0) this.report(module,callback,"flatMap requiere un callback que devuelva un array"); result = expectedReturn; }
-    if (method == "find") result = "Optional<" + element + ">";
+    if (method == "find" || method == "findLast") result = "Optional<" + element + ">";
+    if (method == "findIndex" || method == "findLastIndex") result = "number";
     if (method == "some" || method == "every") result = "boolean";
     if (method == "forEach") result = "void";
     if (reduce) result = accumulator;
-    this.result.files[module].signatures[id] = "(" + (reduce ? accumulator + "," : "") + adapted + ")=>" + result;
+    this.result.files[module].signatures[id] = "(" + adapted + (initial ? "," + accumulator : "") + ")=>" + result;
     return result;
   }
   optionalCall(module: number, id: number, method: string, receiver: string, expected: string): string {
@@ -1711,7 +1731,7 @@ export class NativeChecker {
         if (borrowedType(receiver) || ![NodeKind.CallExpression,NodeKind.MemberCallExpression,NodeKind.NewExpression,NodeKind.ArrayLiteralExpression,NodeKind.TernaryExpression].includes(receiverNode.kind)) this.report(module,id,"E4101: una operación que copia owners requiere consumir el array con move");
       }
       const memberId: number = this.result.files[module].members[id];
-      if ((memberId >= 0 && this.methodMutates(memberId)) || (memoryValue(receiver).endsWith("[]") && ["push","pop","sort"].includes(n.get(AttributeKind.Method))) || (["Map","Set"].includes(genericBase(memoryValue(receiver))) && ["set","add","delete","clear"].includes(n.get(AttributeKind.Method)))) this.writableTarget(module,object,true);
+      if ((memberId >= 0 && this.methodMutates(memberId)) || (memoryValue(receiver).endsWith("[]") && ["push","pop","sort","shift","unshift","reverse","fill"].includes(n.get(AttributeKind.Method))) || (["Map","Set"].includes(genericBase(memoryValue(receiver))) && ["set","add","delete","clear"].includes(n.get(AttributeKind.Method)))) this.writableTarget(module,object,true);
       const optional: boolean = n.get(AttributeKind.Optional) == "true";
       const context: string = optional && genericBase(expected) == "Optional" ? genericArguments(expected)[0] : expected;
       const result: string = this.call(module,id,valueType,this.result.files[module].members[id],receiver,context);
