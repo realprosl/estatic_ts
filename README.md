@@ -383,6 +383,27 @@ function show(value: Named): void {
 
 La interfaz anterior se convierte en un `concept Named` y `show` en una función plantilla restringida. `interface` no admite `extends`: la reutilización de comportamiento se diseña mediante composición.
 
+## Valores que pueden faltar: `T | undefined`
+
+Como en TypeScript, un valor que puede no existir se escribe `T | undefined`. Por
+debajo es un `Optional<T>` (`std::optional` en C++): no hay valor especial ni
+excepciones.
+
+```ts
+let x: number | undefined;            // empieza sin valor
+x = 5;                                // se asigna un number sin más
+if (x !== undefined) print(x + 1);    // dentro del if, x es number
+function buscar(n: number): string | undefined { return n > 0 ? "sí" : undefined; }
+print(buscar(-1) ?? "nada");          // ?? da el valor por defecto
+function f(a: number, b?: number): number { return b === undefined ? a : a + b; }
+```
+
+- `===` y `!==` son `==` y `!=` (el dialecto no convierte tipos al comparar).
+- Solo un `T | undefined` se compara con `undefined`; fuera de la comprobación
+  sigue siendo `T | undefined` y el checker exige comprobarlo (o usar `??`).
+- Una variable sin valor inicial solo puede ser `T | undefined`.
+- Los errores con motivo (leer un fichero, parsear) siguen yendo por `Result<T, E>`.
+
 ## Clases mediante composición
 
 Las clases son tipos concretos por valor. Sus argumentos de construcción corresponden, en orden, a sus campos. No existe `extends`, clase base, método virtual ni conversión descendente.

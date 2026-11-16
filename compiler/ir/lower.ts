@@ -171,7 +171,9 @@ export class IrLowering {
     if (n.kind == NodeKind.IdentifierExpression) {
       let p: number = this.place(this.reference(id),id); if (p < 0) return p;
       const actual: number = this.result.functions[this.currentFunction].places[p].typeId; const expected: number = this.typeId(this.checked.files[this.module].types[id],id);
-      if (actual != expected && ["union","sum"].includes(this.result.typeDefinitions[actual].kind)) p = this.projection(p,"checkedView",expected,-1,-1,id); return p;
+      if (actual != expected && ["union","sum"].includes(this.result.typeDefinitions[actual].kind)) p = this.projection(p,"checkedView",expected,-1,-1,id);
+      else if (this.narrowedOptional(actual,expected)) p = this.projection(p,"checkedView",expected,-1,-1,id);
+      return p;
     }
     if (n.kind == NodeKind.MemberExpression || n.kind == NodeKind.IndexExpression) {
       const bound: number = this.checked.files[this.module].members[id];
@@ -394,6 +396,13 @@ export class IrLowering {
     if (id < 0) return -1;
     for (let at: number = this.overrideNodes.length-1; at >= 0; at = at-1) if (this.overrideNodes[at] == id) return this.emit("load",this.result.functions[this.currentFunction].places[this.overridePlaces[at]].typeId,[],this.overridePlaces[at],-1,"",id);
     if (this.checked.files[this.module].constantStates[id] == "evaluated") return this.evaluatedConstant(id);
+    // `undefined`: solo existe como valor de un T | undefined, es decir,
+    // un Optional<T> vacío.
+    if (this.isUndefined(id)) {
+      const target: string = this.checked.files[this.module].conversions[id];
+      if (genericBase(target) != "Optional") this.fail(id,"undefined solo puede usarse donde se espera un T | undefined");
+      return this.emit("none",this.typeId(target,id),[],-1,-1,"",id);
+    }
     let value: number = this.expressionInner(id); const conversion: string = this.checked.files[this.module].conversions[id];
     if (conversion != "" && !["ref","constRef"].includes(memoryMode(conversion))) value = this.convert(value,this.typeId(conversion,id),id); return value;
   }
@@ -472,6 +481,13 @@ export class IrLowering {
       const op: string = n.get(AttributeKind.Operator); const left: number = bindingChild(n,EdgeRole.Left); const right: number = bindingChild(n,EdgeRole.Right);
       if (op == "&&" || op == "||") return this.conditional(id,left,right,-1,typeId,op);
       if (op == "??") return this.coalesce(id,left,right,typeId);
+      // x == undefined / x != undefined sobre un T | undefined (Optional<T>).
+      if ((op == "==" || op == "!=") && this.isUndefined(left) != this.isUndefined(right)) {
+        const other: number = this.isUndefined(left) ? right : left;
+        let p: number = this.materialize(other); if (p < 0) p = this.optionalInput(other,id);
+        const present: number = this.optionalPresent(p,id);
+        return op == "!=" ? present : this.emit("unary",typeId,[present],-1,-1,"!",id);
+      }
       if (op == "instanceof") { const value: number = this.expression(left); const target: string = this.resolved(this.checked.files[this.module].types[right]); const result: number = this.emit("typeTest",typeId,[value],-1,-1,"",id); this.result.functions[this.currentFunction].blocks[this.block].instructions[this.result.functions[this.currentFunction].blocks[this.block].instructions.length-1].signature = this.typeId(target.slice(6,target.length),id); return result; }
       const a: number = this.readValue(this.expression(left),left); const b: number = this.readValue(this.expression(right),right);
       return this.binary(op,a,b,typeId,id);
@@ -588,6 +604,8 @@ export class IrLowering {
     }
     let p: number = this.place(symbol,id);
     if (p >= 0 && this.result.functions[this.currentFunction].places[p].typeId != typeId && this.result.typeDefinitions[this.result.functions[this.currentFunction].places[p].typeId].kind == "ref") p = this.projection(p,"deref",typeId,-1,-1,id);
+    // Un T | undefined ya comprobado (x != undefined) se lee como T.
+    if (p >= 0 && this.narrowedOptional(this.result.functions[this.currentFunction].places[p].typeId,typeId)) p = this.projection(p,"checkedView",typeId,-1,-1,id);
     const stored: number = this.result.functions[this.currentFunction].places[p].typeId; return this.convert(this.emit("load",stored,[],p,-1,"",id),typeId,id);
   }
   call(id: number, typeId: number, receiver: number = -1, indirect: number = -1, target: number = -1, targetModule: number = -1): number {
@@ -752,6 +770,15 @@ export class IrLowering {
     }
     const value: number = this.emit("callIndirect",parts[parts.length-1],operands,-1,-1,"",id); this.result.functions[this.currentFunction].blocks[this.block].instructions[this.result.functions[this.currentFunction].blocks[this.block].instructions.length-1].signature = signature;
     if (result >= 0) this.emit("store",-1,[this.convert(value,resultType,id)],result,-1,"",id);
+  }
+  isUndefined(id: number): boolean {
+    if (id < 0) return false; const n = this.node(id);
+    if (n.kind != NodeKind.IdentifierExpression || n.get(AttributeKind.Name) != "undefined") return false;
+    const symbol: number = this.reference(id); return symbol >= 0 && (this.binding.symbols[symbol].module) < 0;
+  }
+  narrowedOptional(actual: number, expected: number): boolean {
+    if (actual == expected || actual < 0 || expected < 0) return false;
+    const shape = this.result.typeDefinitions[actual]; return shape.kind == "Optional" && shape.arguments.length == 1 && shape.arguments[0] == expected;
   }
   optionalInput(input: number, id: number): number {
     const value: number = this.expression(input); const p: number = this.local(-1,this.valueType(value),false,id); this.emit("store",-1,[value],p,-1,"",id); this.track(p); return p;
@@ -972,7 +999,9 @@ export class IrLowering {
       if (n.get(AttributeKind.Pattern) != "") { this.destructuring(id); return; }
       const symbol: number = this.binding.files[this.module].declarations[id]; const typeId: number = this.typeId(this.checked.files[this.module].types[id],id);
       const p: number = this.globalSymbols.includes(symbol) ? this.place(symbol,id) : this.local(symbol,typeId,false,id);
-      const initializer: number = bindingChild(n,EdgeRole.Initializer); if (initializer < 0) { this.fail(id,"Variable sin inicializador"); return; }
+      const initializer: number = bindingChild(n,EdgeRole.Initializer);
+      if (initializer < 0 && this.result.typeDefinitions[typeId].kind == "Optional") { this.emit("store",-1,[this.emit("none",typeId,[],-1,-1,"",id)],p,-1,"",id); if (!this.globalSymbols.includes(symbol)) this.track(p); return; }
+      if (initializer < 0) { this.fail(id,"Variable sin inicializador"); return; }
       const value: number = this.convert(["ref","constRef"].includes(this.result.typeDefinitions[typeId].kind) ? this.argumentValue(initializer,this.result.types[typeId]) : this.expression(initializer),typeId,id); this.emit("store",-1,[value],p,-1,"",id); if (!this.globalSymbols.includes(symbol)) this.track(p); return;
     }
     if (kind == NodeKind.ExpressionStatement && [NodeKind.AssignmentExpression,NodeKind.CompoundAssignmentExpression].includes(this.node(bindingChild(n,EdgeRole.Expression)).kind)) { this.assignmentPlace(bindingChild(n,EdgeRole.Expression)); return; }

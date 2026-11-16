@@ -113,6 +113,7 @@ public:
   const auto& parent=f.places.at(p.base);S raw=place(f,p.base)+".get()";
   if(p.kind=="field")return field(raw,parent.typeId,p.field);
   if(p.kind=="deref")return shape(parent.typeId).kind=="readonly"?"ets::ir::view("+raw+")":"ets::ir::view(*("+raw+"))";
+  if(p.kind=="checkedView"&&shape(parent.typeId).kind=="Optional")return "ets::ir::view("+raw+".value())";
   if(p.kind=="checkedView")return sum(parent.typeId)?"ets::ir::view(std::get<"+n(index(choices(parent.typeId),p.typeId))+">("+raw+".data))":place(f,p.base);
   if(p.kind=="index"){const auto& s=shape(parent.typeId);if(in(s.kind,{"tuple","pack"}))return "ets::ir::view(std::get<"+n(constantIndex(f,p.index))+">("+raw+"))";if(this->p.types.at(parent.typeId)=="string")return fail("Los índices de string requieren lectura",p.source);return "ets::ir::view(("+raw+").at(static_cast<std::size_t>(v"+n(p.index)+".get()))"+(s.kind=="array"&&this->p.types.at(s.arguments.at(0))=="boolean"?".value":"")+")"; }
   return fail("Place C++ desconocido: "+p.kind,p.source);

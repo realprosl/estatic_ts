@@ -46,6 +46,9 @@ export class NativeChecker {
   }
   compatibleInner(actual: string, expected: string): boolean {
     if (actual == "!never") return true;
+    // T | undefined (Optional<T>) admite undefined y cualquier T, como en TypeScript.
+    if (genericBase(expected) == "Optional" && actual == "undefined") return true;
+    if (genericBase(expected) == "Optional" && genericBase(actual) != "Optional" && this.compatible(actual,genericArguments(expected)[0])) return true;
     if (typeCompatible(actual,expected)) return true;
     // Un literal de tipo se ensancha a su primitivo: `"Hola"` es un string.
     if (literalType(actual) && primitiveType(expected)) return literalKind(actual) == expected;
@@ -244,7 +247,7 @@ export class NativeChecker {
     // se codifican con ids internos. En los mensajes del usuario se sustituyen
     // por el nombre del simbolo: "#218" -> "Point", "@219" -> "T".
     // Un literal de tipo ("$lit:string=Hola") se muestra como el literal fuente.
-    let result: string = text;
+    let result: string = undefinedDisplay(text);
     if (result.indexOf(literalTypePrefix(),0) >= 0) {
       for (const part of splitTypes(result,"|")) {
         if (!literalType(part)) continue;
@@ -290,6 +293,11 @@ export class NativeChecker {
     } else if (!this.affectsFacts(module,yes) && !this.affectsFacts(module,no)) return;
     this.narrowedSymbols = []; this.narrowedTypes = [];
   }
+  undefinedLiteral(module: number, id: number): boolean {
+    if (id < 0) return false; const n: AstNode = this.node(module,id);
+    if (n.kind != NodeKind.IdentifierExpression || n.get(AttributeKind.Name) != "undefined") return false;
+    const sid: number = this.reference(module,id); return sid >= 0 && (this.binding.symbols[sid].module) < 0;
+  }
   narrowCondition(module: number, id: number, truth: boolean): void {
     if (id < 0) return; const n: AstNode = this.node(module,id);
     if (n.kind == NodeKind.UnaryExpression && n.get(AttributeKind.Operator) == "!") { this.narrowCondition(module,bindingChild(n,EdgeRole.Operand),!truth); return; }
@@ -302,6 +310,18 @@ export class NativeChecker {
       this.narrowedSymbols.push(sid); this.narrowedTypes.push(parts.length == 0 ? "!never" : joinTypes(parts,"|")); return;
     }
     if (n.kind == NodeKind.BinaryExpression && ["==","!=","===","!=="].includes(n.get(AttributeKind.Operator))) {
+      // x != undefined: dentro de la rama, x es T (no Optional<T>).
+      const left: number = bindingChild(n,EdgeRole.Left); const right: number = bindingChild(n,EdgeRole.Right);
+      const leftUndefined: boolean = this.undefinedLiteral(module,left); const rightUndefined: boolean = this.undefinedLiteral(module,right);
+      if (leftUndefined != rightUndefined) {
+        const subject: number = leftUndefined ? right : left;
+        if (this.node(module,subject).kind != NodeKind.IdentifierExpression) return;
+        const sid: number = this.reference(module,subject); const current: string = this.flowType(sid,module,id);
+        if (genericBase(memoryValue(current)) != "Optional") return;
+        const present: boolean = (n.get(AttributeKind.Operator) == "!=" || n.get(AttributeKind.Operator) == "!==") == truth;
+        if (present) { this.narrowedSymbols.push(sid); this.narrowedTypes.push(genericArguments(memoryValue(current))[0]); }
+        return;
+      }
       let query: number = bindingChild(n,EdgeRole.Left); let literal: number = bindingChild(n,EdgeRole.Right);
       if (this.node(module,query).kind != NodeKind.UnaryExpression) { query = bindingChild(n,EdgeRole.Right); literal = bindingChild(n,EdgeRole.Left); }
       const op: AstNode = this.node(module,query); const tag: AstNode = this.node(module,literal);
@@ -410,8 +430,13 @@ export class NativeChecker {
       let params: string[] = []; for (const p of functionParams(text)) params.push(this.annotation(module,id,p));
       return "(" + params.join(",") + ")=>" + this.annotation(module,id,functionReturn(text));
     }
+    if (text == "undefined") { this.report(module,id,"'undefined' solo como parte de un tipo: T | undefined\nayuda: escribe por ejemplo 'number | undefined'"); return "!error"; }
     const unions: string[] = splitTypes(text,"|");
     if (unions.length > 1) {
+      // T | undefined es Optional<T> (std::optional en C++): sin valor especial.
+      let present: string[] = []; let absent: boolean = false;
+      for (const p of unions) { if (p.trim() == "undefined" || p.trim() == "null") absent = true; else present.push(p); }
+      if (absent) { if (present.length == 0) { this.report(module,id,"Un tipo no puede ser solo undefined"); return "!error"; } return "Optional<" + this.annotation(module,id,joinTypes(present,"|")) + ">"; }
       let parts: string[] = [];
       for (const p of unions) parts.push(this.annotation(module,id,p));
       return joinTypes(parts,"|");
@@ -691,6 +716,7 @@ export class NativeChecker {
   }
   builtin(name: string): string {
     if (numericType(name)) return "!cast:" + name;
+    if (name == "undefined") return "undefined";
     if (name == "comptime") return "!comptime";
     if (name == "match") return "!match";
     if (name == "optionalMap" || name == "optionalAndThen") return "!optionalGlobal:"+(name == "optionalMap" ? "map" : "andThen");
@@ -1394,6 +1420,7 @@ export class NativeChecker {
     if (callable == "!print" || callable == "!consoleLog") {
 
       for (const valueType of actual) if (valueType == "void") this.report(module,id,"No se puede imprimir void");
+      for (const valueType of actual) if (valueType == "undefined") this.report(module,id,"No se puede imprimir undefined: no es un valor\nayuda: imprime un T | undefined con 'x ?? valorPorDefecto'");
       this.result.files[module].signatures[id] = "(" + actual.join(",") + ")=>void"; return "void";
     }
     if (callable == "!error") return callable;
@@ -1740,6 +1767,11 @@ export class NativeChecker {
           this.report(module,otherId,"E3001: No se puede concatenar un valor de tipo '" + this.displayType(other) + "' con un string" + (genericBase(other) == "Optional" ? "\nayuda: el valor puede no existir: usa 'valor ?? \"por defecto\"' o comprueba antes que existe" + catalogVariant("concatenacion-opcional") : "\nayuda: conviértelo antes a string (por ejemplo, con un método que devuelva su texto)" + catalogVariant("concatenacion")) + catalogArg("tipo", this.displayType(other)));
         return "string";
       }
+      if (["==","!=","===","!=="].includes(op) && (left == "undefined" || right == "undefined")) {
+        const other: string = memoryValue(left == "undefined" ? right : left);
+        if (genericBase(other) != "Optional" && other != "!error") this.report(module,id,"Solo un T | undefined se puede comparar con undefined: '" + this.displayType(other) + "' siempre tiene valor");
+        return "boolean";
+      }
       if (["==","!=","===","!==","<",">","<=",">="].includes(op)) {
         if (numericType(left) && numericType(right)) {
           const promoted: string = nativeBinaryPromotion(left,right,op);
@@ -1967,7 +1999,9 @@ export class NativeChecker {
       if (n.get(AttributeKind.Pattern) != "") { this.destructure(module,id); return; }
       const sid: number = this.binding.files[module].declarations[id]; const valueType: string = this.symbolType(sid,module,id);
       if (valueType == "void") this.report(module,id,"Una variable no puede ser void");
-      const init: number = bindingChild(n,EdgeRole.Initializer); this.requireType(module,init,this.expression(module,init,valueType),valueType); this.result.files[module].types[id] = valueType; return;
+      const init: number = bindingChild(n,EdgeRole.Initializer);
+      if (init < 0) { if (genericBase(valueType) != "Optional") this.report(module,id,"La variable necesita un valor inicial: solo un T | undefined puede empezar sin valor"); this.result.files[module].types[id] = valueType; return; }
+      this.requireType(module,init,this.expression(module,init,valueType),valueType); this.result.files[module].types[id] = valueType; return;
     }
     if (isCallableNodeKind(kind)) {
       const outerSwitches: number = this.switches; this.switches = 0;
@@ -2191,5 +2225,18 @@ export class NativeChecker {
     if (this.result.diagnostics.length == 0) { if (this.trace) progressDetail("frontend: comptime"); this.result = evaluateNativeComptime(this.graph,this.binding,this.result); }
     this.result.success = this.result.diagnostics.length == 0; return this.result;
   }
+}
+// Optional<X> se muestra como en TypeScript: "X | undefined".
+function undefinedDisplay(text: string): string {
+  let result: string = text; let at: number = result.indexOf("Optional<",0);
+  while (at >= 0) {
+    let depth: number = 0; let end: number = -1;
+    for (let k: number = at + 8; k < result.length; k = k + 1) { const c: string = result.charAt(k); if (c == "<") depth = depth + 1; if (c == ">") { depth = depth - 1; if (depth == 0) { end = k; break; } } }
+    if (end < 0) break;
+    const inner: string = result.slice(at + 9, end); const shown: string = inner.indexOf("|",0) >= 0 || inner.indexOf("=>",0) >= 0 ? "(" + inner + ")" : inner;
+    result = result.slice(0, at) + shown + " | undefined" + result.slice(end + 1, result.length);
+    at = result.indexOf("Optional<",0);
+  }
+  return result;
 }
 export function checkProject(graph: ModuleGraph, binding: BindingResult, trace: boolean = false): CheckResult { let checker: NativeChecker = new NativeChecker(graph,binding); checker.trace = trace; const checked: CheckResult = checker.check(); if (trace) progressDetail("frontend: module records"); return attachModuleRecords(graph,binding,checked); }

@@ -276,6 +276,11 @@ export class Lexer {
     if (three == "..." || three == "**=" || three == "<<=" || three == ">>=") {
       this.advance(); this.advance(); this.advance(); this.emit(three, three, offset, line, column); return;
     }
+    // === y !== son == y != (el dialecto no convierte tipos al comparar).
+    if (three == "===" || three == "!==") {
+      const same: string = three == "===" ? "==" : "!=";
+      this.advance(); this.advance(); this.advance(); this.emit(same, same, offset, line, column); return;
+    }
     const two: string = this.peek(0) + this.peek(1);
     const doubles: string[] = ["++", "--", "==", "!=", "<=", ">=", "&&", "||", "=>", "??", "?.", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="];
     if (doubles.includes(two)) {

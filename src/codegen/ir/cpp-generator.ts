@@ -188,6 +188,7 @@ export class IrCppGenerator {
     const parent=f.places[p.base], raw=`${this.place(f,p.base)}.get()`;
     if(p.kind==="field")return this.field(raw,parent.typeId,p.field);
     if(p.kind==="deref")return this.shape(parent.typeId).kind==="readonly"?`ets::ir::view(${raw})`:`ets::ir::view(*(${raw}))`;
+    if(p.kind==="checkedView"&&this.shape(parent.typeId).kind==="Optional")return `ets::ir::view(${raw}.value())`;
     if(p.kind==="checkedView")return sumKinds.has(this.shape(parent.typeId).kind)?`ets::ir::view(std::get<${this.choices(parent.typeId).indexOf(p.typeId)}>(${raw}.data))`:this.place(f,p.base);
     if(p.kind==="index") {
       const s=this.shape(parent.typeId);
