@@ -148,6 +148,7 @@ desde la raíz del repositorio. `--help` muestra la ayuda de los que la tienen.
 | `scripts/build-ets-compiler.sh` | Compila el compilador ETS: `stage1` con la semilla (`build/ets-compiler/etsc`) o `stage1`+`stage2` (`etsc-stage2`), con tiempos en `timings.tsv`. | `stage1` \| `stage2`; entorno `ESTATIC_ETS_OPTIMIZATION=-O1\|-O2\|-O3`, `ESTATIC_ETS_BUILD_DIR` |
 | `scripts/check-ets-compiler.sh` | Prueba de humo de un compilador: compila y ejecuta un programa mínimo. | `[COMPILADOR]` (por defecto `build/ets-compiler/etsc`) |
 | `scripts/selfhost-ir-frontend.sh` | Adaptador que usa el CI: expone el compilador autoalojado con el protocolo fuente→IR JSON de los fixtures. | entorno `ESTATIC_SELFHOST_COMPILER` |
+| `scripts/ci-tests.mjs` | Elige los tests de la CI rápida según las rutas tocadas y los reparte en shards. La CI completa (toda la suite, e2e, instalación, punto fijo y binarios) se lanza con la etiqueta `ci-completa` en la PR, a mano, en main y cada noche. | `--full`, `--changed FICHERO`, `--shards N` |
 
 ### Dependencias nativas (en `build/libs/` y `build/tools/`)
 

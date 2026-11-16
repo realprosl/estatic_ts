@@ -1,26 +1,85 @@
 name: CI
 
+# Dos niveles:
+# - Rápida (cada push a una PR): tests de la zona tocada (scripts/ci-tests.mjs)
+#   repartidos en shards, más la regresión de includes como humo (construye la
+#   semilla y compila programas cortos). Si solo cambia documentación no corre
+#   nada. Objetivo: <10 min.
+# - Completa: toda la suite en 4 shards + e2e + instalación sin Node, y en
+#   ets-selfhost.yml / seed-prebuilt.yml el punto fijo y los binarios. Se lanza
+#   con la etiqueta `ci-completa` en la PR, a mano (workflow_dispatch), en cada
+#   push a main y cada noche. Ninguna PR se fusiona sin la completa en verde.
+
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    - cron: '23 2 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  # Un unico run por rama: el evento `push` y el `pull_request` comparten
-  # grupo, asi que el segundo cancela al primero en vez de duplicar la
-  # corrida. Un push directo a una rama sin PR sigue teniendo su run.
-  group: ci-${{ github.head_ref || github.ref_name }}
+  # Un único run por rama; poner `ci-completa` cancela la rápida en curso.
+  # Otras etiquetas van a un grupo propio para no cancelar nada.
+  group: ci-${{ github.head_ref || github.ref_name }}${{ github.event.action == 'labeled' && github.event.label.name != 'ci-completa' && format('-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Suite (unit + bootstrap + e2e)
+  plan:
+    name: Plan (qué se prueba)
+    # Una etiqueta distinta de ci-completa no relanza nada.
+    if: github.event.action != 'labeled' || github.event.label.name == 'ci-completa'
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 5
+    outputs:
+      full: ${{ steps.mode.outputs.full }}
+      matrix: ${{ steps.select.outputs.matrix }}
+      count: ${{ steps.select.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Modo
+        id: mode
+        shell: bash
+        run: |
+          full=false
+          if [[ "${{ github.event_name }}" != pull_request ]]; then full=true; fi
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'ci-completa') }}" == true ]]; then full=true; fi
+          echo "full=$full" >> "$GITHUB_OUTPUT"
+      - name: Seleccionar tests
+        id: select
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.mode.outputs.full }}" == true ]]; then
+            node scripts/ci-tests.mjs --full --shards 4 > "$RUNNER_TEMP/plan.txt"
+          else
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD" > "$RUNNER_TEMP/changed.txt"
+            node scripts/ci-tests.mjs --changed "$RUNNER_TEMP/changed.txt" --shards 4 > "$RUNNER_TEMP/plan.txt"
+          fi
+          cat "$RUNNER_TEMP/plan.txt" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Plan de CI (${{ steps.mode.outputs.full == 'true' && 'completa' || 'rápida' }})"
+            echo '```text'
+            grep -v '^matrix=' "$RUNNER_TEMP/plan.txt"
+            node -e 'const m=JSON.parse(process.argv[1].slice(7));for(const s of m.include)console.log(`shard ${s.shard}: ${s.tests}`)' "$(grep '^matrix=' "$RUNNER_TEMP/plan.txt")"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    name: Tests ${{ matrix.shard }}
+    needs: plan
+    if: needs.plan.outputs.count != '0'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,27 +121,70 @@ jobs:
       - name: Install project (precompiles the C++ runtime)
         run: npm install
 
-      - name: Unit + bootstrap test suite
+      - name: Tests del shard
         env:
           ESTATIC_ANALYSIS_JOBS: '2'
           ESTATIC_TEST_COMPARE_JOBS: '1'
         run: |
           set -o pipefail
-          npm test 2>&1 | tee unit-test.log
+          node --experimental-strip-types --test --test-concurrency=1 ${{ matrix.tests }} 2>&1 | tee unit-test.log
 
-      - name: Preserve complete unit test log
+      - name: Preserve test log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: unit-test-log
+          name: unit-test-log-${{ matrix.shard }}
           path: unit-test.log
           retention-days: 7
 
+  e2e:
+    name: End-to-end (completa)
+    needs: plan
+    if: needs.plan.outputs.full == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Ensure system dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages=(g++ libssl-dev libcurl4-openssl-dev libuv1-dev)
+          missing=()
+          apt_updated=0
+          for package in "${packages[@]}"; do
+            if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q '^install ok installed$'; then
+              missing+=("$package")
+            fi
+          done
+          if ((${#missing[@]})); then
+            sudo apt-get -o Acquire::Retries=5 update
+            sudo apt-get -o Acquire::Retries=5 install -y "${missing[@]}"
+            apt_updated=1
+          else
+            echo 'Native compiler and runtime dependencies already present on runner.'
+          fi
+          # El backend HTTP de drogon es opcional: si el paquete no esta, un
+          # unico test falla por entorno y el resto de la suite sigue valida.
+          # libjsoncpp-dev aporta las cabeceras `json/json.h` que drogon
+          # incluye; libdrogon-dev solo arrastra el runtime de jsoncpp.
+          # Drogon ademas de jsoncpp necesita libuuid (-luuid) y zlib (-lz).
+          # Drogon nunca viene preinstalado: refresca los indices si el paso
+          # anterior no lo hizo, para no degradar su test a un aviso por apt viejo.
+          if ((apt_updated == 0)); then sudo apt-get -o Acquire::Retries=5 update; fi
+          sudo apt-get -o Acquire::Retries=5 install -y libdrogon-dev libjsoncpp-dev uuid-dev zlib1g-dev || echo "::warning::libdrogon-dev no disponible"
+
+      - name: Install project (precompiles the C++ runtime)
+        run: npm install
+
       - name: End-to-end suite (compiles and runs real programs)
-        # Se ejecuta siempre, incluso si la suite anterior falla: el e2e
-        # compila y ejecuta programas reales, y es la senal mas valuable
-        # cuando el resto ya esta verde.
-        if: always()
         env:
           SKIP_NETWORK: '1'
         run: npm run test:e2e
@@ -90,6 +192,8 @@ jobs:
   install:
     name: Instalación sin Node
     runs-on: ubuntu-24.04
+    needs: plan
+    if: needs.plan.outputs.full == 'true'
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -143,6 +247,9 @@ jobs:
   includes:
     name: Regresión de includes (semilla C++)
     runs-on: ubuntu-24.04
+    needs: plan
+    # Humo de la rápida: construye la semilla y compila programas cortos.
+    if: needs.plan.outputs.count != '0'
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4

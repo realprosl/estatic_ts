@@ -1,7 +1,22 @@
 name: ETS compiler self-hosting
+# El punto fijo (selfhost-O2, ~45 min) es parte de la CI completa: corre con la
+# etiqueta `ci-completa`, a mano, en main y cada noche. Las regresiones de copia
+# nativa son baratas y van también en la rápida.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '41 2 * * *'
+  push:
+    branches: [main]
+    paths:
+      - compiler/**
+      - native-cpp/**
+      - runtime/**
+      - src/codegen/ir/native/**
+      - scripts/build-ets-compiler.sh
+      - scripts/check-ets-compiler.sh
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - compiler/**
       - native-cpp/**
@@ -13,9 +28,13 @@ on:
       - .github/workflows/ets-selfhost.yml
 permissions:
   contents: read
+concurrency:
+  group: selfhost-${{ github.head_ref || github.ref_name }}${{ github.event.action == 'labeled' && github.event.label.name != 'ci-completa' && format('-{0}', github.run_id) || '' }}
+  cancel-in-progress: true
 jobs:
   native-copy-regressions:
     name: Native backend copy regressions
+    if: github.event.action != 'labeled' || github.event.label.name == 'ci-completa'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -55,6 +74,7 @@ jobs:
         run: node --experimental-strip-types --test --test-concurrency=1 --test-name-pattern='readonly' compiler/checker/checker.test.ts compiler/ir/readonly-verifier.test.ts compiler/ir/native.test.ts
   selfhost:
     needs: native-copy-regressions
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci-completa')
     strategy:
       fail-fast: false
       matrix:
