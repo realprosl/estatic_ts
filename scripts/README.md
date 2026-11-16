@@ -134,7 +134,7 @@ Iba a compilar una herramienta `ets-ast-dump` reutilizando los `.o` de
 
 Verifica que el **contrato de paso de objetos** sea el mismo en stage 0
 (`src/`) y en el frontend nativo (`compiler/ir`): `ref<T>` → `T&`,
-`constRef<T>` → `const T&`, `out T` → `T&`, `ptr<T>` → `std::unique_ptr<T>`,
+`constRef<T>` → `const T&`, `ptr<T>` → `std::unique_ptr<T>`,
 `constPtr<T>` → `std::unique_ptr<const T>` y `T` → copia.
 
 Compara el *observable* —la forma del parámetro en la firma C++—, no el texto:

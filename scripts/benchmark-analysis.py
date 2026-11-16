@@ -20,9 +20,9 @@ def workload():
     # Mutable parameters keep contextual callee checking active. No execution of
     # these functions is necessary: every definition must still be checked.
     source = "class Cell{value:number=1;}\n"
-    source += "function touch(out cell:Cell):number{" + "cell.value+=1;" * 16 + "return cell.value;}\n"
+    source += "function touch(cell:ref<Cell>):number{" + "cell.value+=1;" * 16 + "return cell.value;}\n"
     for index in range(48):
-        source += f"function work{index}(out cell:Cell):number{{\n"
+        source += f"function work{index}(cell:ref<Cell>):number{{\n"
         source += "touch(cell);\n" * 32
         source += "return cell.value;}\n"
     return source
