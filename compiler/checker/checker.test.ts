@@ -2130,3 +2130,9 @@ test("checker: string acepta los argumentos opcionales de TypeScript",()=>{
   error('const s="abc";print(s.slice(1,2,3));',/Aridad|argument/);
   error('const n:number[]=[1];print(String(n));',/String\(x\)/);
 });
+test('checker: array flat, splice y estáticos de Array con tipos de TypeScript',()=>{
+  const g=check('let d:number[][][]=[[[1]]];const a:number[]=d.flat(2);const b:number[][]=d.flat();let c:number[]=[1,2];const r:number[]=c.splice(0,1,5);const k:number[]=c.keys();const e:[number,number][]=c.entries();const o:string[]=Array.of("a");const f:string[]=Array.from("ab");const i:boolean=Array.isArray(c);print(a,b,r,k,e,o,f,i);');
+  assert.ok(types(g,'CallExpression').length>0);
+  error('let d:number[][]=[[1]];let n:number=1;print(d.flat(n));',/profundidad entera literal/);
+  error('print(Array.from(3));',/Array.from acepta/);
+});

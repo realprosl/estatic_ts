@@ -517,7 +517,7 @@ export class EffectAnalyzer {
         for (const source of this.taskSources(m,this.taskOperand(m,id))) if (source >= 0) { const sourceModule: number = this.sourceModule(source); if (this.helper(sourceModule,source-this.offsets[sourceModule]) == "sleep") this.summaries[owner].external = true; }
       }
       if (this.helper(m,id) == "move") this.addEffect(owner,this.root(m,bindingChild(n,EdgeRole.Args)),"move");
-      if (n.kind == NodeKind.MemberCallExpression && ["push","pop","sort","shift","unshift","reverse","fill","set","add","delete","clear"].includes(n.get(AttributeKind.Method))) this.addEffect(owner,this.root(m,bindingChild(n,EdgeRole.Object)),"write");
+      if (n.kind == NodeKind.MemberCallExpression && ["push","pop","sort","shift","unshift","reverse","fill","splice","set","add","delete","clear"].includes(n.get(AttributeKind.Method))) this.addEffect(owner,this.root(m,bindingChild(n,EdgeRole.Object)),"write");
       if (n.kind == NodeKind.ReturnStatement) { const value: number = bindingChild(n,EdgeRole.Value); if (value >= 0) for (const origin of this.points[this.vertex(m,value)].origins) if (!this.summaries[owner].returned.includes(origin)) this.summaries[owner].returned.push(origin); }
       if (n.kind == NodeKind.VariableDeclaration || n.kind == NodeKind.UsingDeclaration) {
         const sid: number = this.binding.files[m].declarations[id]; const init: number = bindingChild(n,EdgeRole.Initializer);

@@ -738,7 +738,7 @@ export class NativeChecker {
     if (name == "exitProcess") return "(number)=>void";
     if (name == "move" || name == "ref" || name == "constRef") return "!" + name;
     if (name == "length") return "!length";
-    if (["Math","JSON","Date","String"].includes(name)) return "!" + name;
+    if (["Math","JSON","Date","String","Array"].includes(name)) return "!" + name;
     if (name == "console") return "Console";
     if (["fs","path","process","http","child_process"].includes(name)) return "!"+name;
     if (nativeBuiltinSignatures(name).length > 0) return "!builtin:"+name;
@@ -762,6 +762,45 @@ export class NativeChecker {
     return "!error";
   }
   // Nombres de los miembros declarados de un tipo nominal (para sugerencias).
+  // Array.isArray(x), Array.of(...items) y Array.from(fuente, mapFn?) con la firma de TypeScript.
+  arrayStaticCall(module: number, id: number, method: string, expected: string): string {
+    let args: number[] = []; for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Args) args.push(edge.node);
+    if (method == "isArray") {
+      if (args.length != 1) { this.report(module,id,"Array.isArray requiere un argumento"); return "!error"; }
+      const value: string = this.expression(module,args[0],"");
+      this.result.files[module].signatures[id] = "(" + value + ")=>boolean"; return "boolean";
+    }
+    if (method == "of") {
+      let element: string = semanticElement(expected) != "" && expected.endsWith("[]") ? semanticElement(expected) : "";
+      let actual: string[] = [];
+      for (const arg of args) {
+        let value: string = memoryValue(this.expression(module,arg,element)); if (literalType(value)) value = literalKind(value);
+        if (element == "") element = value;
+        this.requireType(module,arg,value,element); actual.push(element);
+      }
+      if (element == "") { this.report(module,id,"Array.of() sin elementos necesita un tipo de destino"); return "!error"; }
+      this.result.files[module].signatures[id] = "(" + actual.join(",") + ")=>" + element + "[]"; return element + "[]";
+    }
+    // Array.from(fuente, mapFn?): fuente array, Set, Map o string.
+    if (args.length < 1 || args.length > 2) { for (const arg of args) this.expression(module,arg,""); this.report(module,id,"Aridad incorrecta de Array.from"); return "!error"; }
+    const source: string = memoryValue(this.expression(module,args[0],""));
+    let element: string = "";
+    if (source.endsWith("[]")) element = semanticElement(source);
+    else if (genericBase(source) == "Set") element = genericArguments(source)[0];
+    else if (genericBase(source) == "Map") element = "[" + genericArguments(source)[0] + "," + genericArguments(source)[1] + "]";
+    else if (source == "string") element = "string";
+    else { this.report(module,args[0],"Array.from acepta un array, Set, Map o string, no " + this.displayType(source)); return "!error"; }
+    if (args.length == 1) { this.result.files[module].signatures[id] = "(" + source + ")=>" + element + "[]"; return element + "[]"; }
+    const callback: string = this.expression(module,args[1],"");
+    if (functionClose(callback) < 0) { this.report(module,args[1],"Array.from requiere un callback como segundo argumento"); return "!error"; }
+    const inputs: string[] = functionParams(callback);
+    if (inputs.length < 1 || inputs.length > 2) { this.report(module,args[1],"El callback de Array.from recibe (valor) o (valor, índice)"); return "!error"; }
+    this.requireType(module,args[1],memoryValue(inputs[0]),element);
+    if (inputs.length == 2) this.requireType(module,args[1],memoryValue(inputs[1]),"number");
+    const result: string = functionReturn(callback);
+    this.result.files[module].signatures[id] = "(" + source + "," + callback + ")=>" + result + "[]"; return result + "[]";
+  }
+
   // Número de argumentos de la llamada id (0 si no es una llamada).
   callArity(module: number, id: number): number {
     let count: number = 0; for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Args) count = count + 1;
@@ -879,6 +918,7 @@ export class NativeChecker {
       if (name == "replace" || name == "replaceAll") return "(string,string)=>string";
     }
     if (valueType == "!String" && (name == "fromCharCode" || name == "fromCodePoint")) return "(...number[])=>string";
+    if (valueType == "!Array" && ["isArray","from","of"].includes(name)) return "!arrayStatic." + name;
     if (valueType.endsWith("[]")) {
       const element: string = semanticElement(valueType);
       if (["map","filter","reduce","reduceRight","forEach","find","findIndex","findLast","findLastIndex","some","every","flatMap","sort","toSorted","concat"].includes(name)) return "!array." + name;
@@ -894,6 +934,30 @@ export class NativeChecker {
       if (name == "reverse" || name == "toReversed") return "()=>" + valueType;
       if (name == "fill") return "(" + element + (count > 1 ? ",number" : "") + (count > 2 ? ",number" : "") + ")=>" + valueType;
       if (name == "with") return "(number," + element + ")=>" + valueType;
+      if (name == "keys") return "()=>number[]";
+      if (name == "values") return "()=>" + valueType;
+      if (name == "entries") return "()=>[number," + element + "][]";
+      if (name == "splice" || name == "toSpliced") {
+        // splice(start, deleteCount?, ...items): splice devuelve lo quitado, toSpliced la copia.
+        let params: string = "number"; if (count > 1) params = params + ",number"; for (let k: number = 2; k < count; k = k+1) params = params + "," + element;
+        return "(" + params + ")=>" + valueType;
+      }
+      if (name == "flat") {
+        // flat(profundidad = 1): la profundidad debe ser un literal para conocer el tipo.
+        let depth: number = 1;
+        if (count > 0) {
+          let argument: number = -1; for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Args && argument < 0) argument = edge.node;
+          const literal: AstNode = this.node(module,argument);
+          const digits: string = literal.get(AttributeKind.Raw) == "" ? literal.get(AttributeKind.Value) : literal.get(AttributeKind.Raw);
+          let integer: boolean = digits.length > 0; for (let at: number = 0; at < digits.length; at = at+1) if (digits.charCodeAt(at) < 48 || digits.charCodeAt(at) > 57) integer = false;
+          if (literal.kind != NodeKind.LiteralExpression || literal.get(AttributeKind.LiteralType) != "number" || !integer) { this.report(module,argument,"flat requiere una profundidad entera literal"); return "!error"; }
+          depth = 0;
+          for (let at: number = 0; at < digits.length; at = at+1) depth = depth * 10 + (digits.charCodeAt(at) - 48);
+        }
+        let result: string = valueType;
+        for (let level: number = 0; level < depth && semanticElement(result).endsWith("[]"); level = level+1) result = semanticElement(result);
+        return (count > 0 ? "(number)=>" : "()=>") + result;
+      }
       if (name == "slice") {
         // Como en JavaScript, slice(start) llega hasta el final: process.argv.slice(2).
         return (this.callArity(module,id) == 1 ? "(number)=>" : "(number,number)=>") + valueType;
@@ -985,7 +1049,7 @@ export class NativeChecker {
           // Un builtin que muta un campo de `this` cambia su estado observable.
           const base: number = bindingChild(receiver,EdgeRole.Object);
           const baseNode: AstNode = this.node(s.module,base);
-          if (baseNode.kind == NodeKind.IdentifierExpression && baseNode.get(AttributeKind.Name) == "this" && ["push","pop","sort","shift","unshift","reverse","fill","set","add","delete","clear"].includes(name)) return true;
+          if (baseNode.kind == NodeKind.IdentifierExpression && baseNode.get(AttributeKind.Name) == "this" && ["push","pop","sort","shift","unshift","reverse","fill","splice","set","add","delete","clear"].includes(name)) return true;
         }
         for (const edge of n.edges) work.push(edge.node);
         continue;
@@ -1398,6 +1462,7 @@ export class NativeChecker {
     }
     if (callable.startsWith("!optional.")) return this.optionalCall(module,id,callable.slice(10,callable.length),receiver,expected);
     if (callable.startsWith("!array.")) return this.arrayCall(module,id,callable.slice(7,callable.length),receiver);
+    if (callable.startsWith("!arrayStatic.")) return this.arrayStaticCall(module,id,callable.slice(13,callable.length),expected);
     if (callable.startsWith("!container:")) return this.containerCall(module,id,callable.slice(11,callable.length),expected);
     const n: AstNode = this.node(module,id); let args: number[] = []; let actual: string[] = [];
     let contexts: string[] = functionParams(callable);
@@ -1722,7 +1787,7 @@ export class NativeChecker {
         if (borrowedType(receiver) || ![NodeKind.CallExpression,NodeKind.MemberCallExpression,NodeKind.NewExpression,NodeKind.ArrayLiteralExpression,NodeKind.TernaryExpression].includes(receiverNode.kind)) this.report(module,id,"E4101: una operación que copia owners requiere consumir el array con move");
       }
       const memberId: number = this.result.files[module].members[id];
-      if ((memberId >= 0 && this.methodMutates(memberId)) || (memoryValue(receiver).endsWith("[]") && ["push","pop","sort","shift","unshift","reverse","fill"].includes(n.get(AttributeKind.Method))) || (["Map","Set"].includes(genericBase(memoryValue(receiver))) && ["set","add","delete","clear"].includes(n.get(AttributeKind.Method)))) this.writableTarget(module,object,true);
+      if ((memberId >= 0 && this.methodMutates(memberId)) || (memoryValue(receiver).endsWith("[]") && ["push","pop","sort","shift","unshift","reverse","fill","splice"].includes(n.get(AttributeKind.Method))) || (["Map","Set"].includes(genericBase(memoryValue(receiver))) && ["set","add","delete","clear"].includes(n.get(AttributeKind.Method)))) this.writableTarget(module,object,true);
       const optional: boolean = n.get(AttributeKind.Optional) == "true";
       const context: string = optional && genericBase(expected) == "Optional" ? genericArguments(expected)[0] : expected;
       const result: string = this.call(module,id,valueType,this.result.files[module].members[id],receiver,context);

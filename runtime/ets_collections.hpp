@@ -425,6 +425,106 @@ inline std::vector<T> ets_with_vec(const std::vector<T>& vec, double index, cons
     return out;
 }
 
+// splice(start, deleteCount?, ...items): quita deleteCount elementos desde
+// start (todos si se omite), mete items en su lugar y devuelve lo quitado.
+// toSpliced hace lo mismo sobre una copia y devuelve la copia.
+template <typename T>
+inline std::size_t ets_splice_count(const std::vector<T>& vec, std::size_t from, double count) {
+    if (std::isnan(count) || count < 0) return 0;
+    const double left = static_cast<double>(vec.size() - from);
+    return static_cast<std::size_t>(std::trunc(count) > left ? left : std::trunc(count));
+}
+template <typename T, typename... Items>
+inline std::vector<T> ets_splice_items_vec(std::vector<T>& vec, std::size_t from, std::size_t count, Items&&... items) {
+    std::vector<T> removed(std::make_move_iterator(vec.begin() + from), std::make_move_iterator(vec.begin() + from + count));
+    vec.erase(vec.begin() + from, vec.begin() + from + count);
+    std::vector<T> added;
+    (added.push_back(std::forward<Items>(items)), ...);
+    vec.insert(vec.begin() + from, std::make_move_iterator(added.begin()), std::make_move_iterator(added.end()));
+    return removed;
+}
+template <typename T>
+inline std::vector<T> ets_splice_vec(std::vector<T>& vec, double start) {
+    const std::size_t from = ets_relative_index(start, vec.size());
+    return ets_splice_items_vec(vec, from, vec.size() - from);
+}
+template <typename T, typename... Items>
+inline std::vector<T> ets_splice_vec(std::vector<T>& vec, double start, double count, Items&&... items) {
+    const std::size_t from = ets_relative_index(start, vec.size());
+    return ets_splice_items_vec(vec, from, ets_splice_count(vec, from, count), std::forward<Items>(items)...);
+}
+template <typename T, typename... Items>
+inline std::vector<T> ets_to_spliced_vec(const std::vector<T>& vec, Items&&... args) {
+    std::vector<T> copy = vec;
+    ets_splice_vec(copy, std::forward<Items>(args)...);
+    return copy;
+}
+
+// keys() / values() / entries(): como arrays (sirven en for...of y Array.from).
+template <typename T>
+inline std::vector<double> ets_keys_vec(const std::vector<T>& vec) {
+    std::vector<double> out(vec.size());
+    for (std::size_t i = 0; i < vec.size(); ++i) out[i] = static_cast<double>(i);
+    return out;
+}
+template <typename R, typename T>
+inline R ets_entries_vec(const std::vector<T>& vec) {
+    R out;
+    out.reserve(vec.size());
+    for (std::size_t i = 0; i < vec.size(); ++i) out.emplace_back(static_cast<double>(i), vec[i]);
+    return out;
+}
+
+// flat(): un nivel de anidamiento (el backend lo encadena para más niveles).
+template <typename T>
+inline std::vector<T> ets_flat_vec(const std::vector<std::vector<T>>& vec) {
+    std::vector<T> out;
+    for (const auto& inner : vec) out.insert(out.end(), inner.begin(), inner.end());
+    return out;
+}
+
+// Array.isArray / Array.of / Array.from.
+template <typename T> struct ets_is_vector : std::false_type {};
+template <typename T, typename A> struct ets_is_vector<std::vector<T, A>> : std::true_type {};
+template <typename T> struct ets_is_std_tuple : std::false_type {};
+template <typename... T> struct ets_is_std_tuple<std::tuple<T...>> : std::true_type {};
+template <typename T>
+inline bool ets_is_array(const T&) {
+    return ets_is_vector<T>::value || ets_is_std_tuple<T>::value;
+}
+template <typename R, typename... Items>
+inline R ets_array_of(Items&&... items) {
+    R out;
+    (out.push_back(std::forward<Items>(items)), ...);
+    return out;
+}
+// Recorre la fuente (array, Set, Map o string) con (valor, índice).
+template <typename S, typename F>
+inline void ets_array_source(const S& source, F&& visit) {
+    std::size_t index = 0;
+    if constexpr (std::is_same_v<S, std::string>) {
+        for (const char c : source) visit(std::string(1, c), index++);
+    } else if constexpr (ets_is_vector<S>::value) {
+        for (const auto& item : source) visit(item, index++);
+    } else if constexpr (requires { source.data().begin()->second; }) {
+        for (const auto& pair : source.data()) visit(std::make_tuple(pair.first, pair.second), index++);
+    } else {
+        for (const auto& item : source.data()) visit(item, index++);
+    }
+}
+template <typename R, typename S>
+inline R ets_array_from(const S& source) {
+    R out;
+    ets_array_source(source, [&](const auto& item, std::size_t) { out.push_back(item); });
+    return out;
+}
+template <typename R, typename S, typename F>
+inline R ets_array_from(const S& source, F&& fn) {
+    R out;
+    ets_array_source(source, [&](const auto& item, std::size_t index) { out.push_back(ets_call_item(fn, item, index)); });
+    return out;
+}
+
 // join(sep = ","): cualquier array; cada elemento como lo escribe JavaScript
 // (números con su formato, booleanos true/false, undefined vacío).
 // Booleano guardado como { bool value } (ets::ir::Boolean evita vector<bool>).

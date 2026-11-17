@@ -11,7 +11,7 @@ export const asyncCalls=new Set(["sleep","delay","spawn","cancel","cancellationT
 export const stringMethods=new Set(["charAt","charCodeAt","indexOf","lastIndexOf","includes","startsWith","endsWith","slice","substring","substr","split","trim","trimStart","trimEnd","toUpperCase","toLowerCase","repeat","padStart","padEnd","replace","replaceAll","localeCompare","toString","at","codePointAt","concat","trimLeft","trimRight"]);
 export const objectMethods:Record<string,Set<string>>={
   "!Math":new Set(["floor","ceil","round","abs","sqrt","pow","min","max","random"]),
-  "!Date":new Set(["now","utc"]), "!String":new Set(["fromCharCode","fromCodePoint"]), "!JSON":new Set(["parse","stringify","parseValue","stringifyBool","stringifyNumber","stringifyValue"]),
+  "!Date":new Set(["now","utc"]), "!String":new Set(["fromCharCode","fromCodePoint"]), "!Array":new Set(["isArray","from","of"]), "!JSON":new Set(["parse","stringify","parseValue","stringifyBool","stringifyNumber","stringifyValue"]),
   "!path":new Set(["dirname","basename","extname","join","resolve","normalize","isAbsolute"]),
   "!fs":new Set(["readFile","writeFile","appendFile","copyFile","rename","unlink","readFileSync","writeFileSync","appendFileSync","copyFileSync","renameSync","unlinkSync","existsSync"]),
   "!process":new Set(["cwd","exit"]),
@@ -87,6 +87,12 @@ export function emitRuntimeCall(g:IrCppGenerator,f:IrFunction,i:IrInstruction):s
   if(base==="process"&&method==="argv")return "ets::processArgv()";
   if(base==="process"&&method==="argc")return "ets::processArgc()";
   if(base==="Console"&&TERMINAL_METHODS[method]){g.headers.add("runtime/ets_terminal.hpp");return `console.${method}(${args()})`;}
+  if(base==="!Array"&&["isArray","of","from"].includes(method)){
+    const R=g.type(i.typeId);
+    if(method==="isArray")return `ets_is_array(${a(0)})`;
+    if(method==="of")return `ets_array_of<${R}>(${args()})`;
+    return i.operands.length>1?`ets_array_from<${R}>(${a(0)},${g.callback(f,i,1)})`:`ets_array_from<${R}>(${a(0)})`;
+  }
   if(objectMethods[base]?.has(method)) {
     if(["!fs","!path","!process"].includes(base)){g.headers.add("runtime/ets_runtime_full.hpp");g.backends.libuv=true;}
     const object=base==="Console"?"console":base.slice(1);
@@ -121,6 +127,12 @@ export function emitRuntimeCall(g:IrCppGenerator,f:IrFunction,i:IrInstruction):s
     if(method==="reverse")return `ets_reverse_vec(${receiver})`;
     if(method==="fill")return `ets_fill_vec<${E}>(${receiver}${rest(1)})`;
     if(method==="toReversed")return `ets_to_reversed_vec(${receiver})`;
+    if(method==="splice")return `ets_splice_vec<${E}>(${receiver}${rest(1)})`;
+    if(method==="toSpliced")return `ets_to_spliced_vec<${E}>(${receiver}${rest(1)})`;
+    if(method==="keys")return `ets_keys_vec(${receiver})`;
+    if(method==="values")return `${g.type(i.typeId)}(${receiver})`;
+    if(method==="entries")return `ets_entries_vec<${g.type(i.typeId)}>(${receiver})`;
+    if(method==="flat"){let text=receiver;let from=g.inner(f.values[i.operands[0]]);while(g.shape(from).kind==="array"&&g.shape(g.shape(from).arguments[0]).kind==="array"&&from!==i.typeId){text=`ets_flat_vec(${text})`;from=g.shape(from).arguments[0];}return text;}
     if(method==="with")return `ets_with_vec<${E}>(${receiver}${rest(1)})`;
     if(method==="toSorted")return i.operands.length===1?`ets_to_sorted_vec(${receiver})`:`ets_to_sorted_vec(${receiver},${g.callback(f,i,1)})`;
     if(method==="findIndex")return `ets_find_index_vec(${receiver},${g.callback(f,i,1)})`;

@@ -1,7 +1,7 @@
 import {IrProject,IrType,IrFunction,IrInstruction,IrSource,IrDispatch,IrAnnotation,IrPlace,IrBlock,IrRuntimeContract} from "../../ir/model";
 import {cppType,fileCallee,regexCallee,netCallee,asyncCallee,networkCallee,globalCalls,asyncCalls,stringMethods,terminalMethods,objectMethod,backend_libuv,backend_curl,backend_tls,backend_ioUring} from "./tables";
 import {contentHash} from "../../platform/index";
-import {quoteCpp,integerIndex,uniqueStrings,parseNumber,numericBase,validNumber,validCppSymbol,validHeader,binaryHelper,arrayIndex} from "./support";
+import {quoteCpp,integerIndex,uniqueStrings,parseNumber,numericBase,validNumber,validCppSymbol,validHeader,binaryHelper,arrayIndex,inspectString} from "./support";
 export class RuntimeBackends {
  libuv:boolean;curl:boolean;tls:boolean;ioUring:boolean;
  constructor(){this.libuv=false;this.curl=false;this.tls=false;this.ioUring=false;}
@@ -629,7 +629,8 @@ let _cppLoop31Result:string[]=[];
 const _cppLoop31Input:number[]=i.operands;
 for(let k:number=0;k<_cppLoop31Input.length;k=k+1){
 const _:number=_cppLoop31Input[k];
-_cppLoop31Result.push(this.output(this.operand(f,i,k,false),f.values[i.operands[k]]));continue;
+const known:string=this.constantInspect(f,i.operands[k]);
+_cppLoop31Result.push(known!=""?`std::string(${quoteCpp(known)},${known.length})`:this.output(this.operand(f,i,k,false),f.values[i.operands[k]]));continue;
 }
 value=`${i.text}(${_cppLoop31Result.join(",")})`;}}break;
       }
@@ -650,12 +651,51 @@ value=`${i.text}(${_cppLoop31Result.join(",")})`;}}break;
     if(value=="")return this.fail(`Opcode C++ sans contrat: ${i.op}`,i.source);
     return i.result>=0?`v${i.result}.set(${value});`:`${value};`;
   }
+  // Texto de print para un array literal de constantes (#214), generado al
+  // compilar con el mismo formato que util.inspect en una línea. "" si no es
+  // constante o si Node lo partiría en varias líneas (entonces va al runtime).
+  constantInspect(f:constRef<IrFunction>,value:number):string {
+    let found:number=-1;let at:number=-1;
+    for(let k:number=0;k<f.blocks.length&&found<0;k=k+1)for(let n:number=0;n<f.blocks[k].instructions.length;n=n+1)if(f.blocks[k].instructions[n].result==value){found=k;at=n;}
+    if(found<0)return "";
+    const definition:IrInstruction=f.blocks[found].instructions[at];
+    if(definition.op!="aggregate"||this.shape(definition.typeId).kind!="array")return "";
+    if(definition.operands.length==0)return "[]";
+    if(definition.operands.length>6)return "";
+    let entries:string[]=[];
+    for(let k:number=0;k<definition.operands.length;k=k+1){
+      if(k<definition.names.length&&definition.names[k]=="spread")return "";
+      let item:number=-1;let place:number=-1;
+      for(let b:number=0;b<f.blocks.length&&item<0;b=b+1)for(let n:number=0;n<f.blocks[b].instructions.length;n=n+1)if(f.blocks[b].instructions[n].result==definition.operands[k]){item=b;place=n;}
+      if(item<0)return "";
+      const element:IrInstruction=f.blocks[item].instructions[place];
+      if(element.op!="constant")return "";
+      const kind:string=this.project.types[element.typeId];
+      if(kind=="string")entries.push(inspectString(element.text));
+      else if(kind=="boolean")entries.push(element.text);
+      else if(kind=="number"){
+        // Solo enteros decimales simples; decimales y exponentes los formatea el runtime.
+        const digits:string=element.text.replaceAll("_","");
+        if(digits.length==0||digits.length>15)return "";
+        for(let c:number=0;c<digits.length;c=c+1)if(digits.charCodeAt(c)<48||digits.charCodeAt(c)>57)return "";
+        entries.push(numberToString(parseNumber(digits)));
+      }
+      else return "";
+    }
+    // reduceToSingleString de Node: start = entradas + 1 ("[") + 10.
+    let total:number=entries.length+entries.length+1+10;
+    if(total+entries.length>80)return "";
+    for(const entry of entries){total=total+entry.length;if(total>80)return "";}
+    return "[ "+entries.join(", ")+" ]";
+  }
   printable(id:number,history:number[]=[]):boolean {
     if(history.includes(id))return false;const s=this.shape(id);
     // Un literal de tipo se imprime como su primitivo.
     if(s.kind=="literal")return this.printable(s.discriminatorType,[...history,id]);
     if(["scalar","enum","variant","ptr","constPtr"].includes(s.kind))return true;
     if(["ref","constRef","readonly"].includes(s.kind))return this.printable(s.arguments[0],[...history,id]);
+    // Arrays, tuplas, Map, Set y T | undefined: como util.inspect de Node (#214).
+    if(["array","tuple","Map","Set","Optional"].includes(s.kind)){for(const t of s.arguments)if(!this.printable(t,[...history,id]))return false;return true;}
     {
 let _cppLoop52Result:boolean=true;
 const _cppLoop52Input:number[]=this.choices(id);
@@ -1064,6 +1104,13 @@ _cppLoop47Result.push(this.operand(f,i,k+1));continue;
 }
 return `(${this.deref(this.operand(f,i,0,false),f.values[i.operands[0]])}).${method=="status"?"status_code":method=="body"?"body_str":method}(${_cppLoop47Result.join(",")})`;}
   if(base=="Console"&&terminalMethods(method)){this.headers.add("runtime/ets_terminal.hpp");return `console.${method}(${this.runtimeArguments(f,i)})`;}
+  if(base=="!Array"){
+    // Array.isArray / Array.of / Array.from con el tipo del resultado explícito.
+    const R:string=this.cppTypeId(i.typeId);
+    if(method=="isArray")return `ets_is_array(${this.operand(f,i,0)})`;
+    if(method=="of")return `ets_array_of<${R}>(${this.operandList(f,i,0).slice(1)})`;
+    return i.operands.length>1?`ets_array_from<${R}>(${this.operand(f,i,0)},${this.callback(f,i,1)})`:`ets_array_from<${R}>(${this.operand(f,i,0)})`;
+  }
   if(objectMethod(base,method)) {
     if(["!fs","!path","!process"].includes(base)){this.headers.add("runtime/ets_runtime_full.hpp");this.backends.libuv=true;}
     const object=base=="Console"?"console":base.slice(1,base.length);
@@ -1118,6 +1165,17 @@ return `(${receiver}).${method=="delete"?"removeKey":method}(${_cppLoop49Result.
     if(method=="reverse")return `ets_reverse_vec(${receiver})`;
     if(method=="fill")return `ets_fill_vec<${E}>(${receiver}${this.operandList(f,i,1)})`;
     if(method=="toReversed")return `ets_to_reversed_vec(${receiver})`;
+    if(method=="splice")return `ets_splice_vec<${E}>(${receiver}${this.operandList(f,i,1)})`;
+    if(method=="toSpliced")return `ets_to_spliced_vec<${E}>(${receiver}${this.operandList(f,i,1)})`;
+    if(method=="keys")return `ets_keys_vec(${receiver})`;
+    if(method=="values")return `${this.cppTypeId(i.typeId)}(${receiver})`;
+    if(method=="entries")return `ets_entries_vec<${this.cppTypeId(i.typeId)}>(${receiver})`;
+    if(method=="flat"){
+      // Un ets_flat_vec por cada nivel que quita el tipo del resultado.
+      let text:string=receiver;let from:number=this.inner(f.values[i.operands[0]]);
+      while(this.shape(from).kind=="array"&&this.shape(this.shape(from).arguments[0]).kind=="array"&&from!=i.typeId){text=`ets_flat_vec(${text})`;from=this.shape(from).arguments[0];}
+      return text;
+    }
     if(method=="with")return `ets_with_vec<${E}>(${receiver}${this.operandList(f,i,1)})`;
     if(method=="toSorted")return i.operands.length==1?`ets_to_sorted_vec(${receiver})`:`ets_to_sorted_vec(${receiver},${this.callback(f,i,1)})`;
     if(method=="findIndex")return `ets_find_index_vec(${receiver},${this.callback(f,i,1)})`;

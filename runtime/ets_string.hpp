@@ -484,12 +484,191 @@ inline double length(const std::tuple<T...>&) {
 // emite "<unstringifiable>" para que el error sea detectable.
 // ----------------------------------------------------------------------------
 #include <sstream>
+// ----------------------------------------------------------------------------
+// inspect: arrays, tuplas, Map, Set y T | undefined con el formato de
+// console.log / util.inspect de Node (#214): `[ 1, 2 ]`, `[ 'a' ]`,
+// `Map(1) { 'a' => 1 }`, `Set(2) { 1, 2 }`; una línea si cabe en 80 columnas,
+// columnas para más de 6 elementos, profundidad 2 y como mucho 100 elementos.
+// ----------------------------------------------------------------------------
+template <typename T> struct inspect_vector : std::false_type {};
+template <typename T, typename A> struct inspect_vector<std::vector<T, A>> : std::true_type {};
+template <typename T> struct inspect_tuple : std::false_type {};
+template <typename... T> struct inspect_tuple<std::tuple<T...>> : std::true_type {};
+template <typename T, typename = void> struct inspect_optional : std::false_type {};
+template <typename T> struct inspect_optional<T, std::void_t<decltype(std::declval<const T&>().isPresent()), decltype(std::declval<const T&>().value())>> : std::true_type {};
+template <typename T, typename = void> struct inspect_keyed : std::false_type {};
+template <typename T> struct inspect_keyed<T, std::void_t<decltype(std::declval<const T&>().data().begin()->second)>> : std::true_type {};
+template <typename T, typename = void> struct inspect_set : std::false_type {};
+template <typename T> struct inspect_set<T, std::void_t<decltype(*std::declval<const T&>().data().begin()), decltype(std::declval<const T&>().size())>> : std::bool_constant<!inspect_keyed<T>::value> {};
+template <typename T, typename = void> struct inspect_boxed_bool : std::false_type {};
+template <typename T> struct inspect_boxed_bool<T, std::void_t<decltype(std::declval<const T&>().value)>>
+    : std::is_same<std::remove_cv_t<std::remove_reference_t<decltype(std::declval<const T&>().value)>>, bool> {};
+
+template <typename T>
+inline constexpr bool inspect_container = inspect_vector<T>::value || inspect_tuple<T>::value || inspect_keyed<T>::value || inspect_set<T>::value;
+
+struct InspectContext {
+    int indentation = 0;  // ctx.indentationLvl
+    int currentDepth = 0; // ctx.currentDepth
+};
+
+// Comillas de Node: simples salvo que el texto las contenga (y no dobles).
+inline std::string inspect_string(const std::string& text) {
+    char quote = '\'';
+    if (text.find('\'') != std::string::npos) {
+        if (text.find('"') == std::string::npos) quote = '"';
+        else if (text.find('`') == std::string::npos) quote = '`';
+    }
+    std::string result(1, quote);
+    for (const char c : text) {
+        if (c == quote || c == '\\') { result += '\\'; result += c; }
+        else if (c == '\n') result += "\\n";
+        else if (c == '\t') result += "\\t";
+        else if (c == '\r') result += "\\r";
+        else if (c == '\b') result += "\\b";
+        else if (c == '\f') result += "\\f";
+        else if (c == '\v') result += "\\v";
+        else if (static_cast<unsigned char>(c) < 0x20 || c == 0x7f) {
+            static const char* digits = "0123456789ABCDEF";
+            result += "\\x"; result += digits[(static_cast<unsigned char>(c) >> 4) & 0xF]; result += digits[static_cast<unsigned char>(c) & 0xF];
+        } else result += c;
+    }
+    result += quote;
+    return result;
+}
+
+template <typename T> std::string inspect_value(InspectContext& ctx, const T& value, int depth);
+
+// groupArrayElements de Node: con más de 6 elementos, en columnas.
+inline std::vector<std::string> inspect_group(const InspectContext& ctx, const std::vector<std::string>& output, bool numbers, bool more) {
+    const std::size_t outputLength = more ? output.size() - 1 : output.size();
+    const double separatorSpace = 2;
+    std::vector<double> dataLen(outputLength);
+    double totalLength = 0, maxLength = 0;
+    for (std::size_t i = 0; i < outputLength; ++i) {
+        const double len = static_cast<double>(output[i].size());
+        dataLen[i] = len; totalLength += len + separatorSpace;
+        if (maxLength < len) maxLength = len;
+    }
+    const double actualMax = maxLength + separatorSpace;
+    if (!(actualMax * 3 + ctx.indentation < 80 && (totalLength / actualMax > 5 || maxLength <= 6))) return output;
+    const double averageBias = std::sqrt(actualMax - totalLength / static_cast<double>(output.size()));
+    const double biasedMax = std::max(actualMax - 3 - averageBias, 1.0);
+    double columns = std::round(std::sqrt(2.5 * biasedMax * static_cast<double>(outputLength)) / biasedMax);
+    columns = std::min({columns, std::floor((80 - ctx.indentation) / actualMax), 3.0 * 4, 15.0});
+    if (columns <= 1) return output;
+    const std::size_t cols = static_cast<std::size_t>(columns);
+    std::vector<double> maxLineLength;
+    for (std::size_t i = 0; i < cols; ++i) {
+        double lineLength = 0;
+        for (std::size_t j = i; j < output.size(); j += cols) if (j < outputLength && dataLen[j] > lineLength) lineLength = dataLen[j];
+        maxLineLength.push_back(lineLength + separatorSpace);
+    }
+    auto pad = [&](const std::string& text, double width) {
+        const std::size_t w = width > 0 ? static_cast<std::size_t>(width) : 0;
+        if (text.size() >= w) return text;
+        return numbers ? std::string(w - text.size(), ' ') + text : text + std::string(w - text.size(), ' ');
+    };
+    std::vector<std::string> grouped;
+    for (std::size_t i = 0; i < outputLength; i += cols) {
+        const std::size_t max = std::min(i + cols, outputLength);
+        std::string line;
+        std::size_t j = i;
+        for (; j < max - 1; ++j) line += pad(output[j] + ", ", maxLineLength[j - i]);
+        if (numbers) line += pad(output[j], maxLineLength[j - i] - separatorSpace);
+        else line += output[j];
+        grouped.push_back(line);
+    }
+    if (more) grouped.push_back(output.back());
+    return grouped;
+}
+
+// reduceToSingleString de Node.
+inline std::string inspect_join(const InspectContext& ctx, std::vector<std::string> output, const std::string& base,
+                                const std::string& open, const std::string& close, bool array, bool numbers, bool more, int depth) {
+    const std::size_t entries = output.size();
+    if (array && entries > 6) output = inspect_group(ctx, output, numbers, more);
+    if (ctx.currentDepth - depth < 3 && entries == output.size()) {
+        const std::size_t start = output.size() + static_cast<std::size_t>(ctx.indentation) + open.size() + base.size() + 10;
+        std::size_t total = output.size() + start;
+        bool below = total + output.size() <= 80;
+        for (const auto& entry : output) { if (!below) break; total += entry.size(); below = total <= 80; }
+        if (below) {
+            std::string joined;
+            for (std::size_t i = 0; i < output.size(); ++i) { if (i > 0) joined += ", "; joined += output[i]; }
+            if (joined.find('\n') == std::string::npos) return (base.empty() ? "" : base + " ") + open + " " + joined + " " + close;
+        }
+    }
+    const std::string indentation = "\n" + std::string(static_cast<std::size_t>(ctx.indentation), ' ');
+    std::string result = (base.empty() ? "" : base + " ") + open + indentation + "  ";
+    for (std::size_t i = 0; i < output.size(); ++i) { if (i > 0) result += "," + indentation + "  "; result += output[i]; }
+    return result + indentation + close;
+}
+
+template <typename T>
+inline std::string inspect_entry(InspectContext& ctx, const T& value, int depth) {
+    ctx.indentation += 2;
+    std::string text = inspect_value(ctx, value, depth);
+    ctx.indentation -= 2;
+    return text;
+}
+
+template <typename T>
+std::string inspect_value(InspectContext& ctx, const T& value, int depth) {
+    if constexpr (std::is_same_v<T, std::string>) return inspect_string(value);
+    else if constexpr (std::is_same_v<T, bool>) return value ? "true" : "false";
+    else if constexpr (inspect_boxed_bool<T>::value) return value.value ? "true" : "false";
+    else if constexpr (std::is_floating_point_v<T>) return js_number(static_cast<double>(value));
+    else if constexpr (std::is_integral_v<T>) return std::to_string(value);
+    else if constexpr (inspect_optional<T>::value) return value.isPresent() ? inspect_value(ctx, value.value(), depth) : std::string("undefined");
+    else if constexpr (inspect_container<T>) {
+        const std::string kind = inspect_keyed<T>::value ? "Map" : inspect_set<T>::value ? "Set" : "Array";
+        std::string base;
+        if constexpr (inspect_keyed<T>::value || inspect_set<T>::value) base = kind + "(" + std::to_string(value.size()) + ")";
+        if (depth > 2) return "[" + kind + "]";
+        ctx.currentDepth = depth;
+        std::vector<std::string> output;
+        bool numbers = true, more = false;
+        if constexpr (inspect_vector<T>::value) {
+            using E = typename T::value_type;
+            numbers = std::is_arithmetic_v<E> && !std::is_same_v<E, bool>;
+            if (value.empty()) return "[]";
+            const std::size_t shown = std::min<std::size_t>(value.size(), 100);
+            for (std::size_t i = 0; i < shown; ++i) output.push_back(inspect_entry(ctx, value[i], depth + 1));
+            if (value.size() > shown) {
+                const std::size_t rest = value.size() - shown;
+                output.push_back("... " + std::to_string(rest) + " more item" + (rest > 1 ? "s" : ""));
+                more = true;
+            }
+        } else if constexpr (inspect_tuple<T>::value) {
+            numbers = false;
+            std::apply([&](const auto&... item) { (output.push_back(inspect_entry(ctx, item, depth + 1)), ...); }, value);
+            if (output.empty()) return "[]";
+        } else if constexpr (inspect_keyed<T>::value) {
+            if (value.size() == 0) return base + " {}";
+            for (const auto& pair : value.data()) output.push_back(inspect_entry(ctx, pair.first, depth + 1) + " => " + inspect_entry(ctx, pair.second, depth + 1));
+        } else {
+            if (value.size() == 0) return base + " {}";
+            for (const auto& item : value.data()) output.push_back(inspect_entry(ctx, item, depth + 1));
+        }
+        const bool array = inspect_vector<T>::value || inspect_tuple<T>::value;
+        return inspect_join(ctx, output, base, array ? "[" : "{", array ? "]" : "}", array, numbers, more, depth);
+    } else {
+        std::ostringstream text;
+        text << value;
+        return text.str();
+    }
+}
+
 // Escribe un valor como lo mostraría JavaScript: true/false y números con
-// js_number (#204, #208); el resto con su operator<<.
+// js_number (#204, #208), contenedores como util.inspect (#214); el resto con
+// su operator<<.
 template <typename T>
 inline void display(std::ostream& out, const T& value) {
     if constexpr (std::is_same_v<T, bool>) out << (value ? "true" : "false");
     else if constexpr (std::is_floating_point_v<T>) out << js_number(static_cast<double>(value));
+    else if constexpr (inspect_container<T> || inspect_boxed_bool<T>::value) { InspectContext ctx; out << inspect_value(ctx, value, 0); }
+    else if constexpr (inspect_optional<T>::value) { if (value.isPresent()) display(out, value.value()); else out << "undefined"; }
     else out << value;
 }
 template <typename T>

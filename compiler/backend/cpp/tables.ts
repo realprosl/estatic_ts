@@ -92,6 +92,7 @@ export function objectMethod(base:string,method:string):boolean {
 if(base=="!Math")return ["floor", "ceil", "round", "abs", "sqrt", "pow", "min", "max", "random"].includes(method);
 if(base=="!Date")return ["now", "utc"].includes(method);
 if(base=="!String")return ["fromCharCode", "fromCodePoint"].includes(method);
+if(base=="!Array")return ["isArray", "from", "of"].includes(method);
 if(base=="!JSON")return ["parse", "stringify", "parseValue", "stringifyBool", "stringifyNumber", "stringifyValue"].includes(method);
 if(base=="!path")return ["dirname", "basename", "extname", "join", "resolve", "normalize", "isAbsolute"].includes(method);
 if(base=="!fs")return ["readFile", "writeFile", "appendFile", "copyFile", "rename", "unlink", "readFileSync", "writeFileSync", "appendFileSync", "copyFileSync", "renameSync", "unlinkSync", "existsSync"].includes(method);

@@ -109,7 +109,7 @@ export class NativeComptime {
     for (let id: number = 0; id < this.checked.files[this.rootModule].types.length; id = id+1) {
       const n: AstNode = this.node(this.rootModule,id); if (nodeBegin(n) >= nodeBegin(this.node(this.rootModule,this.rootNode)) || this.functionOwner(this.binding.files[this.rootModule].nodeScopes[id]) != rootOwner) continue;
       if ((n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression || n.kind == NodeKind.UpdateExpression || n.kind == NodeKind.DeleteStatement) && this.directRoot(this.rootModule,bindingChild(n,EdgeRole.Target)) == sid) return true;
-      if (n.kind == NodeKind.MemberCallExpression && ["push","pop","sort","shift","unshift","reverse","fill","set","add","delete","clear"].includes(n.get(AttributeKind.Method)) && this.directRoot(this.rootModule,bindingChild(n,EdgeRole.Object)) == sid) return true;
+      if (n.kind == NodeKind.MemberCallExpression && ["push","pop","sort","shift","unshift","reverse","fill","splice","set","add","delete","clear"].includes(n.get(AttributeKind.Method)) && this.directRoot(this.rootModule,bindingChild(n,EdgeRole.Object)) == sid) return true;
       if ((n.kind == NodeKind.CallExpression || n.kind == NodeKind.MemberCallExpression) && this.checked.files[this.rootModule].constantStates[id] != "evaluated") {
         const selected: number = this.checked.files[this.rootModule].selected[id]; const module: number = this.checked.files[this.rootModule].selectedModules[id];
         for (const effect of this.checked.effects) if (effect.module == module && effect.node == selected && effect.phase == "body" && (effect.writes.includes(sid) || effect.moves.includes(sid) || effect.unknown)) return true;

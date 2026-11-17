@@ -135,7 +135,7 @@ public:
  S body(const Function&,int);
  S declarations();
  bool printable(int id,V<int> history={})const{if(has(history,id))return false;const auto& s=shape(id);// Un literal de tipo se imprime como su primitivo.
-  if(s.kind=="literal"){history.push_back(id);return printable(s.discriminatorType,history);}if(in(s.kind,{"scalar","enum","variant","ptr","constPtr"}))return true;if(in(s.kind,{"ref","constRef","readonly"})){history.push_back(id);return printable(s.arguments.at(0),history);}if(sum(id)){history.push_back(id);for(int t:choices(id))if(!printable(t,history))return false;return true;}return false;}
+  if(s.kind=="literal"){history.push_back(id);return printable(s.discriminatorType,history);}if(in(s.kind,{"scalar","enum","variant","ptr","constPtr"}))return true;if(in(s.kind,{"ref","constRef","readonly"})){history.push_back(id);return printable(s.arguments.at(0),history);}if(in(s.kind,{"array","tuple","Map","Set","Optional"})){history.push_back(id);for(int t:s.arguments)if(!printable(t,history))return false;return true;}if(sum(id)){history.push_back(id);for(int t:choices(id))if(!printable(t,history))return false;return true;}return false;}
  S output(const S& value,int id){const auto& s=shape(id);if(in(s.kind,{"ref","constRef"}))return output("(*("+value+"))",s.arguments.at(0));if(!printable(id))return fail("Tipo sin contrato de impresión C++: "+p.types.at(id));if(in(s.kind,{"ptr","constPtr"}))return "("+value+").get()";return s.numericKind=="integer"&&s.bits==8?"static_cast<int>("+value+")":value;}
  const Instruction& definition(const Function& f,int value)const{for(auto& b:f.blocks)for(auto& i:b.instructions)if(i.result==value)return i;throw Error("Temporal sin definición",f.source);}
  void validate();Result generate();
@@ -291,6 +291,11 @@ S Generator::runtimeCall(const Function& f,const Instruction& i){const auto& c=p
  if(base=="process"&&method=="argv")return "ets::processArgv()";
  if(base=="process"&&method=="argc")return "ets::processArgc()";
  if(base=="Console"&&terminalMethods.contains(method)){result.headers.insert("runtime/ets_terminal.hpp");return "console."+method+"("+args()+")";}
+ if(base=="!Array"&&in(method,{"isArray","of","from"})){S R=type(i.typeId);
+  if(method=="isArray")return "ets_is_array("+a(0)+")";
+  if(method=="of")return "ets_array_of<"+R+">("+args()+")";
+  return i.operands.size()>1?"ets_array_from<"+R+">("+a(0)+","+callback(f,i,1)+")":"ets_array_from<"+R+">("+a(0)+")";
+ }
  if(objectMethods.contains(base)&&objectMethods.at(base).contains(method)){
   if(in(base,{"!fs","!path","!process"})){result.headers.insert("runtime/ets_runtime_full.hpp");result.libuv=true;}S arguments=args();if(base=="Console"){V<S> values;for(int k=0;k<int(i.operands.size());k++)values.push_back(output(a(k,false),f.values.at(i.operands[k])));arguments=join(values);}
   return (base=="Console"?S("console"):base.substr(1))+"."+(method.starts_with("stringify")?"stringify":method)+"("+arguments+")";
@@ -313,6 +318,12 @@ S Generator::runtimeCall(const Function& f,const Instruction& i){const auto& c=p
   if(method=="reverse")return "ets_reverse_vec("+receiver+")";
   if(method=="fill")return "ets_fill_vec<"+E+">("+receiver+rest+")";
   if(method=="toReversed")return "ets_to_reversed_vec("+receiver+")";
+  if(method=="splice")return "ets_splice_vec<"+E+">("+receiver+rest+")";
+  if(method=="toSpliced")return "ets_to_spliced_vec<"+E+">("+receiver+rest+")";
+  if(method=="keys")return "ets_keys_vec("+receiver+")";
+  if(method=="values")return type(i.typeId)+"("+receiver+")";
+  if(method=="entries")return "ets_entries_vec<"+type(i.typeId)+">("+receiver+")";
+  if(method=="flat"){S text=receiver;int from=inner(f.values.at(i.operands.at(0)));while(shape(from).kind=="array"&&shape(shape(from).arguments.at(0)).kind=="array"&&from!=i.typeId){text="ets_flat_vec("+text+")";from=shape(from).arguments.at(0);}return text;}
   if(method=="with")return "ets_with_vec<"+E+">("+receiver+rest+")";
   if(method=="toSorted")return i.operands.size()==1?"ets_to_sorted_vec("+receiver+")":"ets_to_sorted_vec("+receiver+","+callback(f,i,1)+")";
   if(method=="findIndex")return "ets_find_index_vec("+receiver+","+callback(f,i,1)+")";

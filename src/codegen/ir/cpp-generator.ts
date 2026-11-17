@@ -347,6 +347,7 @@ export class IrCppGenerator {
     if(s.kind==="literal")return this.printable(s.discriminatorType,[...history,id]);
     if(["scalar","enum","variant","ptr","constPtr"].includes(s.kind))return true;
     if(["ref","constRef","readonly"].includes(s.kind))return this.printable(s.arguments[0],[...history,id]);
+    if(["array","tuple","Map","Set","Optional"].includes(s.kind))return s.arguments.every(t=>this.printable(t,[...history,id]));
     return sumKinds.has(s.kind)&&this.choices(id).every(t=>this.printable(t,[...history,id]));
   }
   output(value:string,id:number):string {
