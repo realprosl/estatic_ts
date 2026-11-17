@@ -1,6 +1,6 @@
 // variables — const vs let, shadowing en bloques.
 //
-// `const` produce inmutables; `let` permite reasignación. Las variables
+// `const` impide reasignar (como en TypeScript); `let` permite reasignación. Las variables
 // declaradas dentro de un bloque `{}` sombrean a las del scope externo
 // sin afectar el valor exterior.
 
