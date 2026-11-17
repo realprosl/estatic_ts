@@ -13,7 +13,9 @@ export class PathAlias {
 export class LoaderOptions {
   // prelude (#165): módulos cuyos exports ven todos los demás sin import.
   verbose: boolean; roots: string[]; aliases: PathAlias[]; cacheDirectory: string; syntaxKey: string; prelude: string[];
-  constructor() { this.verbose = false; this.roots = []; this.aliases = []; this.cacheDirectory = ""; this.syntaxKey = ""; this.prelude = []; }
+  // Carpeta de las librerías del runtime: "estatic:math" -> <library>/math.ts.
+  library: string;
+  constructor() { this.verbose = false; this.roots = []; this.aliases = []; this.cacheDirectory = ""; this.syntaxKey = ""; this.prelude = []; this.library = ""; }
 }
 export class ModuleRequest {
   specifier: string; node: number; kind: string; typeOnly: boolean; dependency: string;
@@ -73,6 +75,8 @@ function requestedPath(base: string, specifier: string): string {
 export function resolveRequest(file: string, specifier: string, options: LoaderOptions): string {
   if (specifier == "") return "";
   if (specifier.startsWith(".") || specifier.startsWith("/")) return resolveSourceFile(requestedPath(pathDirectory(file), specifier));
+  // Librerías del runtime escritas en Estatic: import Math from "estatic:math".
+  if (specifier.startsWith("estatic:")) return options.library == "" ? "" : resolveSourceFile(requestedPath(options.library, specifier.slice(8, specifier.length)));
   let selected: number = -1; let longest: number = -1;
   for (let i: number = 0; i < options.aliases.length; i = i + 1) {
     const name: string = options.aliases[i].name; const scope: string = options.aliases[i].scope;

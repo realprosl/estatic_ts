@@ -205,7 +205,16 @@ S Generator::instruction(const Function& f,const Instruction& i,int block){
  return i.result>=0?"v"+n(i.result)+".set("+v+");":v+";";
 }
 S Generator::signature(const Function& f,int id){S ret=f.asynchronous&&shape(f.returns).kind!="Promise"?"ets::Task<"+type(f.bodyReturns)+">":type(f.returns);if(f.asynchronous){result.headers.insert("runtime/ets_async.hpp");result.libuv=true;}V<S> args;for(int k=0;k<int(f.captureTypes.size());k++)args.push_back(type(f.captureTypes[k])+(f.captureModes.at(k)=="reference"?"*":"")+" c"+n(k));for(int k=0;k<int(f.parameterTypes.size());k++)args.push_back(parameterType(f.parameterTypes[k])+" a"+n(k));return ret+" ir_f"+n(id)+"("+join(args)+")";}
-S Generator::body(const Function& f,int id){V<S> out;int parameter=0;
+S Generator::body(const Function& f,int id){
+ // @cpp_native: la función sin cuerpo llama al símbolo C++ indicado.
+ for(const auto& a:p.annotationRecords){
+  if(str(get(a,"name"))!="cpp_native")continue;const J& target=get(a,"target");
+  if(str(get(target,"moduleId"))!=f.source.moduleId||integer(get(target,"node"))!=f.source.node)continue;
+  const auto& args=array(get(a,"arguments"));if(args.size()!=1||!args[0].isString())throw Error("Invalid @cpp_native symbol",Source(get(a,"source")));
+  S call=str(args[0])+"(";for(size_t k=0;k<f.parameterTypes.size();k++)call+=(k?",":"")+S("std::move(a")+std::to_string(k)+")";call+=")";
+  return signature(f,id)+" {"+(p.types.at(f.returns)=="void"?call+";":"return "+call+";")+"}";
+ }
+ V<S> out;int parameter=0;
  for(int k=0;k<int(f.places.size());k++){auto& p=f.places[k];if(p.kind=="local"&&p.global<0)out.push_back("ets::ir::Slot<"+type(p.typeId)+"> p"+n(k)+";");}
  for(int k=0;k<int(f.values.size());k++)out.push_back("ets::ir::Slot<"+type(f.values[k])+"> v"+n(k)+";");
  for(int k=0;k<int(f.blocks.size());k++){auto& b=f.blocks[k];if(b.terminator=="suspend"){int t=shape(f.values.at(b.value)).arguments.at(0);if(p.types.at(t)!="void")out.push_back("ets::ir::Slot<"+type(t)+"> await"+n(k)+";");}}
