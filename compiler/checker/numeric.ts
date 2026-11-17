@@ -48,6 +48,78 @@ export function nativeInteger64(raw: string, negative: boolean, expected: string
   if (magnitude.length > limit.length || (magnitude.length == limit.length && magnitude.localeCompare(limit) > 0)) return "";
   return negative && magnitude != "0" ? "-" + magnitude : magnitude;
 }
+// Enteros grandes sin signo en límbs de 24 bits (little-endian): todas las
+// operaciones son exactas en double. Sirven para convertir literales con
+// redondeo correcto (al par más cercano), como hace JavaScript.
+const LIMB: number = 16777216;
+function bigMulAdd(value: number[], factor: number, addend: number): void {
+  let carry: number = addend;
+  for (let at: number = 0; at < value.length; at = at + 1) {
+    const product: number = value[at] * factor + carry;
+    carry = Math.floor(product / LIMB); value[at] = product - carry * LIMB;
+  }
+  while (carry > 0) { const next: number = Math.floor(carry / LIMB); value.push(carry - next * LIMB); carry = next; }
+}
+function bigShift(value: number[], bits: number): void {
+  let left: number = bits; let limbs: number = 0;
+  while (left >= 24) { limbs = limbs + 1; left = left - 24; }
+  if (limbs > 0) {
+    const size: number = value.length;
+    for (let k: number = 0; k < limbs; k = k + 1) value.push(0);
+    for (let at: number = size - 1; at >= 0; at = at - 1) { value[at + limbs] = value[at]; value[at] = 0; }
+  }
+  if (left > 0) bigMulAdd(value, Math.pow(2, left), 0);
+}
+function bigTrim(value: number[]): void { while (value.length > 0 && value[value.length - 1] == 0) value.pop(); }
+function bigBits(value: number[]): number {
+  bigTrim(value); if (value.length == 0) return 0;
+  let top: number = value[value.length - 1]; let bits: number = (value.length - 1) * 24;
+  while (top >= 1) { top = Math.floor(top / 2); bits = bits + 1; }
+  return bits;
+}
+function bigCompare(a: number[], b: number[]): number {
+  bigTrim(a); bigTrim(b);
+  if (a.length != b.length) { if (a.length < b.length) return -1; return 1; }
+  for (let at: number = a.length - 1; at >= 0; at = at - 1) if (a[at] != b[at]) { if (a[at] < b[at]) return -1; return 1; }
+  return 0;
+}
+function bigSubtract(a: number[], b: number[]): void {
+  let borrow: number = 0;
+  for (let at: number = 0; at < a.length; at = at + 1) {
+    let next: number = a[at] - borrow; if (at < b.length) next = next - b[at];
+    if (next < 0) { next = next + LIMB; borrow = 1; } else borrow = 0;
+    a[at] = next;
+  }
+  bigTrim(a);
+}
+function bigCopy(value: number[]): number[] { let result: number[] = []; for (const limb of value) result.push(limb); return result; }
+// Double más cercano a numerator / denominator (ambos > 0); empate al par.
+function bigQuotient(numerator: number[], denominator: number[]): number {
+  let a: number[] = bigCopy(numerator); let b: number[] = bigCopy(denominator);
+  // a·2^shift / b queda en [2^54, 2^56): 55-56 bits de cociente.
+  const shift: number = 55 + bigBits(b) - bigBits(a);
+  if (shift > 0) bigShift(a, shift); else if (shift < 0) bigShift(b, -shift);
+  let multiples: number[][] = []; let current: number[] = bigCopy(b);
+  for (let bit: number = 0; bit <= 56; bit = bit + 1) { multiples.push(bigCopy(current)); bigMulAdd(current, 2, 0); }
+  // Bits del cociente (un double no guarda enteros de más de 53 bits).
+  let quotient: boolean[] = []; let bits: number = 0;
+  for (let bit: number = 0; bit <= 56; bit = bit + 1) quotient.push(false);
+  for (let bit: number = 56; bit >= 0; bit = bit - 1) {
+    if (bigCompare(a, multiples[bit]) >= 0) { bigSubtract(a, multiples[bit]); quotient[bit] = true; if (bits == 0) bits = bit + 1; }
+  }
+  let sticky: boolean = bigBits(a) > 0;
+  let drop: number = bits - 53;
+  // Subnormales: el bit menos significativo no baja de 2^-1074.
+  if (drop - shift < -1074) drop = -1074 + shift;
+  let mantissa: number = 0;
+  for (let bit: number = 56; bit >= 0; bit = bit - 1) {
+    if (bit >= drop) { mantissa = mantissa * 2; if (quotient[bit]) mantissa = mantissa + 1; }
+    else if (bit < drop - 1 && quotient[bit]) sticky = true;
+  }
+  const halfBit: boolean = drop >= 1 && drop - 1 <= 56 && quotient[drop - 1];
+  if (halfBit && (sticky || mantissa % 2 == 1)) mantissa = mantissa + 1;
+  return mantissa * Math.pow(2, drop - shift);
+}
 export function nativeNumericLiteral(raw: string): NativeNumericLiteral {
   let radix: number = 10; let start: number = 0;
   if (raw.charAt(0) == "0") {
@@ -56,8 +128,9 @@ export function nativeNumericLiteral(raw: string): NativeNumericLiteral {
     if (prefix == "b" || prefix == "B") { radix = 2; start = 2; }
     if (prefix == "o" || prefix == "O") { radix = 8; start = 2; }
   }
-  let value: number = 0; let fraction: number = 1; let point: boolean = false; let count: number = 0;
-  for (let at: number = start; at < raw.length; at = at + 1) {
+  let digits: number[] = []; let point: boolean = false; let count: number = 0; let decimals: number = 0; let exponent: number = 0;
+  let at: number = start;
+  while (at < raw.length) {
     const c: string = raw.charAt(at);
     if (c == "_") {
       const before: number = numericDigit(raw.charAt(at - 1)); const after: number = numericDigit(raw.charAt(at + 1));
@@ -67,24 +140,39 @@ export function nativeNumericLiteral(raw: string): NativeNumericLiteral {
       point = true;
     } else if ((c == "e" || c == "E") && radix == 10 && count > 0) {
       // Exponente decimal: 1e21, 2.5e-3.
-      let at2: number = at + 1; let negative: boolean = false;
-      if (raw.charAt(at2) == "+" || raw.charAt(at2) == "-") { negative = raw.charAt(at2) == "-"; at2 = at2 + 1; }
-      let exponent: number = 0; let digits: number = 0;
-      for (; at2 < raw.length; at2 = at2 + 1) { const d: number = numericDigit(raw.charAt(at2)); if (raw.charAt(at2) == "_") continue; if (d < 0 || d > 9) return new NativeNumericLiteral(0,false); exponent = exponent * 10 + d; digits = digits + 1; }
-      if (digits == 0) return new NativeNumericLiteral(0,false);
-      const scaled: number = negative ? value / Math.pow(10,exponent) : value * Math.pow(10,exponent);
-      return new NativeNumericLiteral(scaled,scaled - scaled == 0);
+      let next: number = at + 1; let negative: boolean = false;
+      if (raw.charAt(next) == "+" || raw.charAt(next) == "-") { negative = raw.charAt(next) == "-"; next = next + 1; }
+      let expDigits: number = 0;
+      while (next < raw.length) {
+        const d: number = numericDigit(raw.charAt(next));
+        if (raw.charAt(next) != "_") { if (d < 0 || d > 9) return new NativeNumericLiteral(0,false); if (exponent < 100000) exponent = exponent * 10 + d; expDigits = expDigits + 1; }
+        next = next + 1;
+      }
+      if (expDigits == 0) return new NativeNumericLiteral(0,false);
+      if (negative) exponent = -exponent;
+      at = raw.length;
     } else {
       const digit: number = numericDigit(c);
       if (digit < 0 || digit >= radix) return new NativeNumericLiteral(0,false);
-      if (point) { fraction = fraction / 10; value = value + digit * fraction; }
-      else value = value * radix + digit;
-      count = count + 1;
+      digits.push(digit); count = count + 1;
+      if (point) decimals = decimals + 1;
     }
+    at = at + 1;
   }
-  // Infinity - Infinity is NaN. This needs no runtime-specific parsing helper
-  // or exception path and also rejects an overflowed unannotated number.
-  return new NativeNumericLiteral(value,count > 0 && value - value == 0);
+  if (count == 0) return new NativeNumericLiteral(0,false);
+  let numerator: number[] = [];
+  for (const digit of digits) bigMulAdd(numerator, radix, digit);
+  if (bigBits(numerator) == 0) return new NativeNumericLiteral(0,true);
+  const scale: number = exponent - decimals;
+  // Un exponente desmesurado ya es infinito (no válido) o cero.
+  if (scale > 400) return new NativeNumericLiteral(0,false);
+  if (scale < -400 - digits.length) return new NativeNumericLiteral(0,true);
+  let denominator: number[] = [1];
+  if (scale > 0) for (let k: number = 0; k < scale; k = k + 1) bigMulAdd(numerator, 10, 0);
+  else for (let k: number = 0; k < -scale; k = k + 1) bigMulAdd(denominator, 10, 0);
+  const value: number = bigQuotient(numerator, denominator);
+  // Infinity - Infinity es NaN: rechaza un literal que desborda.
+  return new NativeNumericLiteral(value, value - value == 0);
 }
 export function nativeUnaryPromotion(text: string): string {
   return ["i8","u8","i16","u16"].includes(text) ? "i32" : text;
