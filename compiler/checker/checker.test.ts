@@ -82,8 +82,6 @@ const invalid:[string,string,RegExp][]=[
  ['variable','const n:number="x";',/incompatible/],
  ['assignment','let n=1; n="x";',/incompatible/],
  ['constant','const n=1; n=2;',/inmutable/],
- ['constField','class C{x:number=1;} const c=new C(); c.x=2;',/inmutable/],
- ['constIndex','const a=[1]; a[0]=2;',/inmutable/],
  ['condition','if(1)print(1);',/incompatible/],
  ['return','function f():number{return "x";}',/incompatible/],
  ['bareReturn','function f():number{return;}',/incompatible/],
@@ -144,7 +142,29 @@ test('checker: interface construction is stopped by binding',()=>{const g=run(fi
 
 test('checker: increment expression is actually checked',()=>error('for(let i=0;i<3;i="x"){}',/incompatible/));
 test('checker: receiver writes are checked inside constructor',()=>check('class C{x:number; constructor(x:number){this.x=x;}} let c=new C(1); c.x=2;'));
-test('checker: mutating method requires mutable receiver',()=>error('class C{x:number=0; set():void{this.x=1;}} const c=new C(); c.set();',/inmutable/));
+// #212: como en TypeScript, const y readonly solo impiden reasignar.
+for(const [name,source] of Object.entries({
+  constField:'class C{x:number=1;} const c=new C(); c.x=2;',
+  constIndex:'const a=[1]; a[0]=2;',
+  constPush:'const xs:number[]=[]; xs.push(1); print(xs.length);',
+  constMap:'const m:Map<string,number> =new Map<string,number>(); m.set("a",1); m.delete("a");',
+  constMethod:'class C{x:number=0; set():void{this.x=1;}} const c=new C(); c.set();',
+  readonlyFieldContent:'class C{readonly xs:number[]=[]; add():void{this.xs.push(1);}} let c=new C(); c.add(); c.xs.push(2);',
+  constOptionalPush:'const o:Optional<number[]> =optionalSome([1]);o?.push(2);',
+  constFixedArray:'const a:number[2]=[1,2];a[0]=2;',
+  constMapSet:'const m=new Map<string,number>();m.set("s",1);',
+  constMapDelete:'const m=new Map<string,number>();delete m["s"];',
+  constSort:'const a=[2,1];a.sort();',
+  constOptionalMethod:'class C{x:number=1;set():void{this.x=2;}}const o:Optional<C> =optionalSome(new C());o?.set();',
+}))test(`checker: const permite modificar el contenido (#212): ${name}`,()=>check(source));
+for(const [name,source,pattern] of [
+  ['reassign','const xs:number[]=[]; xs=[1];',/inmutable/],
+  ['update','const n=0;n+=1;',/inmutable/],
+  ['readonlyField','class C{readonly xs:number[]=[];} let c=new C(); c.xs=[1];',/inmutable|readonly/],
+  ['refBorrow','function f(xs:ref<number[]>):void{xs=[];}const xs:number[]=[];f(xs);',/inmutable|E4208/],
+  ['sharedLoan','const xs:number[]=[1];const r=constRef(xs);xs.push(2);print(r);',/E42/],
+  ['readonlyType','function f(xs:constRef<number[]>):void{xs.push(1);}',/readonly|inmutable/],
+] as const)test(`checker: const sigue impidiendo reasignar (#212): ${name}`,()=>error(source,pattern));
 test('checker: array pop returns T | undefined as in TypeScript',()=>{const g=check('let a=[1]; const n=a.pop(); const m:number=a.shift()??0; print(n??m);');assert.ok(types(g,'MemberCallExpression').includes('Optional<number>'));});
 // El offset de `includes` es opcional, igual que en JavaScript y TypeScript:
 // `includes("b")` y `includes("b",0)` son ambos validos.
@@ -530,7 +550,6 @@ for(const [name,source] of Object.entries({
  elementRange:'const a:u8[2]=[1,256];',
  borrowedElement:'class C{}function f(c:ref<C>):void{const a:ref<C>[1]=[c];}',
  ownersRemainChecked:'class C{}let p:ptr<C> = new C();const a:ptr<C>[1]=[p];',
- readonly:'const a:number[2]=[1,2];a[0]=2;',
 }))test(`native fixed arrays rejects ${name}`,()=>run(fixture(source),1));
 test('native fixed arrays preserve exact integer element metadata',()=>{
  const g=check('const a:u64[1]=[18446744073709551615];');
@@ -865,8 +884,6 @@ test('native diagnostics name both sides of an incompatible assignment',()=>{
 for(const [name,source] of Object.entries({
  key:'let m=new Map<string,number>();m.set(1,2);',
  value:'let m=new Map<string,number>();m.set("s","bad");',
- immutable:'const m=new Map<string,number>();m.set("s",1);',
- deleteConstant:'const m=new Map<string,number>();delete m["s"];',
  wrongDelete:'let m=new Map<string,number>();delete m[1];',
  size:'let m=new Map<string,number>();m.size=1;',
  iteratorMutation:'let m=new Map<string,number>();for(const key in m){m.set(key,1);}',
@@ -925,7 +942,6 @@ for(const [name,source] of Object.entries({
  arity:'const a=[1,2];a.reduce(0);',
  reduceReturn:'const a=[1,2];a.reduce((s:number,x:number):string=>"s", 0);',
  flatMap:'const a=[1,2];a.flatMap((x:number):number=>x);',
- sortConstant:'const a=[2,1];a.sort();',
  sortReturn:'let a=[2,1];a.sort((x:number,y:number):boolean=>x>y);',
  mutation:'let a=[1,2];a.forEach((x:number):void=>{a.push(x);});',
  indirectMutation:'let a=[1,2];function mutate(x:number):void{a.push(x);}a.forEach(mutate);',
@@ -1118,7 +1134,7 @@ test('native aggregate ownership rejects reusing a property parameter',()=>error
 
 test('native aggregate ownership transports partial moves through methods',()=>check(ownerBox+'class H{p:ptr<Box> = new Box();q:ptr<Box> = new Box();take():ptr<Box>{return move(this.p);}}let h=new H();const p=h.take();print(h.q.value);h.p=new Box();const next=move(h);'));
 test('native aggregate ownership rejects a method reading its moved field',()=>error(ownerBox+'class H{p:ptr<Box> = new Box();take():ptr<Box>{return move(this.p);}}let h=new H();const p=h.take();print(h.p.value);',/E4102/));
-test('native aggregate ownership treats a moving method as mutation',()=>error(ownerBox+'class H{p:ptr<Box> = new Box();take():ptr<Box>{return move(this.p);}}const h=new H();const p=h.take();',/inmutable/));
+test('native aggregate ownership treats a moving method as mutation',()=>error(ownerBox+'class H{p:ptr<Box> = new Box();take():ptr<Box>{return move(this.p);}}const h=new H();const r=constRef(h);const p=h.take();print(r);',/E42/));
 
 test('native aggregate ownership rejects copying slice',()=>error(ownerBox+'let a:ptr<Box>[]=[new Box()];const b=a.slice(0,1);',/E4101/));
 test('native aggregate ownership rejects copying concat receiver',()=>error(ownerBox+'let a:ptr<Box>[]=[new Box()];const b=a.concat([]);',/E4101/));
@@ -1675,9 +1691,7 @@ for(const [name,source,pattern] of [
   ['receiver','const s="a";s?.toUpperCase();',/requiere Optional/],
   ['argument','const o:Optional<string> =optionalSome("abc");o?.charAt("x");',/incompatible/],
   ['member','const o:Optional<string> =optionalSome("abc");o?.absent();',/miembro/],
-  ['constMutation','const o:Optional<number[]> =optionalSome([1]);o?.push(2);',/inmutable/],
   ['moveJoin','class B{}class C{f(p:ptr<B>):number{return 1;}}let p:ptr<B> =new B();const o:Optional<C> =optionalNone<C>();o?.f(move(p));print(p);',/E4103|E4102/],
-  ['receiverWrite','class C{x:number=1;set():void{this.x=2;}}const o:Optional<C> =optionalSome(new C());o?.set();',/inmutable/],
 ] as const)test(`frontend closure optional call rejects ${name}`,()=>error(source,pattern));
 for(const [name,body,expected] of [
   ['present','const o:Optional<string> =optionalSome("abc");return o?.slice(0,1).value().length;',1],
