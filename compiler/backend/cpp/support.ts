@@ -51,7 +51,7 @@ export function validHeader(value:string):boolean{
  return true;
 }
 export function binaryHelper(op:string):string{
- if(op=="+")return "add";if(op=="-")return "sub";if(op=="*")return "mul";if(op=="/")return "divide";if(op=="%")return "remainder";
+ if(op=="+")return "add";if(op=="-")return "sub";if(op=="*")return "mul";if(op=="/")return "divide";if(op=="%")return "remainder";if(op=="**")return "power";
  if(op=="<<")return "shiftLeft";if(op==">>")return "shiftRight";return "";
 }
 

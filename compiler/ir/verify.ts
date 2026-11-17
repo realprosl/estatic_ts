@@ -86,7 +86,7 @@ export class IrVerifier {
       if (!hasResult || i.operands.length != 1 || !valid) this.error(i.source,"Operación unaria inválida");
     } else if (i.op == "binary") {
       let valid: boolean = false;
-      if (["+","-","*","/","%","&","|","^","<<",">>"].includes(i.text)) valid = numericType(a) && numericType(b) && resultType == nativeBinaryPromotion(a,b,i.text);
+      if (["+","-","*","/","%","**","&","|","^","<<",">>"].includes(i.text)) valid = numericType(a) && numericType(b) && resultType == nativeBinaryPromotion(a,b,i.text);
       if (i.text == "+" && resultType == "string") valid = (a == "string" || b == "string") && primitiveType(a) && primitiveType(b);
       if (["<",">","<=",">="].includes(i.text)) valid = resultType == "boolean" && ((numericType(a) && numericType(b)) || (a == "string" && b == "string"));
       if (["==","!="].includes(i.text)) valid = resultType == "boolean" && (a == b || (numericType(a) && numericType(b)));

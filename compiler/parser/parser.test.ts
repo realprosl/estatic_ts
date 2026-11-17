@@ -333,6 +333,10 @@ for (const source of [
   const result = native(source + " print(999);");
   assert.ok(result.diagnostics.length > 0 && result.diagnostics.length <= 100);
 });
+test("bootstrap parser: ** asocia por la derecha y rechaza un unario sin paréntesis (#249)", () => {
+  assert.deepEqual(native("let a=2 ** 3 ** 2; let b=(-2) ** 2; let c=-(2 ** 2); a **= 2;").diagnostics, []);
+  assert.ok(native("let d=-2 ** 2;").diagnostics.some((d: any) => d.message.includes("**")));
+});
 test("bootstrap parser destructuring recovery preserves the next statement", () => {
   for (const source of ["const [a];", "const {x}=;", "const [a,[b=values;"]) {
     const result = native(source + " print(999);");

@@ -110,6 +110,21 @@ template<class T> T remainder(T a, T b) {
         return a%b;
     } else return std::fmod(a,b);
 }
+// a ** b como en JavaScript: NaN si el exponente es NaN, y (±1) ** ±Infinity es NaN
+// (std::pow da 1). En enteros, potencia exacta con desbordamiento modular; un
+// exponente negativo da la parte entera (0 salvo para 1 y -1).
+template<class T> T power(T a, T b) {
+    if constexpr(std::is_integral_v<T>) {
+        if constexpr(std::is_signed_v<T>) if (b < 0) { if (a == 0) std::abort(); if (a == 1) return 1; if (a == -1) return (b % 2) ? T(-1) : T(1); return 0; }
+        using U=std::make_unsigned_t<T>; U result=1, base=U(a); auto e=b;
+        while (e > 0) { if (e & 1) result = U(result*base); base = U(base*base); e = e >> 1; }
+        return cast<T>(result);
+    } else {
+        if (std::isnan(b)) return std::numeric_limits<T>::quiet_NaN();
+        if (std::isinf(b) && std::fabs(a) == T(1)) return std::numeric_limits<T>::quiet_NaN();
+        return std::pow(a, b);
+    }
+}
 template<class T, class U> T shiftLeft(T a, U b) {
     using V=std::conditional_t<std::is_floating_point_v<T>,std::int64_t,T>;
     if (b<0 || b>=sizeof(V)*8) std::abort();

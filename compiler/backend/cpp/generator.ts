@@ -966,7 +966,7 @@ if(!(integerIndex(t)&&t>=0&&t<f.blocks.length)){_cppLoop53Result=false;break;}co
 }
 if(!_cppLoop53Result)this.fail("Destino de bloque inexistente",b.source);}
         for(const i of b.instructions) {
-          if(i.op=="binary"&&!["+","-","*","/","%","&","|","^","<<",">>","==","!=","<",">","<=",">="].includes(i.text))this.fail("Operador binario inválido",i.source);
+          if(i.op=="binary"&&!["+","-","*","/","%","**","&","|","^","<<",">>","==","!=","<",">","<=",">="].includes(i.text))this.fail("Operador binario inválido",i.source);
           if(i.op=="unary"&&!["+","-","!","~"].includes(i.text))this.fail("Operador unario inválido",i.source);
           if(i.op=="intrinsic"&&!["print","write","printError","writeError"].includes(i.text))this.fail("Intrínseco inválido",i.source);
           {
