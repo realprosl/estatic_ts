@@ -167,19 +167,13 @@ export class Lexer {
     this.emit("number", this.source.slice(start, this.byteOffset), offset, line, column);
   }
   scanString(offset: number, line: number, column: number): void {
-    const quote: string = this.advance();
-    let value: string = "";
+    const quote: string = this.advance(); const begin: number = this.byteOffset;
     while (!this.atEnd() && this.peek(0) != quote && this.peek(0) != "\n") {
-      if (this.peek(0) == "\\") {
-        this.advance();
-        const escaped: string = this.advance();
-        if (escaped == "n") value = value + "\n";
-        else if (escaped == "t") value = value + "\t";
-        else if (escaped == "r") value = value + "\r";
-        else value = value + escaped;
-      } else value = value + this.advance();
+      if (this.peek(0) == "\\") { this.advance(); if (!this.atEnd()) this.advance(); }
+      else this.advance();
     }
     if (this.peek(0) != quote) { this.error("Cadena sin cerrar", offset, line, column); return; }
+    const value: string = decodeEscapes(this.source.slice(begin, this.byteOffset));
     this.advance(); this.emit("string", value, offset, line, column);
   }
   templateFailure(message: string, offset: number, line: number, column: number): void {
@@ -317,6 +311,59 @@ export class Lexer {
   }
 }
 
+function hexValue(c: string): number {
+  const code: number = c.length == 1 ? c.charCodeAt(0) : -1;
+  if (code >= 48 && code <= 57) return code - 48;
+  if (code >= 97 && code <= 102) return code - 87;
+  if (code >= 65 && code <= 70) return code - 55;
+  return -1;
+}
+// Valor de `count` dígitos hexadecimales desde `at`, o -1 si alguno no lo es.
+function hexRun(text: string, at: number, count: number): number {
+  if (at + count > text.length) return -1;
+  let value: number = 0;
+  for (let k: number = 0; k < count; k = k + 1) { const digit: number = hexValue(text.charAt(at + k)); if (digit < 0) return -1; value = value * 16 + digit; }
+  return value;
+}
+// Interpreta los escapes de un string o template como JavaScript: \n \t \r \b \f \v \0,
+// \xHH, \uHHHH (con pares sustitutos), \u{...} y la continuación de línea. Un escape
+// desconocido deja el carácter (\q es q). Los caracteres de control se construyen con
+// String.fromCodePoint porque la semilla no entiende estos escapes en el propio código.
+export function decodeEscapes(raw: string): string {
+  let result: string = "";
+  let at: number = 0;
+  while (at < raw.length) {
+    const c: string = raw.charAt(at);
+    if (c != "\\" || at + 1 >= raw.length) { result = result + c; at = at + 1; continue; }
+    const next: string = raw.charAt(at + 1); at = at + 2;
+    if (next == "n") result = result + "\n";
+    else if (next == "t") result = result + "\t";
+    else if (next == "r") result = result + "\r";
+    else if (next == "b") result = result + String.fromCodePoint(8);
+    else if (next == "f") result = result + String.fromCodePoint(12);
+    else if (next == "v") result = result + String.fromCodePoint(11);
+    else if (next == "0" && (at >= raw.length || hexValue(raw.charAt(at)) < 0 || hexValue(raw.charAt(at)) > 9)) result = result + String.fromCodePoint(0);
+    else if (next == "\n") { }
+    else if (next == "\r") { if (raw.charAt(at) == "\n") at = at + 1; }
+    else if (next == "x" && hexRun(raw, at, 2) >= 0) { result = result + String.fromCodePoint(hexRun(raw, at, 2)); at = at + 2; }
+    else if (next == "u" && raw.charAt(at) == "{") {
+      const close: number = raw.indexOf("}", at);
+      let value: number = close > at + 1 ? 0 : -1;
+      for (let k: number = at + 1; value >= 0 && k < close; k = k + 1) { const digit: number = hexValue(raw.charAt(k)); if (digit < 0 || value > 1114111) value = -1; else value = value * 16 + digit; }
+      if (value >= 0 && value <= 1114111) { result = result + String.fromCodePoint(value); at = close + 1; }
+      else result = result + next;
+    } else if (next == "u" && hexRun(raw, at, 4) >= 0) {
+      let value: number = hexRun(raw, at, 4); at = at + 4;
+      // Un par sustituto \uD83D\uDE00 forma un solo carácter.
+      if (value >= 55296 && value <= 56319 && raw.charAt(at) == "\\" && raw.charAt(at + 1) == "u") {
+        const low: number = hexRun(raw, at + 2, 4);
+        if (low >= 56320 && low <= 57343) { value = 65536 + (value - 55296) * 1024 + (low - 56320); at = at + 6; }
+      }
+      result = result + String.fromCodePoint(value);
+    } else result = result + next;
+  }
+  return result;
+}
 export function tokenize(source: string): LexerResult {
   let lexer: Lexer = new Lexer(source);
   return lexer.tokenize();

@@ -2321,6 +2321,7 @@ export class TypeChecker {
         if (node.name === "process") { result = "Process"; break; }
         if (node.name === "JSON") { result = "Json"; break; }
         if (node.name === "Math") { result = "Math"; break; }
+        if (node.name === "String") { result = "StringObject"; break; }
         if (node.name === "Date") { result = "Date"; break; }
         if (node.name === "http") { result = "http"; break; }
         // V30.25: `regex` es un builtin global que crea un Regex (envuelve
@@ -3069,6 +3070,11 @@ export class TypeChecker {
         }
         if (objectType === "Process") {
           result = this.dispatchBuiltin("process", PROCESS_METHODS, node, scope);
+          break;
+        }
+        if (objectType === "StringObject") {
+          // Solo lo que usa el lexer de compiler/ (escapes \x y \u).
+          result = this.dispatchBuiltin("String", { fromCodePoint: { params: ["number"], returnType: "string" } }, node, scope);
           break;
         }
         if (objectType === "Math") {

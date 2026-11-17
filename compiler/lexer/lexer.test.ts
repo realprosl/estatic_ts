@@ -48,6 +48,8 @@ const fixtures: [string, string][] = [
   ["numeric boundaries", "0x 0b2 0o8 0x12g 1. 1e3 .5"],
   ["quoted strings", String.raw`'hello' "with \"quote\"" 'a\nb\tc\r'`],
   ["unknown escapes", String.raw`"\q\u0041\0"`],
+  ["control and unicode escapes (#248)", String.raw`"\b\f\v\0\x41\u{1F600}\uD83D\uDE00\u{110000}" 'a\
+b'`],
   ["unicode strings", 'const text:string="España 🙂 漢字"; print(text);'],
   ["unicode comments", '// 🙂 España\nprint("é");'],
   ["raw template", '`hello ${value}`'],
