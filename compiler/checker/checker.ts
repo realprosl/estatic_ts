@@ -16,13 +16,16 @@ import { nativeNumericLiteral, nativeUnaryPromotion, nativeBinaryPromotion, nati
 export class NativeChecker {
   graph: ModuleGraph; binding: BindingResult; result: CheckResult; symbolStates: number[]; depth: number; switches: number; compatibilityDepth: number;
   narrowedSymbols: number[]; narrowedTypes: string[]; trace: boolean;
+  // #213: rutas de acceso estrechadas (x.cause, this.a.b). Cada ruta tiene un id
+  // negativo en narrowedSymbols: -(posición en narrowedPaths) - 2.
+  narrowedPaths: string[];
   // Memoiza que metodo muta su receptor. Los arrays se copian al pasarlos,
   // asi que la cache vive en la clase y no en un argumento recursivo.
   // 0 = no muta, 1 = muta, 2 = en curso (ciclo).
   mutationCache: Map<string,number>;
   constructor(graph: ModuleGraph, binding: BindingResult) {
     this.graph = graph; this.binding = binding; this.result = new CheckResult(); this.symbolStates = []; this.depth = 0; this.switches = 0; this.compatibilityDepth = 0;
-    this.narrowedSymbols = []; this.narrowedTypes = []; this.trace = false;
+    this.narrowedSymbols = []; this.narrowedTypes = []; this.trace = false; this.narrowedPaths = [];
     this.mutationCache = new Map<string,number>();
   }
   node(module: number, id: number): AstNode { return this.graph.modules[module].cached.result.ast.nodes[id]; }
@@ -273,6 +276,35 @@ export class NativeChecker {
     }
     return result;
   }
+  // Ruta estrechable de un acceso: s<símbolo>.campo.campo o this.campo; "" si no lo es.
+  accessPath(module: number, id: number): string {
+    if (id < 0) return ""; const n: AstNode = this.node(module,id);
+    if (n.kind == NodeKind.IdentifierExpression) {
+      const sid: number = this.reference(module,id);
+      if (sid >= 0) return "s" + numberToString(sid);
+      if (n.get(AttributeKind.Name) == "this") return "this";
+      return "";
+    }
+    if (n.kind != NodeKind.MemberExpression || n.get(AttributeKind.Optional) == "true") return "";
+    const base: string = this.accessPath(module,bindingChild(n,EdgeRole.Object));
+    return base == "" ? "" : base + "." + n.get(AttributeKind.Member);
+  }
+  pathSymbol(route: string): number {
+    for (let at: number = 0; at < this.narrowedPaths.length; at = at + 1) if (this.narrowedPaths[at] == route) return -at - 2;
+    this.narrowedPaths.push(route); return -this.narrowedPaths.length - 1;
+  }
+  narrowedPath(module: number, id: number): string {
+    const route: string = this.accessPath(module,id); if (route.indexOf(".",0) < 0) return "";
+    const sid: number = this.pathSymbol(route);
+    for (let at: number = this.narrowedSymbols.length - 1; at >= 0; at = at - 1) if (this.narrowedSymbols[at] == sid) return this.narrowedTypes[at];
+    return "";
+  }
+  // Una asignación puede cambiar cualquier ruta: se olvidan todas.
+  forgetPaths(): void {
+    let symbols: number[] = []; let types: string[] = [];
+    for (let at: number = 0; at < this.narrowedSymbols.length; at = at + 1) if (this.narrowedSymbols[at] >= -1) { symbols.push(this.narrowedSymbols[at]); types.push(this.narrowedTypes[at]); }
+    this.narrowedSymbols = symbols; this.narrowedTypes = types;
+  }
   flowType(sid: number, module: number, id: number): string {
     for (let at: number = this.narrowedSymbols.length - 1; at >= 0; at = at - 1) if (this.narrowedSymbols[at] == sid) return this.narrowedTypes[at];
     const declared: string = this.symbolType(sid,module,id);
@@ -323,6 +355,15 @@ export class NativeChecker {
       const leftUndefined: boolean = this.undefinedLiteral(module,left); const rightUndefined: boolean = this.undefinedLiteral(module,right);
       if (leftUndefined != rightUndefined) {
         const subject: number = leftUndefined ? right : left;
+        if (this.node(module,subject).kind == NodeKind.MemberExpression) {
+          // #213: x.cause !== undefined estrecha la ruta completa x.cause.
+          const route: string = this.accessPath(module,subject); if (route.indexOf(".",0) < 0) return;
+          let currentPath: string = this.narrowedPath(module,subject); if (currentPath == "") currentPath = this.result.files[module].types[subject];
+          if (genericBase(memoryValue(currentPath)) != "Optional") return;
+          const presentPath: boolean = (n.get(AttributeKind.Operator) == "!=" || n.get(AttributeKind.Operator) == "!==") == truth;
+          if (presentPath) { this.narrowedSymbols.push(this.pathSymbol(route)); this.narrowedTypes.push(genericArguments(memoryValue(currentPath))[0]); }
+          return;
+        }
         if (this.node(module,subject).kind != NodeKind.IdentifierExpression) return;
         const sid: number = this.reference(module,subject); const current: string = this.flowType(sid,module,id);
         if (genericBase(memoryValue(current)) != "Optional") return;
@@ -1706,7 +1747,8 @@ export class NativeChecker {
     }
     if (this.result.files[module].states[id] == 1) { this.report(module,id,"Inferencia circular; añade una anotación de tipo"); return "!error"; }
     this.result.files[module].states[id] = 1; this.depth = this.depth + 1;
-    const valueType: string = this.expressionInner(module,id,expected);
+    let valueType: string = this.expressionInner(module,id,expected);
+    if (this.node(module,id).kind == NodeKind.MemberExpression && genericBase(memoryValue(valueType)) == "Optional") { const narrowed: string = this.narrowedPath(module,id); if (narrowed != "") valueType = narrowed; }
     if ([NodeKind.CallExpression,NodeKind.MemberCallExpression,NodeKind.NewExpression].includes(this.node(module,id).kind)) { this.narrowedSymbols = []; this.narrowedTypes = []; }
     this.depth = this.depth - 1; this.result.files[module].types[id] = valueType; this.result.files[module].states[id] = 2; return valueType;
   }
@@ -1928,7 +1970,7 @@ export class NativeChecker {
       return valueType;
     }
     if (kind == NodeKind.AssignmentExpression || kind == NodeKind.CompoundAssignmentExpression) {
-      const target: number = bindingChild(n,EdgeRole.Target); let valueType: string = this.expression(module,target,"");
+      const target: number = bindingChild(n,EdgeRole.Target); this.forgetPaths(); let valueType: string = this.expression(module,target,"");
       if (this.node(module,target).kind == NodeKind.IdentifierExpression) { const sid: number = this.reference(module,target); valueType = this.symbolType(sid,module,target); this.narrowedSymbols.push(sid); this.narrowedTypes.push(valueType); this.result.files[module].types[target] = valueType; }
       // Asignar a un ref<T> escribe un T a través de la referencia.
       const assigned: string = memoryMode(valueType) == "ref" ? memoryInner(valueType) : valueType;

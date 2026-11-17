@@ -190,6 +190,9 @@ export class IrLowering {
       const name: string = n.get(AttributeKind.Member); const parentType: number = this.result.functions[this.currentFunction].places[base].typeId;
       let field: number = -1; for (let at: number = 0; at < this.result.typeDefinitions[parentType].names.length; at = at+1) if (this.result.typeDefinitions[parentType].names[at] == name) field = at;
       if (field < 0) { this.fail(id,"Campo sin identidad de IR: "+name); return -1; }
+      // #213: un campo T | undefined ya comprobado (x.cause !== undefined) se lee como T.
+      const fieldType: number = field < this.result.typeDefinitions[parentType].fields.length ? this.result.typeDefinitions[parentType].fields[field] : -1;
+      if (this.narrowedOptional(fieldType,typeId)) return this.projection(this.projection(base,"field",fieldType,-1,field,id),"checkedView",typeId,-1,-1,id);
       return this.projection(base,"field",typeId,-1,field,id);
     }
     this.fail(id,"La operación requiere un place"); return -1;

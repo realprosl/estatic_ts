@@ -2122,6 +2122,11 @@ test('analysis rejects invalid job counts instead of silently disabling checks',
  const p=spawnSync(binary,[f.entry],{encoding:'utf8',env:{...process.env,ESTATIC_ANALYSIS_JOBS:'invalid'}});assert.equal(p.status,1,p.stderr);assert.equal(JSON.parse(p.stdout).success,false);
 });
 // T | undefined es Optional<T> (sin excepciones ni valor especial).
+test('checker: x.b !== undefined estrecha la ruta x.b (#213)',()=>check('class B{n:number;constructor(){this.n=1;}}class A{b:B|undefined;c:B|undefined;constructor(){this.b=undefined;this.c=undefined;}}let x:A=new A();if(x.b!==undefined){const n:number=x.b.n;print(n);}if(x.b===undefined)print(0);else print(x.b.n);'));
+test('checker: el narrowing de una ruta no vale para otra (#213)',()=>error('class B{n:number;constructor(){this.n=1;}}class A{b:B|undefined;c:B|undefined;constructor(){this.b=undefined;this.c=undefined;}}let x:A=new A();let y:A=new A();if(x.b!==undefined){print(y.b.n);}',/no declara/));
+test('checker: el narrowing de una ruta no vale para otro campo (#213)',()=>error('class B{n:number;constructor(){this.n=1;}}class A{b:B|undefined;c:B|undefined;constructor(){this.b=undefined;this.c=undefined;}}let x:A=new A();if(x.b!==undefined){print(x.c.n);}',/no declara/));
+test('checker: asignar invalida el narrowing de la ruta (#213)',()=>error('class B{n:number;constructor(){this.n=1;}}class A{b:B|undefined;c:B|undefined;constructor(){this.b=undefined;this.c=undefined;}}let x:A=new A();if(x.b!==undefined){x.b=undefined;print(x.b.n);}',/no declara/));
+test('checker: una llamada invalida el narrowing de la ruta (#213)',()=>error('class B{n:number;constructor(){this.n=1;}}class A{b:B|undefined;c:B|undefined;constructor(){this.b=undefined;this.c=undefined;}}function f():void{}let x:A=new A();if(x.b!==undefined){f();print(x.b.n);}',/no declara/));
 test('checker: T | undefined acepta T y undefined y se estrecha con !== undefined',()=>check('let x:number|undefined=undefined;x=3;if(x!==undefined){const y:number=x+1;print(y);}'));
 test('checker: solo un T | undefined se compara con undefined',()=>error('const n:number=1;print(n===undefined);',/siempre tiene valor/));
 test('checker: undefined no es un tipo por sí solo',()=>error('let x:undefined=undefined;',/solo como parte de un tipo/));
