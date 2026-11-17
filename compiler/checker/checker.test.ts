@@ -1705,12 +1705,13 @@ for(const [name,source,pattern] of [
   ['async','async function f(n:ref<number>):Promise<void>{n=1;}',/E4204/],
   ['alias','function f(n:ref<number>,m:ref<number>):void{n=1;m=2;}let n=0;f(n,n);',/E4206/],
 ] as const)test(`frontend closure ref parameter rejects ${name}`,()=>error(source,pattern));
-// #220: con `out` estos casos daban E4102/E4207; con ref<ptr<T>> aún no se detectan.
+// #220: mover desde un ref<ptr<T>> está prohibido (E4100), así que el que llama
+// no puede quedarse con un ptr movido; y pasar por ref con un préstamo vivo es E4207.
 for(const [name,source,pattern] of [
-  ['borrow','class B{}function f(p:ref<ptr<B>>):void{const q=move(p);}let p:ptr<B> =new B();const r=constRef(p);f(p);print(r);',/E4207/],
-  ['moved','class B{}function f(p:ref<ptr<B>>):void{const q=move(p);}let p:ptr<B> =new B();f(p);print(p);',/E4102/],
-  ['reborrow','class B{}function g(p:ref<ptr<B>>):void{const q=move(p);}function f(p:ref<ptr<B>>):void{g(p);print(p);}let p:ptr<B> =new B();f(p);',/E4102/],
-] as const)test(`frontend closure ref parameter rejects ${name} (#220)`,{todo:true},()=>error(source,pattern));
+  ['borrow','class B{}function f(p:ref<ptr<B>>):void{}let p:ptr<B> =new B();const r=constRef(p);f(p);print(r);',/E4207/],
+  ['moved','class B{}function f(p:ref<ptr<B>>):void{const q=move(p);}let p:ptr<B> =new B();f(p);print(p);',/E4100/],
+  ['reborrow','class B{}function g(p:ref<ptr<B>>):void{const q=move(p);}function f(p:ref<ptr<B>>):void{g(p);print(p);}let p:ptr<B> =new B();f(p);',/E4100/],
+] as const)test(`frontend closure ref parameter rejects ${name} (#220)`,()=>error(source,pattern));
 for(const [name,body,expected] of [
  ['composition','class C{x:number;y:number;}const c=new C(2,3);return c.x+c.y;',5],
  ['named','class C{x:number;y:number;}const c=new C(y:2,x:3);return c.x*10+c.y;',32],
