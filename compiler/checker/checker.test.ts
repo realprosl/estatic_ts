@@ -1147,6 +1147,8 @@ for(const [name,source] of Object.entries({
  unusedLoan:'async function test():Promise<void>{let n=0;const r=constRef(n);await sleep(1);}',
  localFrame:'async function use(cb:()=>number):Promise<number>{await sleep(1);return cb();}async function outer():Promise<number>{let n=0;const t=use(():number=>{n+=1;return n;});return await t;}',
  detached:'async function f():Promise<void>{await sleep(1);print(1);}spawn(f());',
+ detachedBuiltinMethod:'async function d():Promise<void>{const r=await http.get("x");}spawn(d());',
+ detachedFs:'async function d():Promise<void>{const r=await fs.readFile("x");}spawn(d());',
  notStarted:'class B{}async function f():Promise<void>{const q=move(p);}const t=f();let p:ptr<B> = new B();await t;',
  defaultAtCreation:'class B{}let p:ptr<B> = new B();async function f(x:ptr<B> = move(p)):Promise<void>{}const t=f();p=new B();const q=move(p);await t;',
 }))test(`native async accepts ${name}`,()=>check(source));

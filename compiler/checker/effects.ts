@@ -205,7 +205,9 @@ export class EffectAnalyzer {
   builtin(module: number, id: number): boolean {
     if (this.suspensionNode(module,id)) {
       const sources: number[] = this.taskSources(module,this.taskOperand(module,id)); if (sources.length == 0) return this.taskCollection(module,id) || this.node(module,id).kind == NodeKind.ForOfStatement;
-      for (const source of sources) { if (source < 0) return false; const m: number = this.sourceModule(source); const helper: string = this.helper(m,source-this.offsets[m]); if (helper != "sleep" && nativeBuiltinSignatures(helper).length == 0) return false; } return true;
+      for (const source of sources) { if (source < 0) return false; const m: number = this.sourceModule(source); const creation: number = source-this.offsets[m]; const helper: string = this.helper(m,creation);
+        // #198: también un método builtin (await http.get(...), fs.readFile(...)).
+        if (helper != "sleep" && nativeBuiltinSignatures(helper).length == 0 && !(this.node(m,creation).kind == NodeKind.MemberCallExpression && this.builtin(m,creation))) return false; } return true;
     }
     if (this.synchronousCallbacks(module,id).length > 0) return false;
     const n: AstNode = this.node(module,id);
