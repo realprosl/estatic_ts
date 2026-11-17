@@ -82,7 +82,7 @@ export function verifyShapeInstruction(project: constRef<IrProject>, f: constRef
     return i.op == "isPresent" ? project.types[i.typeId] == "boolean" ? "" : "Test de presencia incompatible" : i.typeId == project.typeDefinitions[input].arguments[0] ? "" : "Payload incompatible";
   }
   if (i.op == "emptyRecord" || i.op == "collection") {
-    if ((i.result) < 0 || i.operands.length != 0 || (i.op == "emptyRecord" ? shape.kind != "record" : !["Map","Set"].includes(shape.kind))) return "Construcción vacía inválida"; return "";
+    if ((i.result) < 0 || i.operands.length > (i.op == "collection" ? 1 : 0) || (i.op == "emptyRecord" ? shape.kind != "record" : !["Map","Set"].includes(shape.kind))) return "Construcción vacía inválida"; return "";
   }
   if (i.op == "aggregate") {
     if (!["array","fixedArray","tuple","pack"].includes(shape.kind) || i.names.length != i.operands.length || (i.result) < 0) return "Construcción de agregado inválida";

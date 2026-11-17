@@ -971,7 +971,11 @@ export class NativeChecker {
       if (name == "clear") return "()=>void";
       if (container == "Map" && name == "get") return "(" + parts[0] + ")=>Optional<" + parts[1] + ">";
       if (container == "Map" && name == "set") return "(" + parts[0] + "," + parts[1] + ")=>void";
-      if (container == "Set" && name == "add") return "(" + parts[0] + ")=>boolean";
+      if (container == "Set" && name == "add") return "(" + parts[0] + ")=>void";
+      // keys/values/entries devuelven arrays (en JavaScript son iteradores).
+      if (name == "keys") return "()=>" + parts[0] + "[]";
+      if (name == "values") return "()=>" + (container == "Map" ? parts[1] : parts[0]) + "[]";
+      if (name == "entries") return "()=>[" + parts[0] + "," + (container == "Map" ? parts[1] : parts[0]) + "][]";
     }
     if (container == "Optional" || container == "Result") {
       if (container == "Result" && name == "kind") return "string";
@@ -1192,7 +1196,13 @@ export class NativeChecker {
     if (["Map","Set"].includes(genericBase(array)) && method == "forEach") {
       const parts: string[] = genericArguments(array); const parameters: string[] = genericBase(array) == "Map" ? [parts[1],parts[0]] : [parts[0]];
       let count: number = 0; let callbackType: string = "";
-      for (const edge of n.edges) if (edge.role == EdgeRole.Args) { callbackType = this.expression(module,edge.node,""); this.requireType(module,edge.node,callbackType,"(" + parameters.join(",") + ")=>void"); count = count + 1; }
+      for (const edge of n.edges) if (edge.role == EdgeRole.Args) {
+        callbackType = this.expression(module,edge.node,"(" + parameters.join(",") + ")=>void");
+        // Como en TypeScript, el callback puede declarar menos parámetros (forEach(v => ...)).
+        const declared: number = functionParams(callbackType).length; let accepted: string[] = [];
+        for (let at: number = 0; at < declared && at < parameters.length; at = at+1) accepted.push(parameters[at]);
+        this.requireType(module,edge.node,callbackType,"(" + accepted.join(",") + ")=>void"); count = count + 1;
+      }
       if (count != 1) this.report(module,id,"forEach requiere un callback");
       this.result.files[module].signatures[id] = "(" + callbackType + ")=>void"; return "void";
     }
@@ -1822,10 +1832,17 @@ export class NativeChecker {
       } else if (rawSymbol >= 0 && this.binding.symbols[rawSymbol].kind == "builtin-type" && ["Map","Set"].includes(raw) && genericBase(expected) == raw) valueType = expected;
       else valueType = this.annotation(module,id,raw);
       if (["Map","Set"].includes(genericBase(valueType))) {
-        for (const edge of n.edges) if (edge.role == EdgeRole.Args) { this.expression(module,edge.node,""); this.report(module,edge.node,"El constructor de colección no acepta argumentos"); }
+        const collectionArgs: string[] = genericArguments(valueType);
+        // new Map(entradas) y new Set(valores), como en JavaScript.
+        const source: string = genericBase(valueType) == "Map" ? "[" + collectionArgs[0] + "," + collectionArgs[1] + "][]" : collectionArgs[0] + "[]";
+        let sourceCount: number = 0;
+        for (const edge of n.edges) if (edge.role == EdgeRole.Args) {
+          sourceCount = sourceCount + 1; const actual: string = this.expression(module,edge.node,source);
+          if (sourceCount > 1) this.report(module,edge.node,"El constructor de colección acepta como mucho un argumento"); else this.requireType(module,edge.node,memoryValue(actual),source);
+        }
         const key: string = genericArguments(valueType)[0]; const keySymbol: number = this.nominalSymbol(key);
         if ((!primitiveType(key) || key == "void") && !(keySymbol >= 0 && this.binding.symbols[keySymbol].kind == "EnumDeclaration")) this.report(module,id,"Una clave de colección requiere un tipo primitivo comparable o enum");
-        this.result.files[module].signatures[id] = "()=>" + valueType; return valueType;
+        this.result.files[module].signatures[id] = (sourceCount > 0 ? "(" + source + ")=>" : "()=>") + valueType; return valueType;
       }
       const sid: number = this.nominalSymbol(valueType);
       if (sid < 0 || this.binding.symbols[sid].kind != "ClassDeclaration") { this.report(module,id,"new requiere una clase"); return "!error"; }
