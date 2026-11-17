@@ -162,7 +162,8 @@ S Generator::instruction(const Function& f,const Instruction& i,int block){
   else if(s.kind=="fixedArray"){S setup;for(int k=0;k<int(i.operands.size());k++){if(i.names.at(k)!="spread"){pieces.push_back(a(k));continue;}const auto& input=shape(f.values.at(i.operands[k]));int count=input.kind=="fixedArray"?input.length:in(input.kind,{"tuple","pack"})?int(input.arguments.size()):-1;if(count<0)return fail("Spread de longitud desconocida en array fijo",i.source);setup+="auto part"+n(k)+"="+a(k)+";";for(int x=0;x<count;x++)pieces.push_back("std::move("+(in(input.kind,{"tuple","pack"})?"std::get<"+n(x)+">(part"+n(k)+")":"part"+n(k)+"["+n(x)+"]")+")");}v="([&](){"+setup+"return "+T+"{"+join(pieces)+"};}())";}
   else{S body;for(int k=0;k<int(i.operands.size());k++)body+=i.names.at(k)=="spread"?"auto part"+n(k)+"="+a(k)+";for(auto& x:part"+n(k)+"){out.push_back(std::move(x));}":"out.push_back("+a(k)+");";v="([&](){"+T+" out;"+body+"return out;}())";}
  }
- else if(op=="emptyRecord"||op=="collection")v=T+"{}";
+ else if(op=="emptyRecord"||(op=="collection"&&i.operands.empty()))v=T+"{}";
+ else if(op=="collection")v=T+"::from("+a(0)+")";
  else if(op=="record"||op=="variant"){
   const auto& s=shape(i.typeId);S fields;for(int k=0;k<int(i.names.size());k++)fields+="out.f"+n(index(s.names,i.names[k]))+".set("+a(k)+");";
   if(op=="variant"){int k=index(s.names,S("kind"));if(k>=0&&!has(i.names,S("kind")))fields+="out.f"+n(k)+".set("+literal(s.tag,s.fields.at(k))+");";k=index(s.names,s.discriminator);if(k>=0&&!has(i.names,s.discriminator))fields+="out.f"+n(k)+".set("+literal(s.discriminatorValue,s.discriminatorType)+");";}
@@ -313,7 +314,7 @@ S Generator::runtimeCall(const Function& f,const Instruction& i){const auto& c=p
  if(i.operands.empty())return fail("Capacidad runtime no implementada: "+c.capability,i.source);
  int actual=f.values.at(i.operands.at(0));const auto& s=shape(inner(actual));S receiver=deref(a(0,false),actual);
  if(in(base,{"Optional","Result"})){if(in(method,{"isPresent","isEmpty","isOk","value","error","valueOr","orElse"}))return "("+deref(a(0,shape(actual).resource),actual)+")."+method+"("+args(1)+")";if(in(method,{"map","andThen"}))return "("+receiver+")."+method+"("+callback(f,i,1)+")";}
- if(in(base,{"Map","Set"})){if(in(method,{"set","add","has","clear","size","delete"}))return "("+receiver+")."+(method=="delete"?"removeKey":method)+"("+args(1)+")";if(method=="get")return T+"::of(("+receiver+").get("+a(1)+"))";if(method=="forEach")return "("+receiver+").forEach("+callback(f,i,1)+")";}
+ if(in(base,{"Map","Set"})){if(in(method,{"set","add","has","clear","size","delete","keys","values","entries"}))return "("+receiver+")."+(method=="delete"?"removeKey":method)+"("+args(1)+")";if(method=="get")return T+"::of(("+receiver+").get("+a(1)+"))";if(method=="forEach")return "("+receiver+").forEach("+callback(f,i,1)+")";}
  if(base=="array"){
   result.headers.insert("runtime/ets_collections.hpp");S E=elementType(s.arguments.at(0));auto cb=[&](){return callback(f,i,i.operands.size()-1);};
   S rest=i.operands.size()>1?","+args(1):S("");

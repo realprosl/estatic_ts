@@ -10,6 +10,7 @@
 //   - Incluir `runtime/ets_io.hpp` si quiere `print`/`console.log`
 //   - Definir sus propios helpers de output
 
+#include "ets_map.hpp"
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
@@ -40,44 +41,7 @@ inline std::ostream& operator<<(std::ostream& stream, const std::variant<Types..
 
 namespace ets {
 
-template <typename K, typename V>
-class Map {
-    std::unordered_map<K, V> data_;
-public:
-    Map() = default;
-    std::optional<V> get(const K& key) const {
-        auto it = data_.find(key);
-        if (it == data_.end()) return std::nullopt;
-        return it->second;
-    }
-    void set(const K& key, V value) { data_[key] = std::move(value); }
-    bool has(const K& key) const { return data_.find(key) != data_.end(); }
-    bool removeKey(const K& key) { return data_.erase(key) > 0; }
-    std::size_t size() const { return data_.size(); }
-    void clear() { data_.clear(); }
-    template <typename F>
-    void forEach(F&& fn) const {
-        for (const auto& pair : data_) fn(pair.second, pair.first);
-    }
-    const std::unordered_map<K, V>& data() const { return data_; }
-};
-
-template <typename T>
-class Set {
-    std::unordered_set<T> data_;
-public:
-    Set() = default;
-    bool add(const T& value) { return data_.insert(value).second; }
-    bool has(const T& value) const { return data_.find(value) != data_.end(); }
-    bool removeKey(const T& value) { return data_.erase(value) > 0; }
-    std::size_t size() const { return data_.size(); }
-    void clear() { data_.clear(); }
-    template <typename F>
-    void forEach(F&& fn) const {
-        for (const auto& value : data_) fn(value);
-    }
-    const std::unordered_set<T>& data() const { return data_; }
-};
+// Map y Set con orden de inserción: runtime/ets_map.hpp.
 
 } // namespace ets
 

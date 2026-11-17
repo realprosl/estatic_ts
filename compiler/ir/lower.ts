@@ -686,7 +686,7 @@ export class IrLowering {
   }
   classConstruct(id: number, typeId: number): number {
     const valueType: string = memoryValue(this.result.types[typeId]); const valueId: number = this.typeId(valueType,id); const nominal: number = canonicalSymbol(valueType);
-    if (["Map","Set"].includes(genericBase(valueType))) return this.emit("collection",valueId,[],-1,-1,"",id);
+    if (["Map","Set"].includes(genericBase(valueType))) { let sources: number[] = []; for (const e of this.node(id).edges) if (e.role == EdgeRole.Args) sources.push(this.expression(e.node)); return this.emit("collection",valueId,sources,-1,-1,"",id); }
     if (nominal < 0) { this.fail(id,"Construcción sin tipo nominal"); return -1; }
     const owner = this.binding.symbols[nominal]; const declaration = this.graph.modules[owner.module].cached.result.ast.nodes[owner.node];
     let actuals: number[] = []; let positions: number[] = [];

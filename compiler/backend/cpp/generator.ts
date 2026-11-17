@@ -480,7 +480,8 @@ const pieces=_cppLoop8Result;
           value=`([&](){${T} out;${shape.kind=="fixedArray"?"std::size_t k=0;":""}${pieces.join("")}return out;}())`;
         }break;
       }
-      case "emptyRecord": case "collection": value=`${T}{}`;break;
+      case "emptyRecord": value=`${T}{}`;break;
+      case "collection": value=i.operands.length==0?`${T}{}`:`${T}::from(${this.operand(f,i,0)})`;break;
       case "record": case "variant": {
         const shape=this.shape(i.typeId);
 let _cppLoop30Result:string[]=[];
@@ -641,7 +642,7 @@ value=`${i.text}(${_cppLoop31Result.join(",")})`;}}break;
         if(i.op=="iterHasNext")value=`v${cursor}.get()<(${base}).size()`;
         else if(["Map","Set"].includes(shape.kind)) {
           const position=`v${cursor}.get()++`;const  map=shape.kind=="Map";
-          value=`([&](){auto it=(${base}).data().begin();std::advance(it,${position});return ${definition.text=="keys"?(map?"it->first":"*it"):map?"std::make_tuple(it->first,it->second)":"*it"};}())`;
+          value=`([&](){const auto& it=(${base}).entryAt(${position});return ${definition.text=="keys"?(map?"it.first":"it"):map?"std::make_tuple(it.first,it.second)":"it"};}())`;
         } else if(definition.text=="keys")value=`static_cast<${T}>(v${cursor}.get()++)`;
         else if(this.project.types[this.inner(place.typeId)]=="string")value=`std::string(1,(${base}).at(v${cursor}.get()++))`;
         else {const element=`(${base}).at(v${cursor}.get()++)`;value=(["ref","constRef"].includes(this.shape(i.typeId).kind)?`std::addressof(ets::ir::read(${element}))`:this.shape(i.typeId).resource?`std::move(${element})`:element);}
@@ -1141,7 +1142,7 @@ return `(${this.deref(value,actual)}).${method}(${_cppLoop48Result.join(",")})`;
     if(["map","andThen"].includes(method))return `(${receiver}).${method}(${this.callback(f,i,1)})`;
   }
   if(["Map","Set"].includes(base)) {
-    if(["set","add","has","clear","size","delete"].includes(method)){
+    if(["set","add","has","clear","size","delete","keys","values","entries"].includes(method)){
 let _cppLoop49Result:string[]=[];
 const _cppLoop49Input:number[]=i.operands.slice(1,i.operands.length);
 for(let k:number=0;k<_cppLoop49Input.length;k=k+1){

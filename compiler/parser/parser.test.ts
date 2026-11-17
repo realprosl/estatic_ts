@@ -328,7 +328,7 @@ for (const source of [
   "const {[key]:value}=source;", "const {'x':value}=source;", "const {1:value}=source;",
   "const [a b]=values;", "const {x y}=source;", "const [a=]=values;", "const {x:alias=}=source;",
   "const [a;", "const {x;", "const [a];", "const {x};", "const [a]=;", "const {x}=;",
-  "using [a]=values;", "for(const [a] of rows)print(a);", "const [a,[b=values;",
+  "using [a]=values;", "const [a,[b=values;",
 ] as const) test(`bootstrap parser destructuring diagnostics: ${source}`, () => {
   const result = native(source + " print(999);");
   assert.ok(result.diagnostics.length > 0 && result.diagnostics.length <= 100);

@@ -894,7 +894,7 @@ export class Parser {
   forStatement(keyword: ParserToken): number {
     const awaited: boolean = this.accept("await"); this.expect("(");
     const result: number = this.add(NodeKind.ForStatement, keyword, keyword);
-    let iteration: boolean = false;
+    let iteration: boolean = false; let pattern: number = -1; let patternName: string = "";
     if (this.check("let") || this.check("const")) {
       const saved: number = this.current;
       let cursor: number = 0; let depth: number = 0;
@@ -909,10 +909,25 @@ export class Parser {
         cursor = cursor + 1;
       }
       if (iteration) {
-        const bindingKeyword: ParserToken = this.take(); const name: ParserToken = this.expect("identifier");
-        const binding: number = this.add(NodeKind.VariableDeclaration, bindingKeyword, name);
-        this.attr(binding, AttributeKind.Name, name.lexeme); this.attr(binding, AttributeKind.Mutable, bindingKeyword.kind == "let" ? "true" : "false");
-        if (this.accept(":")) this.attr(binding, AttributeKind.DeclaredType, this.typeName());
+        const bindingKeyword: ParserToken = this.take();
+        let binding: number = -1;
+        if (this.check("[") || this.check("{")) {
+          // for (const [k, v] of x) se reescribe como
+          // for (const __forN of x) { const [k, v] = __forN; ... } (destructuring normal).
+          pattern = this.add(NodeKind.VariableDeclaration, bindingKeyword, this.peek(0));
+          this.attr(pattern, AttributeKind.Mutable, bindingKeyword.kind == "let" ? "true" : "false");
+          this.bindingPattern(pattern, this.check("["));
+          if (this.accept(":")) this.attr(pattern, AttributeKind.DeclaredType, this.typeName());
+          this.setEnd(pattern, this.previous());
+          patternName = "__for" + numberToString(result);
+          binding = this.add(NodeKind.VariableDeclaration, bindingKeyword, bindingKeyword);
+          this.attr(binding, AttributeKind.Name, patternName); this.attr(binding, AttributeKind.Mutable, "false");
+        } else {
+          const name: ParserToken = this.expect("identifier");
+          binding = this.add(NodeKind.VariableDeclaration, bindingKeyword, name);
+          this.attr(binding, AttributeKind.Name, name.lexeme); this.attr(binding, AttributeKind.Mutable, bindingKeyword.kind == "let" ? "true" : "false");
+          if (this.accept(":")) this.attr(binding, AttributeKind.DeclaredType, this.typeName());
+        }
         const iterationToken: ParserToken = this.take();
         this.setKind(result, iterationToken.kind == "of" ? NodeKind.ForOfStatement : NodeKind.ForInStatement);
         if (iterationToken.kind == "of") this.attr(result, AttributeKind.Await, awaited ? "true" : "false");
@@ -929,7 +944,16 @@ export class Parser {
       if (!this.check(";")) this.edge(result, EdgeRole.Condition, this.expression());
       this.expect(";"); if (!this.check(")")) this.edge(result, EdgeRole.Increment, this.expression());
     }
-    this.expect(")"); const body: number = this.statement(false); this.edge(result, EdgeRole.Body, body);
+    this.expect(")"); let body: number = this.statement(false);
+    if (pattern >= 0) {
+      // Bloque con el destructuring del patrón y después el cuerpo original.
+      const source: number = this.add(NodeKind.IdentifierExpression, this.previous(), this.previous());
+      this.attr(source, AttributeKind.Name, patternName); this.edge(pattern, EdgeRole.Initializer, source);
+      const block: number = this.add(NodeKind.BlockStatement, this.previous(), this.previous());
+      this.edge(block, EdgeRole.Statements, pattern); this.edge(block, EdgeRole.Statements, body);
+      this.nodes[block].end = this.node(body).end; body = block;
+    }
+    this.edge(result, EdgeRole.Body, body);
     this.setEnd(result, this.node(body).end); return result;
   }
   typeName(): string {

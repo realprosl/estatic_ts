@@ -255,7 +255,8 @@ export class IrCppGenerator {
           value=`([&](){${T} out;${shape.kind==="fixedArray"?"std::size_t k=0;":""}${pieces.join("")}return out;}())`;
         }break;
       }
-      case "emptyRecord": case "collection": value=`${T}{}`;break;
+      case "emptyRecord": value=`${T}{}`;break;
+      case "collection": value=i.operands.length?`${T}::from(${this.operand(f,i,0)})`:`${T}{}`;break;
       case "record": case "variant": {
         const shape=s(i.typeId), fields=i.names.map((name,k)=>`out.f${shape.names.indexOf(name)}.set(${a(k)});`);
         if(i.op==="variant") {
