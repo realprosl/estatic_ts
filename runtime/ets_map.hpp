@@ -116,10 +116,11 @@ template <typename T>
 class Set : public OrderedTable<T, T> {
 public:
     Set() = default;
-    // add devuelve el propio Set, como en JavaScript (s.add(1).add(2)).
-    Set& add(const T& value) {
-        if (this->index_.find(value) == this->index_.end()) { this->index_.emplace(value, this->entries_.size()); this->entries_.emplace_back(value); }
-        return *this;
+    // Devuelve si se insertó: el código que genera la semilla lo guarda como boolean.
+    bool add(const T& value) {
+        if (this->index_.find(value) != this->index_.end()) return false;
+        this->index_.emplace(value, this->entries_.size()); this->entries_.emplace_back(value);
+        return true;
     }
     // new Set(valores): cualquier secuencia.
     template <typename Source>

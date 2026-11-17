@@ -109,7 +109,7 @@ export function emitRuntimeCall(g:IrCppGenerator,f:IrFunction,i:IrInstruction):s
     if(["map","andThen"].includes(method))return `(${receiver}).${method}(${g.callback(f,i,1)})`;
   }
   if(["Map","Set"].includes(base)) {
-    if(["set","add","has","clear","size","delete"].includes(method))return `(${receiver}).${method==="delete"?"removeKey":method}(${i.operands.slice(1).map((_,k)=>a(k+1)).join(",")})`;
+    if(["set","add","has","clear","size","delete","keys","values","entries"].includes(method))return `(${receiver}).${method==="delete"?"removeKey":method}(${i.operands.slice(1).map((_,k)=>a(k+1)).join(",")})`;
     if(method==="get")return `${T}::of((${receiver}).get(${a(1)}))`;
     if(method==="forEach")return `(${receiver}).forEach(${g.callback(f,i,1)})`;
   }
