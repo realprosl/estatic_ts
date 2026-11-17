@@ -28,6 +28,8 @@ export async function buildIrFrontend(directory=join(root,"build/compiler/ir-cpp
   const built=await buildLoader(directory,"compiler/ir/demo.ts",true,"-O0",detail);writeFileSync(stamp,identity);return built;
 }
 export function nativeIr(binary:string, entry:string,loaderArgs:string[]=[],detail:(text:string)=>void=()=>{}):IrProject {
+  // Librerías del runtime ("estatic:math" -> runtime/lib/math.ts).
+  if(!loaderArgs.includes("--library"))loaderArgs=[...loaderArgs,"--library",join(root,"runtime/lib")];
   detail(`Comando frontend: ${JSON.stringify([binary,resolve(entry),...loaderArgs])}`);
   const p=spawnSync(binary,[resolve(entry),...loaderArgs],{encoding:"utf8",maxBuffer:64*1024*1024,timeout:120000});
   return decodeNativeIr(p,entry);
@@ -43,7 +45,7 @@ function decodeNativeIr(p:{error?:Error;status:number|null;stdout:string;stderr:
 }
 // Read progress while the frontend runs; stdout remains the JSON protocol.
 export function nativeIrWithProgress(binary:string,entry:string,loaderArgs:string[],detail:(text:string)=>void,diagnostic:(text:string)=>void=detail):Promise<IrProject> {
-  const args=[resolve(entry),...loaderArgs,"--verbose"];
+  const args=[resolve(entry),...loaderArgs,...(loaderArgs.includes("--library")?[]:["--library",join(root,"runtime/lib")]),"--verbose"];
   detail(`Comando frontend: ${JSON.stringify([binary,...args])}`);
   return new Promise((resolve,reject)=>{
     const child=spawn(binary,args,{stdio:["ignore","pipe","pipe"]});

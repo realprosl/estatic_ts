@@ -12,6 +12,7 @@ function runIr(): void {
     else if(arg=="--jobs"){at=at+1;if(at>=argumentCount()||!configureAnalysisJobs(argument(at))){printError("--jobs requiere un entero entre 1 y 32");exitProcess(2);}}
     else if (arg == "--verbose") { verbose = true; options.verbose = true; }
     else if (arg == "--root" || arg == "--cache") { at = at+1; if (at >= argumentCount()) exitProcess(2); if (arg == "--root") options.roots.push(normalizePath(argument(at))); else options.cacheDirectory = argument(at); }
+    else if (arg == "--library") { at = at+1; if (at >= argumentCount()) exitProcess(2); options.library = normalizePath(argument(at)); }
     else if (arg == "--alias") { if (at+2 >= argumentCount()) exitProcess(2); options.aliases.push(new PathAlias(argument(at+1),argument(at+2))); at = at+2; }
     else if (entry == "" && !arg.startsWith("-")) entry = arg; else exitProcess(2);
   }

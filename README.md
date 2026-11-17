@@ -471,6 +471,35 @@ en una línea, el texto se genera ya al compilar.
 - Aún no se puede desestructurar en `for (const [i, x] of a.entries())`: usa
   `e[0]` y `e[1]` (va en la tanda de Map/Set).
 
+## Librerías del runtime: `estatic:math` y `estatic:number`
+
+`Math` y `Number` de TypeScript son librerías escritas en Estatic
+(`runtime/lib/*.ts`), no builtins: se importan.
+
+```ts
+import Math, { floor, PI } from "estatic:math";     // las dos formas
+Math.floor(2.7); floor(2.7); Math.max(1, 5, 3); Math.hypot(3, 4); Math.PI;
+
+import Number, { parseInt, parseFloat, toFixed, toPrecision, toExponential, toString } from "estatic:number";
+Number.isInteger(5); Number.MAX_SAFE_INTEGER; Number.EPSILON;
+parseInt("ff", 16); parseFloat("3.14abc");
+toFixed(1.005, 2);        // "1.00"   (x.toFixed(2) en TypeScript)
+toPrecision(123.456, 4);  // "123.5"
+toString(255, 16);        // "ff"
+```
+
+- `Math` tiene todas las funciones y constantes de TypeScript, con sus
+  resultados (`round(-2.5)` es `-2`, `min(0, -0)` es `-0`, `pow(1, NaN)` es
+  `NaN`, `max()` es `-Infinity`).
+- Los métodos de `number` (`x.toFixed(2)`, `x.toString(16)`...) son funciones
+  que reciben el número: `toFixed(x, 2)`, `toString(x, 16)`. Dan el mismo texto
+  que JavaScript, redondeo de empates incluido (comparado con Node en 27.000
+  casos).
+- Lo que necesita C++ (`<cmath>`, el redondeo decimal exacto) está en
+  `runtime/lib/numeric.hpp` y se enlaza con `@cpp_native`.
+- El `Math` global sigue existiendo de momento; `import Math from
+  "estatic:math"` lo sustituye en el módulo que lo importa.
+
 ## Errores: `Error` sin excepciones
 
 `Error`, `TypeError`, `RangeError`, `SyntaxError`, `ReferenceError`, `EvalError` y

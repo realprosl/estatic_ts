@@ -299,6 +299,8 @@ function main():void{
  if(configPath!=""){for(const alias of dependencyAliases(config,base,options.aliases))options.aliases.push(alias);for(const flag of dependencyLinkFlags(config,base))links.push(flag);syncTsconfig(base,config);libraryRoots=dependencyRoots(config,base);}
  // Prelude (#165): el del runtime (runtime/prelude/*.ts: Error…) y el del proyecto ("prelude" en la config).
  for(const file of files(root+"/runtime/prelude"))if(file.endsWith(".ts"))options.prelude.push(root+"/runtime/prelude/"+file);
+ // Librerías del runtime: import Math from "estatic:math" (runtime/lib/math.ts).
+ options.library=root+"/runtime/lib";
  for(const path of configStrings(jsonObjectGet(config,"prelude")))options.prelude.push(pathAt(base,path));
  if(emitInterface){emitModuleInterface(entry,options);return;}
  // Fase 3 de #149: con una huella vigente no se analiza ni se compila.
