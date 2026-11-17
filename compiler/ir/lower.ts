@@ -9,6 +9,7 @@ import { finishBorrows } from "./borrows";
 import { preserveContracts } from "./contracts";
 import { verifyIr } from "./verify";
 import { progressDetail } from "../platform/index";
+import { decodeEscapes } from "../lexer/index";
 
 function irIndex(values: number[], value: number): number { for (let i: number = 0; i < values.length; i = i+1) if (values[i] == value) return i; return -1; }
 
@@ -375,23 +376,8 @@ export class IrLowering {
     if (["ptr","constPtr"].includes(shape.kind) && shape.arguments[0] == this.valueType(value)) return this.emit("own",typeId,[value],-1,-1,"",id);
     return this.emit("convert",typeId,[value],-1,-1,"",id);
   }
-  decodeTemplatePart(raw: string): string {
-    let decoded: string = "";
-    let index: number = 0;
-    while (index < raw.length) {
-      const ch: string = raw.charAt(index);
-      if (ch == "\\" && index + 1 < raw.length) {
-        const next: string = raw.charAt(index + 1);
-        if (next == "n") { decoded = decoded + "\n"; index = index + 2; continue; }
-        if (next == "r") { decoded = decoded + "\r"; index = index + 2; continue; }
-        if (next == "t") { decoded = decoded + "\t"; index = index + 2; continue; }
-        if (next == "\\" || next == "`" || next == "$") { decoded = decoded + next; index = index + 2; continue; }
-      }
-      decoded = decoded + ch;
-      index = index + 1;
-    }
-    return decoded;
-  }
+  decodeTemplatePart(raw: string): string { return decodeEscapes(raw); }
+
   expression(id: number): number {
     if (id < 0) return -1;
     for (let at: number = this.overrideNodes.length-1; at >= 0; at = at-1) if (this.overrideNodes[at] == id) return this.emit("load",this.result.functions[this.currentFunction].places[this.overridePlaces[at]].typeId,[],this.overridePlaces[at],-1,"",id);

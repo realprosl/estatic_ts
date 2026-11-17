@@ -156,21 +156,20 @@ export class Lexer {
 
   private string(start: Position): void {
     const quote = this.advance();
-    let value = "";
+    let raw = "";
     while (!this.atEnd() && this.peek() !== quote) {
       if (this.peek() === "\n") break;
       if (this.peek() === "\\") {
         this.advance();
-        const escaped = this.advance();
-        value += ({ n: "\n", t: "\t", r: "\r", "\\": "\\", '"': '"', "'": "'" } as Record<string, string>)[escaped] ?? escaped;
-      } else value += this.advance();
+        raw += "\\" + (this.atEnd() ? "" : this.advance());
+      } else raw += this.advance();
     }
     if (this.peek() !== quote) {
       this.diagnostics.push({ phase: "lexer", message: "Cadena sin cerrar", span: span(start, this.position()) });
       return;
     }
     this.advance();
-    this.add("string", value, start);
+    this.add("string", decodeEscapes(raw), start);
   }
 
   // Preserve the raw body while balancing template/interpolation contexts.
@@ -222,4 +221,15 @@ export class Lexer {
     return c;
   }
   private position(): Position { return { offset: this.offset, line: this.line, column: this.column }; }
+}
+
+// Escapes de strings como JavaScript (igual que decodeEscapes de compiler/lexer).
+export function decodeEscapes(raw: string): string {
+  return raw.replace(/\\(u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|0(?![0-9])|\r\n|[\s\S])/g, (whole, body: string, braced?: string, unicode?: string, hex?: string) => {
+    if (braced !== undefined) { const code = parseInt(braced, 16); return code <= 0x10ffff ? String.fromCodePoint(code) : "u" + body.slice(1); }
+    if (unicode !== undefined) return String.fromCharCode(parseInt(unicode, 16));
+    if (hex !== undefined) return String.fromCharCode(parseInt(hex, 16));
+    const map: Record<string, string> = { n: "\n", t: "\t", r: "\r", b: "\b", f: "\f", v: "\v", "0": "\0", "\n": "", "\r": "", "\r\n": "" };
+    return map[body] ?? body;
+  });
 }
