@@ -1204,7 +1204,8 @@ export class Parser {
       } else if (this.check(".") || this.check("?.")) {
         const optional: boolean = this.take().kind == "?.";
         let member: ParserToken = this.peek(0);
-        if (this.check("delete") || this.check("default")) member = this.take(); else member = this.expect("identifier");
+        // Como en TypeScript, tras el punto vale una palabra clave (map.delete, Array.of).
+        if (this.check("delete") || this.check("default") || this.check("of")) member = this.take(); else member = this.expect("identifier");
         const parent: number = this.add(NodeKind.MemberExpression, this.node(result).start, member);
         this.edge(parent, EdgeRole.Object, result); this.attr(parent, AttributeKind.Optional, optional ? "true" : "false");
         if (this.check("<") && this.genericMethodFollower() == "(") this.typeArguments(parent);

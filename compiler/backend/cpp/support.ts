@@ -54,3 +54,21 @@ export function binaryHelper(op:string):string{
  if(op=="+")return "add";if(op=="-")return "sub";if(op=="*")return "mul";if(op=="/")return "divide";if(op=="%")return "remainder";
  if(op=="<<")return "shiftLeft";if(op==">>")return "shiftRight";return "";
 }
+
+// Comillas de util.inspect de Node para un string dentro de un array: simples
+// salvo que el texto las contenga (y no dobles); escapa la comilla elegida,
+// la barra y los caracteres de control.
+export function inspectString(text:string):string{
+  let quote:string="'";
+  if(text.includes("'")){if(!text.includes("\""))quote="\"";else if(!text.includes("`"))quote="`";}
+  let result:string=quote;
+  for(let at:number=0;at<text.length;at=at+1){
+    const c:string=text.charAt(at);const code:number=text.charCodeAt(at);
+    if(c==quote||c=="\\")result=result+"\\"+c;
+    else if(c=="\n")result=result+"\\n";else if(c=="\t")result=result+"\\t";else if(c=="\r")result=result+"\\r";
+    else if(code==8)result=result+"\\b";else if(code==12)result=result+"\\f";else if(code==11)result=result+"\\v";
+    else if(code<32||code==127){const digits:string="0123456789ABCDEF";result=result+"\\x"+digits.charAt((code-code%16)/16)+digits.charAt(code%16);}
+    else result=result+c;
+  }
+  return result+quote;
+}

@@ -448,13 +448,28 @@ a.pop(); a.shift(); a.unshift(0);
 a.join(); [true, false].join("|");   // join con cualquier tipo de elemento
 a.toSorted(); a.toReversed(); a.with(0, 9);   // copias
 a.reverse(); a.fill(7, 1, -1);                // modifican el array
+a.splice(1, 2, 9, 8);          // quita y devuelve los 2 elementos; toSpliced(...) sobre una copia
+[[1], [2, 3]].flat();          // [1, 2, 3]; flat(2), flat(3)... con profundidad literal
+a.keys(); a.values(); a.entries();   // arrays: sirven en for...of y en Array.from
+Array.isArray(a); Array.of(1, 2); Array.from("ab"); Array.from(set, (x, i) => x * i);
 ```
+
+`print` y `console.log` muestran arrays, tuplas, `Map`, `Set` y `T | undefined`
+como Node (`util.inspect`): `[ 1, 2, 3 ]`, `[ 'a', "it's" ]`,
+`Map(1) { 'a' => 1 }`, `Set(2) { 1, 2 }`; en una línea si cabe en 80 columnas,
+en columnas con más de 6 elementos, hasta 100 elementos y profundidad 2. Si el
+argumento es un array literal de constantes (enteros, strings, booleanos) y cabe
+en una línea, el texto se genera ya al compilar.
 
 - `reduce` sin valor inicial sobre un array vacío, o `with` fuera de rango,
   terminan el programa con el mismo mensaje que lanzaría JavaScript (`TypeError`
   / `RangeError`): el dialecto no tiene excepciones.
 - `sort()` y `toSorted()` sin comparador ordenan números por valor (JavaScript
   los ordena como texto).
+- `keys()`, `values()` y `entries()` devuelven arrays, no iteradores (no hay
+  `.next()`); `print(a.keys())` muestra el array.
+- Aún no se puede desestructurar en `for (const [i, x] of a.entries())`: usa
+  `e[0]` y `e[1]` (va en la tanda de Map/Set).
 
 ## Errores: `Error` sin excepciones
 

@@ -907,7 +907,7 @@ export class IrLowering {
     let operands: number[] = []; let effects: string[] = ["runtime"]; let mutatedPlace: number = -1; let mutatedType: string = "";
     const receiverSymbol: number = this.reference(receiver);
     if (!(receiverSymbol >= 0 && (this.binding.symbols[receiverSymbol].module) < 0 && this.node(receiver).kind == NodeKind.IdentifierExpression) && receiverType != "namespace" && !receiverType.startsWith("class:") && !receiverType.startsWith("!")) {
-      if (receiverType == "Server" || ["push","pop","sort","shift","unshift","reverse","fill","set","add","delete","clear"].includes(name)) {
+      if (receiverType == "Server" || ["push","pop","sort","shift","unshift","reverse","fill","splice","set","add","delete","clear"].includes(name)) {
         // #195: el préstamo mutable del receptor se toma después de evaluar los
         // argumentos (this.lista.push(this.metodoQueMuta()) no choca).
         mutatedPlace = this.unwrappedPlace(receiver,this.typeId(receiverType,id)); mutatedType = receiverType; effects.push("mutate");

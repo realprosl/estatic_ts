@@ -379,7 +379,7 @@ export class SafetyAnalyzer {
   }
   mutating(module: number, id: number): boolean {
     const n: AstNode = this.node(module,id); if (n.kind != NodeKind.MemberCallExpression) return false;
-    if (["push","pop","sort","shift","unshift","reverse","fill"].includes(n.get(AttributeKind.Method))) return true;
+    if (["push","pop","sort","shift","unshift","reverse","fill","splice"].includes(n.get(AttributeKind.Method))) return true;
     if (["Map","Set"].includes(genericBase(memoryValue(this.result.files[module].types[bindingChild(n,EdgeRole.Object)])))) return ["set","add","delete","clear"].includes(n.get(AttributeKind.Method));
     const target: number = this.result.files[module].selected[id]; const targetModule: number = this.result.files[module].selectedModules[id];
     if (target < 0 || targetModule < 0) return false;
