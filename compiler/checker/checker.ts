@@ -971,7 +971,7 @@ export class NativeChecker {
       if (name == "clear") return "()=>void";
       if (container == "Map" && name == "get") return "(" + parts[0] + ")=>Optional<" + parts[1] + ">";
       if (container == "Map" && name == "set") return "(" + parts[0] + "," + parts[1] + ")=>void";
-      if (container == "Set" && name == "add") return "(" + parts[0] + ")=>void";
+      if (container == "Set" && name == "add") return "(" + parts[0] + ")=>boolean";
       // keys/values/entries devuelven arrays (en JavaScript son iteradores).
       if (name == "keys") return "()=>" + parts[0] + "[]";
       if (name == "values") return "()=>" + (container == "Map" ? parts[1] : parts[0]) + "[]";
