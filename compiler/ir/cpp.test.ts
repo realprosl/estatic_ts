@@ -77,6 +77,7 @@ for(const [name,source,expected] of [
  ["length snapshot semantics",'let xs=[1,2];const saved=xs;xs.push(3);print(saved.length);print(xs.length);',"2\n3\n"],
  ["length mutation ordering",'let xs=[1];function grow():number{xs.push(2);return xs.length;}print(xs.length);print(grow());print(xs.length);',"1\n2\n2\n"],
  ["scalars",'let n:i32=2;n+=3;print(n*2);',"10\n"],
+ ["undefined como argumento de un par\u00e1metro T | undefined","function f(x: number | undefined): number { return x ?? 7; }console.log(f(undefined), f(3));class F { c: number | undefined; constructor(c: number | undefined) { this.c = c; } }let a: F = new F(undefined);let b: F = new F(5);console.log(a.c ?? 1, b.c ?? 1);function g(s: string, t: string | undefined = undefined): string { return s + (t ?? \"-\"); }console.log(g(\"a\"), g(\"a\", undefined), g(\"a\", \"b\"));","7 3\n1 5\na- a- ab\n"],
  ["recursion",'function f(n:number):number{if(n==0)return 1;return n*f(n-1);}print(f(5));',"120\n"],
  ["loops",'let n=0;for(let i=0;i<6;i+=1){if(i==1)continue;if(i==5)break;n+=i;}print(n);',"9\n"],
  ["short circuit",'let n=0;function f():boolean{n+=1;return true;}const x=false&&f();const y=true||f();print(n);',"0\n"],
