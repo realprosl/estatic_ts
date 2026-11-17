@@ -48,66 +48,70 @@ export function nativeInteger64(raw: string, negative: boolean, expected: string
   if (magnitude.length > limit.length || (magnitude.length == limit.length && magnitude.localeCompare(limit) > 0)) return "";
   return negative && magnitude != "0" ? "-" + magnitude : magnitude;
 }
-// Enteros grandes sin signo en límbs de 24 bits (little-endian): todas las
-// operaciones son exactas en double. Sirven para convertir literales con
+// Entero grande sin signo en límbs de 24 bits (little-endian): todas las
+// operaciones son exactas en double. Sirve para convertir literales con
 // redondeo correcto (al par más cercano), como hace JavaScript.
-const LIMB: number = 16777216;
-function bigMulAdd(value: number[], factor: number, addend: number): void {
-  let carry: number = addend;
-  for (let at: number = 0; at < value.length; at = at + 1) {
-    const product: number = value[at] * factor + carry;
-    carry = Math.floor(product / LIMB); value[at] = product - carry * LIMB;
+class BigNat {
+  limbs: number[];
+  constructor() { this.limbs = []; }
+  mulAdd(factor: number, addend: number): void {
+    let carry: number = addend;
+    for (let at: number = 0; at < this.limbs.length; at = at + 1) {
+      const product: number = this.limbs[at] * factor + carry;
+      carry = Math.floor(product / 16777216); this.limbs[at] = product - carry * 16777216;
+    }
+    while (carry > 0) { const next: number = Math.floor(carry / 16777216); this.limbs.push(carry - next * 16777216); carry = next; }
   }
-  while (carry > 0) { const next: number = Math.floor(carry / LIMB); value.push(carry - next * LIMB); carry = next; }
-}
-function bigShift(value: number[], bits: number): void {
-  let left: number = bits; let limbs: number = 0;
-  while (left >= 24) { limbs = limbs + 1; left = left - 24; }
-  if (limbs > 0) {
-    const size: number = value.length;
-    for (let k: number = 0; k < limbs; k = k + 1) value.push(0);
-    for (let at: number = size - 1; at >= 0; at = at - 1) { value[at + limbs] = value[at]; value[at] = 0; }
+  shift(bits: number): void {
+    let left: number = bits; let words: number = 0;
+    while (left >= 24) { words = words + 1; left = left - 24; }
+    if (words > 0) {
+      const size: number = this.limbs.length;
+      for (let k: number = 0; k < words; k = k + 1) this.limbs.push(0);
+      for (let at: number = size - 1; at >= 0; at = at - 1) { this.limbs[at + words] = this.limbs[at]; this.limbs[at] = 0; }
+    }
+    if (left > 0) this.mulAdd(Math.pow(2, left), 0);
   }
-  if (left > 0) bigMulAdd(value, Math.pow(2, left), 0);
-}
-function bigTrim(value: number[]): void { while (value.length > 0 && value[value.length - 1] == 0) value.pop(); }
-function bigBits(value: number[]): number {
-  bigTrim(value); if (value.length == 0) return 0;
-  let top: number = value[value.length - 1]; let bits: number = (value.length - 1) * 24;
-  while (top >= 1) { top = Math.floor(top / 2); bits = bits + 1; }
-  return bits;
-}
-function bigCompare(a: number[], b: number[]): number {
-  bigTrim(a); bigTrim(b);
-  if (a.length != b.length) { if (a.length < b.length) return -1; return 1; }
-  for (let at: number = a.length - 1; at >= 0; at = at - 1) if (a[at] != b[at]) { if (a[at] < b[at]) return -1; return 1; }
-  return 0;
-}
-function bigSubtract(a: number[], b: number[]): void {
-  let borrow: number = 0;
-  for (let at: number = 0; at < a.length; at = at + 1) {
-    let next: number = a[at] - borrow; if (at < b.length) next = next - b[at];
-    if (next < 0) { next = next + LIMB; borrow = 1; } else borrow = 0;
-    a[at] = next;
+  // Límbs significativos (sin ceros a la izquierda).
+  size(): number { let size: number = this.limbs.length; while (size > 0 && this.limbs[size - 1] == 0) size = size - 1; return size; }
+  bits(): number {
+    const size: number = this.size(); if (size == 0) return 0;
+    let top: number = this.limbs[size - 1]; let bits: number = (size - 1) * 24;
+    while (top >= 1) { top = Math.floor(top / 2); bits = bits + 1; }
+    return bits;
   }
-  bigTrim(a);
+  compare(other: BigNat): number {
+    const mine: number = this.size(); const theirs: number = other.size();
+    if (mine != theirs) { if (mine < theirs) return -1; return 1; }
+    for (let at: number = mine - 1; at >= 0; at = at - 1) if (this.limbs[at] != other.limbs[at]) { if (this.limbs[at] < other.limbs[at]) return -1; return 1; }
+    return 0;
+  }
+  // this -= other (con this >= other).
+  subtract(other: BigNat): void {
+    let borrow: number = 0;
+    for (let at: number = 0; at < this.limbs.length; at = at + 1) {
+      let next: number = this.limbs[at] - borrow; if (at < other.limbs.length) next = next - other.limbs[at];
+      if (next < 0) { next = next + 16777216; borrow = 1; } else borrow = 0;
+      this.limbs[at] = next;
+    }
+  }
+  copy(): BigNat { let result: BigNat = new BigNat(); for (const limb of this.limbs) result.limbs.push(limb); return result; }
 }
-function bigCopy(value: number[]): number[] { let result: number[] = []; for (const limb of value) result.push(limb); return result; }
 // Double más cercano a numerator / denominator (ambos > 0); empate al par.
-function bigQuotient(numerator: number[], denominator: number[]): number {
-  let a: number[] = bigCopy(numerator); let b: number[] = bigCopy(denominator);
+function bigQuotient(numerator: BigNat, denominator: BigNat): number {
+  let a: BigNat = numerator.copy(); let b: BigNat = denominator.copy();
   // a·2^shift / b queda en [2^54, 2^56): 55-56 bits de cociente.
-  const shift: number = 55 + bigBits(b) - bigBits(a);
-  if (shift > 0) bigShift(a, shift); else if (shift < 0) bigShift(b, -shift);
-  let multiples: number[][] = []; let current: number[] = bigCopy(b);
-  for (let bit: number = 0; bit <= 56; bit = bit + 1) { multiples.push(bigCopy(current)); bigMulAdd(current, 2, 0); }
+  const shift: number = 55 + b.bits() - a.bits();
+  if (shift > 0) a.shift(shift); else if (shift < 0) b.shift(-shift);
+  let multiples: BigNat[] = []; let current: BigNat = b.copy();
+  for (let bit: number = 0; bit <= 56; bit = bit + 1) { multiples.push(current.copy()); current.mulAdd(2, 0); }
   // Bits del cociente (un double no guarda enteros de más de 53 bits).
   let quotient: boolean[] = []; let bits: number = 0;
   for (let bit: number = 0; bit <= 56; bit = bit + 1) quotient.push(false);
   for (let bit: number = 56; bit >= 0; bit = bit - 1) {
-    if (bigCompare(a, multiples[bit]) >= 0) { bigSubtract(a, multiples[bit]); quotient[bit] = true; if (bits == 0) bits = bit + 1; }
+    if (a.compare(multiples[bit]) >= 0) { a.subtract(multiples[bit]); quotient[bit] = true; if (bits == 0) bits = bit + 1; }
   }
-  let sticky: boolean = bigBits(a) > 0;
+  let sticky: boolean = a.bits() > 0;
   let drop: number = bits - 53;
   // Subnormales: el bit menos significativo no baja de 2^-1074.
   if (drop - shift < -1074) drop = -1074 + shift;
@@ -160,16 +164,16 @@ export function nativeNumericLiteral(raw: string): NativeNumericLiteral {
     at = at + 1;
   }
   if (count == 0) return new NativeNumericLiteral(0,false);
-  let numerator: number[] = [];
-  for (const digit of digits) bigMulAdd(numerator, radix, digit);
-  if (bigBits(numerator) == 0) return new NativeNumericLiteral(0,true);
+  let numerator: BigNat = new BigNat();
+  for (const digit of digits) numerator.mulAdd(radix, digit);
+  if (numerator.bits() == 0) return new NativeNumericLiteral(0,true);
   const scale: number = exponent - decimals;
   // Un exponente desmesurado ya es infinito (no válido) o cero.
   if (scale > 400) return new NativeNumericLiteral(0,false);
   if (scale < -400 - digits.length) return new NativeNumericLiteral(0,true);
-  let denominator: number[] = [1];
-  if (scale > 0) for (let k: number = 0; k < scale; k = k + 1) bigMulAdd(numerator, 10, 0);
-  else for (let k: number = 0; k < -scale; k = k + 1) bigMulAdd(denominator, 10, 0);
+  let denominator: BigNat = new BigNat(); denominator.limbs.push(1);
+  if (scale > 0) for (let k: number = 0; k < scale; k = k + 1) numerator.mulAdd(10, 0);
+  else for (let k: number = 0; k < -scale; k = k + 1) denominator.mulAdd(10, 0);
   const value: number = bigQuotient(numerator, denominator);
   // Infinity - Infinity es NaN: rechaza un literal que desborda.
   return new NativeNumericLiteral(value, value - value == 0);
