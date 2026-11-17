@@ -157,6 +157,8 @@ export class IrLowering {
     return place;
   }
   argumentValue(id: number, formal: string): number {
+    // f(undefined) con un parámetro T | undefined: un Optional<T> vacío.
+    if (this.isUndefined(id) && genericBase(formal) == "Optional") return this.emit("none",this.typeId(formal,id),[],-1,-1,"",id);
     const expected: number = this.typeId(formal,id); const actual: number = this.typeId(this.checked.files[this.module].types[id],id);
     if (["ref","constRef"].includes(this.result.typeDefinitions[expected].kind) && actual != expected) {
       const n = this.node(id); const value: number = n.kind == NodeKind.NamedArgumentExpression ? bindingChild(n,EdgeRole.Value) : id;
