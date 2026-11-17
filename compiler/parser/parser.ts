@@ -1098,7 +1098,7 @@ export class Parser {
   }
   binaryKind(): string {
     const first: ParserToken = this.peek(0); const second: ParserToken = this.peek(1);
-    if ((first.kind == "<" || first.kind == ">") && second.kind == first.kind && first.endOffset == second.offset) return first.kind + second.kind;
+    if ((first.kind == "<" || first.kind == ">" || first.kind == "*") && second.kind == first.kind && first.endOffset == second.offset) return first.kind + second.kind;
     return first.kind;
   }
   precedence(kind: string): number {
@@ -1114,16 +1114,19 @@ export class Parser {
     if (kind == "<<" || kind == ">>") return 9;
     if (kind == "+" || kind == "-") return 10;
     if (kind == "*" || kind == "/" || kind == "%") return 11;
+    if (kind == "**") return 12;
     return 0;
   }
   binary(minimum: number): number {
     let left: number = this.unary();
     while (this.precedence(this.binaryKind()) >= minimum) {
-      const kind: string = this.binaryKind(); const op: ParserToken = this.take(); if (kind != op.kind) this.take();
+      const kind: string = this.binaryKind(); const before: ParserToken = this.previous(); const op: ParserToken = this.take(); if (kind != op.kind) this.take();
       if (!this.enter()) return left;
       let right: number = -1;
       if (kind == "instanceof") { const annotation: string = this.typeName(); right = this.add(NodeKind.IdentifierExpression, op, op); this.attr(right, AttributeKind.Name, annotation); }
-      else right = this.binary(this.precedence(kind) + 1);
+      // `**` asocia por la derecha: 2 ** 3 ** 2 es 2 ** (3 ** 2).
+      else right = this.binary(kind == "**" ? this.precedence(kind) : this.precedence(kind) + 1);
+      if (kind == "**" && this.node(left).kind == NodeKind.UnaryExpression && this.node(left).end.offset == before.offset) this.reportAt(op,"E1004: Como en TypeScript, el operando izquierdo de '**' no puede ser una expresión unaria: usa paréntesis, (-a) ** b");
       this.leave(); const parent: number = this.add(NodeKind.BinaryExpression, this.node(left).start, this.node(right).end);
       this.attr(parent, AttributeKind.Operator, kind); this.edge(parent, EdgeRole.Left, left); this.edge(parent, EdgeRole.Right, right); left = parent;
     }

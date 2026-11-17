@@ -155,7 +155,7 @@ S Generator::instruction(const Function& f,const Instruction& i,int block){
  else if(op=="own")v="std::make_unique<"+type(shape(i.typeId).arguments.at(0))+">("+a(0)+")";
  else if(op=="convert")v=convert(a(0),f.values.at(i.operands.at(0)),i.typeId);
  else if(op=="unary"){const auto& s=shape(i.typeId);v=i.text=="-"&&s.numericKind=="integer"?"ets::ir::sub<"+T+">(0,"+a(0)+")":i.text=="~"?"static_cast<"+T+">(~static_cast<"+(s.numericKind=="float"?"std::int64_t":T)+">("+a(0)+"))":"("+i.text+a(0)+")";}
- else if(op=="binary"){static const std::map<S,S> helpers{{"+","add"},{"-","sub"},{"*","mul"},{"/","divide"},{"%","remainder"},{"<<","shiftLeft"},{">>","shiftRight"}};if(helpers.contains(i.text)&&numeric(i.typeId))v="ets::ir::"+helpers.at(i.text)+"<"+T+">("+a(0)+","+a(1)+")";else if(in(i.text,{"&","|","^"}))v="static_cast<"+T+">(static_cast<std::int64_t>("+a(0)+")"+i.text+"static_cast<std::int64_t>("+a(1)+"))";else v="("+a(0)+" "+i.text+" "+a(1)+")";}
+ else if(op=="binary"){static const std::map<S,S> helpers{{"+","add"},{"-","sub"},{"*","mul"},{"/","divide"},{"%","remainder"},{"**","power"},{"<<","shiftLeft"},{">>","shiftRight"}};if(helpers.contains(i.text)&&numeric(i.typeId))v="ets::ir::"+helpers.at(i.text)+"<"+T+">("+a(0)+","+a(1)+")";else if(in(i.text,{"&","|","^"}))v="static_cast<"+T+">(static_cast<std::int64_t>("+a(0)+")"+i.text+"static_cast<std::int64_t>("+a(1)+"))";else v="("+a(0)+" "+i.text+" "+a(1)+")";}
  else if(op=="aggregate"){
   const auto& s=shape(i.typeId);V<S> pieces;
   if(in(s.kind,{"tuple","pack"})){for(int k=0;k<int(i.operands.size());k++)pieces.push_back(i.names.at(k)=="spread"?a(k):"std::make_tuple("+a(k)+")");v="std::tuple_cat("+join(pieces)+")";}

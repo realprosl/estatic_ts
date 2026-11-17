@@ -227,7 +227,7 @@ export class IrCppGenerator {
       case "convert": value=this.convert(a(0),f.values[i.operands[0]],i.typeId);break;
       case "unary": value=i.text==="-"&&s(i.typeId).numericKind==="integer"?`ets::ir::sub<${T}>(0,${a(0)})`:i.text==="~"?`static_cast<${T}>(~static_cast<${s(i.typeId).numericKind==="float"?"std::int64_t":T}>(${a(0)}))`:`(${i.text}${a(0)})`;break;
       case "binary": {
-        const helpers:Record<string,string>={"+":"add","-":"sub","*":"mul","/":"divide","%":"remainder","<<":"shiftLeft",">>":"shiftRight"};
+        const helpers:Record<string,string>={"+":"add","-":"sub","*":"mul","/":"divide","%":"remainder","**":"power","<<":"shiftLeft",">>":"shiftRight"};
         if(helpers[i.text]&&this.numeric(i.typeId))value=`ets::ir::${helpers[i.text]}<${T}>(${a(0)},${a(1)})`;
         else if(["&","|","^"].includes(i.text))value=`static_cast<${T}>(static_cast<std::int64_t>(${a(0)})${i.text}static_cast<std::int64_t>(${a(1)}))`;
         else value=`(${a(0)} ${i.text} ${a(1)})`;break;
@@ -445,7 +445,7 @@ export class IrCppGenerator {
       for(const b of f.blocks) {
         if(!b.targets.every(t=>Number.isSafeInteger(t)&&t>=0&&t<f.blocks.length))this.fail("Destino de bloque inexistente",b.source);
         for(const i of b.instructions) {
-          if(i.op==="binary"&&!["+","-","*","/","%","&","|","^","<<",">>","==","!=","<",">","<=",">="].includes(i.text))this.fail("Operador binario inválido",i.source);
+          if(i.op==="binary"&&!["+","-","*","/","%","**","&","|","^","<<",">>","==","!=","<",">","<=",">="].includes(i.text))this.fail("Operador binario inválido",i.source);
           if(i.op==="unary"&&!["+","-","!","~"].includes(i.text))this.fail("Operador unario inválido",i.source);
           if(i.op==="intrinsic"&&!["print","write","printError","writeError"].includes(i.text))this.fail("Intrínseco inválido",i.source);
           if(!i.operands.every(v=>Number.isSafeInteger(v)&&v>=0&&v<f.values.length))this.fail("Operando inexistente",i.source);
