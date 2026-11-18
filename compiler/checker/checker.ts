@@ -692,7 +692,7 @@ export class NativeChecker {
       if (position == rest) { if (this.node(module,args[a]).kind == NodeKind.NamedArgumentExpression) return ""; continue; }
       if (used.includes(position) || this.node(module,args[a]).kind == NodeKind.SpreadElement) return ""; used.push(position);
       let target: string = instantiated[position];
-      if (this.optionalParameter(ownerModule,candidate,position) && genericBase(target) == "Optional" && genericBase(actual[a]) != "Optional") target = genericArguments(target)[0];
+      if (this.optionalParameter(ownerModule,candidate,position) && genericBase(target) == "Optional" && genericBase(actual[a]) != "Optional" && actual[a] != "undefined") target = genericArguments(target)[0];
       if (!this.compatible(actual[a],target)) return "";
     }
     return signature;
@@ -1694,7 +1694,7 @@ export class NativeChecker {
         const spread: boolean = this.node(module,args[a]).kind == NodeKind.SpreadElement;
         if ((spread && p != rest) || (p == rest && this.node(module,args[a]).kind == NodeKind.NamedArgumentExpression)) matches = false;
         const parameter: string = argumentType(parameters[p],spread);
-        const target: string = this.optionalParameter(ownerModule,candidate,p) && genericBase(parameter) == "Optional" && genericBase(actual[a]) != "Optional" ? genericArguments(parameter)[0] : parameter;
+        const target: string = this.optionalParameter(ownerModule,candidate,p) && genericBase(parameter) == "Optional" && genericBase(actual[a]) != "Optional" && actual[a] != "undefined" ? genericArguments(parameter)[0] : parameter;
         if (!this.compatible(actual[a],target) && !(ownedType(target) && actual[a] == memoryInner(target) && this.node(module,this.argumentValue(module,args[a])).kind == NodeKind.NewExpression)) matches = false;
       }
       if (matches) {
@@ -1714,7 +1714,7 @@ export class NativeChecker {
       for (let a: number = 0; a < args.length; a = a + 1) {
         const p: number = selectedPositions[a]; this.result.files[module].argumentParameters[args[a]] = p;
         const value: number = this.argumentValue(module,args[a]);
-        const wrap: boolean = this.optionalParameter(ownerModule,selected,p) && genericBase(parameters[p]) == "Optional" && genericBase(actual[a]) != "Optional";
+        const wrap: boolean = this.optionalParameter(ownerModule,selected,p) && genericBase(parameters[p]) == "Optional" && genericBase(actual[a]) != "Optional" && actual[a] != "undefined";
         const rest: number = restPosition(this.result.files[module].signatures[id]);
         if (p == rest && genericBase(parameters[p].slice(3,parameters[p].length)) == "pack") {
           const wanted: string[] = genericArguments(parameters[p].slice(3,parameters[p].length)); let offset: number = 0;
