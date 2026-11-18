@@ -38,6 +38,8 @@ export class IrLowering {
   graph: ModuleGraph; binding: BindingResult; checked: CheckResult; result: IrProject;
   module: number; currentFunction: number; block: number; symbols: number[]; breakTargets: number[]; continueTargets: number[];
   overrideNodes: number[]; overridePlaces: number[]; optionalActive: number[];
+  // #254: place del receptor de la última llamada que lo modifica (m.set, s.add, xs.push).
+  mutatedPlace: number;
   cleanupScopes: IrCleanupScope[]; breakDepths: number[]; continueDepths: number[];
   receiverOverride: number; preparedArguments: number[]; preparedCall: number;
   argumentSymbols: number[]; argumentValues: number[];
@@ -47,7 +49,7 @@ export class IrLowering {
     this.contextFrom = []; this.contextTo = [];
     this.graph = graph; this.binding = binding; this.checked = checked; this.result = new IrProject();
     this.module = 0; this.currentFunction = -1; this.block = 0; this.symbols = []; this.breakTargets = []; this.continueTargets = [];
-    this.overrideNodes = []; this.overridePlaces = []; this.optionalActive = [];
+    this.overrideNodes = []; this.overridePlaces = []; this.optionalActive = []; this.mutatedPlace = -1;
     this.cleanupScopes = []; this.breakDepths = []; this.continueDepths = [];
     this.receiverOverride = -1; this.preparedArguments = []; this.preparedCall = -1;
     this.argumentSymbols = []; this.argumentValues = [];
@@ -169,6 +171,7 @@ export class IrLowering {
   }
   rootPlace(id: number): number {
     for (let at: number = this.overrideNodes.length-1; at >= 0; at = at-1) if (this.overrideNodes[at] == id) return this.overridePlaces[at];
+    if (this.chainCall(id)) return this.chainedPlace(id);
     const n = this.node(id);
     if (this.processProperty(id)) { const value: number = this.expression(id); const p: number = this.local(-1,this.valueType(value),false,id); this.emit("store",-1,[value],p,-1,"",id); this.track(p); return p; }
     if (n.kind == NodeKind.IdentifierExpression) {
@@ -203,6 +206,7 @@ export class IrLowering {
   materialize(id: number): number {
     const n = this.node(id);
     if (n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression) return this.assignmentPlace(id);
+    if (this.chainCall(id)) return this.chainedPlace(id);
     if (n.kind == NodeKind.IdentifierExpression || n.kind == NodeKind.IndexExpression || n.kind == NodeKind.MemberExpression) {
       const bound: number = this.reference(id);
       if (!(bound >= 0 && ["FunctionDeclaration","ClassDeclaration","UnionDeclaration","EnumDeclaration","builtin","builtin-type"].includes(this.binding.symbols[bound].kind))) return this.rootPlace(id);
@@ -451,6 +455,7 @@ export class IrLowering {
     if (kind == NodeKind.AwaitExpression) return this.awaitValue(id,bindingChild(n,EdgeRole.Operand),typeId);
     if ((kind == NodeKind.MemberExpression || kind == NodeKind.MemberCallExpression) && n.get(AttributeKind.Optional) == "true" && !this.optionalActive.includes(id)) return this.optionalAccess(id,typeId);
     if (kind == NodeKind.NewExpression) return this.classConstruct(id,typeId);
+    if (kind == NodeKind.MemberCallExpression && this.chainCall(id)) { const p: number = this.chainedPlace(id); return p < 0 ? -1 : this.emit("load",this.result.functions[this.currentFunction].places[p].typeId,[],p,-1,"",id); }
     if (kind == NodeKind.MemberCallExpression) return this.methodCall(id,typeId);
     if (kind == NodeKind.IndexExpression) return this.emit("load",typeId,[],this.rootPlace(id),-1,"",id);
     if (kind == NodeKind.MemberExpression) return this.memberValue(id,typeId);
@@ -919,6 +924,19 @@ export class IrLowering {
     const result: number = this.emit("runtimeCall",typeId,operands,-1,-1,"",id);
     this.result.functions[this.currentFunction].blocks[this.block].instructions[this.result.functions[this.currentFunction].blocks[this.block].instructions.length-1].contract = contract; return result;
   }
+  // #254: m.set(k, v) y s.add(x) devuelven el propio contenedor, como en TS. Se
+  // bajan como una llamada sin valor sobre el place del receptor; el resultado
+  // es ese place (para encadenar sin copiar) o una copia si se usa como valor.
+  chainCall(id: number): boolean {
+    const n = this.node(id); if (n.kind != NodeKind.MemberCallExpression || n.get(AttributeKind.Optional) == "true") return false;
+    const receiver: string = genericBase(memoryValue(this.resolved(this.checked.files[this.module].receivers[id]))); const name: string = n.get(AttributeKind.Method);
+    return (receiver == "Map" && name == "set") || (receiver == "Set" && name == "add");
+  }
+  chainedPlace(id: number): number {
+    this.mutatedPlace = -1; this.methodCall(id,this.typeId("void",id));
+    if (this.mutatedPlace < 0) this.fail(id,"Llamada encadenada sin receptor modificable");
+    return this.mutatedPlace;
+  }
   methodCall(id: number, typeId: number): number {
     const n = this.node(id); const receiver: number = bindingChild(n,EdgeRole.Object); const member: number = this.checked.files[this.module].members[id];
     if (member >= 0 && this.binding.symbols[member].kind == "UnionVariant") return this.unionConstructor(id,typeId);
@@ -980,6 +998,7 @@ export class IrLowering {
     const formals: string[] = functionParams(this.resolved(this.checked.files[this.module].signatures[id])); let at: number = 0;
     for (const e of n.edges) if (e.role == EdgeRole.Args) { let value: number = this.expression(e.node); if (at < formals.length && !formals[at].startsWith("...")) value = this.convert(value,this.typeId(formals[at],id),id); operands.push(value); if (functionClose(this.result.types[this.valueType(value)]) >= 0) effects.push("invoke"); at = at+1; }
     if (mutatedPlace >= 0) { let ordered: number[] = [this.emit("address",this.typeId("ref<"+mutatedType+">",id),[],mutatedPlace,-1,"",id)]; for (const operand of operands) ordered.push(operand); operands = ordered; }
+    this.mutatedPlace = mutatedPlace;
     const base: string = receiverType.startsWith("!") ? receiverType : genericBase(memoryValue(receiverType)) != "" ? genericBase(memoryValue(receiverType)) : receiverType.endsWith("[]") ? "array" : receiverType;
     return this.runtime(base+"."+name,typeId,operands,id,effects);
   }
@@ -1060,6 +1079,7 @@ export class IrLowering {
       const value: number = this.convert(["ref","constRef"].includes(this.result.typeDefinitions[typeId].kind) ? this.argumentValue(initializer,this.result.types[typeId]) : this.expression(initializer),typeId,id); this.emit("store",-1,[value],p,-1,"",id); if (!this.globalSymbols.includes(symbol)) this.track(p); return;
     }
     if (kind == NodeKind.ExpressionStatement && [NodeKind.AssignmentExpression,NodeKind.CompoundAssignmentExpression].includes(this.node(bindingChild(n,EdgeRole.Expression)).kind)) { this.assignmentPlace(bindingChild(n,EdgeRole.Expression)); return; }
+    if (kind == NodeKind.ExpressionStatement && this.chainCall(bindingChild(n,EdgeRole.Expression))) { this.chainedPlace(bindingChild(n,EdgeRole.Expression)); return; }
     if (kind == NodeKind.ExpressionStatement) { const value: number = this.expression(bindingChild(n,EdgeRole.Expression)); if (value >= 0 && this.result.typeDefinitions[this.valueType(value)].resource && ![NodeKind.AssignmentExpression,NodeKind.CompoundAssignmentExpression].includes(this.node(bindingChild(n,EdgeRole.Expression)).kind)) this.emit("dropValue",-1,[value],-1,-1,"",id); return; }
     if (kind == NodeKind.ReturnStatement) {
       const value: number = this.expression(bindingChild(n,EdgeRole.Value));

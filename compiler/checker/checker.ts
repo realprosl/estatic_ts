@@ -1030,8 +1030,8 @@ export class NativeChecker {
       if (name == "has" || name == "delete") return "(" + parts[0] + ")=>boolean";
       if (name == "clear") return "()=>void";
       if (container == "Map" && name == "get") return "(" + parts[0] + ")=>Optional<" + parts[1] + ">";
-      if (container == "Map" && name == "set") return "(" + parts[0] + "," + parts[1] + ")=>void";
-      if (container == "Set" && name == "add") return "(" + parts[0] + ")=>boolean";
+      if (container == "Map" && name == "set") return "(" + parts[0] + "," + parts[1] + ")=>Map<" + parts[0] + "," + parts[1] + ">";
+      if (container == "Set" && name == "add") return "(" + parts[0] + ")=>Set<" + parts[0] + ">";
       // keys/values/entries devuelven arrays (en JavaScript son iteradores).
       if (name == "keys") return "()=>" + parts[0] + "[]";
       if (name == "values") return "()=>" + (container == "Map" ? parts[1] : parts[0]) + "[]";
@@ -1176,7 +1176,10 @@ export class NativeChecker {
     } return false;
   }
   writableTarget(module: number, id: number, through: boolean): void {
-    const n: AstNode = this.node(module,id); let sid: number = this.reference(module,id);
+    const n: AstNode = this.node(module,id);
+    // Un valor temporal (new Set().add(1), m.set(a, 1).set(b, 2)) se puede modificar.
+    if (through && [NodeKind.NewExpression,NodeKind.CallExpression,NodeKind.MemberCallExpression].includes(n.kind)) return;
+    let sid: number = this.reference(module,id);
     if (n.get(AttributeKind.Optional) == "true") this.report(module,id,"El acceso opcional no es un destino asignable");
     if (readonlyType(this.result.files[module].types[id])) this.report(module,id,"E4300: destino readonly");
     if (n.kind == NodeKind.MemberExpression) {

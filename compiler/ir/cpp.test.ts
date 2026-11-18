@@ -88,6 +88,7 @@ for(const [name,source,expected] of [
  ["tuples",'const a:[number,string]=[2,"s"];print(a[0]);print(a[1]);',"2\ns\n"],
  ["fixed spread",'const a:number[2]=[1,2];const b:number[3]=[0,...a];print(b[2]);',"2\n"],
  ["class",'class C{x:number;constructor(n:number){this.x=n;}inc():void{this.x+=1;}}let c=new C(2);c.inc();print(c.x);',"3\n"],
+ ["Map.set y Set.add encadenables (#254)","let m: Map<string, number> = new Map<string, number>();m.set(\"a\", 1).set(\"b\", 2).set(\"c\", 3);m.set(\"d\", 4);console.log(m.size, m.get(\"b\") ?? 0);let s: Set<number> = new Set<number>();s.add(1).add(2).add(2).add(3);console.log(s.size, s.has(3));const copia: Map<string, number> = m.set(\"e\", 5);console.log(copia.size, m.size);class Indice { usos: Map<string, number>; constructor() { this.usos = new Map<string, number>(); } marca(k: string): void { this.usos.set(k, 1).set(k + \"!\", 2); } }let i: Indice = new Indice(); i.marca(\"x\");console.log(i.usos.size);console.log(new Set<string>().add(\"p\").add(\"q\").size);","4 2\n3 true\n5 5\n2\n2\n"],
  ["generic default",'function f<T>(a:T,b:T[]=[a]):T[]{return b;}print(f(4)[0]);',"4\n"],
  ["generic class",'class Box<T>{constructor(public items:T[]=[]){}}const b=new Box<number>();print(b.items.length);',"0\n"],
  ["closure",'function make(n:number):(x:number)=>number{return(x:number):number=>n+x;}const f=make(10);print(f(2));',"12\n"],
