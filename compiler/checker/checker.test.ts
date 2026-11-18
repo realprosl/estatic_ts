@@ -524,7 +524,8 @@ test('native exact64 rejects overflowing return literal',()=>error('function f()
 test('native exact64 publishes instantiated call conversions',()=>{
  const g=check('function id<T>(x:T):T{return x;}const x=id<u64>(9007199254740993);');
  assert.ok(g.files[0].exactIntegers.includes('9007199254740993'));
- assert.ok(g.files[0].conversions.includes('u64'));
+ // #272: con <u64> explícito el literal ya se tipa como u64 (sin conversión).
+ assert.ok(g.files[0].types.includes('u64')||g.files[0].conversions.includes('u64'));
 });
 test('native numeric rejects narrow integer overflow in returns',()=>error('function f():i8{return 128;}',/rango/));
 

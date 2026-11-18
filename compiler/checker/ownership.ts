@@ -46,7 +46,8 @@ export function resourceSubstitution(pattern: string, actual: string, token: str
   if (pattern.startsWith("...")) pattern = pattern.slice(3,pattern.length);
   if (actual.startsWith("...")) actual = actual.slice(3,actual.length);
   if (pattern == token) return actual;
-  if (pattern.endsWith("[]") && actual.endsWith("[]")) return resourceSubstitution(semanticElement(pattern),semanticElement(actual),token);
+  // Un tipo función que devuelve un array ((T[]) => T[]) también termina en [].
+  if (pattern.endsWith("[]") && actual.endsWith("[]") && functionClose(pattern) < 0 && functionClose(actual) < 0) return resourceSubstitution(semanticElement(pattern),semanticElement(actual),token);
   if (memoryMode(pattern) != "" && memoryMode(pattern) == memoryMode(actual)) return resourceSubstitution(memoryInner(pattern),memoryInner(actual),token);
   let patterns: string[] = []; let values: string[] = [];
   if (genericBase(pattern) != "" && genericBase(pattern) == genericBase(actual)) { patterns = genericArguments(pattern); values = genericArguments(actual); }
