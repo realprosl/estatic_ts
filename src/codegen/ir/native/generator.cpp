@@ -306,6 +306,7 @@ S Generator::runtimeCall(const Function& f,const Instruction& i){const auto& c=p
   if(method=="allSettled")return "ets::task_all_settled<"+type(shape(shape(i.typeId).arguments.at(0)).arguments.at(0))+">("+a(0)+")";
   return S("ets::")+(method=="all"?"task_all":"task_race")+"("+a(0)+")";
  }
+ if(base=="!Object"&&in(method,{"keys","values","entries"})){result.headers.insert("runtime/ets_object.hpp");return "ets::object_"+method+"<"+type(i.typeId)+">("+a(0)+")";}
  if(base=="!Array"&&in(method,{"isArray","of","from"})){S R=type(i.typeId);
   if(method=="isArray")return "ets_is_array("+a(0)+")";
   if(method=="of")return "ets_array_of<"+R+">("+args()+")";
