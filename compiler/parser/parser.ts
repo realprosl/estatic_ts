@@ -1170,12 +1170,15 @@ export class Parser {
   // `obj.field < 5` stays a comparison. Identifiers use the same lookahead.
   genericMethodFollower(): string {
     if (!this.check("<")) return "";
-    let depth: number = 0;
+    let depth: number = 0; let parens: number = 0;
     let cursor: number = 0;
     while (this.peek(cursor).kind != "eof") {
       const kind: string = this.peek(cursor).kind;
       if (kind == "<") depth = depth + 1;
       else if (kind == ">") { depth = depth - 1; if (depth == 0) return this.peek(cursor + 1).kind; }
+      // #270: un tipo entre paréntesis dentro de los argumentos: f<(A | B)[]>(x).
+      else if (kind == "(") parens = parens + 1;
+      else if (kind == ")" && parens > 0) parens = parens - 1;
       else if (kind == ";" || kind == "newline" || kind == "{" || kind == "}" || kind == ")") return "";
       cursor = cursor + 1;
     }
