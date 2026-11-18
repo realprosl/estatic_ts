@@ -1109,6 +1109,13 @@ _cppLoop47Result.push(this.operand(f,i,k+1));continue;
 }
 return `(${this.deref(this.operand(f,i,0,false),f.values[i.operands[0]])}).${method=="status"?"status_code":method=="body"?"body_str":method}(${_cppLoop47Result.join(",")})`;}
   if(base=="Console"&&terminalMethods(method)){this.headers.add("runtime/ets_terminal.hpp");return `console.${method}(${this.runtimeArguments(f,i)})`;}
+  if(base=="!Promise"){
+    // Promise.all/race/any/allSettled/resolve sobre las Task del runtime.
+    this.headers.add("runtime/ets_async.hpp");this.backends.libuv=true;
+    if(method=="resolve")return `ets::task_resolve(${this.operand(f,i,0)})`;
+    if(method=="allSettled")return `ets::task_all_settled<${this.cppTypeId(this.shape(this.shape(i.typeId).arguments[0]).arguments[0])}>(${this.operand(f,i,0)})`;
+    return `ets::${method=="all"?"task_all":"task_race"}(${this.operand(f,i,0)})`;
+  }
   if(base=="!Array"){
     // Array.isArray / Array.of / Array.from con el tipo del resultado explícito.
     const R:string=this.cppTypeId(i.typeId);

@@ -1279,7 +1279,10 @@ Esta sección documenta **explícitamente** features de TypeScript estándar que
 - Match expressions con `when (pattern) => result` (1.10) — **eliminado en V23**, ver `docs/match-syntax.md`.
 - **`export default` y `export { x as y }`** (1.15).
 - `satisfies` operator con cast implícito (1.11).
-- `Promise.all(tasks)` y `Promise.race(tasks)` sobre `Promise<T>[]` (1.13).
+- `Promise.all`, `Promise.race`, `Promise.any`, `Promise.allSettled` y
+  `Promise.resolve` sobre `Promise<T>[]` (1.13; any, allSettled y resolve en
+  v1.10x). Sin excepciones una promesa no se rechaza: `any` se comporta como
+  `race` y `allSettled` devuelve `Result<T, Error>[]`, todos correctos.
 
 Cualquier PR que intente reintroducir un rechazo irreversible debe reconsiderar primero la decisión de diseño.
 
