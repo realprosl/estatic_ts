@@ -294,6 +294,22 @@ Task<T> task_race(std::vector<Task<T>> tasks) {
     co_return race(tasks);
 }
 
+// Promise.allSettled: sin excepciones todas las tareas acaban bien, así que
+// cada resultado es un Result correcto (R es Result<T, Error>).
+template <typename R, typename T>
+Task<std::vector<R>> task_all_settled(std::vector<Task<T>> tasks) {
+    auto values = all(tasks);
+    std::vector<R> settled; settled.reserve(values.size());
+    for (auto& value : values) settled.push_back(R::success(std::move(value)));
+    co_return settled;
+}
+
+// Promise.resolve(valor): una Task ya resuelta.
+template <typename T>
+Task<std::decay_t<T>> task_resolve(T value) {
+    co_return std::move(value);
+}
+
 // V30.17: `make_task_vector<T>(arr)` mueve los elementos de un
 // `std::vector<T>` (donde T es convertible a Task<U>) a un
 // `std::vector<Task<T>>`. Util para `Promise.all<T>` que toma un

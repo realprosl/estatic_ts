@@ -924,7 +924,7 @@ export class NativeChecker {
     if (name == "exitProcess") return "(number)=>void";
     if (name == "move" || name == "ref" || name == "constRef") return "!" + name;
     if (name == "length") return "!length";
-    if (["Math","JSON","Date","String","Array"].includes(name)) return "!" + name;
+    if (["Math","JSON","Date","String","Array","Promise"].includes(name)) return "!" + name;
     if (name == "console") return "Console";
     if (["fs","path","process","http","child_process"].includes(name)) return "!"+name;
     if (nativeBuiltinSignatures(name).length > 0) return "!builtin:"+name;
@@ -949,6 +949,33 @@ export class NativeChecker {
   }
   // Nombres de los miembros declarados de un tipo nominal (para sugerencias).
   // Array.isArray(x), Array.of(...items) y Array.from(fuente, mapFn?) con la firma de TypeScript.
+  // Promise.all/race/any/allSettled/resolve. Sin excepciones una promesa no se
+  // rechaza: any es race y allSettled da Result<T, Error>[] (todos correctos).
+  promiseStaticCall(module: number, id: number, method: string, expected: string): string {
+    let args: number[] = []; for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Args) args.push(edge.node);
+    if (method == "resolve") {
+      if (args.length != 1) { this.report(module,id,"Promise.resolve requiere un argumento"); return "!error"; }
+      const inner: string = genericBase(expected) == "Promise" ? genericArguments(expected)[0] : "";
+      let value: string = memoryValue(this.expression(module,args[0],inner)); if (literalType(value)) value = literalKind(value);
+      if (inner != "") { this.requireType(module,args[0],value,inner); value = inner; }
+      this.result.files[module].signatures[id] = "(" + value + ")=>Promise<" + value + ">"; return "Promise<" + value + ">";
+    }
+    if (args.length != 1) { this.report(module,id,"Promise." + method + " requiere un array de Promise<T>"); return "!error"; }
+    let context: string = "";
+    if (genericBase(expected) == "Promise") {
+      const awaited: string = genericArguments(expected)[0];
+      if (method == "all" && awaited.endsWith("[]")) context = "Promise<" + semanticElement(awaited) + ">[]";
+      if (method == "race" || method == "any") context = "Promise<" + awaited + ">[]";
+    }
+    const input: string = memoryValue(this.expression(module,args[0],context));
+    if (!input.endsWith("[]") || genericBase(semanticElement(input)) != "Promise") { this.report(module,args[0],"Promise." + method + " requiere Promise<T>[]"); return "!error"; }
+    const element: string = genericArguments(semanticElement(input))[0];
+    let result: string = element;
+    if (method == "all") result = semanticArray(element);
+    if (method == "allSettled") result = semanticArray("Result<" + element + "," + this.annotation(module,id,"Error") + ">");
+    this.result.files[module].signatures[id] = "(" + input + ")=>Promise<" + result + ">"; this.result.files[module].argumentParameters[args[0]] = 0;
+    return "Promise<" + result + ">";
+  }
   arrayStaticCall(module: number, id: number, method: string, expected: string): string {
     let args: number[] = []; for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Args) args.push(edge.node);
     if (method == "isArray") {
@@ -1105,6 +1132,7 @@ export class NativeChecker {
     }
     if (valueType == "!String" && (name == "fromCharCode" || name == "fromCodePoint")) return "(...number[])=>string";
     if (valueType == "!Array" && ["isArray","from","of"].includes(name)) return "!arrayStatic." + name;
+    if (valueType == "!Promise" && ["all","race","any","allSettled","resolve"].includes(name)) return "!promiseStatic." + name;
     if (valueType.endsWith("[]")) {
       const element: string = semanticElement(valueType);
       if (["map","filter","reduce","reduceRight","forEach","find","findIndex","findLast","findLastIndex","some","every","flatMap","sort","toSorted","concat"].includes(name)) return "!array." + name;
@@ -1665,6 +1693,7 @@ export class NativeChecker {
     if (callable.startsWith("!optional.")) return this.optionalCall(module,id,callable.slice(10,callable.length),receiver,expected);
     if (callable.startsWith("!array.")) return this.arrayCall(module,id,callable.slice(7,callable.length),receiver);
     if (callable.startsWith("!arrayStatic.")) return this.arrayStaticCall(module,id,callable.slice(13,callable.length),expected);
+    if (callable.startsWith("!promiseStatic.")) return this.promiseStaticCall(module,id,callable.slice(15,callable.length),expected);
     if (callable.startsWith("!container:")) return this.containerCall(module,id,callable.slice(11,callable.length),expected);
     const n: AstNode = this.node(module,id); let args: number[] = []; let actual: string[] = [];
     let contexts: string[] = functionParams(callable);
