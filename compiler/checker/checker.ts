@@ -1019,6 +1019,14 @@ export class NativeChecker {
   }
 
   // Número de argumentos de la llamada id (0 si no es una llamada).
+  // Tipo del primer argumento si es el RegExp de estatic:regexp ("" si no).
+  regexpArgument(module: number, id: number): string {
+    let first: number = -1; for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Args && first < 0) first = edge.node;
+    if (first < 0) return "";
+    const argument: string = memoryValue(this.expression(module,first,""));
+    const sid: number = this.nominalSymbol(argument); if (sid < 0 || this.binding.symbols[sid].kind != "ClassDeclaration" || this.binding.symbols[sid].module < 0) return "";
+    return this.graph.modules[this.binding.symbols[sid].module].file.endsWith("runtime/lib/regexp.ts") ? argument : "";
+  }
   callArity(module: number, id: number): number {
     let count: number = 0; for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Args) count = count + 1;
     return count;
@@ -1117,6 +1125,18 @@ export class NativeChecker {
       // Firmas de TypeScript: los argumentos opcionales se resuelven por la
       // aridad de la llamada (el runtime C++ tiene los mismos valores por defecto).
       const count: number = this.callArity(module,id);
+      // Con un RegExp de estatic:regexp: las firmas de TypeScript (match da
+      // undefined si no hay match, matchAll un array de matches).
+      if (["replace","replaceAll","match","matchAll","search","split"].includes(name)) {
+        const pattern: string = this.regexpArgument(module,id);
+        if (pattern != "") {
+          if (name == "replace" || name == "replaceAll") return "(" + pattern + ",string)=>string";
+          if (name == "match") return "(" + pattern + ")=>Optional<string[]>";
+          if (name == "matchAll") return "(" + pattern + ")=>string[][]";
+          if (name == "search") return "(" + pattern + ")=>number";
+          return "(" + pattern + ")=>string[]";
+        }
+      }
       if (name == "charAt") return count == 0 ? "()=>string" : "(number)=>string";
       if (name == "charCodeAt") return count == 0 ? "()=>number" : "(number)=>number";
       if (name == "at") return "(number)=>Optional<string>";
