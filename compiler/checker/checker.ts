@@ -1527,6 +1527,17 @@ export class NativeChecker {
         for (let p: number = 0; p < contexts.length; p = p + 1) if (p >= other.length || contexts[p] != other[p]) contexts[p] = "";
       }
     }
+    // #272: con argumentos de tipo explícitos, los parámetros genéricos ya se
+    // conocen y dan contexto a los argumentos (f<number | string>([1, "x"])).
+    if (sid >= 0 && (this.binding.symbols[sid].module) >= 0 && callableBinding(this.binding.symbols[sid].kind) && this.binding.symbols[sid].declarations.length == 1) {
+      const owner: number = this.binding.symbols[sid].module; const declarationNode: AstNode = this.node(owner,this.binding.symbols[sid].declarations[0]);
+      let explicitTypes: string[] = []; for (const attr of n.attributes) if (attr.name == AttributeKind.TypeArgument) explicitTypes.push(this.annotation(module,id,attr.value));
+      let g: number = 0;
+      for (const edge of declarationNode.edges) if (edge.role == EdgeRole.TypeParameters) {
+        if (g < explicitTypes.length) for (let p: number = 0; p < contexts.length; p = p + 1) contexts[p] = replaceType(contexts[p],"@" + numberToString(this.binding.files[owner].declarations[edge.node]),explicitTypes[g]);
+        g = g + 1;
+      }
+    }
     let named: boolean = false;
     for (const edge of n.edges) if (edge.role == EdgeRole.Args) {
       const argument: AstNode = this.node(module,edge.node);
