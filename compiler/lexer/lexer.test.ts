@@ -164,3 +164,10 @@ test("bootstrap lexer: deterministic generated ASCII corpus", () => {
     const source = parts.join(" ");assert.deepEqual(native(source).tokens, new Lexer(source).tokenize());
   }
 });
+// Literales /patrón/flags frente a la división (solo en el lexer nativo).
+test("lexer: /patrón/flags frente a la división", () => {
+  const kinds = (source: string) => (native(source).tokens as any[]).map((t: any) => t.kind + (t.kind === "regex" ? ":" + t.lexeme : ""));
+  assert.deepEqual(kinds("a / b / c"), ["identifier", "/", "identifier", "/", "identifier", "eof"]);
+  assert.deepEqual(kinds("x = /a[/]b\\/c/gi;"), ["identifier", "=", "regex:/a[/]b\\/c/gi", ";", "eof"]);
+  assert.deepEqual(kinds("f(/\\d+/, (n) / 2)"), ["identifier", "(", "regex:/\\d+/", ",", "(", "identifier", ")", "/", "number", ")", "eof"]);
+});

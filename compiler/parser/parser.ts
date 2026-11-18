@@ -1535,6 +1535,14 @@ export class Parser {
   primary(): number {
     const token: ParserToken = this.take();
     if (token.kind == "template-start") return this.templateLiteral(token);
+    // /patrón/flags es new RegExp("patrón", "flags") con el RegExp importado de estatic:regexp.
+    if (token.kind == "regex") {
+      const close: number = token.lexeme.lastIndexOf("/");
+      const result: number = this.add(NodeKind.NewExpression, token, token); this.attr(result, AttributeKind.ClassName, "RegExp");
+      const pattern: number = this.add(NodeKind.LiteralExpression, token, token); this.attr(pattern, AttributeKind.LiteralType, "string"); this.attr(pattern, AttributeKind.Value, token.lexeme.slice(1, close));
+      const flags: number = this.add(NodeKind.LiteralExpression, token, token); this.attr(flags, AttributeKind.LiteralType, "string"); this.attr(flags, AttributeKind.Value, token.lexeme.slice(close + 1, token.lexeme.length));
+      this.edge(result, EdgeRole.Args, pattern); this.edge(result, EdgeRole.Args, flags); return result;
+    }
     if (token.kind == "template-error") { this.reportAt(token, token.lexeme); return this.add(NodeKind.ErrorNode, token, token); }
     if (token.kind == "number" || token.kind == "string" || token.kind == "true" || token.kind == "false") {
       const result: number = this.add(NodeKind.LiteralExpression, token, token);
