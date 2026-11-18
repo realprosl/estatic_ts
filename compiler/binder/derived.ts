@@ -46,6 +46,15 @@ export class DerivedExpander {
     const parts: string[] = this.graph.modules[module].cached.result.ast.nodes[id].get(AttributeKind.Underlying).split("#");
     if (parts.length < 3) return;
     const kind: string = parts[0]; const source: string = parts[1]; let keys: string[] = []; if (parts[2] != "") keys = parts[2].split(",");
+    if (kind == "Record") {
+      for (const name of keys) {
+        let item: AstNode = new AstNode(NodeKind.InterfaceField, this.graph.modules[module].cached.result.ast.nodes[id].start, this.graph.modules[module].cached.result.ast.nodes[id].end);
+        item.attributes.push(new AstAttribute(AttributeKind.Name, name)); item.attributes.push(new AstAttribute(AttributeKind.Type, source)); item.attributes.push(new AstAttribute(AttributeKind.Optional, "false"));
+        this.graph.modules[module].cached.result.ast.nodes.push(item);
+        this.graph.modules[module].cached.result.ast.nodes[id].edges.push(new AstEdge(EdgeRole.Fields, this.graph.modules[module].cached.result.ast.nodes.length - 1));
+      }
+      return;
+    }
     if (!this.shape(module, source)) { this.report(module, id, kind + "<" + source + ">: '" + source + "' tiene que ser una interfaz, una clase o un tipo objeto con nombre"); return; }
     const where: number = this.foundModule; const at: number = this.foundNode; let names: string[] = [];
     for (const edge of this.graph.modules[where].cached.result.ast.nodes[at].edges) if (edge.role == EdgeRole.Fields) {

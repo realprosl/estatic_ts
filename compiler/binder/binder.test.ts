@@ -42,7 +42,7 @@ test("binder: builtin declarations stay synchronized with canonical d.ts",()=>{c
   // con el servidor de TypeScript, declararlo choca con el `Promise` estandar.
   // El binder si lo registra como builtin, asi que se excluye aqui en lugar de
   // anadirlo al d.ts. Lo mismo con `String` (String(x), String.fromCharCode).
-  assert.deepEqual(g.symbols.filter((s:any)=>s.kind==="builtin"&&s.name!=="Promise"&&s.name!=="undefined"&&s.name!=="String"&&s.name!=="Array").map((s:any)=>s.name).sort(),names);});
+  assert.deepEqual(g.symbols.filter((s:any)=>s.kind==="builtin"&&s.name!=="Promise"&&s.name!=="undefined"&&s.name!=="String"&&s.name!=="Array"&&s.name!=="Object").map((s:any)=>s.name).sort(),names);});
 test("binder: import aliases connect to original declarations",()=>{const g=bind('import {x as local} from "./lib"; print(local);',0,{"lib.ets":"export const x=1;"});const target=targets(g,"local")[0];assert.equal(target.name,"x");assert.equal(basename(g.files[target.module].file),"lib.ets");});
 test("binder: default named/anonymous/expression exports preserve their identities",()=>{for(const lib of ['export default function f():number{return 1;}','export default function():number{return 1;}','export default class {x:number=1;}','export default 2;']){const g=bind('import value from "./lib"; print(value);',0,{"lib.ets":lib});assert.equal(refs(g,"value").length,1);assert.equal(g.exports.filter((e:any)=>e.name==="default").length,1);}});
 test("binder: side effects load modules without introducing names",()=>{errors('import "./lib"; print(x);',/No existe 'x' en este ámbito/,{"lib.ets":"export const x=1;"});});

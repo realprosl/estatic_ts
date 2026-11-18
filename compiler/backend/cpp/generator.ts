@@ -1116,6 +1116,11 @@ return `(${this.deref(this.operand(f,i,0,false),f.values[i.operands[0]])}).${met
     if(method=="allSettled")return `ets::task_all_settled<${this.cppTypeId(this.shape(this.shape(i.typeId).arguments[0]).arguments[0])}>(${this.operand(f,i,0)})`;
     return `ets::${method=="all"?"task_all":"task_race"}(${this.operand(f,i,0)})`;
   }
+  if(base=="!Object"){
+    // Object.keys/values/entries: Map (orden de inserción) o struct (ets_fields).
+    this.headers.add("runtime/ets_object.hpp");
+    return `ets::object_${method}<${this.cppTypeId(i.typeId)}>(${this.operand(f,i,0)})`;
+  }
   if(base=="!Array"){
     // Array.isArray / Array.of / Array.from con el tipo del resultado explícito.
     const R:string=this.cppTypeId(i.typeId);

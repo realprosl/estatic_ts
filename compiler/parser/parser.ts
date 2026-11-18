@@ -1145,7 +1145,7 @@ export class Parser {
   // "a" | "b" (tipos literales de string) -> [a, b].
   literalKeys(text: string): string[] {
     let keys: string[] = [];
-    for (const part of text.split(" | ")) { if (part.startsWith("$lit:string=")) keys.push(part.slice(12, part.length)); else this.report("Las claves de Pick/Omit tienen que ser literales de string (\"a\" | \"b\")"); }
+    for (const part of text.split(" | ")) { if (part.startsWith("$lit:string=")) keys.push(part.slice(12, part.length)); else this.report("Las claves de Pick/Omit/Record tienen que ser literales de string (\"a\" | \"b\")"); }
     return keys;
   }
   interfaceDeclaration(keyword: ParserToken): number {
@@ -1296,6 +1296,9 @@ export class Parser {
       this.closeAngle();
       if (result == "Array" && args.length == 1) result = args[0] + "[]";
       else if ((result == "Partial" || result == "Required") && args.length == 1) { let none: string[] = []; result = this.derivedType(result, args[0], none, this.previous()); }
+      // Record<"a" | "b", V> es un struct con esos campos; Record<K, V> con K abierto, un Map ordenado.
+      else if (result == "Record" && args.length == 2 && args[0].startsWith("$lit:string=")) result = this.derivedType("Record", args[1], this.literalKeys(args[0]), this.previous());
+      else if (result == "Record" && args.length == 2) result = "Map<" + args[0] + "," + args[1] + ">";
       else if ((result == "Pick" || result == "Omit") && args.length == 2) result = this.derivedType(result, args[0], this.literalKeys(args[1]), this.previous());
       else result = result + "<" + args.join(",") + ">";
     }
@@ -1389,7 +1392,7 @@ export class Parser {
   precedence(kind: string): number {
     if (kind == "??") return 1; if (kind == "||") return 2; if (kind == "&&") return 3;
     if (kind == "==" || kind == "!=") return 4;
-    if (kind == "<" || kind == "<=" || kind == ">" || kind == ">=" || kind == "instanceof") return 5;
+    if (kind == "<" || kind == "<=" || kind == ">" || kind == ">=" || kind == "instanceof" || kind == "in") return 5;
     // Precedencia de los operadores bitwise: `|` es el mas bajo, luego `^`,
     // luego `&`, y por ultimo el desplazamiento. Igual que en TypeScript:
     // `a | b & c` es `a | (b & c)`, no `(a | b) & c`.

@@ -464,6 +464,27 @@ function f({ age, ...otros }: User) { ... }
   necesita el tipo de la fuente: la anotación de la declaración o del
   parámetro (`const { a, ...resto }: T = …`). Sin ella, error de compilación.
 
+### `Record<K, V>` y `Object.keys/values/entries`
+
+```ts
+const edades: Record<string, number> = { ana: 30, luis: 25 };
+edades["eva"] = 41;                          // set
+const e: number | undefined = edades["ana"]; // get: V | undefined
+if ("ana" in edades) delete edades["ana"];
+for (const k in edades) { ... }               // orden de inserción
+const xy: Record<"x" | "y", number> = { x: 1, y: 2 };   // struct { x; y }
+Object.keys(edades); Object.values(xy); Object.entries(p);
+```
+
+- Con claves abiertas (`Record<string, V>`, `Record<number, V>`) es un `Map`
+  ordenado: `r[k]` es `V | undefined` (como `noUncheckedIndexedAccess`), así
+  que `r[k] += 1` es un error; se escribe `r[k] = (r[k] ?? 0) + 1`.
+- Con una unión de literales (`Record<"x" | "y", V>`) es un struct con esos
+  campos.
+- `Object.keys/values/entries` sirven para un Record (orden de inserción) y
+  para objetos con campos (orden de declaración); `values` y `entries` piden que
+  todos los campos tengan el mismo tipo.
+
 ## Métodos de `string`
 
 Mismas firmas que en TypeScript, argumentos opcionales incluidos:
