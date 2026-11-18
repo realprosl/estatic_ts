@@ -405,6 +405,36 @@ function f(a: number, b?: number): number { return b === undefined ? a : a + b; 
 - Una variable sin valor inicial solo puede ser `T | undefined`.
 - Los errores con motivo (leer un fichero, parsear) siguen yendo por `Result<T, E>`.
 
+## Tipos objeto: `{ a: T; b?: U }`
+
+Un tipo objeto se puede escribir en el sitio, como en TypeScript: en variables,
+parámetros, retornos, arrays y alias (`type Punto = { x: number; y?: number }`).
+
+```ts
+function suma(p: { x: number; y?: number }): number { return p.x + (p.y ?? 0); }
+suma({ x: 1 }); suma({ x: 1, y: 2 });
+const lista: { n: string; v: number }[] = [{ n: "a", v: 1 }];
+```
+
+- Cada forma (nombres y tipos de los campos, sin importar el orden) es un struct
+  con nombre (`__Obj_x_y_<hash>`), y la misma forma se reutiliza en el módulo.
+- Un campo opcional (`b?: T`) es `T | undefined`, también en las interfaces.
+- Un literal sin tipo (`const p = { x: 1, nombre: "a" }`) deduce su forma;
+  dos literales con los mismos campos y tipos comparten tipo
+  (`[{ v: 1 }, { v: 2 }]` es un array).
+- Parámetros desestructurados, con valores por defecto que se aplican en la
+  función cuando el campo llega vacío:
+
+```ts
+function crear({ nombre, edad = 18 }: { nombre: string; edad?: number } = { nombre: "anon" }): string { ... }
+crear({ nombre: "Ana" }); crear();
+function opciones({ a = 1, b = "x" }) { ... }   // sin anotación: campos opcionales con el tipo del valor
+const { a, b = "def" } = objeto;                 // también en declaraciones
+```
+
+- Pendiente (#223): paso entre formas compatibles con campos de más, patrones
+  anidados y resto (`...resto`).
+
 ## Métodos de `string`
 
 Mismas firmas que en TypeScript, argumentos opcionales incluidos:

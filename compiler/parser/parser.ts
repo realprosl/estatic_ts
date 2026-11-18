@@ -67,15 +67,28 @@ export class ParseResult {
   }
 }
 
+function bindingChildOf(node: AstNode, role: EdgeRole): number { for (const edge of node.edges) if (edge.role == role) return edge.node; return -1; }
+// Orden de dos textos por código de carácter (para las formas de los tipos objeto).
+function compareText(a: string, b: string): number {
+  const size: number = a.length < b.length ? a.length : b.length;
+  for (let at: number = 0; at < size; at = at + 1) { const difference: number = a.charCodeAt(at) - b.charCodeAt(at); if (difference != 0) return difference; }
+  return a.length - b.length;
+}
 export class Parser {
   tokens: ParserToken[]; current: number; nodes: AstNode[]; diagnostics: ParserDiagnostic[];
   nesting: number; exhausted: boolean;
   // `const T&` / `const T*`: el `const` inicial espera al primer `&` o `*`
   // del mismo tipo (ver typeSuffix). typeName lo aisla de los tipos anidados.
   constMemory: boolean;
+  // #223: tipos objeto { a: T; b?: U } convertidos en interfaces sintéticas, una
+  // por forma (se añaden al final del programa).
+  objectTypes: number[]; objectTypeNames: string[];
+  // #223: parámetros desestructurados ({ a, b = 1 }: T): la declaración del
+  // patrón se añade al principio del cuerpo de su función.
+  patternOwners: number[]; patternDeclarations: number[];
   constructor(tokens: ParserToken[]) {
     this.tokens = tokens; this.current = 0; this.nodes = []; this.diagnostics = [];
-    this.nesting = 0; this.exhausted = false; this.constMemory = false;
+    this.nesting = 0; this.exhausted = false; this.constMemory = false; this.objectTypes = []; this.objectTypeNames = []; this.patternOwners = []; this.patternDeclarations = [];
     if (tokens.length == 0) {
       this.tokens.push(new ParserToken("eof", "", 0, 1, 1, 0, 1, 1));
       this.report("La entrada de tokens necesita un eof final");
@@ -231,6 +244,7 @@ export class Parser {
         if (this.current == before && !this.check("eof")) { this.report("E1006: No se esperaba " + this.found() + " aquí" + this.foundArg()); this.take(); }
       }
     }
+    for (const objectType of this.objectTypes) this.edge(program, EdgeRole.Statements, objectType);
     this.setEnd(program, this.peek(0));
     return new ParseResult(program, this.nodes, this.diagnostics);
   }
@@ -759,10 +773,23 @@ export class Parser {
       const property: boolean = access != "" || isReadonly;
       if (property && !properties) this.reportAt(start, "Las propiedades de parámetro solo se permiten en constructores de instancia");
       if (property && variadic) this.reportAt(start, "Una propiedad de parámetro no puede ser variádica");
-      const name: ParserToken = this.expect("identifier"); const optional: boolean = this.accept("?");
-      this.expect(":"); const annotation: string = this.typeName();
+      let pattern: number = -1; let parameterName: string = "";
+      if (!variadic && !property && (this.check("{") || this.check("["))) {
+        // { nombre, edad = 18 }: T → parámetro __arg<N> y const { ... } = __arg<N> en el cuerpo.
+        pattern = this.add(NodeKind.VariableDeclaration, start, start); this.attr(pattern, AttributeKind.Mutable, "false");
+        this.bindingPattern(pattern, this.check("[")); this.setEnd(pattern, this.previous());
+        parameterName = "__arg" + numberToString(pattern);
+      } else parameterName = this.expect("identifier").lexeme;
+      const optional: boolean = this.accept("?");
+      let annotation: string = "";
+      if (pattern >= 0 && !this.check(":")) annotation = this.patternType(pattern);
+      else { this.expect(":"); annotation = this.typeName(); }
       const param: number = this.add(NodeKind.Parameter, start, this.previous());
-      this.attr(param, AttributeKind.Name, name.lexeme); this.attr(param, AttributeKind.Type, annotation);
+      this.attr(param, AttributeKind.Name, parameterName); this.attr(param, AttributeKind.Type, annotation);
+      if (pattern >= 0) {
+        const source: number = this.add(NodeKind.IdentifierExpression, start, start); this.attr(source, AttributeKind.Name, parameterName);
+        this.edge(pattern, EdgeRole.Initializer, source); this.patternOwners.push(owner); this.patternDeclarations.push(pattern);
+      }
       if (access != "") this.attr(param, AttributeKind.Access, access);
       if (isReadonly) this.attr(param, AttributeKind.Readonly, "true");
       if (property && properties) this.attr(param, AttributeKind.ParameterProperty, "true");
@@ -778,6 +805,35 @@ export class Parser {
       if (this.current == before || !this.accept(",")) break;
     }
     this.expect(")");
+  }
+  // Tipo de un patrón de objeto sin anotación: un campo con valor por defecto
+  // es opcional y tiene el tipo de ese valor; uno sin valor por defecto necesita tipo.
+  patternType(pattern: number): string {
+    if (this.node(pattern).get(AttributeKind.Pattern) != "object") { this.report("Un patrón de array en un parámetro necesita tipo: añade ': Tipo'"); return "<error>"; }
+    let names: string[] = []; let types: string[] = []; let optionals: boolean[] = []; let tokens: ParserToken[] = [];
+    for (const edge of this.node(pattern).edges) if (edge.role == EdgeRole.ObjectBindings) {
+      const binding: AstNode = this.node(edge.node); const value: number = bindingChildOf(binding, EdgeRole.DefaultValue);
+      if (value < 0) { this.reportAt(binding.start, "El campo '" + binding.get(AttributeKind.Property) + "' del patrón necesita tipo: anota el parámetro (por ejemplo { a }: { a: number })"); continue; }
+      names.push(binding.get(AttributeKind.Property)); types.push("$valueof$" + numberToString(value)); optionals.push(true); tokens.push(binding.start);
+    }
+    return this.objectTypeFrom(names, types, optionals, tokens, this.node(pattern).start, this.node(pattern).end);
+  }
+  // Cuerpo de una función con parámetros desestructurados: primero sus patrones.
+  withPatterns(owner: number, body: number): number {
+    let patterns: number[] = [];
+    for (let at: number = 0; at < this.patternOwners.length; at = at + 1) if (this.patternOwners[at] == owner) patterns.push(this.patternDeclarations[at]);
+    if (patterns.length == 0) return body;
+    let block: number = body;
+    if (this.node(body).kind != NodeKind.BlockStatement) {
+      block = this.add(NodeKind.BlockStatement, this.node(body).start, this.node(body).end);
+      const result: number = this.add(NodeKind.ReturnStatement, this.node(body).start, this.node(body).end); this.edge(result, EdgeRole.Value, body);
+      this.edge(block, EdgeRole.Statements, result);
+    }
+    let edges: AstEdge[] = [];
+    for (const pattern of patterns) edges.push(new AstEdge(EdgeRole.Statements, pattern));
+    for (const edge of this.nodes[block].edges) edges.push(edge);
+    this.nodes[block].edges = edges;
+    return block;
   }
   typeParameters(owner: number, packs: boolean): void {
     if (!this.accept("<")) return;
@@ -822,7 +878,7 @@ export class Parser {
     this.attr(result, AttributeKind.ReturnType, this.returnType(anonymous ? "La función" : "La función '" + name.lexeme + "'"));
     let body: number = -1;
     if (this.accept(";")) body = this.add(NodeKind.BlockStatement, this.previous(), this.previous());
-    else { const open: ParserToken = this.expect("{"); body = this.block(open); }
+    else { const open: ParserToken = this.expect("{"); body = this.withPatterns(result, this.block(open)); }
     this.edge(result, EdgeRole.Body, body); this.setEnd(result, this.node(body).end); return result;
   }
   classDeclaration(keyword: ParserToken, allowAnonymous: boolean): number {
@@ -854,7 +910,7 @@ export class Parser {
           if (this.accept(":")) returnType = this.typeName();
           else if (member.lexeme != "constructor") this.report(this.missingReturnType("El método '" + member.lexeme + "'"));
           this.attr(item, AttributeKind.ReturnType, returnType);
-          const open: ParserToken = this.expect("{"); const body: number = this.block(open);
+          const open: ParserToken = this.expect("{"); const body: number = this.withPatterns(item, this.block(open));
           this.edge(item, EdgeRole.Body, body); this.setEnd(item, this.node(body).end);
           this.edge(result, EdgeRole.Methods, item);
         } else {
@@ -866,6 +922,44 @@ export class Parser {
       }
     }
     this.setEnd(result, this.expect("}")); return result;
+  }
+  // { a: T; b?: U } en un tipo: una interfaz sintética con nombre estable por
+  // forma (campos y tipos, sin importar el orden). La misma forma se reutiliza.
+  objectType(): string {
+    const open: ParserToken = this.take();
+    let names: string[] = []; let types: string[] = []; let optionals: boolean[] = []; let tokens: ParserToken[] = [];
+    this.skipNewlines();
+    while (!this.check("}") && !this.check("eof")) {
+      const before: number = this.current;
+      const member: ParserToken = this.check("string") ? this.take() : this.expect("identifier");
+      const optional: boolean = this.accept("?"); this.expect(":"); const memberType: string = this.typeName();
+      if (names.includes(member.lexeme)) this.reportAt(member, "Campo duplicado '" + member.lexeme + "' en el tipo objeto");
+      names.push(member.lexeme); types.push(memberType); optionals.push(optional); tokens.push(member);
+      if (!this.accept(";")) this.accept(",");
+      this.skipNewlines();
+      if (this.current == before) { this.report("Miembro de tipo objeto no reconocido"); this.take(); }
+    }
+    const close: ParserToken = this.expect("}");
+    return this.objectTypeFrom(names, types, optionals, tokens, open, close);
+  }
+  // La interfaz sintética de una forma; la misma forma da el mismo nombre.
+  objectTypeFrom(names: string[], types: string[], optionals: boolean[], tokens: ParserToken[], open: ParserToken, close: ParserToken): string {
+    let order: number[] = []; for (let at: number = 0; at < names.length; at = at + 1) order.push(at);
+    order.sort((a: number, b: number): number => compareText(names[a], names[b]));
+    let key: string = ""; let label: string = "";
+    for (const at of order) { key = key + names[at] + (optionals[at] ? "?:" : ":") + types[at] + ";"; label = label + "_" + names[at]; }
+    let hash: number = 0;
+    for (let at: number = 0; at < key.length; at = at + 1) hash = (hash * 31 + key.charCodeAt(at)) % 4294967296;
+    const name: string = "__Obj" + label + "_" + numberToString(hash);
+    if (!this.objectTypeNames.includes(name)) {
+      const declaration: number = this.add(NodeKind.InterfaceDeclaration, open, close); this.attr(declaration, AttributeKind.Name, name);
+      for (let at: number = 0; at < names.length; at = at + 1) {
+        const item: number = this.add(NodeKind.InterfaceField, tokens[at], tokens[at]); this.attr(item, AttributeKind.Name, names[at]);
+        this.attr(item, AttributeKind.Type, types[at]); this.attr(item, AttributeKind.Optional, optionals[at] ? "true" : "false"); this.edge(declaration, EdgeRole.Fields, item);
+      }
+      this.objectTypes.push(declaration); this.objectTypeNames.push(name);
+    }
+    return name;
   }
   interfaceDeclaration(keyword: ParserToken): number {
     const decorators: number[] = this.decorators();
@@ -982,6 +1076,7 @@ export class Parser {
       if (this.constMemory) { this.constMemory = false; this.reportAt(keyword, "'const' en un tipo requiere '&' (constRef) o '*' (constPtr)"); }
       return constant;
     }
+    if (this.check("{")) return this.typeSuffix(this.objectType());
     if (this.accept("typeof")) {
       let query: string = "$typeof$" + this.expect("identifier").lexeme;
       while (this.accept(".")) query = query + "." + (this.check("default") ? this.take().lexeme : this.expect("identifier").lexeme);
@@ -1080,6 +1175,7 @@ export class Parser {
     if (this.accept(":")) this.attr(result, AttributeKind.ReturnType, this.typeName());
     this.expect("=>"); let body: number = -1;
     if (this.accept("{")) body = this.block(this.previous()); else body = this.expression();
+    body = this.withPatterns(result, body);
     this.edge(result, EdgeRole.Body, body); this.setEnd(result, this.node(body).end); return result;
   }
   assignment(): number {
@@ -1306,7 +1402,18 @@ export class Parser {
         if (!this.accept(",")) break;
         this.skipNewlines();
       }
-      this.setEnd(result, this.expect("}")); return result;
+      this.setEnd(result, this.expect("}"));
+      // #223: sin otro contexto, el literal es de una interfaz sintética cuyos
+      // campos tienen el tipo de su valor ($valueof$<nodo>).
+      const shape: number = this.add(NodeKind.InterfaceDeclaration, token, this.previous()); const shapeName: string = "__Lit" + numberToString(result);
+      this.attr(shape, AttributeKind.Name, shapeName);
+      for (const edge of this.node(result).edges) if (edge.role == EdgeRole.Properties) {
+        const property: AstNode = this.node(edge.node); const value: number = bindingChildOf(property, EdgeRole.Value);
+        const item: number = this.add(NodeKind.InterfaceField, property.start, property.start); this.attr(item, AttributeKind.Name, property.get(AttributeKind.Key));
+        this.attr(item, AttributeKind.Type, "$valueof$" + numberToString(value)); this.attr(item, AttributeKind.Optional, "false"); this.edge(shape, EdgeRole.Fields, item);
+      }
+      this.objectTypes.push(shape); this.attr(result, AttributeKind.DeclaredType, shapeName);
+      return result;
     }
     if (token.kind == "new") {
       let name: string = this.expect("identifier").lexeme;

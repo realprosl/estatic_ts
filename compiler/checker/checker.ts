@@ -23,10 +23,25 @@ export class NativeChecker {
   // asi que la cache vive en la clase y no en un argumento recursivo.
   // 0 = no muta, 1 = muta, 2 = en curso (ciclo).
   mutationCache: Map<string,number>;
+  // #223: literales sin tipo con la misma forma comparten tipo (el primero).
+  literalShapeKeys: string[]; literalShapeTypes: string[];
   constructor(graph: ModuleGraph, binding: BindingResult) {
     this.graph = graph; this.binding = binding; this.result = new CheckResult(); this.symbolStates = []; this.depth = 0; this.switches = 0; this.compatibilityDepth = 0;
     this.narrowedSymbols = []; this.narrowedTypes = []; this.trace = false; this.narrowedPaths = [];
-    this.mutationCache = new Map<string,number>();
+    this.mutationCache = new Map<string,number>(); this.literalShapeKeys = []; this.literalShapeTypes = [];
+  }
+  literalShape(typeText: string): string {
+    const sid: number = this.nominalSymbol(typeText); if (sid < 0) return typeText;
+    const owner = this.binding.symbols[sid]; let entries: string[] = [];
+    for (const edge of this.node(owner.module,owner.node).edges) if (edge.role == EdgeRole.Fields) {
+      const field: number = this.binding.files[owner.module].declarations[edge.node];
+      entries.push(this.node(owner.module,edge.node).get(AttributeKind.Name) + ":" + this.symbolType(field,owner.module,edge.node));
+    }
+    // La forma no depende del orden de los campos.
+    for (let at: number = 1; at < entries.length; at = at + 1) for (let back: number = at; back > 0 && entries[back - 1].localeCompare(entries[back]) > 0; back = back - 1) { const swap: string = entries[back]; entries[back] = entries[back - 1]; entries[back - 1] = swap; }
+    const key: string = entries.join(";");
+    for (let at: number = 0; at < this.literalShapeKeys.length; at = at + 1) if (this.literalShapeKeys[at] == key) return this.literalShapeTypes[at];
+    this.literalShapeKeys.push(key); this.literalShapeTypes.push(typeText); return typeText;
   }
   node(module: number, id: number): AstNode { return this.graph.modules[module].cached.result.ast.nodes[id]; }
   report(module: number, id: number, message: string): void {
@@ -525,6 +540,8 @@ export class NativeChecker {
       return semanticFixedArray(element,size.value);
     }
     if (text.startsWith("$typeof$")) return this.queryType(module,id,text.slice(8,text.length));
+    // #223: campo de la interfaz sintética de un literal sin tipo: el tipo de su valor.
+    if (text.startsWith("$valueof$")) { let node: number = 0; for (let at: number = 9; at < text.length; at = at + 1) node = node * 10 + text.charCodeAt(at) - 48; const valueType: string = this.expression(module,node,""); return literalType(valueType) ? literalKind(valueType) : valueType; }
     const generic: number = text.indexOf("<",0);
     if (generic > 0 && text.endsWith(">")) {
       const sid: number = this.qualifiedType(module,id,text.slice(0,generic));
@@ -755,7 +772,9 @@ export class NativeChecker {
         valueType = this.annotation(s.module,s.node,n.get(AttributeKind.DeclaredType));
         if (valueType == "") valueType = this.expression(s.module,bindingChild(n,EdgeRole.Initializer),"");
         if (genericBase(valueType) == "variant") valueType = genericArguments(valueType)[0];
-      } else if (s.kind == "Parameter" || s.kind == "ClassField" || s.kind == "InterfaceField" || s.kind == "UnionVariantBinding") { if (n.kind == NodeKind.Parameter) valueType = this.parameterType(s.module,s.node); else valueType = this.annotation(s.module,s.node,n.get(AttributeKind.Type)); }
+      } else if (s.kind == "Parameter" || s.kind == "ClassField" || s.kind == "InterfaceField" || s.kind == "UnionVariantBinding") { if (n.kind == NodeKind.Parameter) valueType = this.parameterType(s.module,s.node); else valueType = this.annotation(s.module,s.node,n.get(AttributeKind.Type));
+        // #223: un campo opcional (b?: T) es T | undefined, como en TypeScript.
+        if (s.kind == "InterfaceField" && n.get(AttributeKind.Optional) == "true" && genericBase(valueType) != "Optional") valueType = "Optional<" + valueType + ">"; }
       else if (s.namespaceModule >= 0) valueType = "namespace";
       else if (s.kind.endsWith("Expression")) valueType = this.expression(s.module,s.node,"");
       else valueType = this.unsupported(useModule,useNode,"símbolo " + s.kind);
@@ -2038,7 +2057,11 @@ export class NativeChecker {
     }
     if (kind == NodeKind.ObjectLiteralExpression) {
       const unionOwner: number = this.nominalSymbol(expected); if (unionOwner >= 0 && this.binding.symbols[unionOwner].kind == "UnionDeclaration") return this.unionObject(module,id,expected,unionOwner);
-      const contracts: string[] = splitTypes(expected,"&");
+      let contracts: string[] = splitTypes(expected,"&");
+      // #223: sin contexto de interfaz, la interfaz sintética del literal.
+      let interfaceContext: boolean = contracts.length > 0;
+      for (const contract of contracts) { const sid: number = this.nominalSymbol(contract); if (sid < 0 || this.binding.symbols[sid].kind != "InterfaceDeclaration") interfaceContext = false; }
+      if (!interfaceContext && n.get(AttributeKind.DeclaredType) != "" && (expected == "" || genericBase(expected) == "Optional" || this.nominalSymbol(expected) < 0)) { expected = this.literalShape(this.annotation(module,id,n.get(AttributeKind.DeclaredType))); contracts = [expected]; }
       if (contracts.length == 0) { this.report(module,id,"Un literal de objeto requiere contexto de interfaz"); return "!error"; }
       for (const contract of contracts) { const sid: number = this.nominalSymbol(contract); if (sid < 0 || this.binding.symbols[sid].kind != "InterfaceDeclaration") { this.report(module,id,"Un literal de objeto requiere contexto de interfaz"); return "!error"; } }
       let provided: string[] = [];
@@ -2144,7 +2167,11 @@ export class NativeChecker {
           else if (fallback >= 0) actual = this.expression(module,fallback,"");
           else this.report(module,e.node,"Binding fuera del tamaño de la tupla");
         } else this.report(module,e.node,"Destructuring de array requiere un array o tupla");
-      } else actual = this.member(module,e.node,source,b.get(AttributeKind.Property));
+      } else {
+        actual = this.member(module,e.node,source,b.get(AttributeKind.Property));
+        // #223: { b = 1 } sobre un campo b?: T: el valor por defecto cubre el undefined.
+        if (fallback >= 0 && genericBase(actual) == "Optional") actual = genericArguments(actual)[0];
+      }
       const declared: string = this.annotation(module,e.node,b.get(AttributeKind.DeclaredType));
       if (declared != "") this.requireType(module,e.node,actual,declared);
       const target: string = declared == "" ? actual : declared;

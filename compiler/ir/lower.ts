@@ -867,17 +867,19 @@ export class IrLowering {
     const n = this.node(id); const input: number = this.materialize(bindingChild(n,EdgeRole.Initializer)); const sourceType: number = this.result.functions[this.currentFunction].places[input].typeId; let position: number = 0;
     for (const e of n.edges) if (e.role == EdgeRole.ArrayBindings || e.role == EdgeRole.ObjectBindings) {
       const item = this.node(e.node); const symbol: number = this.binding.files[this.module].declarations[e.node]; const expected: number = this.typeId(this.checked.files[this.module].types[e.node],e.node); const target: number = this.globalSymbols.includes(symbol) ? this.place(symbol,e.node) : this.local(symbol,expected,false,e.node);
-      const fallback: number = bindingChild(item,EdgeRole.DefaultValue); let projected: number = -1; let condition: number = -1;
+      const fallback: number = bindingChild(item,EdgeRole.DefaultValue); let projected: number = -1; let condition: number = -1; let optionalField: boolean = false;
       if (e.role == EdgeRole.ArrayBindings) {
         const index: number = this.emit("constant",this.typeId("number",id),[],-1,-1,numberToString(position),e.node);
         if (this.result.typeDefinitions[sourceType].kind == "tuple") { if (position < this.result.typeDefinitions[sourceType].arguments.length) projected = this.projection(input,"index",this.result.typeDefinitions[sourceType].arguments[position],index,-1,e.node); }
         else { projected = this.projection(input,"index",this.result.typeDefinitions[sourceType].arguments[0],index,-1,e.node); if (fallback >= 0) { const source: number = this.emit("load",sourceType,[],input,-1,"",id); const length: number = this.emit("property",this.typeId("number",id),[source],-1,-1,"length",id); condition = this.emit("binary",this.typeId("boolean",id),[index,length],-1,-1,"<",id); } }
       } else {
         const name: string = item.get(AttributeKind.Property); for (let at: number = 0; at < this.result.typeDefinitions[sourceType].names.length; at = at+1) if (this.result.typeDefinitions[sourceType].names[at] == name) projected = this.projection(input,"field",this.result.typeDefinitions[sourceType].fields[at],-1,at,e.node);
+        // #223: { b = 1 } sobre un campo b?: T: si el campo está vacío, el valor por defecto.
+        if (fallback >= 0 && projected >= 0 && this.narrowedOptional(this.result.functions[this.currentFunction].places[projected].typeId,expected)) { optionalField = true; condition = this.optionalPresent(projected,e.node); }
       }
       if (condition >= 0) {
         const yes: number = this.newBlock(e.node); const no: number = this.newBlock(e.node); const join: number = this.newBlock(e.node); this.terminate("branch",condition,[yes,no],e.node);
-        this.block = yes; const value: number = this.emit("load",this.result.functions[this.currentFunction].places[projected].typeId,[],projected,-1,"",e.node); this.emit("store",-1,[this.convert(value,expected,e.node)],target,-1,"",e.node); this.terminate("jump",-1,[join],e.node);
+        this.block = yes; const value: number = optionalField ? this.optionalPayload(projected,e.node) : this.emit("load",this.result.functions[this.currentFunction].places[projected].typeId,[],projected,-1,"",e.node); this.emit("store",-1,[this.convert(value,expected,e.node)],target,-1,"",e.node); this.terminate("jump",-1,[join],e.node);
         this.block = no; this.emit("store",-1,[this.convert(this.expression(fallback),expected,e.node)],target,-1,"",e.node); this.terminate("jump",-1,[join],e.node); this.block = join;
       } else {
         const value: number = projected >= 0 ? this.emit("load",this.result.functions[this.currentFunction].places[projected].typeId,[],projected,-1,"",e.node) : this.expression(fallback);
