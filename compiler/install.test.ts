@@ -252,10 +252,11 @@ test("install builds compiler/ with the seed and publishes that executable",asyn
    const repo=join(dir,"repo190"),git=(...args:string[])=>{const r=spawnSync("git",["-C",repo,"-c","user.name=t","-c","user.email=t@t",...args],{encoding:"utf8"});assert.equal(r.status,0,r.stderr);};
    mkdirSync(repo,{recursive:true});git("init","-q");const marker=join(dir,"update190.txt");
    writeFileSync(join(repo,"install.sh"),`#!/usr/bin/env bash\necho "$@" > ${JSON.stringify(marker)}\n`);git("add",".");git("commit","-q","-m","fake");
-   for(const tag of ["v0.0.2","v1.99.0","v1.100.0",installedVersion,"nightly"])git("tag",tag);
+   // Versiones muy por encima de la instalada: el test no caduca al subir de versión.
+   for(const tag of ["v0.0.2","v999.99.0","v999.100.0",installedVersion,"nightly"])git("tag",tag);
    const env={...process.env,ESTC_ROOT:home,ESTC_REPO:"file://"+repo},update=(...args:string[])=>spawnSync(bin,["update",...args],{encoding:"utf8",env,timeout:120000});
    let p=update("--list");assert.equal(p.status,0,p.stderr);const listed=p.stdout.trim().split("\n");
-   assert.ok(listed.indexOf("v1.99.0")<listed.indexOf("v1.100.0"),p.stdout);assert.ok(!p.stdout.includes("nightly"));assert.ok(listed.includes(installedVersion+"  (instalada)"),p.stdout);
+   assert.ok(listed.indexOf("v999.99.0")<listed.indexOf("v999.100.0"),p.stdout);assert.ok(!p.stdout.includes("nightly"));assert.ok(listed.includes(installedVersion+"  (instalada)"),p.stdout);
    p=update("--dry-run");assert.equal(p.status,1,p.stderr);assert.ok(p.stdout.includes(installedVersion+" → v"),p.stdout);
    p=update(installedVersion.slice(1));assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/ya está en/);
    p=update("9.9.9");assert.equal(p.status,1);assert.match(p.stderr,/No existe la versión v9\.9\.9/);
