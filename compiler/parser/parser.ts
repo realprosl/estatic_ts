@@ -87,12 +87,17 @@ export class Parser {
   // #223: parámetros desestructurados ({ a, b = 1 }: T): la declaración del
   // patrón se añade al principio del cuerpo de su función.
   patternOwners: number[]; patternDeclarations: number[];
+  // #223: declaraciones extra de un patrón (anidados y resto), antes o después
+  // de la sentencia que lo contiene.
+  extraOwners: number[]; extraNodes: number[]; extraBefore: boolean[];
+  // Resto de array pendiente de la fuente: patrón, nombre del resto y posición.
+  restOwners: number[]; restNames: ParserToken[]; restIndexes: number[];
   jsonAt: number;
   // Nombres locales importados de "estatic:json": la clase (JSON) y parse.
   jsonClasses: string[]; jsonParsers: string[];
   constructor(tokens: ParserToken[]) {
     this.tokens = tokens; this.current = 0; this.nodes = []; this.diagnostics = [];
-    this.nesting = 0; this.exhausted = false; this.constMemory = false; this.objectTypes = []; this.objectTypeNames = []; this.patternOwners = []; this.patternDeclarations = []; this.jsonAt = 0; this.jsonClasses = []; this.jsonParsers = [];
+    this.nesting = 0; this.exhausted = false; this.constMemory = false; this.objectTypes = []; this.objectTypeNames = []; this.patternOwners = []; this.patternDeclarations = []; this.extraOwners = []; this.extraNodes = []; this.extraBefore = []; this.restOwners = []; this.restNames = []; this.restIndexes = []; this.jsonAt = 0; this.jsonClasses = []; this.jsonParsers = [];
     if (tokens.length == 0) {
       this.tokens.push(new ParserToken("eof", "", 0, 1, 1, 0, 1, 1));
       this.report("La entrada de tokens necesita un eof final");
@@ -244,7 +249,7 @@ export class Parser {
       if (!this.accept(";")) {
         const before: number = this.current;
         const child: number = this.statement(true);
-        this.edge(program, EdgeRole.Statements, child);
+        this.pushStatement(program, EdgeRole.Statements, child);
         if (this.current == before && !this.check("eof")) { this.report("E1006: No se esperaba " + this.found() + " aquí" + this.foundArg()); this.take(); }
       }
     }
@@ -669,7 +674,7 @@ export class Parser {
         while (!this.check("case") && !this.check("default") && !this.check("}") && !this.check("eof")) {
           this.skipNewlines(); if (this.check("case") || this.check("default") || this.check("}") || this.check("eof")) break;
           if (!this.accept(";")) {
-            const before: number = this.current; const child: number = this.statement(false); this.edge(clause, EdgeRole.Body, child);
+            const before: number = this.current; const child: number = this.statement(false); this.pushStatement(clause, EdgeRole.Body, child);
             this.setEnd(clause, this.node(child).end);
             if (this.current == before && !this.check("eof")) { this.report("E1006: No se esperaba " + this.found() + " en el switch\nayuda: cada rama del switch empieza con 'case valor:' o 'default:'" + this.foundArg() + catalogVariant("switch")); this.take(); }
           }
@@ -692,30 +697,101 @@ export class Parser {
       this.take();
     }
   }
+  // Un patrón anidado: const <patrón> = <local>, después de su sentencia.
+  nestedPattern(owner: number, local: string, start: ParserToken): void {
+    const nested: number = this.add(NodeKind.VariableDeclaration, start, start); this.attr(nested, AttributeKind.Mutable, this.get(owner, AttributeKind.Mutable) == "true" ? "true" : "false");
+    this.bindingPattern(nested, this.check("[")); this.setEnd(nested, this.previous());
+    const source: number = this.add(NodeKind.IdentifierExpression, start, start); this.attr(source, AttributeKind.Name, local);
+    this.edge(nested, EdgeRole.Initializer, source); this.finishPattern(nested);
+    this.extraOwners.push(owner); this.extraNodes.push(nested); this.extraBefore.push(false);
+  }
+  // Con el inicializador ya puesto: el resto de array (fuente.slice(k)). Si la
+  // fuente no es una variable, se guarda antes en una (__src<N>).
+  finishPattern(owner: number): void {
+    for (let at: number = 0; at < this.restOwners.length; at = at + 1) if (this.restOwners[at] == owner) {
+      let initializer: number = -1; for (const edge of this.node(owner).edges) if (edge.role == EdgeRole.Initializer) initializer = edge.node;
+      if (initializer < 0) return;
+      const token: ParserToken = this.restNames[at]; let sourceName: string = "";
+      if (this.node(initializer).kind == NodeKind.IdentifierExpression) sourceName = this.get(initializer, AttributeKind.Name);
+      else {
+        sourceName = "__src" + numberToString(owner);
+        const holder: number = this.add(NodeKind.VariableDeclaration, this.node(owner).start, this.node(owner).start); this.attr(holder, AttributeKind.Name, sourceName); this.attr(holder, AttributeKind.Mutable, "false");
+        this.edge(holder, EdgeRole.Initializer, initializer);
+        const reference: number = this.add(NodeKind.IdentifierExpression, token, token); this.attr(reference, AttributeKind.Name, sourceName);
+        let edges: AstEdge[] = []; for (const edge of this.nodes[owner].edges) edges.push(edge.role == EdgeRole.Initializer ? new AstEdge(EdgeRole.Initializer, reference) : edge);
+        this.nodes[owner].edges = edges;
+        this.extraOwners.push(owner); this.extraNodes.push(holder); this.extraBefore.push(true);
+      }
+      const rest: number = this.add(NodeKind.VariableDeclaration, token, token); this.attr(rest, AttributeKind.Name, token.lexeme); this.attr(rest, AttributeKind.Mutable, this.get(owner, AttributeKind.Mutable) == "true" ? "true" : "false");
+      const object: number = this.add(NodeKind.IdentifierExpression, token, token); this.attr(object, AttributeKind.Name, sourceName);
+      const call: number = this.add(NodeKind.MemberCallExpression, token, token); this.edge(call, EdgeRole.Object, object); this.attr(call, AttributeKind.Optional, "false"); this.attr(call, AttributeKind.Method, "slice");
+      const index: number = this.add(NodeKind.LiteralExpression, token, token); this.attr(index, AttributeKind.LiteralType, "number"); this.attr(index, AttributeKind.Raw, numberToString(this.restIndexes[at]));
+      this.edge(call, EdgeRole.Args, index); this.edge(rest, EdgeRole.Initializer, call);
+      this.extraOwners.push(owner); this.extraNodes.push(rest); this.extraBefore.push(false);
+    }
+  }
+  // La sentencia con sus declaraciones extra, en orden.
+  withExtras(statement: number): number[] {
+    let result: number[] = [];
+    for (let at: number = 0; at < this.extraOwners.length; at = at + 1) if (this.extraOwners[at] == statement && this.extraBefore[at]) for (const item of this.withExtras(this.extraNodes[at])) result.push(item);
+    result.push(statement);
+    for (let at: number = 0; at < this.extraOwners.length; at = at + 1) if (this.extraOwners[at] == statement && !this.extraBefore[at]) for (const item of this.withExtras(this.extraNodes[at])) result.push(item);
+    return result;
+  }
+  pushStatement(container: number, role: EdgeRole, statement: number): void { for (const item of this.withExtras(statement)) this.edge(container, role, item); }
   bindingPattern(owner: number, array: boolean): void {
     this.take(); const close: string = array ? "]" : "}";
     this.attr(owner, AttributeKind.Pattern, array ? "array" : "object"); this.attr(owner, AttributeKind.Name, "");
     let names: string[] = [];
     while (!this.check("eof")) {
       this.skipNewlines(); if (this.check(close)) break;
+      // [, b]: un hueco ocupa una posición con un nombre sintético.
+      if (array && this.check(",")) {
+        const hole: ParserToken = this.peek(0); const skipped: number = this.add(NodeKind.ArrayBinding, hole, hole);
+        this.attr(skipped, AttributeKind.Name, "__hole" + numberToString(skipped)); this.edge(owner, EdgeRole.ArrayBindings, skipped);
+        this.take(); continue;
+      }
+      // [a, ...resto]: el resto es fuente.slice(k), una declaración aparte.
+      if (this.accept("...")) {
+        const restName: ParserToken = this.expect("identifier");
+        if (!array) this.reportAt(restName, "El resto en un patrón de objeto ({ a, ...resto }) todavía no está soportado");
+        else { let count: number = 0; for (const edge of this.node(owner).edges) if (edge.role == EdgeRole.ArrayBindings) count = count + 1; this.restOwners.push(owner); this.restNames.push(restName); this.restIndexes.push(count); }
+        this.skipNewlines(); if (!this.check(close)) this.report("El resto tiene que ser el último elemento del patrón");
+        break;
+      }
+      // [[a, b], c] o [{ x }]: un elemento que es a su vez un patrón.
+      if (array && (this.check("[") || this.check("{"))) {
+        const start: ParserToken = this.peek(0); const binding: number = this.add(NodeKind.ArrayBinding, start, start);
+        const local: string = "__nest" + numberToString(binding); this.attr(binding, AttributeKind.Name, local);
+        this.nestedPattern(owner, local, start);
+        this.skipNewlines(); if (this.accept("=")) { this.skipNewlines(); this.edge(binding, EdgeRole.DefaultValue, this.expression()); }
+        this.setEnd(binding, this.previous()); this.edge(owner, EdgeRole.ArrayBindings, binding);
+        this.skipNewlines(); if (this.accept(",")) continue;
+        if (!this.check(close)) { this.report("Se esperaba ',' o '" + close + "' en el patrón"); this.recoverBinding(close); if (this.accept(",")) continue; }
+        break;
+      }
       if (!this.check("identifier")) {
-        this.report("Se esperaba un identificador: patrones anidados, rest y huecos no están soportados");
+        this.report("Se esperaba un identificador en el patrón");
         this.recoverBinding(close); if (this.accept(",")) continue; break;
       }
-      const key: ParserToken = this.take(); let local: ParserToken = key; let end: ParserToken = key;
+      const key: ParserToken = this.take(); let local: ParserToken = key; let end: ParserToken = key; let nestedLocal: string = "";
       const binding: number = this.add(array ? NodeKind.ArrayBinding : NodeKind.ObjectBinding, key, key);
       if (!array) this.attr(binding, AttributeKind.Property, key.lexeme);
       this.skipNewlines();
       if (this.accept(":")) {
         this.skipNewlines();
-        if (!array && this.check("identifier")) {
+        // { dir: { ciudad } } o { xs: [a, b] }: patrón anidado, como en TypeScript.
+        if (!array && (this.check("{") || this.check("["))) {
+          nestedLocal = "__nest" + numberToString(binding); this.nestedPattern(owner, nestedLocal, this.peek(0)); end = this.previous();
+        } else if (!array && this.check("identifier")) {
           local = this.take(); end = local; this.skipNewlines();
           if (this.accept(":")) { this.skipNewlines(); this.attr(binding, AttributeKind.DeclaredType, this.typeName()); end = this.previous(); }
         } else { this.attr(binding, AttributeKind.DeclaredType, this.typeName()); end = this.previous(); }
       }
-      this.attr(binding, AttributeKind.Name, local.lexeme);
-      if (names.includes(local.lexeme)) this.reportAt(local, "Binding duplicado '" + local.lexeme + "'");
-      names.push(local.lexeme); this.skipNewlines();
+      const localName: string = nestedLocal != "" ? nestedLocal : local.lexeme;
+      this.attr(binding, AttributeKind.Name, localName);
+      if (names.includes(localName)) this.reportAt(local, "Binding duplicado '" + localName + "'");
+      names.push(localName); this.skipNewlines();
       if (this.accept("=")) { this.skipNewlines(); this.edge(binding, EdgeRole.DefaultValue, this.expression()); end = this.previous(); }
       this.setEnd(binding, end); this.edge(owner, array ? EdgeRole.ArrayBindings : EdgeRole.ObjectBindings, binding);
       this.skipNewlines(); if (this.accept(",")) continue;
@@ -738,6 +814,7 @@ export class Parser {
         this.report("El destructuring necesita un inicializador");
         const missing: number = this.add(NodeKind.ErrorNode, this.peek(0), this.peek(0)); this.edge(result, EdgeRole.Initializer, missing);
       } else this.edge(result, EdgeRole.Initializer, this.expression());
+      this.finishPattern(result);
       this.setEnd(result, terminated ? this.terminator() : this.previous()); return result;
     }
     const keyword: ParserToken = this.take(); const name: ParserToken = this.expect("identifier");
@@ -756,7 +833,7 @@ export class Parser {
       this.skipNewlines();
       if (this.check("}") || this.check("eof")) break;
       if (!this.accept(";")) {
-        const before: number = this.current; this.edge(result, EdgeRole.Statements, this.statement(false));
+        const before: number = this.current; this.pushStatement(result, EdgeRole.Statements, this.statement(false));
         if (this.current == before && !this.check("eof")) { this.report("E1006: No se esperaba " + this.found() + " dentro del bloque" + this.foundArg() + catalogVariant("bloque")); this.take(); }
       }
     }
@@ -798,7 +875,7 @@ export class Parser {
       this.attr(param, AttributeKind.Name, parameterName); this.attr(param, AttributeKind.Type, annotation);
       if (pattern >= 0) {
         const source: number = this.add(NodeKind.IdentifierExpression, start, start); this.attr(source, AttributeKind.Name, parameterName);
-        this.edge(pattern, EdgeRole.Initializer, source); this.patternOwners.push(owner); this.patternDeclarations.push(pattern);
+        this.edge(pattern, EdgeRole.Initializer, source); this.finishPattern(pattern); this.patternOwners.push(owner); this.patternDeclarations.push(pattern);
       }
       if (access != "") this.attr(param, AttributeKind.Access, access);
       if (isReadonly) this.attr(param, AttributeKind.Readonly, "true");
@@ -909,7 +986,7 @@ export class Parser {
       this.edge(block, EdgeRole.Statements, result);
     }
     let edges: AstEdge[] = [];
-    for (const pattern of patterns) edges.push(new AstEdge(EdgeRole.Statements, pattern));
+    for (const pattern of patterns) for (const item of this.withExtras(pattern)) edges.push(new AstEdge(EdgeRole.Statements, item));
     for (const edge of this.nodes[block].edges) edges.push(edge);
     this.nodes[block].edges = edges;
     return block;
@@ -1123,7 +1200,7 @@ export class Parser {
       const source: number = this.add(NodeKind.IdentifierExpression, this.previous(), this.previous());
       this.attr(source, AttributeKind.Name, patternName); this.edge(pattern, EdgeRole.Initializer, source);
       const block: number = this.add(NodeKind.BlockStatement, this.previous(), this.previous());
-      this.edge(block, EdgeRole.Statements, pattern); this.edge(block, EdgeRole.Statements, body);
+      this.finishPattern(pattern); this.pushStatement(block, EdgeRole.Statements, pattern); this.edge(block, EdgeRole.Statements, body);
       this.nodes[block].end = this.node(body).end; body = block;
     }
     this.edge(result, EdgeRole.Body, body);

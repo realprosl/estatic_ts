@@ -432,8 +432,16 @@ function opciones({ a = 1, b = "x" }) { ... }   // sin anotación: campos opcion
 const { a, b = "def" } = objeto;                 // también en declaraciones
 ```
 
-- Pendiente (#223): paso entre formas compatibles con campos de más, patrones
-  anidados y resto (`...resto`).
+- Patrones anidados (`const { dir: { ciudad = "Madrid" } } = u`, también en
+  parámetros y en `for...of`), resto de array (`const [a, ...resto] = xs`, que
+  es `xs.slice(1)`) y huecos (`const [, b] = xs`). Dentro de un patrón,
+  `{ a: { ... } }` y `{ a: [ ... ] }` son patrones anidados, como en
+  TypeScript.
+- Un objeto con campos de más que viene de una variable se acepta donde se
+  pide una forma con menos campos; en un literal escrito en el sitio, un campo
+  de más es un error, como en TypeScript.
+- Pendiente: el resto de objeto (`{ a, ...resto }`), que necesita tipos
+  derivados (`Omit`) y va con la tanda de `Record`/`Partial`/`Pick`/`Omit`.
 
 ## Métodos de `string`
 

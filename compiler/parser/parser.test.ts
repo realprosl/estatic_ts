@@ -224,7 +224,6 @@ const fixtures: [string, string][] = [
   ["object trailing comma", "const {x,y,}=source;"],
   ["object multiline bindings", "const {\n name:\n alias:string=\n 'guest',\n age=18,\n}=source;"],
   ["object function type", "const {handler:(x:number)=>string=convert}=source;"],
-  ["object tuple binding type", "const {pair:[number,string]=make()}=source;"],
   ["object same property distinct aliases", "const {x:a,x:b}=source;"],
   ["binding declaration in function", "function f():void{const [x]=values;const {name:n}=source;}"],
   ["binding declaration in classic for", "for(let [i]=[0];i<3;i=i+1){print(i);}"],
@@ -327,8 +326,7 @@ test("bootstrap parser: demo executes fixed tokens without a lexer", () => {
 });
 for (const source of [
   "const [a,a]=values;", "const {x:a,y:a}=source;", "const {x,x}=source;",
-  "const [a,,b]=values;", "const [,a]=values;", "const [...rest]=values;", "const {x,...rest}=source;",
-  "const [[a]]=values;", "const [a,{b}]=values;", "const {x:{y}}=source;",
+  "const {x,...rest}=source;", "const [...rest,a]=values;",
   "const {[key]:value}=source;", "const {'x':value}=source;", "const {1:value}=source;",
   "const [a b]=values;", "const {x y}=source;", "const [a=]=values;", "const {x:alias=}=source;",
   "const [a;", "const {x;", "const [a];", "const {x};", "const [a]=;", "const {x}=;",
@@ -376,12 +374,16 @@ test("bootstrap parser destructuring array binding spans include complete defaul
   const result = native(source); assert.deepEqual(result.diagnostics, []);
   assert.deepEqual(result.nodes.filter(n => n.kind === "ArrayBinding").map(n => source.slice(n.span.start.offset,n.span.end.offset)), ["a:number=(1+2)","b='🙂'"]);
 });
-test("bootstrap parser destructuring tuple annotation never introduces nested bindings", () => {
+// #223: como en TypeScript, { x: [Y] } y { x: { y } } son patrones anidados.
+test("bootstrap parser destructuring: { x: [Y] } es un patrón anidado (#223)", () => {
   const result = native("const {x:[Y]}=source;"); assert.deepEqual(result.diagnostics, []);
-  const bindings = result.nodes.filter(n => n.kind === "ObjectBinding"); assert.equal(bindings.length, 1);
-  assert.ok(bindings[0].attributes.some(a => a.name === "name" && a.value === "x"));
-  assert.ok(bindings[0].attributes.some(a => a.name === "declaredType" && a.value === "[Y]"));
+  const object = result.nodes.filter(n => n.kind === "ObjectBinding"); assert.equal(object.length, 1);
+  assert.ok(object[0].attributes.some(a => a.name === "name" && a.value.startsWith("__nest")));
+  const inner = result.nodes.filter(n => n.kind === "ArrayBinding"); assert.equal(inner.length, 1);
+  assert.ok(inner[0].attributes.some(a => a.name === "name" && a.value === "Y"));
 });
+for (const source of ["const [a,,b]=values;", "const [,a]=values;", "const [a,...rest]=values;", "const [...rest]=make();", "const [[a]]=values;", "const [a,{b}]=values;", "const {x:{y}}=source;", "const {x:{y:{z=1}}}=source;"] as const)
+  test(`bootstrap parser destructuring acepta (#223): ${source}`, () => assert.deepEqual(native(source).diagnostics, []));
 test("bootstrap parser destructuring malformed token corpus terminates", () => {
   const pieces = ["a", "b", "=", ",", ":", "[", "]", "{", "}", "(", ")", "...", "number", "1", ";"];
   let seed = 5531;

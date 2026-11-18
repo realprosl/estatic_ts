@@ -667,7 +667,11 @@ export class NativeChecker {
     }
     if (text.startsWith("$typeof$")) return this.queryType(module,id,text.slice(8,text.length));
     // #223: campo de la interfaz sintética de un literal sin tipo: el tipo de su valor.
-    if (text.startsWith("$valueof$")) { let node: number = 0; for (let at: number = 9; at < text.length; at = at + 1) node = node * 10 + text.charCodeAt(at) - 48; const valueType: string = this.expression(module,node,""); return literalType(valueType) ? literalKind(valueType) : valueType; }
+    if (text.startsWith("$valueof$")) { let node: number = 0; for (let at: number = 9; at < text.length; at = at + 1) node = node * 10 + text.charCodeAt(at) - 48;
+      // Un literal de objeto anidado no se comprueba aquí: lo hará su propio literal,
+      // quizá con contexto (o se quedaría tipado sin él y en caché).
+      if (this.node(module,node).kind == NodeKind.ObjectLiteralExpression && this.node(module,node).get(AttributeKind.DeclaredType) != "") return this.annotation(module,node,this.node(module,node).get(AttributeKind.DeclaredType));
+      const valueType: string = this.expression(module,node,""); return literalType(valueType) ? literalKind(valueType) : valueType; }
     const generic: number = text.indexOf("<",0);
     if (generic > 0 && text.endsWith(">")) {
       const sid: number = this.qualifiedType(module,id,text.slice(0,generic));
