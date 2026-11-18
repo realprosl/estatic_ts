@@ -884,7 +884,11 @@ for(let k:number=0;k<_cppLoop36Input.length;k=k+1){
 const t:number=_cppLoop36Input[k];
 _cppLoop36Result.push(`ets::ir::Slot<${this.cppTypeId(t)}> f${k};`);continue;
 }
-const text=`struct ${this.typeName(id)}{${_cppLoop36Result.join("")}bool operator==(const ${this.typeName(id)}&)const=default;};`;this.layoutOutput.push(text);}
+// Recorrido de campos por nombre (estatic:json): f("nombre", campo).
+let visits:string[]=[];
+for(let k:number=0;k<s.fields.length;k=k+1)visits.push("f("+quoteCpp(k<s.names.length?s.names[k]:"f"+k)+",f"+k+");");
+const fieldsVisitor="template<class F>void ets_fields(F&& f){"+visits.join("")+"}template<class F>void ets_fields(F&& f)const{"+visits.join("")+"}";
+const text=`struct ${this.typeName(id)}{${_cppLoop36Result.join("")}${fieldsVisitor}bool operator==(const ${this.typeName(id)}&)const=default;};`;this.layoutOutput.push(text);}
     else{for(const a of this.choices(id))this.layoutDependency(a);
 let _cppLoop65Result:string[]=[];
 const _cppLoop65Input:number[]=this.choices(id);

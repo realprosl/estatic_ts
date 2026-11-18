@@ -255,7 +255,7 @@ S Generator::declarations(){std::set<int> done,active;V<S> out;std::function<voi
  dependency=[&](int id){const auto& s=shape(id);if(in(s.kind,{"ptr","constPtr","ref","constRef","function"}))return;if(record(id)||sum(id))emit(id);else for(int x:s.arguments)dependency(x);};
  emit=[&](int id){if(done.contains(id))return;if(active.contains(id))throw Error("Ciclo de layout por valor en tipos IR");active.insert(id);const auto& s=shape(id);S fields;
   if(interface(id))fields=interfaceVariant(id)+" data;";
-  else if(record(id)){for(int x:s.fields)dependency(x);for(int k=0;k<int(s.fields.size());k++)fields+="ets::ir::Slot<"+type(s.fields[k])+"> f"+n(k)+";";}
+  else if(record(id)){for(int x:s.fields)dependency(x);S visits;for(int k=0;k<int(s.fields.size());k++){fields+="ets::ir::Slot<"+type(s.fields[k])+"> f"+n(k)+";";visits+="f("+quote(k<int(s.names.size())?s.names[k]:"f"+n(k))+",f"+n(k)+");";}fields+="template<class F>void ets_fields(F&& f){"+visits+"}template<class F>void ets_fields(F&& f)const{"+visits+"}";}
   else{auto c=choices(id);for(int x:c)dependency(x);fields="std::variant<"+types(c)+"> data;";}
   out.push_back("struct ir_t"+n(id)+"{"+fields+"bool operator==(const ir_t"+n(id)+"&)const=default;};");active.erase(id);done.insert(id);
  };
