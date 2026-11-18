@@ -221,6 +221,17 @@ export class IrLowering {
   }
   shapeConstruct(id: number, typeId: number): number {
     const n = this.node(id); let values: number[] = []; let names: string[] = [];
+    if (n.kind == NodeKind.ObjectLiteralExpression && this.result.typeDefinitions[typeId].kind == "Map") {
+      // Record<string, V> literal: Map::from([[clave, valor], …]) en orden de escritura.
+      const parts: string[] = genericArguments(this.result.types[typeId]); const entry: number = this.typeId("[" + parts[0] + "," + parts[1] + "]",id);
+      for (const e of n.edges) if (e.role == EdgeRole.Properties) {
+        const property = this.node(e.node); const key: number = this.emit("constant",this.typeId("string",id),[],-1,-1,property.get(AttributeKind.Key),e.node);
+        const value: number = this.convert(this.expression(bindingChild(property,EdgeRole.Value)),this.typeId(parts[1],id),id);
+        values.push(this.emit("aggregate",entry,[key,value],-1,-1,"",e.node)); this.setNames(["value","value"]); names.push("value");
+      }
+      const entries: number = this.emit("aggregate",this.typeId("[" + parts[0] + "," + parts[1] + "][]",id),values,-1,-1,"",id); this.setNames(names);
+      return this.emit("collection",typeId,[entries],-1,-1,"",id);
+    }
     if (n.kind == NodeKind.ArrayLiteralExpression) {
       let position: number = 0;
       for (const e of n.edges) if (e.role == EdgeRole.Elements) { const spread: boolean = this.node(e.node).kind == NodeKind.SpreadElement; let value: number = this.expression(e.node); const shape = this.result.typeDefinitions[typeId]; if (!spread && shape.arguments.length > 0) value = this.convert(value,shape.arguments[["tuple","pack"].includes(shape.kind) ? position : 0],e.node); values.push(value); names.push(spread ? "spread" : "value"); position = position+1; }
@@ -457,6 +468,7 @@ export class IrLowering {
     if (kind == NodeKind.NewExpression) return this.classConstruct(id,typeId);
     if (kind == NodeKind.MemberCallExpression && this.chainCall(id)) { const p: number = this.chainedPlace(id); return p < 0 ? -1 : this.emit("load",this.result.functions[this.currentFunction].places[p].typeId,[],p,-1,"",id); }
     if (kind == NodeKind.MemberCallExpression) return this.methodCall(id,typeId);
+    if (kind == NodeKind.IndexExpression && this.mapIndex(id)) return this.runtime("Map.get",typeId,[this.mapReceiver(bindingChild(n,EdgeRole.Object),id),this.expression(bindingChild(n,EdgeRole.Index))],id,["runtime"]);
     if (kind == NodeKind.IndexExpression) return this.emit("load",typeId,[],this.rootPlace(id),-1,"",id);
     if (kind == NodeKind.MemberExpression) return this.memberValue(id,typeId);
     if (kind == NodeKind.TemplateLiteralExpression) {
@@ -479,6 +491,7 @@ export class IrLowering {
       const op: string = n.get(AttributeKind.Operator); const left: number = bindingChild(n,EdgeRole.Left); const right: number = bindingChild(n,EdgeRole.Right);
       if (op == "&&" || op == "||") return this.conditional(id,left,right,-1,typeId,op);
       if (op == "??") return this.coalesce(id,left,right,typeId);
+      if (op == "in") return this.runtime("Map.has",typeId,[this.mapReceiver(right,id),this.expression(left)],id,["runtime"]);
       // x == undefined / x != undefined sobre un T | undefined (Optional<T>).
       if ((op == "==" || op == "!=") && this.isUndefined(left) != this.isUndefined(right)) {
         const other: number = this.isUndefined(left) ? right : left;
@@ -491,6 +504,7 @@ export class IrLowering {
       return this.binary(op,a,b,typeId,id);
     }
     if (kind == NodeKind.AssignmentExpression || kind == NodeKind.CompoundAssignmentExpression) {
+      if (this.mapIndex(bindingChild(n,EdgeRole.Target))) { this.fail(id,"r[k] = v sobre un Record solo se admite como sentencia"); return -1; }
       const p: number = this.assignmentPlace(id); if (p < 0) return -1;
       return this.result.typeDefinitions[typeId].kind == "ref" ? this.emit("borrow",typeId,[],p,-1,"ref",id) : this.emit("load",typeId,[],p,-1,"",id);
     }
@@ -499,8 +513,29 @@ export class IrLowering {
   }
   // A destination (including every receiver/index expression) is evaluated once.
   // materialize() also uses this path when an assignment is itself a receiver.
+  // Record<K, V> abierto es un Map: r[k] lee con get y r[k] = v escribe con set.
+  mapIndex(id: number): boolean {
+    if (this.node(id).kind != NodeKind.IndexExpression) return false;
+    return genericBase(memoryValue(this.resolved(this.checked.files[this.module].types[bindingChild(this.node(id),EdgeRole.Object)]))) == "Map";
+  }
+  // El Map receptor prestado (sin copiarlo) cuando es un place.
+  mapReceiver(object: number, id: number): number {
+    const mapType: string = memoryValue(this.resolved(this.checked.files[this.module].types[object]));
+    if (this.purePlace(object)) {
+      const element: number = this.typeId(mapType,id); const p: number = this.unwrappedPlace(object,element);
+      if (p >= 0 && this.result.functions[this.currentFunction].places[p].typeId == element) return this.emit("borrow",this.typeId("constRef<"+mapType+">",id),[],p,-1,"constRef",id);
+    }
+    return this.expression(object);
+  }
   assignmentPlace(id: number): number {
     const n = this.node(id); const target: number = bindingChild(n,EdgeRole.Target);
+    if (this.mapIndex(target)) {
+      const object: number = bindingChild(this.node(target),EdgeRole.Object); const mapType: string = memoryValue(this.resolved(this.checked.files[this.module].types[object]));
+      const key: number = this.expression(bindingChild(this.node(target),EdgeRole.Index));
+      const value: number = this.convert(this.readValue(this.expression(bindingChild(n,EdgeRole.Value)),id),this.typeId(genericArguments(mapType)[1],id),id);
+      const p: number = this.unwrappedPlace(object,this.typeId(mapType,id)); if (p < 0) { this.fail(id,"Record sin place modificable"); return -1; }
+      this.runtime("Map.set",this.typeId("void",id),[this.emit("address",this.typeId("ref<"+mapType+">",id),[],p,-1,"",id),key,value],id,["runtime","mutate"]); return p;
+    }
     let p: number = this.rootPlace(target); if (p < 0) return -1;
     const originalType: number = this.result.functions[this.currentFunction].places[p].typeId;
     if (this.result.typeDefinitions[originalType].kind == "ref") p = this.projection(p,"deref",this.result.typeDefinitions[originalType].arguments[0],-1,-1,target);

@@ -938,7 +938,7 @@ export class NativeChecker {
     if (name == "exitProcess") return "(number)=>void";
     if (name == "move" || name == "ref" || name == "constRef") return "!" + name;
     if (name == "length") return "!length";
-    if (["Math","JSON","Date","String","Array","Promise"].includes(name)) return "!" + name;
+    if (["Math","JSON","Date","String","Array","Object","Promise"].includes(name)) return "!" + name;
     if (name == "console") return "Console";
     if (["fs","path","process","http","child_process"].includes(name)) return "!"+name;
     if (nativeBuiltinSignatures(name).length > 0) return "!builtin:"+name;
@@ -989,6 +989,30 @@ export class NativeChecker {
     if (method == "allSettled") result = semanticArray("Result<" + element + "," + this.annotation(module,id,"Error") + ">");
     this.result.files[module].signatures[id] = "(" + input + ")=>Promise<" + result + ">"; this.result.files[module].argumentParameters[args[0]] = 0;
     return "Promise<" + result + ">";
+  }
+  // Object.keys/values/entries de un Record (Map, en orden de inserción) o de un
+  // objeto con campos (en orden de declaración); values y entries piden que todos
+  // los campos tengan el mismo tipo.
+  objectStaticCall(module: number, id: number, method: string): string {
+    let args: number[] = []; for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Args) args.push(edge.node);
+    if (args.length != 1) { for (const arg of args) this.expression(module,arg,""); this.report(module,id,"Object." + method + " requiere un argumento"); return "!error"; }
+    const source: string = memoryValue(this.expression(module,args[0],"")); if (source.startsWith("!")) return "!error";
+    let keyType: string = "string"; let valueType: string = "";
+    if (genericBase(source) == "Map") { keyType = genericArguments(source)[0]; valueType = genericArguments(source)[1]; }
+    else {
+      const sid: number = this.nominalSymbol(source);
+      if (sid < 0 || !["InterfaceDeclaration","ClassDeclaration"].includes(this.binding.symbols[sid].kind)) { this.report(module,args[0],"Object." + method + " acepta un Record o un objeto con campos, no " + this.displayType(source)); return "!error"; }
+      const owner = this.binding.symbols[sid];
+      for (const edge of this.node(owner.module,owner.node).edges) if (edge.role == EdgeRole.Fields && this.node(owner.module,edge.node).get(AttributeKind.IsStatic) != "true") {
+        const field: string = memoryValue(this.instantiateMember(source,this.symbolType(this.binding.files[owner.module].declarations[edge.node],owner.module,edge.node)));
+        if (valueType == "") valueType = field;
+        else if (valueType != field && method != "keys") { this.report(module,id,"Object." + method + " necesita que todos los campos de " + this.displayType(source) + " tengan el mismo tipo"); return "!error"; }
+      }
+      if (valueType == "") valueType = "never";
+    }
+    let result: string = keyType + "[]"; if (method == "values") result = valueType + "[]"; if (method == "entries") result = "[" + keyType + "," + valueType + "][]";
+    if (method != "keys" && valueType == "never") { this.report(module,id,"Object." + method + " de un objeto sin campos"); return "!error"; }
+    this.result.files[module].signatures[id] = "(" + source + ")=>" + result; return result;
   }
   arrayStaticCall(module: number, id: number, method: string, expected: string): string {
     let args: number[] = []; for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Args) args.push(edge.node);
@@ -1166,6 +1190,7 @@ export class NativeChecker {
     }
     if (valueType == "!String" && (name == "fromCharCode" || name == "fromCodePoint")) return "(...number[])=>string";
     if (valueType == "!Array" && ["isArray","from","of"].includes(name)) return "!arrayStatic." + name;
+    if (valueType == "!Object" && ["keys","values","entries"].includes(name)) return "!objectStatic." + name;
     if (valueType == "!Promise" && ["all","race","any","allSettled","resolve"].includes(name)) return "!promiseStatic." + name;
     if (valueType.endsWith("[]")) {
       const element: string = semanticElement(valueType);
@@ -1727,6 +1752,7 @@ export class NativeChecker {
     if (callable.startsWith("!optional.")) return this.optionalCall(module,id,callable.slice(10,callable.length),receiver,expected);
     if (callable.startsWith("!array.")) return this.arrayCall(module,id,callable.slice(7,callable.length),receiver);
     if (callable.startsWith("!arrayStatic.")) return this.arrayStaticCall(module,id,callable.slice(13,callable.length),expected);
+    if (callable.startsWith("!objectStatic.")) return this.objectStaticCall(module,id,callable.slice(14,callable.length));
     if (callable.startsWith("!promiseStatic.")) return this.promiseStaticCall(module,id,callable.slice(15,callable.length),expected);
     if (callable.startsWith("!container:")) return this.containerCall(module,id,callable.slice(11,callable.length),expected);
     const n: AstNode = this.node(module,id); let args: number[] = []; let actual: string[] = [];
@@ -2121,6 +2147,12 @@ export class NativeChecker {
     }
     if (kind == NodeKind.BinaryExpression) {
       const leftId: number = bindingChild(n,EdgeRole.Left); const rightId: number = bindingChild(n,EdgeRole.Right);
+      // k in r: la clave está en el Record (Map).
+      if (n.get(AttributeKind.Operator) == "in") {
+        const container: string = memoryValue(this.expression(module,rightId,""));
+        if (genericBase(container) != "Map") { if (container != "!error") this.report(module,id,"'in' solo se admite sobre un Record<K, V> abierto (Map)"); return "boolean"; }
+        const keyType: string = genericArguments(container)[0]; this.requireType(module,leftId,this.expression(module,leftId,keyType),keyType); return "boolean";
+      }
       if (n.get(AttributeKind.Operator) == "instanceof") {
         this.expression(module,leftId,""); let name: string = this.node(module,rightId).get(AttributeKind.Name); let types: string[] = [];
         for (const attr of this.node(module,rightId).attributes) if (attr.name == AttributeKind.TypeArgument) types.push(attr.value);
@@ -2199,7 +2231,12 @@ export class NativeChecker {
       const target: number = bindingChild(n,EdgeRole.Target); this.forgetPaths(); let valueType: string = this.expression(module,target,"");
       if (this.node(module,target).kind == NodeKind.IdentifierExpression) { const sid: number = this.reference(module,target); valueType = this.symbolType(sid,module,target); this.narrowedSymbols.push(sid); this.narrowedTypes.push(valueType); this.result.files[module].types[target] = valueType; }
       // Asignar a un ref<T> escribe un T a través de la referencia.
-      const assigned: string = memoryMode(valueType) == "ref" ? memoryInner(valueType) : valueType;
+      let assigned: string = memoryMode(valueType) == "ref" ? memoryInner(valueType) : valueType;
+      // r[k] = v en un Record (Map) guarda un V; r[k] += 1 no (r[k] es V | undefined).
+      if (this.node(module,target).kind == NodeKind.IndexExpression && genericBase(memoryValue(this.result.files[module].types[bindingChild(this.node(module,target),EdgeRole.Object)])) == "Map") {
+        if (kind == NodeKind.CompoundAssignmentExpression) { this.report(module,id,"r[k] es V | undefined en un Record: usa r[k] = (r[k] ?? 0) + 1"); return "!error"; }
+        assigned = genericArguments(memoryValue(this.result.files[module].types[bindingChild(this.node(module,target),EdgeRole.Object)]))[1];
+      }
       const value: string = this.expression(module,bindingChild(n,EdgeRole.Value),assigned); this.requireType(module,bindingChild(n,EdgeRole.Value),value,assigned); this.writable(module,target);
       if (kind == NodeKind.CompoundAssignmentExpression && !numericType(memoryValue(valueType)) && !(memoryValue(valueType) == "string" && n.get(AttributeKind.Operator) == "+=")) this.report(module,id,"Asignación compuesta inválida"); return valueType;
     }
@@ -2241,7 +2278,10 @@ export class NativeChecker {
     }
     if (kind == NodeKind.IndexExpression) {
       const object: string = memoryValue(this.expression(module,bindingChild(n,EdgeRole.Object),""));
-      const indexId: number = bindingChild(n,EdgeRole.Index); this.requireType(module,indexId,this.expression(module,indexId,""),"number");
+      const indexId: number = bindingChild(n,EdgeRole.Index);
+      // Record<K, V> (un Map ordenado): r[k] es V | undefined.
+      if (genericBase(object) == "Map") { const parts: string[] = genericArguments(object); this.requireType(module,indexId,this.expression(module,indexId,parts[0]),parts[0]); return "Optional<" + parts[1] + ">"; }
+      this.requireType(module,indexId,this.expression(module,indexId,""),"number");
       if (object == "string") return "string";
       if (object.endsWith("[]")) return semanticElement(object);
       if (fixedArraySize(object) >= 0) {
@@ -2258,6 +2298,17 @@ export class NativeChecker {
         this.report(module,id,"Índice de tupla fuera de rango o no constante"); return "!error";
       }
       if (object != "!error") this.report(module,id,"El tipo no admite índices: " + this.displayType(object)); return "!error";
+    }
+    if (kind == NodeKind.ObjectLiteralExpression && genericBase(memoryValue(expected)) == "Map") {
+      // { a: 1, b: 2 } como Record<string, V> (Map ordenado): cada valor es un V.
+      const parts: string[] = genericArguments(memoryValue(expected));
+      if (parts[0] != "string") { this.report(module,id,"Un literal de objeto solo construye un Record con claves string"); return "!error"; }
+      for (const edge of n.edges) if (edge.role == EdgeRole.Properties) {
+        const property: AstNode = this.node(module,edge.node);
+        if (property.kind != NodeKind.ObjectProperty || property.get(AttributeKind.Key) == "") { this.report(module,edge.node,"En un literal de Record solo van propiedades clave: valor"); continue; }
+        const valueId: number = bindingChild(property,EdgeRole.Value); this.requireType(module,valueId,this.expression(module,valueId,parts[1]),parts[1]);
+      }
+      return memoryValue(expected);
     }
     if (kind == NodeKind.ObjectLiteralExpression) {
       const unionOwner: number = this.nominalSymbol(expected); if (unionOwner >= 0 && this.binding.symbols[unionOwner].kind == "UnionDeclaration") return this.unionObject(module,id,expected,unionOwner);

@@ -11,7 +11,7 @@ export const asyncCalls=new Set(["sleep","delay","spawn","cancel","cancellationT
 export const stringMethods=new Set(["charAt","charCodeAt","indexOf","lastIndexOf","includes","startsWith","endsWith","slice","substring","substr","split","trim","trimStart","trimEnd","toUpperCase","toLowerCase","repeat","padStart","padEnd","replace","replaceAll","match","matchAll","search","localeCompare","toString","at","codePointAt","concat","trimLeft","trimRight"]);
 export const objectMethods:Record<string,Set<string>>={
   "!Math":new Set(["floor","ceil","round","abs","sqrt","pow","min","max","random"]),
-  "!Date":new Set(["now","utc"]), "!String":new Set(["fromCharCode","fromCodePoint"]), "!Array":new Set(["isArray","from","of"]), "!Promise":new Set(["all","race","any","allSettled","resolve"]), "!JSON":new Set(["parse","stringify","parseValue","stringifyBool","stringifyNumber","stringifyValue"]),
+  "!Date":new Set(["now","utc"]), "!String":new Set(["fromCharCode","fromCodePoint"]), "!Array":new Set(["isArray","from","of"]), "!Object":new Set(["keys","values","entries"]), "!Promise":new Set(["all","race","any","allSettled","resolve"]), "!JSON":new Set(["parse","stringify","parseValue","stringifyBool","stringifyNumber","stringifyValue"]),
   "!path":new Set(["dirname","basename","extname","join","resolve","normalize","isAbsolute"]),
   "!fs":new Set(["readFile","writeFile","appendFile","copyFile","rename","unlink","readFileSync","writeFileSync","appendFileSync","copyFileSync","renameSync","unlinkSync","existsSync"]),
   "!process":new Set(["cwd","exit"]),
@@ -93,6 +93,7 @@ export function emitRuntimeCall(g:IrCppGenerator,f:IrFunction,i:IrInstruction):s
     if(method==="allSettled")return `ets::task_all_settled<${g.type(g.shape(g.shape(i.typeId).arguments[0]).arguments[0])}>(${a(0)})`;
     return `ets::${method==="all"?"task_all":"task_race"}(${a(0)})`;
   }
+  if(base==="!Object"&&["keys","values","entries"].includes(method)){g.headers.add("runtime/ets_object.hpp");return `ets::object_${method}<${g.type(i.typeId)}>(${runtimeArg(0)})`;}
   if(base==="!Array"&&["isArray","of","from"].includes(method)){
     const R=g.type(i.typeId);
     if(method==="isArray")return `ets_is_array(${a(0)})`;
