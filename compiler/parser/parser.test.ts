@@ -90,12 +90,16 @@ function nativeShape(result: NativeResult, id = result.root, visiting = new Set<
   const item = result.nodes[id], attributes: Record<string, string[]> = {}, edges: Record<string, any[]> = {};
   for (const field of item.attributes) {
     if (field.value === "false" && field.name !== "mutable" && field.name !== "value") continue;
+    // #223: el tipo sintético de un literal de objeto solo existe en el parser nativo.
+    if (item.kind === "ObjectLiteralExpression" && field.name === "declaredType" && field.value.startsWith("__Lit")) continue;
     (attributes[field.name] ??= []).push(field.value);
   }
   for (const edge of item.edges) {
     // Stage 0 discards binding names. The new AST retains them and dedicated
     // tests verify their names, order, types and positions independently.
     if (item.kind === "UnionVariant" && edge.role === "bindings") continue;
+    // #223: interfaces sintéticas de literales y tipos objeto (no existen en stage 0).
+    if (item.kind === "Program" && result.nodes[edge.node].kind === "InterfaceDeclaration" && /^__(Lit|Obj)/.test(result.nodes[edge.node].attributes.find((a: any) => a.name === "name")?.value ?? "")) continue;
     (edges[edge.role] ??= []).push(nativeShape(result, edge.node, visiting));
   }
   visiting.delete(id); return { kind: item.kind, attributes, edges };

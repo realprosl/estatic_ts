@@ -364,6 +364,8 @@ export class Binder {
         const firstName: boolean = first;
         let name: string = text.slice(start, at); let space: string = firstValue && first ? "value" : "type"; first = false;
         if (name.startsWith("$typeof$")) { name = name.slice(8, name.length); space = "query"; }
+        // #223: el tipo del valor de un campo de literal se resuelve en el checker.
+        if (name.startsWith("$valueof$")) { previous = ""; continue; }
         if (previous == "[" && start >= 2) {
           const before: string = text.charAt(start - 2);
           if (before != "" && before != "(" && before != "," && before != "[" && before != " ") space = "value";
