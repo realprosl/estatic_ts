@@ -67,6 +67,7 @@ export class ParseResult {
   }
 }
 
+function jsonSpace(code: number): boolean { return code == 32 || code == 9 || code == 10 || code == 13; }
 function bindingChildOf(node: AstNode, role: EdgeRole): number { for (const edge of node.edges) if (edge.role == role) return edge.node; return -1; }
 // Orden de dos textos por código de carácter (para las formas de los tipos objeto).
 function compareText(a: string, b: string): number {
@@ -86,9 +87,12 @@ export class Parser {
   // #223: parámetros desestructurados ({ a, b = 1 }: T): la declaración del
   // patrón se añade al principio del cuerpo de su función.
   patternOwners: number[]; patternDeclarations: number[];
+  jsonAt: number;
+  // Nombres locales importados de "estatic:json": la clase (JSON) y parse.
+  jsonClasses: string[]; jsonParsers: string[];
   constructor(tokens: ParserToken[]) {
     this.tokens = tokens; this.current = 0; this.nodes = []; this.diagnostics = [];
-    this.nesting = 0; this.exhausted = false; this.constMemory = false; this.objectTypes = []; this.objectTypeNames = []; this.patternOwners = []; this.patternDeclarations = [];
+    this.nesting = 0; this.exhausted = false; this.constMemory = false; this.objectTypes = []; this.objectTypeNames = []; this.patternOwners = []; this.patternDeclarations = []; this.jsonAt = 0; this.jsonClasses = []; this.jsonParsers = [];
     if (tokens.length == 0) {
       this.tokens.push(new ParserToken("eof", "", 0, 1, 1, 0, 1, 1));
       this.report("La entrada de tokens necesita un eof final");
@@ -460,7 +464,13 @@ export class Parser {
       } else if (this.check("{")) this.moduleSpecifiers(result, true, typeOnly);
       else this.report("Se esperaba un binding, namespace o lista de nombres en import");
     } else if (!hasDefault) this.report("Se esperaba un nombre local en import");
-    this.moduleSource(result); this.checkModuleNames(result, true); this.setEnd(result, this.moduleEnd()); return result;
+    this.moduleSource(result); this.checkModuleNames(result, true);
+    if (this.get(result, AttributeKind.Source) == "estatic:json") for (const edge of this.node(result).edges) if (edge.role == EdgeRole.Specifiers) {
+      const item: AstNode = this.node(edge.node);
+      if (item.get(AttributeKind.Imported) == "default") this.jsonClasses.push(item.get(AttributeKind.Local));
+      else if (item.get(AttributeKind.Imported) == "parse") this.jsonParsers.push(item.get(AttributeKind.Local));
+    }
+    this.setEnd(result, this.moduleEnd()); return result;
   }
   exportList(keyword: ParserToken, typeOnly: boolean): number {
     const result: number = this.add(this.check("*") ? NodeKind.ExportAllDeclaration : NodeKind.ExportNamedDeclaration, keyword, keyword);
@@ -805,6 +815,75 @@ export class Parser {
       if (this.current == before || !this.accept(",")) break;
     }
     this.expect(")");
+  }
+  // #273: JSON.parse("texto constante") sin <T>: el tipo sale del propio texto
+  // (los objetos son tipos objeto con nombre por forma) y la llamada pasa a ser
+  // JSON.parse<Tipo>(texto). El checker comprueba el texto al compilar.
+  jsonParseType(call: number, object: number, member: ParserToken): void {
+    if (this.get(call, AttributeKind.TypeArgument) != "") return;
+    if (object >= 0 && (member.lexeme != "parse" || this.node(object).kind != NodeKind.IdentifierExpression || !this.jsonClasses.includes(this.get(object, AttributeKind.Name)))) return;
+    if (object < 0 && !this.jsonParsers.includes(member.lexeme)) return;
+    let args: number[] = []; for (const edge of this.node(call).edges) if (edge.role == EdgeRole.Args) args.push(edge.node);
+    if (args.length != 1 || this.node(args[0]).kind != NodeKind.LiteralExpression || this.get(args[0], AttributeKind.LiteralType) != "string") return;
+    const text: string = this.get(args[0], AttributeKind.Value); this.jsonAt = 0;
+    const inferred: string = this.jsonType(text, member);
+    while (this.jsonAt < text.length && jsonSpace(text.charCodeAt(this.jsonAt))) this.jsonAt = this.jsonAt + 1;
+    if (inferred == "" || this.jsonAt != text.length) { this.reportAt(this.node(args[0]).start, "JSON no válido en JSON.parse (posición " + numberToString(this.jsonAt) + ")"); return; }
+    this.attr(call, AttributeKind.TypeArgument, inferred);
+  }
+  jsonType(text: string, token: ParserToken): string {
+    while (this.jsonAt < text.length && jsonSpace(text.charCodeAt(this.jsonAt))) this.jsonAt = this.jsonAt + 1;
+    if (this.jsonAt >= text.length) return "";
+    const c: string = text.charAt(this.jsonAt);
+    if (c == "\"") { if (this.jsonString(text) < 0) return ""; return "string"; }
+    if (c == "t" && text.slice(this.jsonAt, this.jsonAt + 4) == "true") { this.jsonAt = this.jsonAt + 4; return "boolean"; }
+    if (c == "f" && text.slice(this.jsonAt, this.jsonAt + 5) == "false") { this.jsonAt = this.jsonAt + 5; return "boolean"; }
+    if (c == "n" && text.slice(this.jsonAt, this.jsonAt + 4) == "null") { this.jsonAt = this.jsonAt + 4; return "JsonValue"; }
+    if (c == "-" || "0123456789".includes(c, 0)) { const start: number = this.jsonAt; this.jsonAt = this.jsonAt + 1; while (this.jsonAt < text.length && "0123456789.eE+-".includes(text.charAt(this.jsonAt), 0)) this.jsonAt = this.jsonAt + 1; return this.jsonAt > start ? "number" : ""; }
+    if (c == "[") {
+      this.jsonAt = this.jsonAt + 1; let types: string[] = [];
+      while (true) {
+        while (this.jsonAt < text.length && jsonSpace(text.charCodeAt(this.jsonAt))) this.jsonAt = this.jsonAt + 1;
+        if (text.charAt(this.jsonAt) == "]" && types.length == 0) { this.jsonAt = this.jsonAt + 1; return "JsonValue[]"; }
+        const element: string = this.jsonType(text, token); if (element == "") return "";
+        if (!types.includes(element)) types.push(element);
+        while (this.jsonAt < text.length && jsonSpace(text.charCodeAt(this.jsonAt))) this.jsonAt = this.jsonAt + 1;
+        if (text.charAt(this.jsonAt) == ",") { this.jsonAt = this.jsonAt + 1; continue; }
+        if (text.charAt(this.jsonAt) == "]") { this.jsonAt = this.jsonAt + 1; break; }
+        return "";
+      }
+      return types.length == 1 ? types[0] + "[]" : "(" + types.join("|") + ")[]";
+    }
+    if (c == "{") {
+      this.jsonAt = this.jsonAt + 1; let names: string[] = []; let types: string[] = []; let optionals: boolean[] = []; let tokens: ParserToken[] = [];
+      while (true) {
+        while (this.jsonAt < text.length && jsonSpace(text.charCodeAt(this.jsonAt))) this.jsonAt = this.jsonAt + 1;
+        if (text.charAt(this.jsonAt) == "}" && names.length == 0) { this.jsonAt = this.jsonAt + 1; break; }
+        const keyStart: number = this.jsonAt; if (text.charAt(this.jsonAt) != "\"" || this.jsonString(text) < 0) return "";
+        const key: string = text.slice(keyStart + 1, this.jsonAt - 1);
+        while (this.jsonAt < text.length && jsonSpace(text.charCodeAt(this.jsonAt))) this.jsonAt = this.jsonAt + 1;
+        if (text.charAt(this.jsonAt) != ":") return ""; this.jsonAt = this.jsonAt + 1;
+        const value: string = this.jsonType(text, token); if (value == "") return "";
+        if (!names.includes(key)) { names.push(key); types.push(value); optionals.push(false); tokens.push(token); }
+        while (this.jsonAt < text.length && jsonSpace(text.charCodeAt(this.jsonAt))) this.jsonAt = this.jsonAt + 1;
+        if (text.charAt(this.jsonAt) == ",") { this.jsonAt = this.jsonAt + 1; continue; }
+        if (text.charAt(this.jsonAt) == "}") { this.jsonAt = this.jsonAt + 1; break; }
+        return "";
+      }
+      return this.objectTypeFrom(names, types, optionals, tokens, token, token);
+    }
+    return "";
+  }
+  // Avanza sobre un string JSON (con escapes); -1 si no se cierra.
+  jsonString(text: string): number {
+    this.jsonAt = this.jsonAt + 1;
+    while (this.jsonAt < text.length) {
+      const c: string = text.charAt(this.jsonAt);
+      if (c == "\\") { this.jsonAt = this.jsonAt + 2; continue; }
+      if (c == "\"") { this.jsonAt = this.jsonAt + 1; return this.jsonAt; }
+      this.jsonAt = this.jsonAt + 1;
+    }
+    return -1;
   }
   // Tipo de un patrón de objeto sin anotación: un campo con valor por defecto
   // es opcional y tiene el tipo de ese valor; uno sin valor por defecto necesita tipo.
@@ -1324,7 +1403,9 @@ export class Parser {
         if (this.node(result).kind != NodeKind.IdentifierExpression) this.report("E1008: Solo se pueden llamar funciones por su nombre (f(...), obj.metodo(...))");
         this.attr(parent, AttributeKind.Callee, this.get(result, AttributeKind.Name));
         if (this.check("<")) this.typeArguments(parent);
-        this.expect("("); this.argumentsInto(parent, EdgeRole.Args, ")"); this.setEnd(parent, this.previous()); result = parent;
+        this.expect("("); this.argumentsInto(parent, EdgeRole.Args, ")"); this.setEnd(parent, this.previous());
+        if (this.node(result).kind == NodeKind.IdentifierExpression) this.jsonParseType(parent, -1, this.node(result).start);
+        result = parent;
       } else if (this.node(result).kind == NodeKind.IdentifierExpression && this.genericFollower() == ".") {
         this.setKind(result, NodeKind.GenericIdentifierExpression); this.typeArguments(result);
       } else if (this.check(".") || this.check("?.")) {
@@ -1338,6 +1419,7 @@ export class Parser {
         if (this.accept("(")) {
           this.setKind(parent, NodeKind.MemberCallExpression); this.attr(parent, AttributeKind.Method, member.lexeme);
           this.argumentsInto(parent, EdgeRole.Args, ")"); this.setEnd(parent, this.previous());
+          this.jsonParseType(parent, result, member);
         } else { this.attr(parent, AttributeKind.Member, member.lexeme); if (this.get(parent, AttributeKind.TypeArgument) != "") this.report("Los argumentos de tipo requieren una llamada"); }
         result = parent;
       } else if (this.accept("[")) {

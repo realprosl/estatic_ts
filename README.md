@@ -568,6 +568,16 @@ const v = JSON.parse(texto);              // Result<JsonValue, Error>
   `Date` se escribe con su campo interno; usa `d.toISOString()`).
 - Las clases se recorren por los nombres de sus campos, que el generador emite
   en cada struct (`ets_fields`); el resto está en `runtime/lib/json.hpp`.
+- Con un texto constante, `JSON.parse` trabaja en compilación (#273):
+  - sin tipo, `JSON.parse('{"a":1,"b":["x"]}')` deduce el tipo del texto (un
+    tipo objeto con nombre por forma, `{ a: number; b: string[] }`), así que
+    `r.value().b.length` se comprueba en compilación;
+  - con tipo, `JSON.parse<Usuario>('{...}')` comprueba el texto al compilar: si
+    no encaja es un error (`E3010: ... se esperaba number en $.edad y hay
+    string`), y un JSON mal formado también;
+  - el resultado sigue siendo `Result<T, Error>`, con la misma firma que con un
+    texto que solo se conoce al ejecutar. Por ahora el objeto se construye
+    parseando el texto al ejecutar (ya comprobado).
 
 ## Errores: `Error` sin excepciones
 
