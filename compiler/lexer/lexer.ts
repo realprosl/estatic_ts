@@ -166,6 +166,39 @@ export class Lexer {
     }
     this.emit("number", this.source.slice(start, this.byteOffset), offset, line, column);
   }
+  // #RegExp: "/" abre un literal /patrón/flags donde no puede haber una división:
+  // al principio o detrás de un operador, "(", ",", "=", "return"...
+  regexAllowed(): boolean {
+    if (this.tokens.length == 0) return true;
+    const previous: string = this.tokens[this.tokens.length - 1].kind;
+    return !["identifier","number","string","template-end",")","]","}","true","false","this","null","undefined","super","++","--"].includes(previous);
+  }
+  // Hay un "/" de cierre en la misma línea (fuera de una clase [...]).
+  regexCloses(): boolean {
+    let at: number = 1; let inClass: boolean = false;
+    while (this.peek(at) != "" && this.peek(at) != "\n") {
+      const c: string = this.peek(at);
+      if (c == "\\") { at = at + 2; continue; }
+      if (c == "[") inClass = true; else if (c == "]") inClass = false;
+      else if (c == "/" && !inClass) return at > 1;
+      at = at + 1;
+    }
+    return false;
+  }
+  scanRegex(offset: number, line: number, column: number): void {
+    const start: number = this.byteOffset; this.advance(); let inClass: boolean = false;
+    while (!this.atEnd() && this.peek(0) != "\n") {
+      const c: string = this.peek(0);
+      if (c == "\\") { this.advance(); if (!this.atEnd() && this.peek(0) != "\n") this.advance(); continue; }
+      if (c == "[") inClass = true; else if (c == "]") inClass = false;
+      else if (c == "/" && !inClass) break;
+      this.advance();
+    }
+    if (this.peek(0) != "/") { this.error("Expresión regular sin cerrar", offset, line, column); return; }
+    this.advance();
+    while (this.identifierPart(this.peek(0))) this.advance();
+    this.emit("regex", this.source.slice(start, this.byteOffset), offset, line, column);
+  }
   scanString(offset: number, line: number, column: number): void {
     const quote: string = this.advance(); const begin: number = this.byteOffset;
     while (!this.atEnd() && this.peek(0) != quote && this.peek(0) != "\n") {
@@ -303,6 +336,7 @@ export class Lexer {
         else if (this.digit(c)) this.scanNumber(offset, line, column);
         else if (c == "\"" || c == "'") this.scanString(offset, line, column);
         else if (c == "`") this.scanTemplate(offset, line, column);
+        else if (c == "/" && this.peek(1) != "/" && this.peek(1) != "*" && this.regexAllowed() && this.regexCloses()) this.scanRegex(offset, line, column);
         else this.symbol(offset, line, column);
       }
     }

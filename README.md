@@ -530,7 +530,7 @@ en una línea, el texto se genera ya al compilar.
 - Aún no se puede desestructurar en `for (const [i, x] of a.entries())`: usa
   `e[0]` y `e[1]` (va en la tanda de Map/Set).
 
-## Librerías del runtime: `estatic:math`, `estatic:number`, `estatic:date` y `estatic:json`
+## Librerías del runtime: `estatic:math`, `estatic:number`, `estatic:date`, `estatic:json` y `estatic:regexp`
 
 `Math` y `Number` de TypeScript son librerías escritas en Estatic
 (`runtime/lib/*.ts`), no builtins: se importan.
@@ -597,6 +597,28 @@ const v = JSON.parse(texto);              // Result<JsonValue, Error>
   `Date` se escribe con su campo interno; usa `d.toISOString()`).
 - Las clases se recorren por los nombres de sus campos, que el generador emite
   en cada struct (`ets_fields`); el resto está en `runtime/lib/json.hpp`.
+
+```ts
+import RegExp from "estatic:regexp";
+const fecha = /(\d{4})-(\d{2})-(\d{2})/;          // o new RegExp("...", "flags")
+const m = fecha.exec("hoy es 2024-01-15");         // string[] | undefined
+if (m !== undefined) print(m[1]);
+/^a+b$/i.test("AAAb");
+"a1b22".replace(/\d+/g, "#"); "x-y".replace(/(\w)-(\w)/, "$2-$1");
+"a, b;c".split(/\s*[,;]\s*/); "a1b22".match(/\d+/g); "k=v".search(/=/);
+for (const par of "k1=v1&k2=v2".matchAll(/(\w+)=(\w+)/g)) print(par[1]);
+```
+
+- El motor es `std::regex` con la gramática ECMAScript: flags `g`, `i`, `m` e
+  `y`, con `lastIndex` en `exec`/`test`. No hay lookbehind, grupos con nombre
+  ni los flags `s`, `u`, `v` y `d`. Un patrón que `std::regex` no acepta
+  termina el programa (el runtime se compila sin excepciones).
+- `exec` devuelve `string[] | undefined` (un grupo que no participa es `""`);
+  el índice del match está en `re.lastMatchIndex`. `match` devuelve
+  `string[] | undefined` y `matchAll` un array de matches. Los índices cuentan
+  bytes, como el resto de strings.
+- El literal `/patrón/flags` es `new RegExp("patrón", "flags")` con el `RegExp`
+  importado de `estatic:regexp`.
 - Con un texto constante, `JSON.parse` trabaja en compilación (#273):
   - sin tipo, `JSON.parse('{"a":1,"b":["x"]}')` deduce el tipo del texto (un
     tipo objeto con nombre por forma, `{ a: number; b: string[] }`), así que
