@@ -176,6 +176,7 @@ export class IrLowering {
       const actual: number = this.result.functions[this.currentFunction].places[p].typeId; const expected: number = this.typeId(this.checked.files[this.module].types[id],id);
       if (actual != expected && ["union","sum"].includes(this.result.typeDefinitions[actual].kind)) p = this.projection(p,"checkedView",expected,-1,-1,id);
       else if (this.narrowedOptional(actual,expected)) p = this.projection(p,"checkedView",expected,-1,-1,id);
+      else p = this.optionalUnionView(p,expected,id);
       return p;
     }
     if (n.kind == NodeKind.MemberExpression || n.kind == NodeKind.IndexExpression) {
@@ -462,6 +463,7 @@ export class IrLowering {
     if (kind == NodeKind.NamedArgumentExpression) return this.expression(bindingChild(n,EdgeRole.Value));
     if (kind == NodeKind.SatisfiesExpression) return this.expression(bindingChild(n,EdgeRole.Operand));
     if (kind == NodeKind.AsExpression) return this.convert(this.expression(bindingChild(n,EdgeRole.Expression)),typeId,id);
+    if (kind == NodeKind.UnaryExpression && n.get(AttributeKind.Operator) == "typeof" && this.dynamicTypeof(bindingChild(n,EdgeRole.Operand))) return this.typeofValue(id,bindingChild(n,EdgeRole.Operand),typeId);
     if (kind == NodeKind.UnaryExpression && n.get(AttributeKind.Operator) == "typeof") {
       const result: number = this.emit("typeTag",typeId,[],-1,-1,"",id); const operand: number = bindingChild(n,EdgeRole.Operand); this.result.functions[this.currentFunction].blocks[this.block].instructions[this.result.functions[this.currentFunction].blocks[this.block].instructions.length-1].signature = this.typeId(this.checked.files[this.module].types[operand],operand); return result;
     }
@@ -597,6 +599,7 @@ export class IrLowering {
     if (p >= 0 && this.result.functions[this.currentFunction].places[p].typeId != typeId && this.result.typeDefinitions[this.result.functions[this.currentFunction].places[p].typeId].kind == "ref") p = this.projection(p,"deref",typeId,-1,-1,id);
     // Un T | undefined ya comprobado (x != undefined) se lee como T.
     if (p >= 0 && this.narrowedOptional(this.result.functions[this.currentFunction].places[p].typeId,typeId)) p = this.projection(p,"checkedView",typeId,-1,-1,id);
+    else if (p >= 0) p = this.optionalUnionView(p,typeId,id);
     const stored: number = this.result.functions[this.currentFunction].places[p].typeId; return this.convert(this.emit("load",stored,[],p,-1,"",id),typeId,id);
   }
   call(id: number, typeId: number, receiver: number = -1, indirect: number = -1, target: number = -1, targetModule: number = -1): number {
@@ -766,6 +769,62 @@ export class IrLowering {
     if (id < 0) return false; const n = this.node(id);
     if (n.kind != NodeKind.IdentifierExpression || n.get(AttributeKind.Name) != "undefined") return false;
     const symbol: number = this.reference(id); return symbol >= 0 && (this.binding.symbols[symbol].module) < 0;
+  }
+  // typeof de una unión o de un T | undefined se decide al ejecutar: se prueba
+  // cada alternativa con typeTest (o la presencia del Optional).
+  dynamicTypeof(operand: number): boolean {
+    const kind: string = this.result.typeDefinitions[this.typeId(this.checked.files[this.module].types[operand],operand)].kind;
+    return ["union","sum","Optional"].includes(kind);
+  }
+  typeofTag(typeId: number): string {
+    const text: string = this.result.types[typeId]; const kind: string = this.result.typeDefinitions[typeId].kind;
+    if (numericType(text)) return "number";
+    if (text == "string" || text == "boolean") return text;
+    if (text == "void" || text == "undefined") return "undefined";
+    if (kind == "function") return "function";
+    return "object";
+  }
+  typeofValue(id: number, operand: number, typeId: number): number {
+    // Una variable se prueba en su place, con su tipo completo: el estrechamiento
+    // estático (typeof v == "boolean" antes) no cambia lo que hay al ejecutar.
+    let input: number = -1;
+    if (this.node(operand).kind == NodeKind.IdentifierExpression && this.reference(operand) >= 0) {
+      input = this.place(this.reference(operand),operand);
+      while (input >= 0 && ["ref","constRef"].includes(this.result.typeDefinitions[this.result.functions[this.currentFunction].places[input].typeId].kind)) input = this.projection(input,"deref",this.result.typeDefinitions[this.result.functions[this.currentFunction].places[input].typeId].arguments[0],-1,-1,id);
+    }
+    if (input < 0) input = this.optionalInput(operand,id);
+    const inputType: number = this.result.functions[this.currentFunction].places[input].typeId;
+    const result: number = this.local(-1,typeId,false,id); this.track(result); const join: number = this.newBlock(id);
+    let place: number = input; let alternatives: number[] = [];
+    if (this.result.typeDefinitions[inputType].kind == "Optional") {
+      const present: number = this.optionalPresent(input,id); const yes: number = this.newBlock(id); const no: number = this.newBlock(id);
+      this.terminate("branch",present,[yes,no],id);
+      this.block = no; this.emit("store",-1,[this.emit("constant",typeId,[],-1,-1,"undefined",id)],result,-1,"",id); this.terminate("jump",-1,[join],id);
+      this.block = yes; const inner: number = this.result.typeDefinitions[inputType].arguments[0];
+      place = this.projection(input,"checkedView",inner,-1,-1,id);
+      if (["union","sum"].includes(this.result.typeDefinitions[inner].kind)) alternatives = this.result.typeDefinitions[inner].arguments; else alternatives.push(inner);
+    } else alternatives = this.result.typeDefinitions[inputType].arguments;
+    const placeType: number = this.result.functions[this.currentFunction].places[place].typeId;
+    for (let at: number = 0; at < alternatives.length; at = at+1) {
+      if (at == alternatives.length - 1) { this.emit("store",-1,[this.emit("constant",typeId,[],-1,-1,this.typeofTag(alternatives[at]),id)],result,-1,"",id); this.terminate("jump",-1,[join],id); break; }
+      const view: number = this.emit("borrow",this.typeId("constRef<"+this.result.types[placeType]+">",id),[],place,-1,"constRef",id);
+      const test: number = this.emit("typeTest",this.typeId("boolean",id),[view],-1,-1,"",id); this.result.functions[this.currentFunction].blocks[this.block].instructions[this.result.functions[this.currentFunction].blocks[this.block].instructions.length-1].signature = alternatives[at];
+      const yes: number = this.newBlock(id); const no: number = this.newBlock(id); this.terminate("branch",test,[yes,no],id);
+      this.block = yes; this.emit("store",-1,[this.emit("constant",typeId,[],-1,-1,this.typeofTag(alternatives[at]),id)],result,-1,"",id); this.terminate("jump",-1,[join],id);
+      this.block = no;
+    }
+    this.block = join; return this.emit("load",typeId,[],result,-1,"",id);
+  }
+  // Un (A | B) | undefined estrechado con !== undefined y luego con typeof o
+  // instanceof se lee como A: primero el Optional, después la alternativa.
+  optionalUnionView(p: number, expected: number, id: number): number {
+    const actual: number = this.result.functions[this.currentFunction].places[p].typeId; const shape = this.result.typeDefinitions[actual];
+    if (actual == expected || expected < 0) return p;
+    if (["union","sum"].includes(shape.kind)) return shape.arguments.includes(expected) ? this.projection(p,"checkedView",expected,-1,-1,id) : p;
+    if (shape.kind != "Optional" || shape.arguments.length != 1) return p;
+    const inner: number = shape.arguments[0];
+    if (inner == expected || !["union","sum"].includes(this.result.typeDefinitions[inner].kind)) return p;
+    return this.projection(this.projection(p,"checkedView",inner,-1,-1,id),"checkedView",expected,-1,-1,id);
   }
   narrowedOptional(actual: number, expected: number): boolean {
     if (actual == expected || actual < 0 || expected < 0) return false;
