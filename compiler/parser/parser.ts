@@ -67,15 +67,24 @@ export class ParseResult {
   }
 }
 
+// Orden de dos textos por código de carácter (para las formas de los tipos objeto).
+function compareText(a: string, b: string): number {
+  const size: number = a.length < b.length ? a.length : b.length;
+  for (let at: number = 0; at < size; at = at + 1) { const difference: number = a.charCodeAt(at) - b.charCodeAt(at); if (difference != 0) return difference; }
+  return a.length - b.length;
+}
 export class Parser {
   tokens: ParserToken[]; current: number; nodes: AstNode[]; diagnostics: ParserDiagnostic[];
   nesting: number; exhausted: boolean;
   // `const T&` / `const T*`: el `const` inicial espera al primer `&` o `*`
   // del mismo tipo (ver typeSuffix). typeName lo aisla de los tipos anidados.
   constMemory: boolean;
+  // #223: tipos objeto { a: T; b?: U } convertidos en interfaces sintéticas, una
+  // por forma (se añaden al final del programa).
+  objectTypes: number[]; objectTypeNames: string[];
   constructor(tokens: ParserToken[]) {
     this.tokens = tokens; this.current = 0; this.nodes = []; this.diagnostics = [];
-    this.nesting = 0; this.exhausted = false; this.constMemory = false;
+    this.nesting = 0; this.exhausted = false; this.constMemory = false; this.objectTypes = []; this.objectTypeNames = [];
     if (tokens.length == 0) {
       this.tokens.push(new ParserToken("eof", "", 0, 1, 1, 0, 1, 1));
       this.report("La entrada de tokens necesita un eof final");
@@ -231,6 +240,7 @@ export class Parser {
         if (this.current == before && !this.check("eof")) { this.report("E1006: No se esperaba " + this.found() + " aquí" + this.foundArg()); this.take(); }
       }
     }
+    for (const objectType of this.objectTypes) this.edge(program, EdgeRole.Statements, objectType);
     this.setEnd(program, this.peek(0));
     return new ParseResult(program, this.nodes, this.diagnostics);
   }
@@ -867,6 +877,40 @@ export class Parser {
     }
     this.setEnd(result, this.expect("}")); return result;
   }
+  // { a: T; b?: U } en un tipo: una interfaz sintética con nombre estable por
+  // forma (campos y tipos, sin importar el orden). La misma forma se reutiliza.
+  objectType(): string {
+    const open: ParserToken = this.take();
+    let names: string[] = []; let types: string[] = []; let optionals: boolean[] = []; let tokens: ParserToken[] = [];
+    this.skipNewlines();
+    while (!this.check("}") && !this.check("eof")) {
+      const before: number = this.current;
+      const member: ParserToken = this.check("string") ? this.take() : this.expect("identifier");
+      const optional: boolean = this.accept("?"); this.expect(":"); const memberType: string = this.typeName();
+      if (names.includes(member.lexeme)) this.reportAt(member, "Campo duplicado '" + member.lexeme + "' en el tipo objeto");
+      names.push(member.lexeme); types.push(memberType); optionals.push(optional); tokens.push(member);
+      if (!this.accept(";")) this.accept(",");
+      this.skipNewlines();
+      if (this.current == before) { this.report("Miembro de tipo objeto no reconocido"); this.take(); }
+    }
+    const close: ParserToken = this.expect("}");
+    let order: number[] = []; for (let at: number = 0; at < names.length; at = at + 1) order.push(at);
+    order.sort((a: number, b: number): number => compareText(names[a], names[b]));
+    let key: string = ""; let label: string = "";
+    for (const at of order) { key = key + names[at] + (optionals[at] ? "?:" : ":") + types[at] + ";"; label = label + "_" + names[at]; }
+    let hash: number = 0;
+    for (let at: number = 0; at < key.length; at = at + 1) hash = (hash * 31 + key.charCodeAt(at)) % 4294967296;
+    const name: string = "__Obj" + label + "_" + numberToString(hash);
+    if (!this.objectTypeNames.includes(name)) {
+      const declaration: number = this.add(NodeKind.InterfaceDeclaration, open, close); this.attr(declaration, AttributeKind.Name, name);
+      for (let at: number = 0; at < names.length; at = at + 1) {
+        const item: number = this.add(NodeKind.InterfaceField, tokens[at], tokens[at]); this.attr(item, AttributeKind.Name, names[at]);
+        this.attr(item, AttributeKind.Type, types[at]); this.attr(item, AttributeKind.Optional, optionals[at] ? "true" : "false"); this.edge(declaration, EdgeRole.Fields, item);
+      }
+      this.objectTypes.push(declaration); this.objectTypeNames.push(name);
+    }
+    return name;
+  }
   interfaceDeclaration(keyword: ParserToken): number {
     const decorators: number[] = this.decorators();
     const name: ParserToken = this.expect("identifier"); const result: number = this.add(NodeKind.InterfaceDeclaration, keyword, name);
@@ -982,6 +1026,7 @@ export class Parser {
       if (this.constMemory) { this.constMemory = false; this.reportAt(keyword, "'const' en un tipo requiere '&' (constRef) o '*' (constPtr)"); }
       return constant;
     }
+    if (this.check("{")) return this.typeSuffix(this.objectType());
     if (this.accept("typeof")) {
       let query: string = "$typeof$" + this.expect("identifier").lexeme;
       while (this.accept(".")) query = query + "." + (this.check("default") ? this.take().lexeme : this.expect("identifier").lexeme);

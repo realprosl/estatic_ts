@@ -86,6 +86,7 @@ for(const [name,source,expected] of [
  ["tuples",'const a:[number,string]=[2,"s"];print(a[0]);print(a[1]);',"2\ns\n"],
  ["fixed spread",'const a:number[2]=[1,2];const b:number[3]=[0,...a];print(b[2]);',"2\n"],
  ["class",'class C{x:number;constructor(n:number){this.x=n;}inc():void{this.x+=1;}}let c=new C(2);c.inc();print(c.x);',"3\n"],
+ ["tipos objeto { a: T; b?: U } en anotaciones (#223)","type Punto = { x: number; y?: number };function suma(p: Punto): number { return p.x + (p.y ?? 10); }function crea(n: string): { nombre: string; dir: { calle: string; num: number } } { return { nombre: n, dir: { calle: \"Mayor\", num: 3 } }; }const a: { y?: number; x: number } = { x: 1, y: 2 };const lista: { n: string; v: number }[] = [{ n: \"a\", v: 1 }, { n: \"b\", v: 2 }];let total = 0; for (const e of lista) total = total + e.v;const c = crea(\"Ana\");console.log(suma({ x: 1 }), suma(a), total, lista[1].n, c.nombre, c.dir.calle, c.dir.num);","11 3 3 b Ana Mayor 3\n"],
  ["generic default",'function f<T>(a:T,b:T[]=[a]):T[]{return b;}print(f(4)[0]);',"4\n"],
  ["generic class",'class Box<T>{constructor(public items:T[]=[]){}}const b=new Box<number>();print(b.items.length);',"0\n"],
  ["closure",'function make(n:number):(x:number)=>number{return(x:number):number=>n+x;}const f=make(10);print(f(2));',"12\n"],

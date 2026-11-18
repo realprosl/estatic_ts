@@ -755,7 +755,9 @@ export class NativeChecker {
         valueType = this.annotation(s.module,s.node,n.get(AttributeKind.DeclaredType));
         if (valueType == "") valueType = this.expression(s.module,bindingChild(n,EdgeRole.Initializer),"");
         if (genericBase(valueType) == "variant") valueType = genericArguments(valueType)[0];
-      } else if (s.kind == "Parameter" || s.kind == "ClassField" || s.kind == "InterfaceField" || s.kind == "UnionVariantBinding") { if (n.kind == NodeKind.Parameter) valueType = this.parameterType(s.module,s.node); else valueType = this.annotation(s.module,s.node,n.get(AttributeKind.Type)); }
+      } else if (s.kind == "Parameter" || s.kind == "ClassField" || s.kind == "InterfaceField" || s.kind == "UnionVariantBinding") { if (n.kind == NodeKind.Parameter) valueType = this.parameterType(s.module,s.node); else valueType = this.annotation(s.module,s.node,n.get(AttributeKind.Type));
+        // #223: un campo opcional (b?: T) es T | undefined, como en TypeScript.
+        if (s.kind == "InterfaceField" && n.get(AttributeKind.Optional) == "true" && genericBase(valueType) != "Optional") valueType = "Optional<" + valueType + ">"; }
       else if (s.namespaceModule >= 0) valueType = "namespace";
       else if (s.kind.endsWith("Expression")) valueType = this.expression(s.module,s.node,"");
       else valueType = this.unsupported(useModule,useNode,"símbolo " + s.kind);

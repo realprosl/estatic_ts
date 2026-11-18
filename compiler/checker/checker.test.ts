@@ -2141,6 +2141,9 @@ test('checker: el narrowing de una ruta no vale para otra (#213)',()=>error('cla
 test('checker: el narrowing de una ruta no vale para otro campo (#213)',()=>error('class B{n:number;constructor(){this.n=1;}}class A{b:B|undefined;c:B|undefined;constructor(){this.b=undefined;this.c=undefined;}}let x:A=new A();if(x.b!==undefined){print(x.c.n);}',/no declara/));
 test('checker: asignar invalida el narrowing de la ruta (#213)',()=>error('class B{n:number;constructor(){this.n=1;}}class A{b:B|undefined;c:B|undefined;constructor(){this.b=undefined;this.c=undefined;}}let x:A=new A();if(x.b!==undefined){x.b=undefined;print(x.b.n);}',/no declara/));
 test('checker: una llamada invalida el narrowing de la ruta (#213)',()=>error('class B{n:number;constructor(){this.n=1;}}class A{b:B|undefined;c:B|undefined;constructor(){this.b=undefined;this.c=undefined;}}function f():void{}let x:A=new A();if(x.b!==undefined){f();print(x.b.n);}',/no declara/));
+test('checker: tipos objeto en anotaciones (#223)',()=>check('type P = { x: number; y?: number };function f(p: P): number { return p.x + (p.y ?? 0); }const a: { y?: number; x: number } = { x: 1 };print(f(a));print(f({ x: 2, y: 3 }));'));
+test('checker: tipo objeto rechaza un campo obligatorio que falta (#223)',()=>error('const a: { x: number; y: number } = { x: 1 };',/campo|falta|requiere|y/));
+test('checker: tipo objeto rechaza un campo de tipo incorrecto (#223)',()=>error('const a: { x: number } = { x: "uno" };',/incompatible/));
 test('checker: T | undefined acepta T y undefined y se estrecha con !== undefined',()=>check('let x:number|undefined=undefined;x=3;if(x!==undefined){const y:number=x+1;print(y);}'));
 test('checker: solo un T | undefined se compara con undefined',()=>error('const n:number=1;print(n===undefined);',/siempre tiene valor/));
 test('checker: undefined no es un tipo por sí solo',()=>error('let x:undefined=undefined;',/solo como parte de un tipo/));
