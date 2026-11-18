@@ -440,8 +440,29 @@ const { a, b = "def" } = objeto;                 // también en declaraciones
 - Un objeto con campos de más que viene de una variable se acepta donde se
   pide una forma con menos campos; en un literal escrito en el sitio, un campo
   de más es un error, como en TypeScript.
-- Pendiente: el resto de objeto (`{ a, ...resto }`), que necesita tipos
-  derivados (`Omit`) y va con la tanda de `Record`/`Partial`/`Pick`/`Omit`.
+
+### Tipos derivados: `Partial`, `Required`, `Pick`, `Omit` y resto de objeto
+
+```ts
+interface User { name: string; age: number; email?: string }
+const borrador: Partial<User> = { age: 3 };            // todos los campos opcionales
+const lleno: Required<User> = { name: "B", age: 2, email: "e" };
+const corto: Pick<User, "name" | "age"> = { name: "C", age: 9 };
+const sinEmail: Omit<User, "email"> = { name: "D", age: 1 };
+const { name, ...resto }: User = u;                    // resto: Omit<User, "name">
+function f({ age, ...otros }: User) { ... }
+```
+
+- Cada tipo derivado es un struct con nombre (`__Partial_User_<hash>`…), con
+  los campos de la fuente y sus mismos tipos. La fuente puede ser una interfaz,
+  una clase (sus campos), un tipo objeto con nombre, un alias, un tipo importado,
+  una instancia genérica (`Partial<Box<number>>`) u otro tipo derivado
+  (`Partial<Pick<User, "name">>`).
+- Las claves de `Pick`/`Omit` son literales de string (`"a" | "b"`); una
+  clave que no existe en `Pick` es un error.
+- El resto de objeto es una copia con los campos que no nombra el patrón, y
+  necesita el tipo de la fuente: la anotación de la declaración o del
+  parámetro (`const { a, ...resto }: T = …`). Sin ella, error de compilación.
 
 ## Métodos de `string`
 

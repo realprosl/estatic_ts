@@ -2,7 +2,7 @@ import { progressDetail, contentHash } from "../platform/index";
 import { AttributeKind, EdgeRole, NodeKind, AstNode, AstEdge, AstAttribute } from "../parser/index";
 import { ModuleGraph, LoadedFile, GeneratedSource, CachedSource, FileRecord } from "../modules/index";
 import { diagnosticAt, parseSource, SourceDiagnostic } from "../diag/index";
-import { bindProject, BindingResult, bindingChild } from "../binder/index";
+import { bindProject, BindingResult, bindingChild, expandDerivedTypes } from "../binder/index";
 import { NativeChecker, checkProject } from "./checker";
 import { CheckResult, TypedFile } from "./model";
 import { NativeComptime } from "./comptime";
@@ -188,6 +188,8 @@ export class NativeExpansion {
 }
 export function analyzeProject(graph: ModuleGraph, trace: boolean = false): FrontendProject {
   if (trace) progressDetail("frontend: expansion and binding");
-  let expansion = new NativeExpansion(graph); const expanded: ModuleGraph = expansion.run(); const binding: BindingResult = bindProject(expanded);
+  let expansion = new NativeExpansion(graph); const generated: ModuleGraph = expansion.run();
+  // Partial/Pick/Omit/Required y { a, ...resto }: sus campos, antes de enlazar.
+  const expanded: ModuleGraph = expandDerivedTypes(generated); const binding: BindingResult = bindProject(expanded);
   return new FrontendProject(expanded,binding,checkProject(expanded,binding,trace));
 }

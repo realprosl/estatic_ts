@@ -4,3 +4,4 @@
 export { bindingChild, BindingResult, BindingSymbol, bindProject, callableBinding } from "./binder";
 export { nativeBuiltinSignatures } from "./builtins";
 export { bindingBoolean, bindingNumbers, formatBinding } from "./format";
+export { expandDerivedTypes } from "./derived";
