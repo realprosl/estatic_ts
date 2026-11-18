@@ -416,7 +416,7 @@ export class IrCppGenerator {
     const emit=(id:number):void=>{
       if(done.has(id))return;if(active.has(id))this.fail("Ciclo de layout por valor en tipos IR");active.add(id);const s=this.shape(id);
       if(this.interface(id))out.push(`struct ir_t${id}{${this.interfaceVariant(id)} data;bool operator==(const ir_t${id}&)const=default;};`);
-      else if(this.record(id)){for(const f of s.fields)dependency(f);out.push(`struct ir_t${id}{${s.fields.map((t,k)=>`ets::ir::Slot<${this.type(t)}> f${k};`).join("")}bool operator==(const ir_t${id}&)const=default;};`);}
+      else if(this.record(id)){for(const f of s.fields)dependency(f);const visits=s.fields.map((_,k)=>`f(${JSON.stringify(s.names[k]??`f${k}`)},f${k});`).join("");out.push(`struct ir_t${id}{${s.fields.map((t,k)=>`ets::ir::Slot<${this.type(t)}> f${k};`).join("")}template<class F>void ets_fields(F&& f){${visits}}template<class F>void ets_fields(F&& f)const{${visits}}bool operator==(const ir_t${id}&)const=default;};`);}
       else {for(const a of this.choices(id))dependency(a);out.push(`struct ir_t${id}{std::variant<${this.choices(id).map(t=>this.type(t)).join(",")}> data;bool operator==(const ir_t${id}&)const=default;};`);}
       active.delete(id);done.add(id);
     };

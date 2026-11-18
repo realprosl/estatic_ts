@@ -501,7 +501,7 @@ en una línea, el texto se genera ya al compilar.
 - Aún no se puede desestructurar en `for (const [i, x] of a.entries())`: usa
   `e[0]` y `e[1]` (va en la tanda de Map/Set).
 
-## Librerías del runtime: `estatic:math`, `estatic:number` y `estatic:date`
+## Librerías del runtime: `estatic:math`, `estatic:number`, `estatic:date` y `estatic:json`
 
 `Math` y `Number` de TypeScript son librerías escritas en Estatic
 (`runtime/lib/*.ts`), no builtins: se importan.
@@ -546,6 +546,28 @@ Date.now(); Date.UTC(2024, 0, 15); Date.parse("2024-01-15");
   paréntesis es la abreviatura del sistema (`CET`), no el nombre largo de Node.
 - El calendario está escrito en Estatic; solo el reloj y la zona salen de C++
   (`runtime/lib/date.hpp`).
+
+```ts
+import JSON from "estatic:json";
+JSON.stringify(usuario);                  // {"nombre":"Ana","edad":30,...}
+JSON.stringify(usuario, undefined, 2);    // con sangría
+const r = JSON.parse<Usuario>(texto);     // Result<Usuario, Error>
+if (r.isOk()) print(r.value().nombre); else print(r.error().message);
+const v = JSON.parse(texto);              // Result<JsonValue, Error>
+```
+
+- `JSON.parse<T>` rellena la clase o el tipo pedido por estructura: comprueba
+  cada campo (`se esperaba string en $.nombre y hay number`), un campo
+  `T | undefined` puede faltar o ser `null`, los demás son obligatorios y los
+  campos de más se ignoran. Admite números, strings, booleanos, arrays, tuplas,
+  clases, `Map<string, T>`, uniones (la primera alternativa que encaja) y
+  `JsonValue`. Sin excepciones: el error es un `SyntaxError` dentro del `Result`.
+- `JSON.stringify` escribe como JavaScript: los campos `undefined` se omiten,
+  `NaN` e `Infinity` son `null`, `Map` y `Set` son `{}` y `space` es un número de
+  espacios o un texto. Todavía no admite `replacer` ni llama a `toJSON` (un
+  `Date` se escribe con su campo interno; usa `d.toISOString()`).
+- Las clases se recorren por los nombres de sus campos, que el generador emite
+  en cada struct (`ets_fields`); el resto está en `runtime/lib/json.hpp`.
 
 ## Errores: `Error` sin excepciones
 
