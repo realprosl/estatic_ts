@@ -364,6 +364,8 @@ export class Binder {
         const firstName: boolean = first;
         let name: string = text.slice(start, at); let space: string = firstValue && first ? "value" : "type"; first = false;
         if (name.startsWith("$typeof$")) { name = name.slice(8, name.length); space = "query"; }
+        // Campo de un tipo derivado ($fieldof$campo$X): se enlaza X.
+        if (name.startsWith("$fieldof$") || name.startsWith("$fieldreq$")) { const tail: string = name.slice(name.startsWith("$fieldof$") ? 9 : 10, name.length); name = tail.slice(tail.indexOf("$", 0) + 1, tail.length); }
         // #223: el tipo del valor de un campo de literal se resuelve en el checker.
         if (name.startsWith("$valueof$")) { previous = ""; continue; }
         if (previous == "[" && start >= 2) {

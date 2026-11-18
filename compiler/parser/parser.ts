@@ -707,11 +707,13 @@ export class Parser {
   }
   // Con el inicializador ya puesto: el resto de array (fuente.slice(k)). Si la
   // fuente no es una variable, se guarda antes en una (__src<N>).
-  finishPattern(owner: number): void {
+  finishPattern(owner: number, sourceType: string = ""): void {
     for (let at: number = 0; at < this.restOwners.length; at = at + 1) if (this.restOwners[at] == owner) {
       let initializer: number = -1; for (const edge of this.node(owner).edges) if (edge.role == EdgeRole.Initializer) initializer = edge.node;
       if (initializer < 0) return;
       const token: ParserToken = this.restNames[at]; let sourceName: string = "";
+      const objectRest: boolean = this.restIndexes[at] < 0;
+      if (objectRest && sourceType == "") { this.reportAt(token, "El resto de un patrón de objeto necesita el tipo de la fuente: anótalo (const { a, ...resto }: T = …)"); return; }
       if (this.node(initializer).kind == NodeKind.IdentifierExpression) sourceName = this.get(initializer, AttributeKind.Name);
       else {
         sourceName = "__src" + numberToString(owner);
@@ -723,6 +725,15 @@ export class Parser {
         this.extraOwners.push(owner); this.extraNodes.push(holder); this.extraBefore.push(true);
       }
       const rest: number = this.add(NodeKind.VariableDeclaration, token, token); this.attr(rest, AttributeKind.Name, token.lexeme); this.attr(rest, AttributeKind.Mutable, this.get(owner, AttributeKind.Mutable) == "true" ? "true" : "false");
+      if (objectRest) {
+        // resto = { c: fuente.c, … } con los campos que no nombra el patrón; los
+        // rellena el binder al expandir el Omit (literal vacío marcado con la fuente).
+        let keys: string[] = []; for (const edge of this.node(owner).edges) if (edge.role == EdgeRole.ObjectBindings) keys.push(this.get(edge.node, AttributeKind.Property));
+        const derived: string = this.derivedType("Omit", sourceType, keys, token);
+        const literal: number = this.add(NodeKind.ObjectLiteralExpression, token, token); this.attr(literal, AttributeKind.Underlying, sourceName); this.attr(literal, AttributeKind.DeclaredType, derived);
+        this.attr(rest, AttributeKind.DeclaredType, derived); this.edge(rest, EdgeRole.Initializer, literal);
+        this.extraOwners.push(owner); this.extraNodes.push(rest); this.extraBefore.push(false); continue;
+      }
       const object: number = this.add(NodeKind.IdentifierExpression, token, token); this.attr(object, AttributeKind.Name, sourceName);
       const call: number = this.add(NodeKind.MemberCallExpression, token, token); this.edge(call, EdgeRole.Object, object); this.attr(call, AttributeKind.Optional, "false"); this.attr(call, AttributeKind.Method, "slice");
       const index: number = this.add(NodeKind.LiteralExpression, token, token); this.attr(index, AttributeKind.LiteralType, "number"); this.attr(index, AttributeKind.Raw, numberToString(this.restIndexes[at]));
@@ -754,7 +765,8 @@ export class Parser {
       // [a, ...resto]: el resto es fuente.slice(k), una declaración aparte.
       if (this.accept("...")) {
         const restName: ParserToken = this.expect("identifier");
-        if (!array) this.reportAt(restName, "El resto en un patrón de objeto ({ a, ...resto }) todavía no está soportado");
+        // { a, ...resto }: el resto es un Omit del tipo de la fuente (índice -1).
+        if (!array) { this.restOwners.push(owner); this.restNames.push(restName); this.restIndexes.push(-1); }
         else { let count: number = 0; for (const edge of this.node(owner).edges) if (edge.role == EdgeRole.ArrayBindings) count = count + 1; this.restOwners.push(owner); this.restNames.push(restName); this.restIndexes.push(count); }
         this.skipNewlines(); if (!this.check(close)) this.report("El resto tiene que ser el último elemento del patrón");
         break;
@@ -814,7 +826,7 @@ export class Parser {
         this.report("El destructuring necesita un inicializador");
         const missing: number = this.add(NodeKind.ErrorNode, this.peek(0), this.peek(0)); this.edge(result, EdgeRole.Initializer, missing);
       } else this.edge(result, EdgeRole.Initializer, this.expression());
-      this.finishPattern(result);
+      this.finishPattern(result, this.get(result, AttributeKind.DeclaredType));
       this.setEnd(result, terminated ? this.terminator() : this.previous()); return result;
     }
     const keyword: ParserToken = this.take(); const name: ParserToken = this.expect("identifier");
@@ -875,7 +887,7 @@ export class Parser {
       this.attr(param, AttributeKind.Name, parameterName); this.attr(param, AttributeKind.Type, annotation);
       if (pattern >= 0) {
         const source: number = this.add(NodeKind.IdentifierExpression, start, start); this.attr(source, AttributeKind.Name, parameterName);
-        this.edge(pattern, EdgeRole.Initializer, source); this.finishPattern(pattern); this.patternOwners.push(owner); this.patternDeclarations.push(pattern);
+        this.edge(pattern, EdgeRole.Initializer, source); this.finishPattern(pattern, annotation); this.patternOwners.push(owner); this.patternDeclarations.push(pattern);
       }
       if (access != "") this.attr(param, AttributeKind.Access, access);
       if (isReadonly) this.attr(param, AttributeKind.Readonly, "true");
@@ -1117,6 +1129,25 @@ export class Parser {
     }
     return name;
   }
+  // Partial/Required/Pick/Omit<X>: interfaz sintética sin campos que el binder
+  // rellena a partir de X (Underlying = "Tipo#X#claves").
+  derivedType(kind: string, source: string, keys: string[], token: ParserToken): string {
+    let label: string = ""; for (let at: number = 0; at < source.length; at = at + 1) { const code: number = source.charCodeAt(at); if ((code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code == 95) label = label + source.charAt(at); }
+    const key: string = kind + "#" + source + "#" + keys.join(","); let hash: number = 0;
+    for (let at: number = 0; at < key.length; at = at + 1) hash = (hash * 31 + key.charCodeAt(at)) % 4294967296;
+    const name: string = "__" + kind + "_" + label + "_" + numberToString(hash);
+    if (!this.objectTypeNames.includes(name)) {
+      const declaration: number = this.add(NodeKind.InterfaceDeclaration, token, token); this.attr(declaration, AttributeKind.Name, name); this.attr(declaration, AttributeKind.Underlying, key);
+      this.objectTypes.push(declaration); this.objectTypeNames.push(name);
+    }
+    return name;
+  }
+  // "a" | "b" (tipos literales de string) -> [a, b].
+  literalKeys(text: string): string[] {
+    let keys: string[] = [];
+    for (const part of text.split(" | ")) { if (part.startsWith("$lit:string=")) keys.push(part.slice(12, part.length)); else this.report("Las claves de Pick/Omit tienen que ser literales de string (\"a\" | \"b\")"); }
+    return keys;
+  }
   interfaceDeclaration(keyword: ParserToken): number {
     const decorators: number[] = this.decorators();
     const name: ParserToken = this.expect("identifier"); const result: number = this.add(NodeKind.InterfaceDeclaration, keyword, name);
@@ -1264,6 +1295,8 @@ export class Parser {
       while (!this.check(">") && !this.check("eof")) { args.push(this.typeName()); if (!this.accept(",")) break; }
       this.closeAngle();
       if (result == "Array" && args.length == 1) result = args[0] + "[]";
+      else if ((result == "Partial" || result == "Required") && args.length == 1) { let none: string[] = []; result = this.derivedType(result, args[0], none, this.previous()); }
+      else if ((result == "Pick" || result == "Omit") && args.length == 2) result = this.derivedType(result, args[0], this.literalKeys(args[1]), this.previous());
       else result = result + "<" + args.join(",") + ">";
     }
     return this.typeSuffix(result);

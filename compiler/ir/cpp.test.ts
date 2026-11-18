@@ -152,6 +152,7 @@ for(const [name,source,expected] of [
  ["distinct logical numeric alternatives",'const n:f64=2;let x:number|f64=n;match(x,[whenType<number>(()=>print("number")),whenType<f64>(()=>print("f64"))]);',"f64\n"],
  ["exact64 template",'const n:u64=18446744073709551615;print(`v=${n}`);',"v=18446744073709551615\n"],
  ["fixed nondefault values",'const xs:Result<number>[2]=[ok(1),ok(2)];print(xs[0].value());',"1\n"],
+ ["tipos derivados Partial, Required, Pick, Omit y resto de objeto","interface User { name: string; age: number; email?: string }\nfunction show(p: Partial<User>): string { return (p.name ?? \"-\") + \"/\" + (p.age ?? 0); }\nconst a: Partial<User> = { age: 3 };\nconsole.log(show(a), show({ name: \"Ana\" }));\nconst r: Required<User> = { name: \"B\", age: 2, email: \"e\" };\nconsole.log(r.email.length);\nconst pk: Pick<User, \"name\" | \"age\"> = { name: \"C\", age: 9 };\nconsole.log(pk.name, pk.age);\nconst om: Omit<User, \"email\" | \"age\"> = { name: \"D\" };\nconsole.log(om.name);\nconst u: User = { name: \"E\", age: 40, email: \"x@y\" };\nconst { name, ...resto }: User = u;\nconsole.log(name, resto.age, resto.email ?? \"?\");\nfunction f({ age, ...otros }: User): string { return otros.name + age; }\nconsole.log(f(u));\nclass Box<T> { value: T; label: string; constructor(v: T) { this.value = v; this.label = \"b\"; } }\nconst b: Partial<Box<number>> = { value: 4 };\nconsole.log(b.value ?? 0, b.label ?? \"sin\");\nclass Punto { x: number; y: number; constructor(x: number, y: number) { this.x = x; this.y = y; } norma(): number { return this.x + this.y; } }\nconst p: Pick<Punto, \"x\"> = { x: 7 };\nconsole.log(p.x);\ntype Parcial = Partial<Pick<User, \"name\" | \"email\">>;\nconst q: Parcial = {};\nconsole.log(q.name ?? \"nadie\");\nfunction datos(): User { return { name: \"F\", age: 1 }; }\nconst { age: edad, ...sinEdad }: User = datos();\nconsole.log(edad, sinEdad.name, sinEdad.email ?? \"-\");\nlet { name: nombre, ...mut }: User = datos();\nmut.age = 5; console.log(nombre, mut.age);\n","-/3 Ana/0\n1\nC 9\nD\nE 40 x@y\nE40\n4 sin\n7\nnadie\n1 F -\nF 5\n"],
  ["detached task drain",'async function f():Promise<void>{await sleep(1);print("done");}spawn(f());',"done\n"],
  ["Result",'function f():Result<number>{return ok(4);}const r=f();if(r.isOk())print(r.value());',"4\n"],
 ] as const)test(`IR C++ executes ${name}`,()=>assert.equal(execute(source),expected));
@@ -205,6 +206,11 @@ test("IR C++ native aggregate fast paths survive seed synchronization",{skip:!pr
   }
  }
  assert.ok(fused>0&&stores>0&&calls>0,'fixture must exercise all three fast paths');
+});
+test("IR C++ tipos derivados de un tipo importado y errores del resto de objeto",()=>{
+ assert.equal(execute('import { User } from "./tipos";const p: Partial<User> = { age: 2 };const u: User = { name: "A", age: 3 };const { name, ...resto }: User = u;console.log(p.age ?? 0, name, resto.age);',{"tipos.ets":'export interface User { name: string; age: number }'}),"2 A 3\n");
+ assert.throws(()=>ir('interface U { a: number; b: number }const u: U = { a: 1, b: 2 };const { a, ...r } = u;print(a);'),/necesita el tipo de la fuente/);
+ assert.throws(()=>ir('interface U { a: number }const p: Pick<U, "z"> = {};'),/no tiene el campo 'z'/);
 });
 test("IR C++ preserves escaped and template literal newlines",()=>{
  assert.equal(execute('print("A\\nB");print(\`C\\nD\`);'),"A\nB\nC\nD\n");

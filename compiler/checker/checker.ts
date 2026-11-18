@@ -666,6 +666,16 @@ export class NativeChecker {
       return semanticFixedArray(element,size.value);
     }
     if (text.startsWith("$typeof$")) return this.queryType(module,id,text.slice(8,text.length));
+    // Campo de Partial/Pick/Omit/Required<X> ($fieldof$campo$X): el tipo del campo en X.
+    if (text.startsWith("$fieldof$") || text.startsWith("$fieldreq$")) {
+      const required: boolean = text.startsWith("$fieldreq$"); const tail: string = text.slice(required ? 10 : 9,text.length); const split: number = tail.indexOf("$",0);
+      const base: string = this.annotation(module,id,tail.slice(split+1,tail.length)); if (base.startsWith("!")) return base;
+      const member: number = this.memberSymbol(base,tail.slice(0,split));
+      if (member < 0) { this.report(module,id,"El tipo '" + this.displayType(base) + "' no tiene el campo '" + tail.slice(0,split) + "'"); return "!error"; }
+      const fieldType: string = this.instantiateMember(base,this.symbolType(member,this.binding.symbols[member].module,this.binding.symbols[member].node));
+      if (required && genericBase(fieldType) == "Optional") return genericArguments(fieldType)[0];
+      return fieldType;
+    }
     // #223: campo de la interfaz sintética de un literal sin tipo: el tipo de su valor.
     if (text.startsWith("$valueof$")) { let node: number = 0; for (let at: number = 9; at < text.length; at = at + 1) node = node * 10 + text.charCodeAt(at) - 48;
       // Un literal de objeto anidado no se comprueba aquí: lo hará su propio literal,
