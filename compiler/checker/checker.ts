@@ -25,10 +25,136 @@ export class NativeChecker {
   mutationCache: Map<string,number>;
   // #223: literales sin tipo con la misma forma comparten tipo (el primero).
   literalShapeKeys: string[]; literalShapeTypes: string[];
+  // #273: comprobación en compilación de JSON.parse<T>("texto constante").
+  jsonText: string; jsonAt: number;
   constructor(graph: ModuleGraph, binding: BindingResult) {
     this.graph = graph; this.binding = binding; this.result = new CheckResult(); this.symbolStates = []; this.depth = 0; this.switches = 0; this.compatibilityDepth = 0;
     this.narrowedSymbols = []; this.narrowedTypes = []; this.trace = false; this.narrowedPaths = [];
-    this.mutationCache = new Map<string,number>(); this.literalShapeKeys = []; this.literalShapeTypes = [];
+    this.mutationCache = new Map<string,number>(); this.literalShapeKeys = []; this.literalShapeTypes = []; this.jsonText = ""; this.jsonAt = 0;
+  }
+  // JSON.parse<T>("...") de estatic:json con texto constante: el texto se
+  // comprueba contra T al compilar y no encajar es un error de compilación.
+  jsonConstant(module: number, id: number, owner: number): void {
+    const n: AstNode = this.node(module,id);
+    const name: string = n.kind == NodeKind.MemberCallExpression ? n.get(AttributeKind.Method) : n.get(AttributeKind.Callee);
+    if (name != "parse" || owner < 0 || owner >= this.graph.modules.length) return;
+    if (!this.graph.modules[owner].file.endsWith("runtime/lib/json.ts")) return;
+    let typeText: string = ""; for (const attr of n.attributes) if (attr.name == AttributeKind.TypeArgument && typeText == "") typeText = attr.value;
+    let args: number[] = []; for (const edge of n.edges) if (edge.role == EdgeRole.Args) args.push(edge.node);
+    if (typeText == "" || args.length != 1) return;
+    const argument: AstNode = this.node(module,args[0]);
+    if (argument.kind != NodeKind.LiteralExpression || argument.get(AttributeKind.LiteralType) != "string") return;
+    const wanted: string = this.annotation(module,id,typeText);
+    this.jsonText = argument.get(AttributeKind.Value); this.jsonAt = 0;
+    let error: string = this.jsonMatch(wanted,"$");
+    this.jsonSpace(); if (error == "" && this.jsonAt != this.jsonText.length) error = "texto de más en la posición " + numberToString(this.jsonAt);
+    if (error != "") this.report(module,args[0],"E3010: El texto JSON no encaja con '" + this.displayType(wanted) + "': " + error);
+  }
+  jsonSpace(): void { while (this.jsonAt < this.jsonText.length && " \t\n\r".includes(this.jsonText.charAt(this.jsonAt), 0)) this.jsonAt = this.jsonAt + 1; }
+  jsonKind(): string {
+    this.jsonSpace(); if (this.jsonAt >= this.jsonText.length) return "";
+    const c: string = this.jsonText.charAt(this.jsonAt);
+    if (c == "{") return "object"; if (c == "[") return "array"; if (c == "\"") return "string";
+    if (c == "t" || c == "f") return "boolean"; if (c == "n") return "null";
+    if (c == "-" || "0123456789".includes(c, 0)) return "number";
+    return "";
+  }
+  // Lee un string JSON (sin las comillas, con los escapes simples resueltos).
+  jsonString(): string {
+    let value: string = ""; this.jsonAt = this.jsonAt + 1;
+    while (this.jsonAt < this.jsonText.length && this.jsonText.charAt(this.jsonAt) != "\"") {
+      if (this.jsonText.charAt(this.jsonAt) == "\\") { this.jsonAt = this.jsonAt + 1; const e: string = this.jsonText.charAt(this.jsonAt); value = value + (e == "n" ? "\n" : e == "t" ? "\t" : e); }
+      else value = value + this.jsonText.charAt(this.jsonAt);
+      this.jsonAt = this.jsonAt + 1;
+    }
+    this.jsonAt = this.jsonAt + 1; return value;
+  }
+  // Salta un valor JSON; "" si es válido.
+  jsonSkip(where: string): string {
+    const kind: string = this.jsonKind();
+    if (kind == "") return "JSON no válido en " + where;
+    if (kind == "string") { this.jsonString(); return ""; }
+    if (kind == "number") { this.jsonAt = this.jsonAt + 1; while (this.jsonAt < this.jsonText.length && "0123456789.eE+-".includes(this.jsonText.charAt(this.jsonAt), 0)) this.jsonAt = this.jsonAt + 1; return ""; }
+    if (kind == "boolean" || kind == "null") {
+      const word: string = this.jsonText.charAt(this.jsonAt) == "t" ? "true" : this.jsonText.charAt(this.jsonAt) == "f" ? "false" : "null";
+      if (this.jsonText.slice(this.jsonAt, this.jsonAt + word.length) != word) return "JSON no válido en " + where;
+      this.jsonAt = this.jsonAt + word.length; return "";
+    }
+    const close: string = kind == "object" ? "}" : "]"; this.jsonAt = this.jsonAt + 1; let first: boolean = true;
+    while (true) {
+      this.jsonSpace();
+      if (first && this.jsonText.charAt(this.jsonAt) == close) { this.jsonAt = this.jsonAt + 1; return ""; }
+      first = false;
+      if (kind == "object") { if (this.jsonKind() != "string") return "JSON no válido en " + where; this.jsonString(); this.jsonSpace(); if (this.jsonText.charAt(this.jsonAt) != ":") return "JSON no válido en " + where; this.jsonAt = this.jsonAt + 1; }
+      const inner: string = this.jsonSkip(where); if (inner != "") return inner;
+      this.jsonSpace();
+      if (this.jsonText.charAt(this.jsonAt) == ",") { this.jsonAt = this.jsonAt + 1; continue; }
+      if (this.jsonText.charAt(this.jsonAt) == close) { this.jsonAt = this.jsonAt + 1; return ""; }
+      return "JSON no válido en " + where;
+    }
+    return "";
+  }
+  // Comprueba el valor JSON que empieza en jsonAt contra el tipo; "" si encaja.
+  jsonMatch(wanted: string, where: string): string {
+    const jtype: string = memoryValue(wanted); const kind: string = this.jsonKind();
+    if (kind == "") return "JSON no válido en " + where;
+    if (jtype == "JsonValue") return this.jsonSkip(where);
+    if (genericBase(jtype) == "Optional") { if (kind == "null") return this.jsonSkip(where); return this.jsonMatch(genericArguments(jtype)[0],where); }
+    const alternatives: string[] = splitTypes(jtype,"|");
+    if (alternatives.length > 1) {
+      const start: number = this.jsonAt; let first: string = "";
+      for (const alternative of alternatives) { this.jsonAt = start; const error: string = this.jsonMatch(ungroupElement(alternative),where); if (error == "") return ""; if (first == "") first = error; }
+      return first;
+    }
+    if (numericType(jtype) || jtype == "string" || jtype == "boolean") {
+      const expectedKind: string = numericType(jtype) ? "number" : jtype;
+      if (kind != expectedKind) return "se esperaba " + expectedKind + " en " + where + " y hay " + kind;
+      return this.jsonSkip(where);
+    }
+    if ((jtype.endsWith("[]") && functionClose(jtype) < 0) || semanticTuple(jtype)) {
+      if (kind != "array") return "se esperaba array en " + where + " y hay " + kind;
+      const tuple: boolean = semanticTuple(jtype); const items: string[] = tuple ? splitTypes(jtype.slice(1,jtype.length-1),",") : [];
+      this.jsonAt = this.jsonAt + 1; let index: number = 0;
+      this.jsonSpace();
+      if (this.jsonText.charAt(this.jsonAt) == "]") { this.jsonAt = this.jsonAt + 1; return tuple && items.length != 0 ? "se esperaban " + numberToString(items.length) + " elementos en " + where + " y hay 0" : ""; }
+      while (true) {
+        if (tuple && index >= items.length) return "se esperaban " + numberToString(items.length) + " elementos en " + where;
+        const error: string = this.jsonMatch(tuple ? items[index] : semanticElement(jtype), where + "[" + numberToString(index) + "]"); if (error != "") return error;
+        index = index + 1; this.jsonSpace();
+        if (this.jsonText.charAt(this.jsonAt) == ",") { this.jsonAt = this.jsonAt + 1; continue; }
+        if (this.jsonText.charAt(this.jsonAt) == "]") { this.jsonAt = this.jsonAt + 1; break; }
+        return "JSON no válido en " + where;
+      }
+      if (tuple && index != items.length) return "se esperaban " + numberToString(items.length) + " elementos en " + where + " y hay " + numberToString(index);
+      return "";
+    }
+    let fieldNames: string[] = []; let fieldTypes: string[] = []; let valueType: string = "";
+    if (genericBase(jtype) == "Map" && genericArguments(jtype)[0] == "string") valueType = genericArguments(jtype)[1];
+    else {
+      const sid: number = this.nominalSymbol(jtype);
+      if (sid < 0 || !["InterfaceDeclaration","ClassDeclaration"].includes(this.binding.symbols[sid].kind)) return "el tipo '" + this.displayType(jtype) + "' no se puede leer de JSON (" + where + ")";
+      const owner = this.binding.symbols[sid];
+      for (const edge of this.node(owner.module,owner.node).edges) if (edge.role == EdgeRole.Fields && this.node(owner.module,edge.node).get(AttributeKind.IsStatic) != "true") {
+        const field: number = this.binding.files[owner.module].declarations[edge.node];
+        fieldNames.push(this.node(owner.module,edge.node).get(AttributeKind.Name)); fieldTypes.push(this.instantiateMember(jtype,this.symbolType(field,owner.module,edge.node)));
+      }
+    }
+    if (kind != "object") return "se esperaba object en " + where + " y hay " + kind;
+    let seen: string[] = []; this.jsonAt = this.jsonAt + 1; this.jsonSpace();
+    if (this.jsonText.charAt(this.jsonAt) == "}") this.jsonAt = this.jsonAt + 1;
+    else while (true) {
+      this.jsonSpace(); if (this.jsonKind() != "string") return "JSON no válido en " + where;
+      const key: string = this.jsonString(); this.jsonSpace();
+      if (this.jsonText.charAt(this.jsonAt) != ":") return "JSON no válido en " + where; this.jsonAt = this.jsonAt + 1;
+      let at: number = -1; for (let k: number = 0; k < fieldNames.length; k = k + 1) if (fieldNames[k] == key) at = k;
+      const error: string = valueType != "" ? this.jsonMatch(valueType, where + "." + key) : at >= 0 ? this.jsonMatch(fieldTypes[at], where + "." + key) : this.jsonSkip(where + "." + key);
+      if (error != "") return error; seen.push(key); this.jsonSpace();
+      if (this.jsonText.charAt(this.jsonAt) == ",") { this.jsonAt = this.jsonAt + 1; continue; }
+      if (this.jsonText.charAt(this.jsonAt) == "}") { this.jsonAt = this.jsonAt + 1; break; }
+      return "JSON no válido en " + where;
+    }
+    for (let k: number = 0; k < fieldNames.length; k = k + 1) if (!seen.includes(fieldNames[k]) && genericBase(fieldTypes[k]) != "Optional") return "falta el campo '" + fieldNames[k] + "' en " + where;
+    return "";
   }
   literalShape(typeText: string): string {
     const sid: number = this.nominalSymbol(typeText); if (sid < 0) return typeText;
@@ -1838,7 +1964,7 @@ export class NativeChecker {
       }
       return valueType;
     }
-    if (kind == NodeKind.CallExpression) { const sid: number = this.reference(module,id); return this.call(module,id,this.flowType(sid,module,id),sid,"",expected); }
+    if (kind == NodeKind.CallExpression) { const sid: number = this.reference(module,id); const called: string = this.call(module,id,this.flowType(sid,module,id),sid,"",expected); this.jsonConstant(module,id,this.result.files[module].selectedModules[id]); return called; }
     if (kind == NodeKind.GenericIdentifierExpression) {
       let args: string[] = []; for (const a of n.attributes) if (a.name == AttributeKind.TypeArgument) args.push(a.value);
       const text: string = this.annotation(module,id,n.get(AttributeKind.Name) + "<" + args.join(",") + ">");
@@ -1879,6 +2005,7 @@ export class NativeChecker {
       const optional: boolean = n.get(AttributeKind.Optional) == "true";
       const context: string = optional && genericBase(expected) == "Optional" ? genericArguments(expected)[0] : expected;
       const result: string = this.call(module,id,valueType,this.result.files[module].members[id],receiver,context);
+      if (this.result.files[module].members[id] >= 0) this.jsonConstant(module,id,this.binding.symbols[this.result.files[module].members[id]].module);
       return optional && result != "void" && result != "!error" ? "Optional<" + result + ">" : result;
     }
     if (kind == NodeKind.NewExpression) {
