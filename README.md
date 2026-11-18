@@ -471,7 +471,7 @@ en una línea, el texto se genera ya al compilar.
 - Aún no se puede desestructurar en `for (const [i, x] of a.entries())`: usa
   `e[0]` y `e[1]` (va en la tanda de Map/Set).
 
-## Librerías del runtime: `estatic:math` y `estatic:number`
+## Librerías del runtime: `estatic:math`, `estatic:number` y `estatic:date`
 
 `Math` y `Number` de TypeScript son librerías escritas en Estatic
 (`runtime/lib/*.ts`), no builtins: se importan.
@@ -499,6 +499,23 @@ toString(255, 16);        // "ff"
   `runtime/lib/numeric.hpp` y se enlaza con `@cpp_native`.
 - El `Math` global sigue existiendo de momento; `import Math from
   "estatic:math"` lo sustituye en el módulo que lo importa.
+
+```ts
+import Date, { parse, UTC } from "estatic:date";
+const d = new Date(2024, 0, 15, 10, 30);      // hora local
+d.getFullYear(); d.getHours(); d.toISOString(); d.setDate(31);
+new Date("2024-01-15T10:30:00Z"); new Date(1705314605123); new Date();
+Date.now(); Date.UTC(2024, 0, 15); Date.parse("2024-01-15");
+```
+
+- `Date` sigue la especificación de ECMAScript: getters y setters locales y UTC,
+  `toISOString`, `toUTCString`, `toDateString`, `toString`, `toJSON`, fechas no
+  válidas (`NaN`, `"Invalid Date"`, `RangeError` en `toISOString`) y el formato
+  ISO de `Date.parse`. Comparado con Node, también con horario de verano.
+- La zona local es la del sistema (`TZ`); en `toString` el nombre entre
+  paréntesis es la abreviatura del sistema (`CET`), no el nombre largo de Node.
+- El calendario está escrito en Estatic; solo el reloj y la zona salen de C++
+  (`runtime/lib/date.hpp`).
 
 ## Errores: `Error` sin excepciones
 
