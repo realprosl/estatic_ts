@@ -8,6 +8,7 @@ import { irNumericWidth, irNumericKind, irNumericSigned } from "./type-traits";
 import { finishBorrows } from "./borrows";
 import { preserveContracts } from "./contracts";
 import { verifyIr } from "./verify";
+import { inferIntegers } from "./integers";
 import { progressDetail } from "../platform/index";
 import { decodeEscapes } from "../lexer/index";
 
@@ -1398,6 +1399,8 @@ export class IrLowering {
     profileEnd("ir-lowering",loweringProfile,"functions="+numberToString(this.result.functions.length)+" types="+numberToString(this.result.types.length)+" blocks="+numberToString(blockCount));
     const borrowsProfile=profileBegin();
     if (trace) progressDetail("frontend: IR: finalizando préstamos ("+(Date.now()-started)+" ms)");
+    // #285: variables locales enteras como i64 en vez de double.
+    if (this.result.diagnostics.length == 0) this.result = inferIntegers(this.result);
     if (this.result.diagnostics.length == 0) this.result = finishBorrows(this.result);
     profileEnd("ir-borrows",borrowsProfile);
     const verifyProfile=profileBegin();
