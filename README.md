@@ -648,8 +648,11 @@ for (const par of "k1=v1&k2=v2".matchAll(/(\w+)=(\w+)/g)) print(par[1]);
     no encaja es un error (`E3010: ... se esperaba number en $.edad y hay
     string`), y un JSON mal formado también;
   - el resultado sigue siendo `Result<T, Error>`, con la misma firma que con un
-    texto que solo se conoce al ejecutar. Por ahora el objeto se construye
-    parseando el texto al ejecutar (ya comprobado).
+    texto que solo se conoce al ejecutar. El valor se construye en compilación
+    (`Ok(valor)`, sin parsear al ejecutar) cuando T se compone de `number`,
+    `string`, `boolean`, opcionales, arrays e interfaces/clases; con
+    `JsonValue`, uniones, `Map` o escapes `\uXXXX` se parsea al ejecutar (ya
+    comprobado).
 
 ## Errores: `Error` sin excepciones
 
