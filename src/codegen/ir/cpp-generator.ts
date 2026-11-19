@@ -54,9 +54,10 @@ export class IrCppGenerator {
         if(name==="Request"||name==="Response"){this.httpServer();return name==="Request"?"const ets::HttpRequest*":"ets::HttpResponse*";}
         if(name==="HttpClientResponse"){this.headers.add("runtime/ets_http_curl_async.hpp");this.backends.libuv=true;this.backends.curl=true;return "ets::HttpClientResponse";}
         if(name==="Timer")this.fail("runtime:Timer necesita un contrato de ownership/copia en el IR para reutilizar el Timer no copiable de C++");
-        if(["JsonValue","Console","Regex","Request","Response","HttpClientResponse","FileReader","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","Server","Timer","FsWatcher","FsEvent"].includes(name)) {
+        if(["JsonValue","Console","Regex","Request","Response","HttpClientResponse","FileReader","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","Server","Timer","FsWatcher","FsEvent","ProcessReadable","ProcessWritable","ChildProcess"].includes(name)) {
+          if(["ProcessReadable","ProcessWritable","ChildProcess"].includes(name)){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;return `ets::${name}`;}
           if(name==="Regex")this.headers.add("runtime/ets_regex.hpp");
-          else if(!["JsonValue","Console"].includes(name)){this.headers.add("runtime/ets_runtime_full.hpp");this.backends.libuv=true;}
+          else if(!["JsonValue","Console","ProcessReadable","ProcessWritable","ChildProcess"].includes(name)){this.headers.add("runtime/ets_runtime_full.hpp");this.backends.libuv=true;}
           return cppType(name);
         }
       }
