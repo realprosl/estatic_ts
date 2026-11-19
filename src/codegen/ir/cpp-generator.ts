@@ -55,6 +55,7 @@ export class IrCppGenerator {
         if(name==="HttpClientResponse"){this.headers.add("runtime/ets_http_curl_async.hpp");this.backends.libuv=true;this.backends.curl=true;return "ets::HttpClientResponse";}
         if(name==="Timer")this.fail("runtime:Timer necesita un contrato de ownership/copia en el IR para reutilizar el Timer no copiable de C++");
         if(["JsonValue","Console","Regex","Request","Response","HttpClientResponse","FileReader","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","Server","Timer","FsWatcher","FsEvent"].includes(name)) {
+          if(name==="TlsContext"||name==="TlsConnection")this.backends.tls=true;
           if(name==="Regex")this.headers.add("runtime/ets_regex.hpp");
           else if(!["JsonValue","Console"].includes(name)){this.headers.add("runtime/ets_runtime_full.hpp");this.backends.libuv=true;}
           return cppType(name);

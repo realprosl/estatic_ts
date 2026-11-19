@@ -551,6 +551,23 @@ en una línea, el texto se genera ya al compilar.
 - Aún no se puede desestructurar en `for (const [i, x] of a.entries())`: usa
   `e[0]` y `e[1]` (va en la tanda de Map/Set).
 
+## `estatic:tls`
+
+```ts
+import tls from "estatic:tls";
+const creado = tls.createServer({ cert: "cert.pem", key: "key.pem" });  // Result<TlsServer, Error>
+const servidor = creado.value();
+servidor.listen(8443, "127.0.0.1");                 // Result<boolean, Error>
+const socket = await servidor.accept();             // Result<TlsSocket, Error>
+const datos = await socket.value().read();          // Result<string, Error>
+await socket.value().write("hola"); socket.value().end(); servidor.close();
+```
+
+- Servidor TLS (OpenSSL, TLS 1.2 o superior) sobre el bucle de eventos,
+  bindings a `runtime/ets_tls.hpp`. `accept`, `read` y `write` admiten un plazo
+  en milisegundos; por defecto, sin límite práctico. Solo los programas que lo
+  importan enlazan OpenSSL.
+
 ## Librerías del runtime: `estatic:math`, `estatic:number`, `estatic:date`, `estatic:json` y `estatic:regexp`
 
 `Math` y `Number` de TypeScript son librerías escritas en Estatic
