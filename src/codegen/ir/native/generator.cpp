@@ -49,7 +49,7 @@ public:
    if(name=="HttpClientResponse"){result.headers.insert("runtime/ets_http_curl_async.hpp");result.libuv=result.curl=true;return "ets::HttpClientResponse";}
    if(name=="Timer")return fail("runtime:Timer necesita un contrato de ownership/copia en el IR");
    auto it=nativeTypes.find(name);if(it!=nativeTypes.end()){
-    if(name=="Regex")result.headers.insert("runtime/ets_regex.hpp");else if(!in(name,{"JsonValue","Console"})){result.headers.insert("runtime/ets_runtime_full.hpp");result.libuv=true;}
+    if(name=="Regex")result.headers.insert("runtime/ets_regex.hpp");else if(in(name,{"ProcessReadable","ProcessWritable","ChildProcess"})){result.headers.insert("runtime/ets_child_process.hpp");result.libuv=true;}else if(!in(name,{"JsonValue","Console"})){result.headers.insert("runtime/ets_runtime_full.hpp");result.libuv=true;}
     return it->second;
    }
   }

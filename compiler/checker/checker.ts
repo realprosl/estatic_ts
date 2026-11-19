@@ -708,7 +708,7 @@ export class NativeChecker {
     if (["ClassDeclaration","TypeAliasDeclaration","UnionDeclaration"].includes(s.kind) && this.genericParameters(sid).length > 0) { let empty: string[] = []; return this.instantiateType(module,id,sid,empty); }
     if (s.kind == "TypeAliasDeclaration") return this.symbolType(sid,module,id);
     if (["ClassDeclaration","InterfaceDeclaration","EnumDeclaration","UnionDeclaration"].includes(s.kind)) return this.nominal(sid);
-    if (s.kind == "builtin-type" && ["JsonValue","FileReader","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","Request","Response","Server","HttpClientResponse","Timer","FsWatcher","FsEvent","Console"].includes(s.name)) return s.name;
+    if (s.kind == "builtin-type" && ["JsonValue","FileReader","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","Request","Response","Server","HttpClientResponse","Timer","FsWatcher","FsEvent","Console","ProcessReadable","ProcessWritable","ChildProcess"].includes(s.name)) return s.name;
     return this.unsupported(module,id,"tipo " + text);
   }
   asynchronous(module: number, id: number): boolean {

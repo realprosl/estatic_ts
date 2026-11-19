@@ -551,6 +551,23 @@ en una línea, el texto se genera ya al compilar.
 - Aún no se puede desestructurar en `for (const [i, x] of a.entries())`: usa
   `e[0]` y `e[1]` (va en la tanda de Map/Set).
 
+## `estatic:process`
+
+```ts
+import process from "estatic:process";
+process.argv;               // string[]: [ejecutable, programa, ...argumentos]
+process.argc;               // process.argv.length
+process.env["HOME"] ?? "";  // Record<string, string>
+process.platform;           // "linux" | "darwin" | "win32"
+process.pid; process.cwd(); process.exit(1);
+process.stdin.on("data", (chunk: string): void => { ... });
+process.stdout.write("hola\n"); process.stderr.write("error\n");
+```
+
+- Son bindings al runtime de siempre (`runtime/lib/process.hpp`). `process` no
+  es global en los programas: se importa (#292). El builtin global se mantiene
+  mientras `compiler/` lo use; se retirará al regenerar la semilla.
+
 ## Librerías del runtime: `estatic:math`, `estatic:number`, `estatic:date`, `estatic:json` y `estatic:regexp`
 
 `Math` y `Number` de TypeScript son librerías escritas en Estatic
