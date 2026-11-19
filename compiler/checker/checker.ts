@@ -2301,6 +2301,12 @@ export class NativeChecker {
       }
       if (object != "!error") this.report(module,id,"El tipo no admite índices: " + this.displayType(object)); return "!error";
     }
+    // { … } donde se espera T | undefined: el literal es un T (opciones opcionales).
+    if (kind == NodeKind.ObjectLiteralExpression && genericBase(memoryValue(expected)) == "Optional") {
+      const inner: string = genericArguments(memoryValue(expected))[0];
+      const innerOwner: number = this.nominalSymbol(inner);
+      if (genericBase(inner) == "Map" || (innerOwner >= 0 && this.binding.symbols[innerOwner].kind == "InterfaceDeclaration")) expected = inner;
+    }
     if (kind == NodeKind.ObjectLiteralExpression && genericBase(memoryValue(expected)) == "Map") {
       // { a: 1, b: 2 } como Record<string, V> (Map ordenado): cada valor es un V.
       const parts: string[] = genericArguments(memoryValue(expected));

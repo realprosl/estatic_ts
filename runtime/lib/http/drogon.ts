@@ -1,0 +1,35 @@
+// Servidor HTTP Drogon (mucho tráfico) como librería del runtime (#292):
+//
+//   import http, { param } from "estatic:http/drogon";
+//   const server = http.createServer();
+//   server.get("/", (req: Request, res: Response): void => { res.send("ok"); });
+//   server.listen("0.0.0.0", 8080);
+//
+// La misma API que estatic:http; solo cambia el servidor que se enlaza.
+
+@include("runtime/lib/http/drogon.hpp")
+import fetchUrl, { RequestInit, Response as FetchResponse } from "../fetch";
+import { Error } from "../../prelude/error";
+
+@cpp_native("ets_http_lib::createServer") function nativeCreateServer(): Server;
+@cpp_native("ets_http_lib::param") function nativeParam(request: Request, name: string): string;
+@cpp_native("ets_http_lib::query") function nativeQuery(request: Request, name: string): string;
+@cpp_native("ets_http_lib::header") function nativeHeader(request: Request, name: string): string;
+
+// Un servidor nuevo; se configura con server.get/post/put/patch/delete(ruta,
+// (req: Request, res: Response): void => …) y se arranca con server.listen.
+export function createServer(): Server { return nativeCreateServer(); }
+// Parámetro de la ruta (/users/:id), de la query (?q=) o cabecera de la petición.
+export function param(request: Request, name: string): string { return nativeParam(request, name); }
+export function query(request: Request, name: string): string { return nativeQuery(request, name); }
+export function header(request: Request, name: string): string { return nativeHeader(request, name); }
+
+export function fetch(url: string, init?: RequestInit): Promise<Result<FetchResponse, Error>> { return fetchUrl(url, init); }
+
+export default class http {
+  static createServer(): Server { return createServer(); }
+  static param(request: Request, name: string): string { return param(request, name); }
+  static query(request: Request, name: string): string { return query(request, name); }
+  static header(request: Request, name: string): string { return header(request, name); }
+  static fetch(url: string, init?: RequestInit): Promise<Result<FetchResponse, Error>> { return fetchUrl(url, init); }
+}

@@ -661,6 +661,29 @@ terminal.columns(); terminal.isTTY(); terminal.moveTo(0, 0); terminal.hideCursor
 - `estatic:terminal` son las operaciones de `console.color`, `console.moveTo`…
   como funciones; sin terminal ANSI no escriben secuencias.
 
+## `estatic:fetch`, `estatic:http` y `estatic:http/drogon`
+
+```ts
+import fetch from "estatic:fetch";
+const r = await fetch("https://ejemplo.com/api", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+if (r.isOk()) { const res = r.value(); res.status; res.ok; res.headers.get("content-type"); await res.text(); }
+
+import http, { param } from "estatic:http";          // servidor ligero (cpp-httplib)
+// import http, { param } from "estatic:http/drogon"; // mismo código, Drogon (mucho tráfico)
+let server: Server = http.createServer();
+server.get("/users/:id", (req: Request, res: Response): void => { res.status(200).send("hola " + param(req, "id")); });
+server.listen("127.0.0.1", 8080);
+```
+
+- `fetch` sin excepciones: un fallo de red es `Result` con el error; un 404 es
+  una respuesta con `ok = false`. Cualquier método, cabeceras y cuerpo, con
+  libcurl en el pool de bloqueo del bucle de eventos.
+- El servidor se elige con el import, sin decorador: `estatic:http`
+  (cpp-httplib, una cabecera) o `estatic:http/drogon` (Drogon). La API es la
+  misma (`get/post/put/patch/delete`, `listen`, `param`, `query`, `header`) y
+  cada programa enlaza solo el servidor que importa. `estatic:http` también
+  exporta `fetch`.
+
 ## Librerías del runtime: `estatic:math`, `estatic:number`, `estatic:date`, `estatic:json` y `estatic:regexp`
 
 `Math` y `Number` de TypeScript son librerías escritas en Estatic

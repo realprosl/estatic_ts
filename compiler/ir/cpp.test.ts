@@ -275,6 +275,18 @@ await main();
  rmSync(dir,{recursive:true,force:true});
  assert.equal(code,0);assert.equal(answer,"eco:hola");
  assert.equal(out,"sin certificado false\naccept sin listen false\nlisten true\nleído hola escrito 8\n");
+test("IR C++ librería estatic:fetch: métodos, cabeceras, cuerpo y errores contra un servidor de Node (#292)",async()=>{
+ const server=createServer((req,res)=>{let body="";req.on("data",chunk=>body+=chunk);req.on("end",()=>{
+  if(req.url==="/hola"){res.writeHead(200,{"X-Test":"si"});res.end("hola");}
+  else if(req.url==="/eco"){res.writeHead(201);res.end(req.method+":"+req.headers["x-uno"]+":"+req.headers["content-type"]+":"+body);}
+  else{res.writeHead(404);res.end("no");}
+ });});server.listen(0,"127.0.0.1");await once(server,"listening");const port=(server.address() as {port:number}).port;
+ try {
+  const project=ir("import fetch from \"estatic:fetch\";\nasync function main(): Promise<void> {\n  const a = await fetch(\"http://127.0.0.1:PORT/hola\");\n  if (a.isOk()) { const r = a.value(); console.log(r.status, r.ok, r.headers.get(\"x-test\") ?? \"-\", r.headers.has(\"X-TEST\"), await r.text()); }\n  const b = await fetch(\"http://127.0.0.1:PORT/eco\", { method: \"put\", headers: { \"X-Uno\": \"1\", \"Content-Type\": \"text/plain\" }, body: \"cuerpo\" });\n  if (b.isOk()) console.log(b.value().status, await b.value().text());\n  const c = await fetch(\"http://127.0.0.1:PORT/falta\");\n  if (c.isOk()) console.log(c.value().status, c.value().ok);\n  const d = await fetch(\"http://127.0.0.1:1/\");\n  console.log(\"sin servidor\", d.isOk());\n}\nawait main();\n".replaceAll("PORT",String(port))),result=generateCppFromIr(project);assert(result.runtimeBackends.curl);
+  const cpp=join(directory,"fetch.cpp"),binary=join(directory,"fetch");writeFileSync(cpp,result.cpp);buildIrCpp(result,cpp,binary);
+  const child=spawn(binary,[],{stdio:["ignore","pipe","pipe"]});let stdout="",stderr="";child.stdout.on("data",chunk=>stdout+=chunk);child.stderr.on("data",chunk=>stderr+=chunk);
+  const timer=setTimeout(()=>child.kill("SIGKILL"),15000);try{const [code]=await once(child,"close");assert.equal(code,0,stderr);assert.equal(stdout,"200 true si true hola\n201 PUT:1:text/plain:cuerpo\n404 false\nsin servidor false\n");}finally{clearTimeout(timer);}
+ }finally{await new Promise<void>(resolve=>server.close(()=>resolve()));}
 });
 test("IR C++ preserves escaped and template literal newlines",()=>{
  assert.equal(execute('print("A\\nB");print(\`C\\nD\`);'),"A\nB\nC\nD\n");
@@ -328,16 +340,19 @@ test("IR C++ writes back builtin ref parameters through runtime references",()=>
 });
 
 
-for(const backend of ["httplib","drogon"] as const)test(`IR C++ retains callbacks and routes real HTTP through ${backend}`,async()=>{
+for(const backend of ["httplib","drogon","estatic:http","estatic:http/drogon"] as const)test(`IR C++ retains callbacks and routes real HTTP through ${backend}`,async()=>{
  const reservation=createServer();reservation.listen(0,"127.0.0.1");await once(reservation,"listening");const port=(reservation.address() as {port:number}).port;await new Promise<void>(resolve=>reservation.close(()=>resolve()));
  const source=`let server=http.createServer();const greeting="hello ";server.get("/users/:id",(req:Request,res:Response):void=>{res.status(202).header("X-Reply","yes").send(greeting+http.param(req,"id")+":"+http.query(req,"q")+":"+http.header(req,"X-Test")+":"+req.method+":"+req.path);});server.post("/echo",(req:Request,res:Response):void=>{res.status(201).send(req.body);});server.delete("/item",(req:Request,res:Response):void=>{res.status(203).json(${JSON.stringify('{"ok":true}')});});server.listen("127.0.0.1",${port});`;
- const project=ir((backend==="drogon"?"@cpp_drogon ":"")+source),result=generateCppFromIr(project);assert(result.headers.includes(`runtime/ets_http_${backend}.hpp`));
+ // #292: con los módulos, el servidor lo elige el import (sin @cpp_drogon).
+ const imported=backend.startsWith("estatic:")?`import http from "${backend}";\n`+source.replaceAll("http.param","http.param").replace("let server=http.createServer()","let server: Server = http.createServer()"):"";
+ const header=backend==="drogon"||backend==="estatic:http/drogon"?"drogon":"httplib";
+ const project=ir(imported!==""?imported:(backend==="drogon"?"@cpp_drogon ":"")+source),result=generateCppFromIr(project);assert(result.headers.includes(`runtime/ets_http_${header}.hpp`));assert(!result.headers.includes(`runtime/ets_http_${header==="drogon"?"httplib":"drogon"}.hpp`));
  const cpp=join(directory,"server.cpp"),binary=join(directory,"server");writeFileSync(cpp,result.cpp);buildIrCpp(result,cpp,binary);
  const child=spawn(binary,[],{stdio:["ignore","pipe","pipe"]});let errors="";child.stderr.on("data",chunk=>errors+=chunk);const closed=once(child,"close");
  try {
   let response:Response|undefined;
   for(let attempt=0;attempt<100;attempt++){try{response=await fetch(`http://127.0.0.1:${port}/users/42?q=one%20two`,{headers:{"X-Test":"custom"}});break;}catch{if(child.exitCode!==null)throw new Error(errors);await new Promise(resolve=>setTimeout(resolve,25));}}
-  assert(response,"Server did not start");assert.equal(response.status,202);assert.equal(response.headers.get("x-reply"),"yes");assert.equal(await response.text(),backend==="drogon"?"hello 42:one%20two:custom:GET:/users/42":"hello 42:one two:custom:GET:/users/42");
+  assert(response,"Server did not start");assert.equal(response.status,202);assert.equal(response.headers.get("x-reply"),"yes");assert.equal(await response.text(),header==="drogon"?"hello 42:one%20two:custom:GET:/users/42":"hello 42:one two:custom:GET:/users/42");
   response=await fetch(`http://127.0.0.1:${port}/echo`,{method:"POST",body:"payload"});assert.equal(response.status,201);assert.equal(await response.text(),"payload");
   response=await fetch(`http://127.0.0.1:${port}/item`,{method:"DELETE"});assert.equal(response.status,203);assert.match(response.headers.get("content-type")??"",/application\/json/);assert.deepEqual(await response.json(),{ok:true});
  }finally{child.kill("SIGTERM");await closed;}
@@ -346,6 +361,13 @@ for(const backend of ["httplib","drogon"] as const)test(`IR C++ retains callback
 test("IR C++ selects the existing Drogon wrapper through its annotation",()=>{
  const p=ir('@cpp_drogon let server:Server=http.createServer();server.get("/",(req:Request,res:Response):void=>{res.send("ok");});');
  const result=generateCppFromIr(p);assert(result.headers.includes("runtime/ets_http_drogon.hpp"));assert(!result.headers.includes("runtime/ets_http_httplib.hpp"));
+});
+
+test("IR C++ estatic:http/drogon elige Drogon por el import, sin decorador (#292)",()=>{
+ const drogon=generateCppFromIr(ir('import http from "estatic:http/drogon";let server: Server = http.createServer();server.get("/",(req:Request,res:Response):void=>{res.send("ok");});'));
+ assert(drogon.headers.includes("runtime/ets_http_drogon.hpp"));assert(!drogon.headers.includes("runtime/ets_http_httplib.hpp"));
+ const light=generateCppFromIr(ir('import http from "estatic:http";let server: Server = http.createServer();server.get("/",(req:Request,res:Response):void=>{res.send("ok");});'));
+ assert(light.headers.includes("runtime/ets_http_httplib.hpp"));assert(!light.headers.includes("runtime/ets_http_drogon.hpp"));
 });
 
 test("IR C++ libcurl client executes GET and POST through native async",async()=>{
