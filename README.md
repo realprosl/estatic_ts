@@ -551,6 +551,29 @@ en una línea, el texto se genera ya al compilar.
 - Aún no se puede desestructurar en `for (const [i, x] of a.entries())`: usa
   `e[0]` y `e[1]` (va en la tanda de Map/Set).
 
+## `estatic:fs`
+
+```ts
+import fs, { readFileSync, readFile } from "estatic:fs";
+const texto = readFileSync("a.txt");              // Result<string, Error>
+if (texto.isOk()) print(texto.value());
+const r = await fs.readFile("a.txt");             // async sobre libuv
+fs.writeFileSync("b.txt", "hola"); fs.appendFileSync("b.txt", "!");
+fs.copyFileSync(a, b); fs.renameSync(a, b); fs.unlinkSync(a); fs.existsSync(a);
+fs.mkdirSync("dir/sub", { recursive: true }); fs.readdirSync("dir");
+fs.rmSync("dir", { recursive: true });
+const st = fs.statSync("b.txt");                  // Result<Stats, Error>
+// st.value().isFile(), isDirectory(), size, mtimeMs
+```
+
+- Es la API de `fs` de Node sin excepciones: lo que en Node lanza aquí
+  devuelve `Result<T, Error>`. Las versiones async (`readFile`, `writeFile`,
+  `appendFile`, `copyFile`, `rename`, `unlink`) devuelven
+  `Promise<Result<T, Error>>`.
+- Son bindings al runtime de siempre (`runtime/ets_file.hpp`) más
+  `std::filesystem` para directorios y `stat` (`runtime/lib/fs.hpp`). El
+  builtin global `fs` se mantiene mientras `compiler/` lo use (#292).
+
 ## Librerías del runtime: `estatic:math`, `estatic:number`, `estatic:date`, `estatic:json` y `estatic:regexp`
 
 `Math` y `Number` de TypeScript son librerías escritas en Estatic
