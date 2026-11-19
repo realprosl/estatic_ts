@@ -196,7 +196,7 @@ let _cppLoop51Result:boolean=false;
 const _cppLoop51Input:IrAnnotation[]=this.project.annotations;
 for(let _cppLoop51Index:number=0;_cppLoop51Index<_cppLoop51Input.length;_cppLoop51Index=_cppLoop51Index+1){
 const a:IrAnnotation=_cppLoop51Input[_cppLoop51Index];
-if(a.name=="cpp_drogon"){_cppLoop51Result=true;break;}continue;
+if(a.name=="cpp_drogon"||(a.name=="include"&&a.arguments.length==1&&a.arguments[0]=="runtime/lib/http/drogon.hpp")){_cppLoop51Result=true;break;}continue;
 }
 this.headers.add(_cppLoop51Result?"runtime/ets_http_drogon.hpp":"runtime/ets_http_httplib.hpp");}}
   elementType(id:number):string {return this.project.types[id]=="boolean"?"ets::ir::Boolean":this.cppTypeId(id);}
