@@ -551,6 +551,23 @@ en una línea, el texto se genera ya al compilar.
 - Aún no se puede desestructurar en `for (const [i, x] of a.entries())`: usa
   `e[0]` y `e[1]` (va en la tanda de Map/Set).
 
+## `estatic:path`
+
+```ts
+import path, { join, resolve, relative } from "estatic:path";
+path.join("a", "b/../c");          // "a/c"
+resolve("x");                      // directorio actual + "/x"
+relative("/a/b/c", "/a/d");        // "../../d"
+path.parse("/home/u/f.txt");       // { root, dir, base, ext, name }
+path.dirname(p); path.basename(p, ".ts"); path.extname(p); path.normalize(p);
+path.isAbsolute(p); path.format(partes); path.sep; path.delimiter;
+```
+
+- Es `path.posix` de Node escrito en Estatic, con el mismo algoritmo y los
+  mismos resultados (comparado con Node). Solo `resolve` pregunta el
+  directorio actual al runtime. El builtin global `path` se mantiene mientras
+  `compiler/` lo use (#292).
+
 ## Librerías del runtime: `estatic:math`, `estatic:number`, `estatic:date`, `estatic:json` y `estatic:regexp`
 
 `Math` y `Number` de TypeScript son librerías escritas en Estatic
