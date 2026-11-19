@@ -639,6 +639,28 @@ await socket.value().write("hola"); socket.value().end(); servidor.close();
   en milisegundos; por defecto, sin límite práctico. Solo los programas que lo
   importan enlazan OpenSSL.
 
+## `estatic:child_process` y `estatic:terminal`
+
+```ts
+import child_process, { spawnSync, execSync } from "estatic:child_process";
+const r = spawnSync("ls", ["-l"]);               // { status, stdout, stderr, error }
+spawnSync("cat", [], { input: "texto" });
+const salida = execSync("echo hola | tr a-z A-Z");  // Result<string, Error>
+const hijo = child_process.spawn("cat", []);     // async: hijo.stdout.on("data", ...)
+
+import terminal, { color, reset } from "estatic:terminal";
+color("green"); terminal.writeLine("ok"); reset();
+terminal.columns(); terminal.isTTY(); terminal.moveTo(0, 0); terminal.hideCursor();
+```
+
+- `spawnSync`/`execSync` esperan a que termine el proceso (POSIX, en
+  `runtime/lib/child_process.hpp`); `status` es el código de salida, 128 + la
+  señal si murió por una, o -1 si no arrancó (con `error`). `execSync` usa
+  `/bin/sh -c` y devuelve un `Error` si el código no es 0. `spawn` es el
+  `ChildProcess` async de siempre (libuv).
+- `estatic:terminal` son las operaciones de `console.color`, `console.moveTo`…
+  como funciones; sin terminal ANSI no escriben secuencias.
+
 ## Librerías del runtime: `estatic:math`, `estatic:number`, `estatic:date`, `estatic:json` y `estatic:regexp`
 
 `Math` y `Number` de TypeScript son librerías escritas en Estatic
