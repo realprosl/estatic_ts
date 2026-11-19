@@ -567,6 +567,22 @@ process.stdout.write("hola\n"); process.stderr.write("error\n");
 - Son bindings al runtime de siempre (`runtime/lib/process.hpp`). `process` no
   es global en los programas: se importa (#292). El builtin global se mantiene
   mientras `compiler/` lo use; se retirará al regenerar la semilla.
+## `estatic:path`
+
+```ts
+import path, { join, resolve, relative } from "estatic:path";
+path.join("a", "b/../c");          // "a/c"
+resolve("x");                      // directorio actual + "/x"
+relative("/a/b/c", "/a/d");        // "../../d"
+path.parse("/home/u/f.txt");       // { root, dir, base, ext, name }
+path.dirname(p); path.basename(p, ".ts"); path.extname(p); path.normalize(p);
+path.isAbsolute(p); path.format(partes); path.sep; path.delimiter;
+```
+
+- Es `path.posix` de Node escrito en Estatic, con el mismo algoritmo y los
+  mismos resultados (comparado con Node). Solo `resolve` pregunta el
+  directorio actual al runtime. El builtin global `path` se mantiene mientras
+  `compiler/` lo use (#292).
 
 ## Librerías del runtime: `estatic:math`, `estatic:number`, `estatic:date`, `estatic:json` y `estatic:regexp`
 
