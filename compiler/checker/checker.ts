@@ -49,6 +49,8 @@ export class NativeChecker {
     let error: string = this.jsonMatch(wanted,"$");
     this.jsonSpace(); if (error == "" && this.jsonAt != this.jsonText.length) error = "texto de más en la posición " + numberToString(this.jsonAt);
     if (error != "") this.report(module,args[0],"E3010: El texto JSON no encaja con '" + this.displayType(wanted) + "': " + error);
+    // Encaja: el valor se construye al compilar (lower).
+    else this.result.files[module].constantStates[id] = "json";
   }
   jsonSpace(): void { while (this.jsonAt < this.jsonText.length && " \t\n\r".includes(this.jsonText.charAt(this.jsonAt), 0)) this.jsonAt = this.jsonAt + 1; }
   jsonKind(): string {

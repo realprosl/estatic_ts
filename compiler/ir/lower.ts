@@ -41,6 +41,8 @@ export class IrLowering {
   overrideNodes: number[]; overridePlaces: number[]; optionalActive: number[];
   // #254: place del receptor de la última llamada que lo modifica (m.set, s.add, xs.push).
   mutatedPlace: number;
+  // #273: texto y posición del JSON.parse constante que se construye al compilar.
+  jsonText: string; jsonAt: number; jsonEscapes: boolean;
   cleanupScopes: IrCleanupScope[]; breakDepths: number[]; continueDepths: number[];
   receiverOverride: number; preparedArguments: number[]; preparedCall: number;
   argumentSymbols: number[]; argumentValues: number[];
@@ -48,7 +50,7 @@ export class IrLowering {
   constructor(graph: ModuleGraph, binding: BindingResult, checked: CheckResult) {
     this.interfaceFrom = []; this.interfaceTo = []; this.dispatchInterfaces = []; this.dispatchNames = []; this.dispatchSignatures = [];
     this.contextFrom = []; this.contextTo = [];
-    this.graph = graph; this.binding = binding; this.checked = checked; this.result = new IrProject();
+    this.graph = graph; this.binding = binding; this.checked = checked; this.result = new IrProject(); this.jsonText = ""; this.jsonAt = 0; this.jsonEscapes = false;
     this.module = 0; this.currentFunction = -1; this.block = 0; this.symbols = []; this.breakTargets = []; this.continueTargets = [];
     this.overrideNodes = []; this.overridePlaces = []; this.optionalActive = []; this.mutatedPlace = -1;
     this.cleanupScopes = []; this.breakDepths = []; this.continueDepths = [];
@@ -404,6 +406,7 @@ export class IrLowering {
     if (id < 0) return -1;
     for (let at: number = this.overrideNodes.length-1; at >= 0; at = at-1) if (this.overrideNodes[at] == id) return this.emit("load",this.result.functions[this.currentFunction].places[this.overridePlaces[at]].typeId,[],this.overridePlaces[at],-1,"",id);
     if (this.checked.files[this.module].constantStates[id] == "evaluated") return this.evaluatedConstant(id);
+    if (this.checked.files[this.module].constantStates[id] == "json") { const built: number = this.jsonConstant(id); if (built >= 0) return built; }
     // `undefined`: solo existe como valor de un T | undefined, es decir,
     // un Optional<T> vacío.
     if (this.isUndefined(id)) {
@@ -423,6 +426,94 @@ export class IrLowering {
     if (item.kind == "array") { const result: number = this.emit("aggregate",typeId,values,-1,-1,"",id); let names: string[] = []; for (const entry of values) names.push("value"); this.setNames(names); return result; }
     if (item.kind == "object") { const result: number = this.emit("record",typeId,values,-1,-1,"",id); this.setNames(item.keys); return result; }
     this.fail(id,"Constante sin representación materializable: "+item.kind); return -1;
+  }
+  // #273: JSON.parse<T>("texto constante") ya comprobado por el checker: el valor
+  // se construye al compilar (Ok(valor) sin parsear al ejecutar). Si T tiene algo
+  // que no se sabe construir así (JsonValue, uniones, Map…) se deja la llamada.
+  jsonConstant(id: number): number {
+    const resultType: number = this.typeId(this.checked.files[this.module].types[id],id);
+    if (this.result.typeDefinitions[resultType].kind != "Result" || !this.jsonBuildable(this.result.typeDefinitions[resultType].arguments[0],0)) return -1;
+    let text: number = -1; for (const edge of this.node(id).edges) if (edge.role == EdgeRole.Args) text = edge.node;
+    if (text < 0) return -1;
+    this.jsonText = this.node(text).get(AttributeKind.Value); this.jsonAt = 0;
+    // \uXXXX: se deja para el parser de ejecución.
+    if (this.jsonText.includes("\\u", 0)) return -1;
+    const value: number = this.jsonBuild(this.result.typeDefinitions[resultType].arguments[0],id); if (value < 0) return -1;
+    return this.emit("result",resultType,[value],-1,-1,"Ok",id);
+  }
+  jsonBuildable(typeId: number, depth: number): boolean {
+    if (depth > 32) return false;
+    const shape = this.result.typeDefinitions[typeId]; const text: string = this.result.types[typeId];
+    if (text == "number" || text == "string" || text == "boolean") return true;
+    if (shape.kind == "Optional" || shape.kind == "array") return this.jsonBuildable(shape.arguments[0],depth+1);
+    if (shape.kind == "interface" || shape.kind == "record") { for (const field of shape.fields) if (!this.jsonBuildable(field,depth+1)) return false; return true; }
+    return false;
+  }
+  jsonSpace(): void { while (this.jsonAt < this.jsonText.length && " \t\n\r".includes(this.jsonText.charAt(this.jsonAt), 0)) this.jsonAt = this.jsonAt + 1; }
+  jsonString(): string {
+    let value: string = ""; this.jsonAt = this.jsonAt + 1;
+    while (this.jsonAt < this.jsonText.length && this.jsonText.charAt(this.jsonAt) != "\"") {
+      let c: string = this.jsonText.charAt(this.jsonAt);
+      if (c == "\\") {
+        this.jsonAt = this.jsonAt + 1; c = this.jsonText.charAt(this.jsonAt);
+        if (c == "n") c = "\n"; else if (c == "t") c = "\t"; else if (c == "r") c = "\r"; else if (c == "b") c = "\b"; else if (c == "f") c = "\f";
+        else if (c == "u") this.jsonEscapes = true;
+      }
+      value = value + c; this.jsonAt = this.jsonAt + 1;
+    }
+    this.jsonAt = this.jsonAt + 1; return value;
+  }
+  // Salta un valor JSON (los campos que T no tiene).
+  jsonSkip(): void {
+    this.jsonSpace(); const c: string = this.jsonText.charAt(this.jsonAt);
+    if (c == "\"") { this.jsonString(); return; }
+    if (c != "{" && c != "[") { while (this.jsonAt < this.jsonText.length && !",}] \t\n\r".includes(this.jsonText.charAt(this.jsonAt), 0)) this.jsonAt = this.jsonAt + 1; return; }
+    let depth: number = 0;
+    while (this.jsonAt < this.jsonText.length) {
+      const d: string = this.jsonText.charAt(this.jsonAt);
+      if (d == "\"") { this.jsonString(); if (depth == 0) return; continue; }
+      if (d == "{" || d == "[") depth = depth + 1;
+      if (d == "}" || d == "]") { depth = depth - 1; if (depth == 0) { this.jsonAt = this.jsonAt + 1; return; } }
+      this.jsonAt = this.jsonAt + 1;
+    }
+  }
+  jsonBuild(typeId: number, id: number): number {
+    this.jsonSpace(); const shape = this.result.typeDefinitions[typeId]; const text: string = this.result.types[typeId];
+    const c: string = this.jsonText.charAt(this.jsonAt);
+    if (shape.kind == "Optional") {
+      if (c == "n") { this.jsonAt = this.jsonAt + 4; return this.emit("none",typeId,[],-1,-1,"",id); }
+      const inner: number = this.jsonBuild(shape.arguments[0],id); if (inner < 0) return -1; return this.emit("some",typeId,[inner],-1,-1,"",id);
+    }
+    if (text == "string") return this.emit("constant",typeId,[],-1,-1,this.jsonString(),id);
+    if (text == "boolean") { const yes: boolean = c == "t"; this.jsonAt = this.jsonAt + (yes ? 4 : 5); return this.emit("constant",typeId,[],-1,-1,yes ? "true" : "false",id); }
+    if (text == "number") {
+      const start: number = this.jsonAt; while (this.jsonAt < this.jsonText.length && "0123456789.eE+-".includes(this.jsonText.charAt(this.jsonAt), 0)) this.jsonAt = this.jsonAt + 1;
+      return this.emit("constant",typeId,[],-1,-1,this.jsonText.slice(start,this.jsonAt),id);
+    }
+    if (shape.kind == "array") {
+      let values: number[] = []; let names: string[] = []; this.jsonAt = this.jsonAt + 1; this.jsonSpace();
+      while (this.jsonAt < this.jsonText.length && this.jsonText.charAt(this.jsonAt) != "]") {
+        const item: number = this.jsonBuild(shape.arguments[0],id); if (item < 0) return -1; values.push(item); names.push("value");
+        this.jsonSpace(); if (this.jsonText.charAt(this.jsonAt) == ",") this.jsonAt = this.jsonAt + 1; this.jsonSpace();
+      }
+      this.jsonAt = this.jsonAt + 1; const result: number = this.emit("aggregate",typeId,values,-1,-1,"",id); this.setNames(names); return result;
+    }
+    // Objeto: los campos en el orden de T; los que faltan son opcionales (none).
+    let found: number[] = []; for (const field of shape.fields) found.push(-1);
+    this.jsonAt = this.jsonAt + 1; this.jsonSpace();
+    while (this.jsonAt < this.jsonText.length && this.jsonText.charAt(this.jsonAt) != "}") {
+      const key: string = this.jsonString(); this.jsonSpace(); this.jsonAt = this.jsonAt + 1;
+      let at: number = -1; for (let index: number = 0; index < shape.names.length; index = index + 1) if (shape.names[index] == key) at = index;
+      if (at < 0) this.jsonSkip(); else { const value: number = this.jsonBuild(shape.fields[at],id); if (value < 0) return -1; found[at] = value; }
+      this.jsonSpace(); if (this.jsonText.charAt(this.jsonAt) == ",") this.jsonAt = this.jsonAt + 1; this.jsonSpace();
+    }
+    this.jsonAt = this.jsonAt + 1;
+    let values: number[] = []; let names: string[] = [];
+    for (let at: number = 0; at < shape.fields.length; at = at + 1) {
+      if (found[at] < 0) { if (this.result.typeDefinitions[shape.fields[at]].kind != "Optional") return -1; found[at] = this.emit("none",shape.fields[at],[],-1,-1,"",id); }
+      values.push(found[at]); names.push(shape.names[at]);
+    }
+    const result: number = this.emit("record",typeId,values,-1,-1,"",id); this.setNames(names); return result;
   }
   evaluatedConstant(id: number): number {
     let evaluator = new NativeComptime(this.graph,this.binding,this.checked); evaluator.evaluate(this.module,id,true);
@@ -1051,7 +1142,9 @@ export class IrLowering {
     if (receiver == "!process" && ["argv","argc"].includes(name)) return this.runtime("process."+name,typeId,[],id,["runtime","read"]);
     if (receiver == "ChildProcess" && ["stdin","stdout","stderr"].includes(name)) return this.runtime("ChildProcess."+name,typeId,[this.expression(bindingChild(n,EdgeRole.Object))],id,["runtime","read"]);
     if (receiver == "Request" && ["method","path","rawQuery","body"].includes(name)) return this.runtime("Request.property."+name,typeId,[this.expression(bindingChild(n,EdgeRole.Object))],id,["runtime","read"]);
-    if (["length","size","kind","ok"].includes(name) && (receiver == "string" || receiver.endsWith("[]") || fixedArraySize(receiver) >= 0 || semanticTuple(receiver) || ["Map","Set","Optional","Result"].includes(genericBase(receiver)))) { const input: number = bindingChild(n,EdgeRole.Object); const actual: number = this.typeId(this.checked.files[this.module].types[input],input); let value: number = -1; if (this.result.typeDefinitions[actual].resource) value = this.emit("borrow",this.typeId("constRef<"+this.result.types[actual]+">",id),[],this.rootPlace(input),-1,"constRef",id); else value = this.expression(input); return this.emit("property",typeId,[value],-1,-1,name,id); }
+    if (["length","size","kind","ok"].includes(name) && (receiver == "string" || receiver.endsWith("[]") || fixedArraySize(receiver) >= 0 || semanticTuple(receiver) || ["Map","Set","Optional","Result"].includes(genericBase(receiver)))) { const input: number = bindingChild(n,EdgeRole.Object); const actual: number = this.typeId(this.checked.files[this.module].types[input],input); let value: number = -1;
+      // #289: si el receptor es un place se lee prestado (sin copiar el array o el string).
+      if (this.result.typeDefinitions[actual].resource || (this.purePlace(input) && (["array","Map","Set"].includes(this.result.typeDefinitions[actual].kind) || this.result.types[actual] == "string"))) value = this.emit("borrow",this.typeId("constRef<"+this.result.types[actual]+">",id),[],this.rootPlace(input),-1,"constRef",id); else value = this.expression(input); return this.emit("property",typeId,[value],-1,-1,name,id); }
     return this.emit("load",typeId,[],this.rootPlace(id),-1,"",id);
   }
   switchStatement(id: number): void {
