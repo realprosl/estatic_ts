@@ -605,6 +605,23 @@ const st = fs.statSync("b.txt");                  // Result<Stats, Error>
 - Son bindings al runtime de siempre (`runtime/ets_file.hpp`) más
   `std::filesystem` para directorios y `stat` (`runtime/lib/fs.hpp`). El
   builtin global `fs` se mantiene mientras `compiler/` lo use (#292).
+## `estatic:net` y `estatic:dns`
+
+```ts
+import net from "estatic:net";
+import dns from "estatic:dns";
+const ip = await dns.lookup("localhost");            // Result<string, Error>
+const servidor = net.listen(8080, "127.0.0.1");      // Result<Server, Error>
+const cliente = await net.connect(8080, "127.0.0.1"); // Result<Socket, Error>
+const socket = await servidor.value().accept();      // Result<Socket, Error>
+await cliente.value().write("hola");                 // Result<number, Error>
+const datos = await socket.value().read();           // Result<string, Error> ("" al cerrar)
+socket.value().end(); servidor.value().close();
+```
+
+- TCP con promesas en vez de eventos, sin excepciones. Son bindings al
+  runtime de siempre (`runtime/ets_net.hpp`, sobre libuv) más `connect` async
+  (`runtime/lib/net.hpp`). `dns.lookup` devuelve la primera IPv4.
 
 ## Librerías del runtime: `estatic:math`, `estatic:number`, `estatic:date`, `estatic:json` y `estatic:regexp`
 
