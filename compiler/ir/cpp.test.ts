@@ -238,6 +238,42 @@ test("IR C++ JSON.parse constante se construye al compilar, sin parsear al ejecu
  assert.ok(!p.functions.some((f:any)=>f.name==="parse"||f.name==="decode"),"no debe quedar la llamada al parser de ejecución");
  assert.ok(p.functions.some((f:any)=>(f.blocks??[]).some((b:any)=>(b.instructions??[]).some((i:any)=>i.op==="result"&&i.text==="Ok"))));
 });
+test("IR C++ librería estatic:tls: servidor TLS con un cliente de Node (#292)",async()=>{
+ const dir=mkdtempSync(join(directory,"tls-")),cert=join(dir,"cert.pem"),key=join(dir,"key.pem");
+ const gen=spawnSync("openssl",["req","-x509","-newkey","rsa:2048","-nodes","-keyout",key,"-out",cert,"-days","1","-subj","/CN=localhost"],{encoding:"utf8"});
+ assert.equal(gen.status,0,gen.stderr);
+ const source=`import tls from "estatic:tls";
+async function main(): Promise<void> {
+  console.log("sin certificado", tls.createServer({ cert: "${dir}/no.pem", key: "${key}" }).isOk());
+  const creado = tls.createServer({ cert: "${cert}", key: "${key}" });
+  if (!creado.isOk()) { console.log("error", creado.error().message); return; }
+  const servidor = creado.value();
+  const antes = await servidor.accept();
+  console.log("accept sin listen", antes.isOk());
+  console.log("listen", servidor.listen(47830, "127.0.0.1").isOk());
+  const entrante = await servidor.accept(10000);
+  if (!entrante.isOk()) { console.log("accept falló", entrante.error().message); return; }
+  const socket = entrante.value();
+  const pedido = await socket.read(65536, 10000);
+  const escrito = await socket.write("eco:" + (pedido.isOk() ? pedido.value() : "?"), 10000);
+  console.log("leído", pedido.isOk() ? pedido.value() : "error", "escrito", escrito.isOk() ? escrito.value() : -1);
+  socket.end(); servidor.close();
+}
+await main();
+`;
+ const project=ir(source),result=generateCppFromIr(project),cpp=join(dir,"app.cpp"),binary=join(dir,"app");writeFileSync(cpp,result.cpp);buildIrCpp(result,cpp,binary,undefined,[]);
+ const child=spawn(binary,[],{encoding:"utf8"} as any);let out="";child.stdout.on("data",(d:Buffer)=>out+=d.toString());
+ const tls=await import("node:tls");let answer="";
+ // El programa tarda un poco en escuchar: se reintenta la conexión.
+ for(let attempt=0;attempt<100;attempt++){
+  try{await new Promise<void>((resolve,reject)=>{const s=tls.connect({host:"127.0.0.1",port:47830,rejectUnauthorized:false},()=>s.write("hola"));s.on("data",(d:Buffer)=>{answer+=d.toString();s.end();});s.on("end",()=>resolve());s.on("error",reject);});break;}
+  catch{await new Promise(r=>setTimeout(r,100));}
+ }
+ const [code]=await once(child,"exit");
+ rmSync(dir,{recursive:true,force:true});
+ assert.equal(code,0);assert.equal(answer,"eco:hola");
+ assert.equal(out,"sin certificado false\naccept sin listen false\nlisten true\nleído hola escrito 8\n");
+});
 test("IR C++ preserves escaped and template literal newlines",()=>{
  assert.equal(execute('print("A\\nB");print(\`C\\nD\`);'),"A\nB\nC\nD\n");
  assert.equal(execute('print(\`C\nD\`);'),"C\nD\n");
