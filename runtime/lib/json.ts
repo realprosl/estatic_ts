@@ -83,7 +83,56 @@ export function isNull(value: JsonValue): boolean { return nativeIsNull(value); 
 /** Escapa un texto para escribirlo dentro de un JSON. */
 export function escape(text: string): string { return nativeEscape(text); }
 
+// ── Los mismos nombres que tenían los builtins ────────────────────────────
+// El runtime exponía esta API como builtin global (jsonObjectGet,
+// jsonAsString, jsonIsObject...). Aquí están con el mismo nombre, asi que un
+// `import { jsonObjectGet } from "estatic:json"` sombrea al builtin y el
+// código que lo usaba no cambia: solo la línea de import.
+
+/** @see objectGet */
+export function jsonObjectGet(value: JsonValue, key: string): JsonValue { return objectGet(value, key); }
+/** @see objectKeys */
+export function jsonObjectKeys(value: JsonValue): string[] { return objectKeys(value); }
+/** @see arrayGet */
+export function jsonArrayGet(value: JsonValue, index: number): JsonValue { return arrayGet(value, index); }
+/** @see arrayLength */
+export function jsonArrayLength(value: JsonValue): number { return arrayLength(value); }
+/** @see asString */
+export function jsonAsString(value: JsonValue): string { return asString(value); }
+/** @see asNumber */
+export function jsonAsNumber(value: JsonValue): number { return asNumber(value); }
+/** @see asBool */
+export function jsonAsBool(value: JsonValue): boolean { return asBool(value); }
+/** @see isObject */
+export function jsonIsObject(value: JsonValue): boolean { return isObject(value); }
+/** @see isArray */
+export function jsonIsArray(value: JsonValue): boolean { return isArray(value); }
+/** @see isString */
+export function jsonIsString(value: JsonValue): boolean { return isString(value); }
+/** @see isNumber */
+export function jsonIsNumber(value: JsonValue): boolean { return isNumber(value); }
+/** @see isBool */
+export function jsonIsBool(value: JsonValue): boolean { return isBool(value); }
+/** @see isNull */
+export function jsonIsNull(value: JsonValue): boolean { return isNull(value); }
+/** @see escape */
+export function jsonEscape(text: string): string { return escape(text); }
+
 export default class JSON {
   static stringify<T>(value: T, replacer?: string[], space?: number | string): string { return stringify<T>(value, replacer, space); }
   static parse<T = JsonValue>(text: string): Result<T, Error> { return parse<T>(text); }
+  static objectGet(value: JsonValue, key: string): JsonValue { return objectGet(value, key); }
+  static objectKeys(value: JsonValue): string[] { return objectKeys(value); }
+  static arrayGet(value: JsonValue, index: number): JsonValue { return arrayGet(value, index); }
+  static arrayLength(value: JsonValue): number { return arrayLength(value); }
+  static asString(value: JsonValue): string { return asString(value); }
+  static asNumber(value: JsonValue): number { return asNumber(value); }
+  static asBool(value: JsonValue): boolean { return asBool(value); }
+  static isObject(value: JsonValue): boolean { return isObject(value); }
+  static isArray(value: JsonValue): boolean { return isArray(value); }
+  static isString(value: JsonValue): boolean { return isString(value); }
+  static isNumber(value: JsonValue): boolean { return isNumber(value); }
+  static isBool(value: JsonValue): boolean { return isBool(value); }
+  static isNull(value: JsonValue): boolean { return isNull(value); }
+  static escape(text: string): string { return escape(text); }
 }

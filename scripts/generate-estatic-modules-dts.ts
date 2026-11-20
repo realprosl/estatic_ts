@@ -143,9 +143,15 @@ function ambientMember(member: string): string | null {
       if (text[at] == ")") { depth = depth - 1; if (depth == 0) { close = at; break; } }
     }
     if (close < 0) return null;
+    // La cabecera puede llevar modificadores (`static`), parametros de tipo
+    // (`<T>`) y el nombre: `static stringify<T>`.
     const head = text.slice(0, open).trim().replace(/\basync\s+/, "");
-    const name = head.split(/\s+/).pop() ?? "";
+    const genericAt = head.indexOf("<");
+    const base = genericAt >= 0 ? head.slice(0, genericAt) : head;
+    const generics = genericAt >= 0 ? head.slice(genericAt) : "";
+    const name = base.split(/\s+/).pop() ?? "";
     if (!/^[A-Za-z_$][\w$]*$/.test(name)) return null;
+    const modifiers = base.slice(0, base.length - name.length);
     const params = ambientParams(text.slice(open + 1, close));
     // El tipo de retorno va hasta la llave del cuerpo (o hasta el fin).
     const rest = text.slice(close + 1);
@@ -153,7 +159,7 @@ function ambientMember(member: string): string | null {
     const tail = (bodyAt < 0 ? rest : rest.slice(0, bodyAt)).trim();
     const colon = tail.indexOf(":");
     const result = colon >= 0 ? tail.slice(0, colon).trim() + ": " + tail.slice(colon + 1).trim() : "";
-    return "  " + head + "(" + params + ")" + result + ";";
+    return "  " + modifiers + name + generics + "(" + params + ")" + result + ";";
   }
   return null;
 }
