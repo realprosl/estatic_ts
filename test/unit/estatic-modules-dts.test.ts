@@ -68,6 +68,15 @@ test("estatic-dts: los modulos declarados corresponden a librerias que existen",
 // El fichero debe ser un SCRIPT (sin import/export en la raiz): si fuera un
 // modulo, TypeScript trataria sus `declare module "estatic:*"` como
 // augmentaciones y `import ... from "estatic:math"` no se resolveria.
+test("estatic-dts: la copia de las plantillas de la semilla esta al dia", () => {
+  // `etsc init` con `--seed` publica el driver de la semilla, que copia las
+  // plantillas: si la copia se queda atras, el proyecto recibe declaraciones
+  // viejas.
+  const canonical = readFileSync(join(ROOT, MODULES_DTS), "utf-8");
+  const template = readFileSync(join(ROOT, "native-cpp/templates/types/estatic-modules.d.ts"), "utf-8");
+  assert.equal(template, canonical, "native-cpp/templates/types/estatic-modules.d.ts esta desfasado");
+});
+
 test("estatic-dts: el fichero de modulos es un script, no un modulo", () => {
   const dts = readFileSync(join(ROOT, MODULES_DTS), "utf-8");
   const root = dts.split("\n").filter((line) => line.trim() != "" && !line.trim().startsWith("//"));

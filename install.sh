@@ -247,6 +247,12 @@ cp -R "$repo_dir/messages" "$stage/messages"
 cp -R "$seed_dir/templates/." "$stage/templates/"
 # Las declaraciones canonicas son la unica fuente de verdad.
 cp "$repo_dir/types/estatic.d.ts" "$stage/templates/types/estatic.d.ts"
+# Las declaraciones de los modulos del runtime tambien estan generadas: la
+# semilla (con `--seed` se publica su driver) copia las plantillas, asi que
+# tienen que ir al dia.
+if [ -f "$repo_dir/types/estatic-modules.d.ts" ]; then
+  cp "$repo_dir/types/estatic-modules.d.ts" "$stage/templates/types/estatic-modules.d.ts"
+fi
 
 # native/frontend: adaptador del protocolo fuente->IR (JSON por stdout) que usan
 # las herramientas de compiler/*.ts, sobre el etsc instalado.
