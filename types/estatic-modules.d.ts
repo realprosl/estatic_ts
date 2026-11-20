@@ -227,7 +227,51 @@ declare module "estatic:http/drogon" {
 declare module "estatic:json" {
   export function stringify<T>(value: T, replacer?: string[], space?: number | string): string;
   export function parse<T = JsonValue>(text: string): Result<T, Error>;
+  export function objectGet(value: JsonValue, key: string): JsonValue;
+  export function objectKeys(value: JsonValue): string[];
+  export function arrayGet(value: JsonValue, index: number): JsonValue;
+  export function arrayLength(value: JsonValue): number;
+  export function asString(value: JsonValue): string;
+  export function asNumber(value: JsonValue): number;
+  export function asBool(value: JsonValue): boolean;
+  export function isObject(value: JsonValue): boolean;
+  export function isArray(value: JsonValue): boolean;
+  export function isString(value: JsonValue): boolean;
+  export function isNumber(value: JsonValue): boolean;
+  export function isBool(value: JsonValue): boolean;
+  export function isNull(value: JsonValue): boolean;
+  export function escape(text: string): string;
+  export function jsonObjectGet(value: JsonValue, key: string): JsonValue;
+  export function jsonObjectKeys(value: JsonValue): string[];
+  export function jsonArrayGet(value: JsonValue, index: number): JsonValue;
+  export function jsonArrayLength(value: JsonValue): number;
+  export function jsonAsString(value: JsonValue): string;
+  export function jsonAsNumber(value: JsonValue): number;
+  export function jsonAsBool(value: JsonValue): boolean;
+  export function jsonIsObject(value: JsonValue): boolean;
+  export function jsonIsArray(value: JsonValue): boolean;
+  export function jsonIsString(value: JsonValue): boolean;
+  export function jsonIsNumber(value: JsonValue): boolean;
+  export function jsonIsBool(value: JsonValue): boolean;
+  export function jsonIsNull(value: JsonValue): boolean;
+  export function jsonEscape(text: string): string;
   export default class JSON {
+  static stringify<T>(value: T, replacer?: string[], space?: number | string): string;
+  static parse<T = JsonValue>(text: string): Result<T, Error>;
+  static objectGet(value: JsonValue, key: string): JsonValue;
+  static objectKeys(value: JsonValue): string[];
+  static arrayGet(value: JsonValue, index: number): JsonValue;
+  static arrayLength(value: JsonValue): number;
+  static asString(value: JsonValue): string;
+  static asNumber(value: JsonValue): number;
+  static asBool(value: JsonValue): boolean;
+  static isObject(value: JsonValue): boolean;
+  static isArray(value: JsonValue): boolean;
+  static isString(value: JsonValue): boolean;
+  static isNumber(value: JsonValue): boolean;
+  static isBool(value: JsonValue): boolean;
+  static isNull(value: JsonValue): boolean;
+  static escape(text: string): string;
   }
 }
 
