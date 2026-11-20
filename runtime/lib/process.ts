@@ -40,3 +40,16 @@ export class Process {
 
 const process: Process = new Process();
 export default process;
+
+// ── Los mismos nombres que tenían los builtins ────────────────────────────
+// El runtime exponía esta API como builtin global (argument, argumentCount,
+// exitProcess). Aquí están con el mismo nombre, asi que un
+// `import { argument } from "estatic:process"` sombrea al builtin y el
+// código que lo usaba no cambia: solo la línea de import.
+
+/** El argumento `index` de la línea de comandos. */
+export function argument(index: number): string { return process.argv[index]; }
+/** Cuántos argumentos hay en la línea de comandos. */
+export function argumentCount(): number { return process.argv.length; }
+/** Termina el proceso con el código `code`. */
+export function exitProcess(code: number): void { process.exit(code); }

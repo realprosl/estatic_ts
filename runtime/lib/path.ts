@@ -10,9 +10,17 @@
 
 @include("runtime/lib/path.hpp")
 @cpp_native("ets_path_lib::cwd") function currentDirectory(): string;
+@cpp_native("ets_path_lib::normalizePath") function nativeNormalizePath(path: string): string;
+@cpp_native("ets_path_lib::pathDirectory") function nativePathDirectory(path: string): string;
 
 export const sep: string = "/";
 export const delimiter: string = ":";
+
+/** Ruta absoluta y normalizada (lexical). Distinto de `normalize`: esta hace
+ *  absoluta la ruta, como el builtin `normalizePath` del runtime. */
+export function normalizePath(path: string): string { return nativeNormalizePath(path); }
+/** El directorio de la ruta. */
+export function pathDirectory(path: string): string { return nativePathDirectory(path); }
 
 export interface ParsedPath { root: string; dir: string; base: string; ext: string; name: string }
 

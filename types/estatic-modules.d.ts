@@ -393,6 +393,8 @@ declare module "estatic:number" {
 declare module "estatic:path" {
   export const sep: string;
   export const delimiter: string;
+  export function normalizePath(path: string): string;
+  export function pathDirectory(path: string): string;
   export interface ParsedPath { root: string; dir: string; base: string; ext: string; name: string }
   export function isAbsolute(path: string): boolean;
   export function normalize(path: string): string;
@@ -436,6 +438,9 @@ declare module "estatic:process" {
   }
   const process: Process;
   export default process;
+  export function argument(index: number): string;
+  export function argumentCount(): number;
+  export function exitProcess(code: number): void;
 }
 
 declare module "estatic:regexp" {
