@@ -35,10 +35,18 @@ function sourceIr(entry:string,options:LoaderOptions,verbose:boolean):IrProject{
  let seen:string[]=[];for(const d of diagnostics){const key=d.file+":"+numberToString(d.token.offset)+":"+d.code+":"+d.message;if(!seen.includes(key)){seen.push(key);ir.diagnostics.push(new IrIssue(d.code,d.message,new IrSource("","",d.file,-1,d.token.offset,d.endToken.endOffset)));}}
  if(!ir.success||ir.diagnostics.length>0){progressFinish(false);for(const d of ir.diagnostics){printError(renderDiagnostic(d.code,d.message,d.source.file,d.source.start,d.source.end));printError("");}driverError(renderSummary(ir.diagnostics.length));}return ir;
 }
+// Escribe un fichero de tipos del editor, guardando el anterior como `.bak`.
+// Las declaraciones de los modulos del runtime (`estatic:*`) van en otro
+// fichero: `types/estatic.d.ts` es un modulo (usa `declare global`) y en un
+// modulo TypeScript trata `declare module "x"` como una augmentacion, no como
+// una declaracion ambiental; ese otro fichero es un script y si resuelve.
+function writeTypesFile(target:string,contents:string):void{if(exists(target)){const previous=checkedRead(target);if(previous==contents)return;if(exists(target+".bak"))driverError("Ya existe "+target+".bak");checkedWrite(target+".bak",previous);}checkedWrite(target,contents);}
 function initialize(root:string,directory:string,update:boolean,sources:boolean=true):void{
- const target=directory+"/types/estatic.d.ts";const types=checkedRead(root+"/types/estatic.d.ts");if(update){if(exists(target)){const previous=checkedRead(target);if(previous==types)return;if(exists(target+".bak"))driverError("Ya existe "+target+".bak");checkedWrite(target+".bak",previous);}checkedWrite(target,types);return;}
+ const target=directory+"/types/estatic.d.ts";const types=checkedRead(root+"/types/estatic.d.ts");
+ const moduleTarget=directory+"/types/estatic-modules.d.ts";const moduleTypes=checkedRead(root+"/types/estatic-modules.d.ts");
+ if(update){writeTypesFile(target,types);writeTypesFile(moduleTarget,moduleTypes);return;}
  let templates=root+"/templates";if(!exists(templates))templates=root+"/native-cpp/templates";if(!exists(templates))driverError("Faltan las plantillas de instalación");// --no-src: el proyecto ya tiene su codigo; no se crea ni se comprueba src/.
- let paths:string[]=[];for(const path of files(templates))if(sources||!path.startsWith("src/"))paths.push(path);if(exists(target))driverError("No se sobrescribe "+target);for(const path of paths)if(exists(directory+"/"+path))driverError("No se sobrescribe "+directory+"/"+path);for(const path of paths)if(path!="types/estatic.d.ts")checkedWrite(directory+"/"+path,checkedRead(templates+"/"+path));checkedWrite(target,types);
+ let paths:string[]=[];for(const path of files(templates))if(sources||!path.startsWith("src/"))paths.push(path);if(exists(target))driverError("No se sobrescribe "+target);if(exists(moduleTarget))driverError("No se sobrescribe "+moduleTarget);for(const path of paths)if(exists(directory+"/"+path))driverError("No se sobrescribe "+directory+"/"+path);for(const path of paths)if(path!="types/estatic.d.ts"&&path!="types/estatic-modules.d.ts")checkedWrite(directory+"/"+path,checkedRead(templates+"/"+path));checkedWrite(target,types);checkedWrite(moduleTarget,moduleTypes);
 }
 // --- Huella de entradas (#149, fase 3) ---------------------------------------
 // Si nada de lo que determina el binario ha cambiado (fuentes, configuración,

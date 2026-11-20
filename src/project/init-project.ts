@@ -12,6 +12,8 @@ export interface UpdatedProjectTypes {
   file: string;
   backup?: string;
   changed: boolean;
+  // Fichero con las declaraciones de los modulos del runtime (`estatic:*`).
+  moduleFile?: string;
 }
 
 // Plantilla de tsconfig.json para el proyecto generado. La clave de todo
@@ -46,7 +48,7 @@ const tsconfigJson = `{
 
 // La declaración del editor tiene una única fuente de verdad en
 // types/estatic.d.ts. `etsc init` y `etsc update-types` leen ese archivo.
-function projectTemplates(declarations: string): ReadonlyArray<readonly [string, string]> {
+function projectTemplates(declarations: string, moduleDeclarations: string): ReadonlyArray<readonly [string, string]> {
   return [
   ["src/main.ts", `print("Hola desde Estatic");
 `],
@@ -82,6 +84,7 @@ export default {
 `],
   ["tsconfig.json", tsconfigJson],
   ["types/estatic.d.ts", declarations],
+  ["types/estatic-modules.d.ts", moduleDeclarations],
   [".gitignore", `build/
 node_modules/
 `],
@@ -133,9 +136,19 @@ paleta de comandos y elige "TypeScript: Restart TS Server".
 }
 
 const canonicalTypesPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../types/estatic.d.ts");
+const canonicalModulesPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../types/estatic-modules.d.ts");
 
 export async function readCanonicalEstaticTypes(): Promise<string> {
   return readFile(canonicalTypesPath, "utf8");
+}
+
+// Las declaraciones de los modulos del runtime (`estatic:*`) van en otro
+// fichero: `types/estatic.d.ts` es un modulo (usa `declare global`), y en un
+// modulo TypeScript trata `declare module "x"` como una augmentacion, no como
+// una declaracion ambiental. Este fichero es un script, asi que sus
+// `declare module "estatic:*"` si se resuelven al importar.
+export async function readCanonicalEstaticModuleTypes(): Promise<string> {
+  return readFile(canonicalModulesPath, "utf8");
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -145,7 +158,7 @@ async function exists(path: string): Promise<boolean> {
 
 export async function initializeProject(target = ".", options: { command?: "etsc" | "nativo" | "estc"; compiler?: string; native?: boolean } = {}): Promise<InitializedProject> {
   const directory = resolve(target);
-  const templates = projectTemplates(await readCanonicalEstaticTypes()).map(([file, original]) => {
+  const templates = projectTemplates(await readCanonicalEstaticTypes(), await readCanonicalEstaticModuleTypes()).map(([file, original]) => {
     let contents = original;
     if (options.compiler && file === "estatic.config.ts") contents = contents.replace('command: "g++"', `command: ${JSON.stringify(options.compiler)}`);
     if (options.command && (options.command !== "etsc" || options.native) && file === "README.md") {
@@ -171,16 +184,21 @@ export async function initializeProject(target = ".", options: { command?: "etsc
 export async function updateProjectTypes(target = "."): Promise<UpdatedProjectTypes> {
   const directory = resolve(target);
   const file = join(directory, "types", "estatic.d.ts");
+  const moduleFile = join(directory, "types", "estatic-modules.d.ts");
   const declarations = await readCanonicalEstaticTypes();
+  const moduleDeclarations = await readCanonicalEstaticModuleTypes();
   await mkdir(dirname(file), { recursive: true });
 
+  // Las declaraciones de los modulos del runtime se actualizan siempre: son
+  // generadas y solo dependen de la version instalada.
+  const moduleChanged = await updateTypesFile(moduleFile, moduleDeclarations);
   if (!(await exists(file))) {
     await writeFile(file, declarations, { encoding: "utf8", flag: "wx" });
-    return { directory, file, changed: true };
+    return { directory, file, changed: true, moduleFile };
   }
 
   const current = await readFile(file, "utf8");
-  if (current === declarations) return { directory, file, changed: false };
+  if (current === declarations) return { directory, file, changed: moduleChanged, moduleFile };
 
   const backup = `${file}.bak`;
   await writeFile(backup, current, { encoding: "utf8", flag: "wx" }).catch((error: NodeJS.ErrnoException) => {
@@ -190,5 +208,24 @@ export async function updateProjectTypes(target = "."): Promise<UpdatedProjectTy
     throw error;
   });
   await writeFile(file, declarations, { encoding: "utf8", flag: "w" });
-  return { directory, file, backup, changed: true };
+  return { directory, file, backup, changed: true, moduleFile };
+}
+
+// Escribe un fichero de tipos, guardando el anterior como `.bak`.
+async function updateTypesFile(file: string, declarations: string): Promise<boolean> {
+  if (!(await exists(file))) {
+    await writeFile(file, declarations, { encoding: "utf8", flag: "wx" });
+    return true;
+  }
+  const current = await readFile(file, "utf8");
+  if (current === declarations) return false;
+  const backup = `${file}.bak`;
+  await writeFile(backup, current, { encoding: "utf8", flag: "wx" }).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "EEXIST") {
+      throw new Error(`No se actualizaron los tipos porque ya existe el respaldo: ${backup}`);
+    }
+    throw error;
+  });
+  await writeFile(file, declarations, { encoding: "utf8", flag: "w" });
+  return true;
 }

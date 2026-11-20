@@ -95,6 +95,16 @@ Si el archivo anterior es diferente, se conserva primero como
 `types/estatic.d.ts.bak`. `etsc init` copia exactamente la misma fuente
 canónica y una prueba detecta builtins sin declaración de editor.
 
+Las librerías del runtime (`estatic:math`, `estatic:fs`, `estatic:net`…) van en
+otro archivo, [`types/estatic-modules.d.ts`](./types/estatic-modules.d.ts), con
+un bloque `declare module "estatic:…"` por librería. Está separado porque
+`types/estatic.d.ts` es un módulo (usa `declare global`) y en un módulo
+TypeScript trata `declare module "x"` como una *augmentación*, no como una
+declaración ambiental: solo en un archivo que sea script se resuelve
+`import Math from "estatic:math"`. Ese archivo está generado desde
+`runtime/lib/` (`npm run generate:estatic-dts`), así que sus declaraciones no
+se quedan atrás cuando cambia una librería.
+
 Para consultar la versión instalada:
 
 ```bash
@@ -332,6 +342,7 @@ mi-libreria/
 ├── saludo.ts             público: import { saludar } from "mi-libreria/saludo"
 ├── internal/formato.ts   interno (alias @interno)
 ├── types/estatic.d.ts
+├── types/estatic-modules.d.ts
 ├── README.md
 └── .gitignore            .build/ y build/
 ```

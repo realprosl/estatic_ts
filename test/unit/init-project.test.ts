@@ -1,7 +1,7 @@
 // Tests del generador de proyectos `estatic init`.
 //
 // Verifica:
-//  1. `initializeProject` crea los 6 archivos esperados
+//  1. `initializeProject` crea los 7 archivos esperados
 //     (src/main.ts, estatic.config.ts, tsconfig.json, types/estatic.d.ts,
 //      .gitignore, README.md).
 //  2. `tsconfig.json` tiene `lib: ["es2022"]` y `types: []` (sin DOM ni
@@ -34,11 +34,12 @@ const expectedFiles = [
   "estatic.config.ts",
   "tsconfig.json",
   "types/estatic.d.ts",
+  "types/estatic-modules.d.ts",
   ".gitignore",
   "README.md",
 ] as const;
 
-test("init-project: crea los 6 archivos del template", async () => {
+test("init-project: crea los 7 archivos del template", async () => {
   const directory = mkdtempSync(join(tmpdir(), "estatic-init-"));
   const result = await initializeProject(directory);
   assert.equal(result.directory, directory);
