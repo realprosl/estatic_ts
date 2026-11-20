@@ -362,18 +362,22 @@ function generate(libs: Lib[]): string {
 
 const libs = libFiles(LIB_DIR).map((file) => readLib(file));
 const region = generate(libs);
-const path = join(ROOT, DTS);
-const current = existsSync(path) ? readFileSync(path, "utf-8") : "";
+// La copia de las plantillas de la semilla: `etsc init` (con `--seed`, que
+// publica el driver de la semilla) copia de ahi, asi que tiene que ir al dia.
+const TEMPLATE = "native-cpp/templates/types/estatic-modules.d.ts";
+const targets = [DTS, TEMPLATE];
+const current = targets.map((file) => (existsSync(join(ROOT, file)) ? readFileSync(join(ROOT, file), "utf-8") : ""));
 
 if (process.argv.includes("--check")) {
-  if (region != current) {
-    console.error("types/estatic-modules.d.ts está desfasado respecto a runtime/lib/.");
+  const stale = targets.filter((file, index) => current[index] != region);
+  if (stale.length > 0) {
+    console.error("Desfasado respecto a runtime/lib/: " + stale.join(", "));
     console.error("Regenera con: node --experimental-strip-types scripts/generate-estatic-modules-dts.ts");
     process.exit(1);
   }
-  console.log("types/estatic-modules.d.ts al día.");
+  console.log(targets.join(" y ") + " al día.");
   process.exit(0);
 }
 
-writeFileSync(join(ROOT, DTS), region);
-console.log("types/estatic-modules.d.ts regenerado (" + region.split("\n").length + " líneas).");
+for (const file of targets) writeFileSync(join(ROOT, file), region);
+console.log(targets.join(" y ") + " regenerados (" + region.split("\n").length + " lineas).");
