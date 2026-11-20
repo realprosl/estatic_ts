@@ -16,6 +16,7 @@
 #include "ets_event_loop_libuv_api.hpp"
 
 #include <algorithm>
+#include <poll.h>
 #include <cstdlib>
 
 namespace ets {
@@ -130,7 +131,16 @@ void LibuvEventLoop::waitForUntil(int fd, short events,
     auto& back = ps.entries.back();
     back.parent = &ps;
     ps.poll.data = &ps;
-    if (uv_poll_start(&ps.poll, events, onPoll) != 0) std::abort();
+    // #296: libuv no usa las constantes de poll() (POLLOUT=4 es UV_DISCONNECT):
+    // se traducen, y el poll espera la unión de las esperas pendientes del fd.
+    int uvEvents = 0;
+    for (const auto& pending : ps.entries) {
+        if (pending.fired) continue;
+        if (pending.events & POLLIN) uvEvents |= UV_READABLE;
+        if (pending.events & POLLOUT) uvEvents |= UV_WRITABLE;
+        if (pending.events & POLLPRI) uvEvents |= UV_PRIORITIZED;
+    }
+    if (uv_poll_start(&ps.poll, uvEvents, onPoll) != 0) std::abort();
     if (deadline != std::chrono::steady_clock::time_point::max()) {
         const auto now = std::chrono::steady_clock::now();
         const auto ms = deadline <= now ? 0

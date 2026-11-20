@@ -148,6 +148,7 @@ return `ets::${s.kind}<${_cppLoop76Result.join(",")}>`;}
         if(name=="Timer")this.fail("runtime:Timer necesita un contrato de ownership/copia en el IR para reutilizar el Timer no copiable de C++");
         if(["JsonValue","Console","Regex","Request","Response","HttpClientResponse","FileReader","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","Server","Timer","FsWatcher","FsEvent","ProcessReadable","ProcessWritable","ChildProcess"].includes(name)) {
           if(["ProcessReadable","ProcessWritable","ChildProcess"].includes(name)){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;}
+           if(name=="TlsContext"||name=="TlsConnection")this.backends.tls=true;
            if(name=="Regex")this.headers.add("runtime/ets_regex.hpp");
           else if(!["JsonValue","Console","ProcessReadable","ProcessWritable","ChildProcess"].includes(name)){this.headers.add("runtime/ets_runtime_full.hpp");this.backends.libuv=true;}
           return cppType(name);
@@ -196,7 +197,7 @@ let _cppLoop51Result:boolean=false;
 const _cppLoop51Input:IrAnnotation[]=this.project.annotations;
 for(let _cppLoop51Index:number=0;_cppLoop51Index<_cppLoop51Input.length;_cppLoop51Index=_cppLoop51Index+1){
 const a:IrAnnotation=_cppLoop51Input[_cppLoop51Index];
-if(a.name=="cpp_drogon"){_cppLoop51Result=true;break;}continue;
+if(a.name=="cpp_drogon"||(a.name=="include"&&a.arguments.length==1&&a.arguments[0]=="runtime/lib/http/drogon.hpp")){_cppLoop51Result=true;break;}continue;
 }
 this.headers.add(_cppLoop51Result?"runtime/ets_http_drogon.hpp":"runtime/ets_http_httplib.hpp");}}
   elementType(id:number):string {return this.project.types[id]=="boolean"?"ets::ir::Boolean":this.cppTypeId(id);}

@@ -567,6 +567,122 @@ process.stdout.write("hola\n"); process.stderr.write("error\n");
 - Son bindings al runtime de siempre (`runtime/lib/process.hpp`). `process` no
   es global en los programas: se importa (#292). El builtin global se mantiene
   mientras `compiler/` lo use; se retirará al regenerar la semilla.
+## `estatic:path`
+
+```ts
+import path, { join, resolve, relative } from "estatic:path";
+path.join("a", "b/../c");          // "a/c"
+resolve("x");                      // directorio actual + "/x"
+relative("/a/b/c", "/a/d");        // "../../d"
+path.parse("/home/u/f.txt");       // { root, dir, base, ext, name }
+path.dirname(p); path.basename(p, ".ts"); path.extname(p); path.normalize(p);
+path.isAbsolute(p); path.format(partes); path.sep; path.delimiter;
+```
+
+- Es `path.posix` de Node escrito en Estatic, con el mismo algoritmo y los
+  mismos resultados (comparado con Node). Solo `resolve` pregunta el
+  directorio actual al runtime. El builtin global `path` se mantiene mientras
+  `compiler/` lo use (#292).
+## `estatic:fs`
+
+```ts
+import fs, { readFileSync, readFile } from "estatic:fs";
+const texto = readFileSync("a.txt");              // Result<string, Error>
+if (texto.isOk()) print(texto.value());
+const r = await fs.readFile("a.txt");             // async sobre libuv
+fs.writeFileSync("b.txt", "hola"); fs.appendFileSync("b.txt", "!");
+fs.copyFileSync(a, b); fs.renameSync(a, b); fs.unlinkSync(a); fs.existsSync(a);
+fs.mkdirSync("dir/sub", { recursive: true }); fs.readdirSync("dir");
+fs.rmSync("dir", { recursive: true });
+const st = fs.statSync("b.txt");                  // Result<Stats, Error>
+// st.value().isFile(), isDirectory(), size, mtimeMs
+```
+
+- Es la API de `fs` de Node sin excepciones: lo que en Node lanza aquí
+  devuelve `Result<T, Error>`. Las versiones async (`readFile`, `writeFile`,
+  `appendFile`, `copyFile`, `rename`, `unlink`) devuelven
+  `Promise<Result<T, Error>>`.
+- Son bindings al runtime de siempre (`runtime/ets_file.hpp`) más
+  `std::filesystem` para directorios y `stat` (`runtime/lib/fs.hpp`). El
+  builtin global `fs` se mantiene mientras `compiler/` lo use (#292).
+## `estatic:net` y `estatic:dns`
+
+```ts
+import net from "estatic:net";
+import dns from "estatic:dns";
+const ip = await dns.lookup("localhost");            // Result<string, Error>
+const servidor = net.listen(8080, "127.0.0.1");      // Result<Server, Error>
+const cliente = await net.connect(8080, "127.0.0.1"); // Result<Socket, Error>
+const socket = await servidor.value().accept();      // Result<Socket, Error>
+await cliente.value().write("hola");                 // Result<number, Error>
+const datos = await socket.value().read();           // Result<string, Error> ("" al cerrar)
+socket.value().end(); servidor.value().close();
+```
+
+- TCP con promesas en vez de eventos, sin excepciones. Son bindings al
+  runtime de siempre (`runtime/ets_net.hpp`, sobre libuv) más `connect` async
+  (`runtime/lib/net.hpp`). `dns.lookup` devuelve la primera IPv4.
+## `estatic:tls`
+
+```ts
+import tls from "estatic:tls";
+const creado = tls.createServer({ cert: "cert.pem", key: "key.pem" });  // Result<TlsServer, Error>
+const servidor = creado.value();
+servidor.listen(8443, "127.0.0.1");                 // Result<boolean, Error>
+const socket = await servidor.accept();             // Result<TlsSocket, Error>
+const datos = await socket.value().read();          // Result<string, Error>
+await socket.value().write("hola"); socket.value().end(); servidor.close();
+```
+
+- Servidor TLS (OpenSSL, TLS 1.2 o superior) sobre el bucle de eventos,
+  bindings a `runtime/ets_tls.hpp`. `accept`, `read` y `write` admiten un plazo
+  en milisegundos; por defecto, sin límite práctico. Solo los programas que lo
+  importan enlazan OpenSSL.
+
+## `estatic:child_process` y `estatic:terminal`
+
+```ts
+import child_process, { spawnSync, execSync } from "estatic:child_process";
+const r = spawnSync("ls", ["-l"]);               // { status, stdout, stderr, error }
+spawnSync("cat", [], { input: "texto" });
+const salida = execSync("echo hola | tr a-z A-Z");  // Result<string, Error>
+const hijo = child_process.spawn("cat", []);     // async: hijo.stdout.on("data", ...)
+
+import terminal, { color, reset } from "estatic:terminal";
+color("green"); terminal.writeLine("ok"); reset();
+terminal.columns(); terminal.isTTY(); terminal.moveTo(0, 0); terminal.hideCursor();
+```
+
+- `spawnSync`/`execSync` esperan a que termine el proceso (POSIX, en
+  `runtime/lib/child_process.hpp`); `status` es el código de salida, 128 + la
+  señal si murió por una, o -1 si no arrancó (con `error`). `execSync` usa
+  `/bin/sh -c` y devuelve un `Error` si el código no es 0. `spawn` es el
+  `ChildProcess` async de siempre (libuv).
+- `estatic:terminal` son las operaciones de `console.color`, `console.moveTo`…
+  como funciones; sin terminal ANSI no escriben secuencias.
+
+## `estatic:fetch`, `estatic:http` y `estatic:http/drogon`
+
+```ts
+import fetch from "estatic:fetch";
+const r = await fetch("https://ejemplo.com/api", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+if (r.isOk()) { const res = r.value(); res.status; res.ok; res.headers.get("content-type"); await res.text(); }
+
+import http, { param } from "estatic:http";          // servidor ligero (cpp-httplib)
+// import http, { param } from "estatic:http/drogon"; // mismo código, Drogon (mucho tráfico)
+let server: Server = http.createServer();
+server.get("/users/:id", (req: Request, res: Response): void => { res.status(200).send("hola " + param(req, "id")); });
+server.listen("127.0.0.1", 8080);
+```
+
+- `fetch` sin excepciones: un fallo de red es `Result` con el error; un 404 es
+  una respuesta con `ok = false`. Cualquier método, cabeceras y cuerpo, con
+  libcurl en el pool de bloqueo del bucle de eventos.
+- El servidor se elige con el import, sin decorador: `estatic:http`
+  (cpp-httplib, una cabecera) o `estatic:http/drogon` (Drogon). La API es la
+  misma (`get/post/put/patch/delete`, `listen`, `param`, `query`, `header`) y
+  cada programa enlaza solo el servidor que importa. `estatic:http` también
+  exporta `fetch`.
 
 ## Librerías del runtime: `estatic:math`, `estatic:number`, `estatic:date`, `estatic:json` y `estatic:regexp`
 

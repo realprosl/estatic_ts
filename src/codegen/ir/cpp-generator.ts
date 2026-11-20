@@ -56,6 +56,7 @@ export class IrCppGenerator {
         if(name==="Timer")this.fail("runtime:Timer necesita un contrato de ownership/copia en el IR para reutilizar el Timer no copiable de C++");
         if(["JsonValue","Console","Regex","Request","Response","HttpClientResponse","FileReader","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","Server","Timer","FsWatcher","FsEvent","ProcessReadable","ProcessWritable","ChildProcess"].includes(name)) {
           if(["ProcessReadable","ProcessWritable","ChildProcess"].includes(name)){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;return `ets::${name}`;}
+          if(name==="TlsContext"||name==="TlsConnection")this.backends.tls=true;
           if(name==="Regex")this.headers.add("runtime/ets_regex.hpp");
           else if(!["JsonValue","Console","ProcessReadable","ProcessWritable","ChildProcess"].includes(name)){this.headers.add("runtime/ets_runtime_full.hpp");this.backends.libuv=true;}
           return cppType(name);
@@ -92,7 +93,7 @@ export class IrCppGenerator {
   }
   interface(id:number):boolean { return ["interface","intersection"].includes(this.shape(id).kind)&&(this.shape(id).methods?.length??0)>0; }
   interfaceVariant(id:number):string { return `std::variant<${this.shape(id).variants.length?this.shape(id).variants.map(t=>`ets::ir::Box<${this.type(t)}>`).join(","):"std::monostate"}>`; }
-  httpServer():void {this.headers.add(this.project.annotations?.some(a=>a.name==="cpp_drogon")?"runtime/ets_http_drogon.hpp":"runtime/ets_http_httplib.hpp");}
+  httpServer():void {this.headers.add(this.project.annotations?.some(a=>a.name==="cpp_drogon"||(a.name==="include"&&a.arguments?.[0]==="runtime/lib/http/drogon.hpp"))?"runtime/ets_http_drogon.hpp":"runtime/ets_http_httplib.hpp");}
   elementType(id:number):string {return this.project.types[id]==="boolean"?"ets::ir::Boolean":this.type(id);}
   // Canonical names are only diagnostics. C++ identifiers come exclusively from IDs.
   record(id:number): boolean { return recordKinds.has(this.shape(id).kind); }

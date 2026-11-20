@@ -18,7 +18,7 @@ public:
  bool numeric(int id)const{return shape(id).numericKind!="none";}
  int inner(int id)const{const auto& s=shape(id);return in(s.kind,{"ref","constRef","ptr","constPtr","readonly"})?s.arguments.at(0):id;}
  S deref(const S& value,int id)const{return in(shape(id).kind,{"ref","constRef","ptr","constPtr"})?"(*("+value+"))":value;}
- void httpServer(){result.headers.insert(has(p.annotations,S("cpp_drogon"))?"runtime/ets_http_drogon.hpp":"runtime/ets_http_httplib.hpp");}
+ void httpServer(){bool drogon=has(p.annotations,S("cpp_drogon"));for(const auto& a:p.annotationRecords){if(str(get(a,"name"))!="include")continue;const auto& args=get(a,"arguments");if(args.isArray()&&array(args).size()==1&&array(args)[0].isString()&&str(array(args)[0])=="runtime/lib/http/drogon.hpp")drogon=true;}result.headers.insert(drogon?"runtime/ets_http_drogon.hpp":"runtime/ets_http_httplib.hpp");}
  S types(const V<int>& ids){V<S> out;for(int t:ids)out.push_back(type(t));return join(out);}
  S type(int id){const auto& s=shape(id);const auto& a=s.arguments;const S& k=s.kind;
   if(record(id)||sum(id))return "ir_t"+n(id);
@@ -50,6 +50,7 @@ public:
    if(name=="Timer")return fail("runtime:Timer necesita un contrato de ownership/copia en el IR");
    auto it=nativeTypes.find(name);if(it!=nativeTypes.end()){
     if(name=="Regex")result.headers.insert("runtime/ets_regex.hpp");else if(in(name,{"ProcessReadable","ProcessWritable","ChildProcess"})){result.headers.insert("runtime/ets_child_process.hpp");result.libuv=true;}else if(!in(name,{"JsonValue","Console"})){result.headers.insert("runtime/ets_runtime_full.hpp");result.libuv=true;}
+    if(name=="TlsContext"||name=="TlsConnection")result.tls=true;
     return it->second;
    }
   }

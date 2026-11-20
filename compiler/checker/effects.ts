@@ -74,7 +74,19 @@ export class EffectAnalyzer {
     for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Decorators && this.node(module,edge.node).get(AttributeKind.Name) == "cppgen") return true;
     return false;
   }
-  implemented(module: number, id: number): boolean { if (this.opaque(module,id)) return false; const body: number = bindingChild(this.node(module,id),EdgeRole.Body); return body >= 0 && this.node(module,body).start.kind != ";"; }
+  // @cpp_native: C++ que solo ve sus argumentos (no puede tocar el estado del
+  // programa), así que su resumen de efectos es vacío en vez de desconocido.
+  native(module: number, id: number): boolean {
+    for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Decorators && this.node(module,edge.node).get(AttributeKind.Name) == "cpp_native") return true;
+    return false;
+  }
+  // La llamada solo va a funciones @cpp_native (await nativeRequest(...)).
+  nativeCall(module: number, id: number): boolean {
+    const targets: number[] = this.callTargets(module,id); if (targets.length == 0) return false;
+    for (const target of targets) if (!this.native(this.summaries[target].module,this.summaries[target].node)) return false;
+    return true;
+  }
+  implemented(module: number, id: number): boolean { if (this.opaque(module,id)) return false; if (this.native(module,id)) return true; const body: number = bindingChild(this.node(module,id),EdgeRole.Body); return body >= 0 && this.node(module,body).start.kind != ";"; }
   asynchronous(target: number): boolean {
     const n: AstNode = this.node(this.summaries[target].module,this.summaries[target].node);
     return n.get(AttributeKind.Async) == "true" || n.get(AttributeKind.IsAsync) == "true";
@@ -207,7 +219,7 @@ export class EffectAnalyzer {
       const sources: number[] = this.taskSources(module,this.taskOperand(module,id)); if (sources.length == 0) return this.taskCollection(module,id) || this.node(module,id).kind == NodeKind.ForOfStatement;
       for (const source of sources) { if (source < 0) return false; const m: number = this.sourceModule(source); const creation: number = source-this.offsets[m]; const helper: string = this.helper(m,creation);
         // #198: también un método builtin (await http.get(...), fs.readFile(...)).
-        if (helper != "sleep" && nativeBuiltinSignatures(helper).length == 0 && !(this.node(m,creation).kind == NodeKind.MemberCallExpression && this.builtin(m,creation))) return false; } return true;
+        if (helper != "sleep" && nativeBuiltinSignatures(helper).length == 0 && !(this.node(m,creation).kind == NodeKind.MemberCallExpression && this.builtin(m,creation)) && !this.nativeCall(m,creation)) return false; } return true;
     }
     if (this.synchronousCallbacks(module,id).length > 0) return false;
     const n: AstNode = this.node(module,id);
@@ -217,7 +229,7 @@ export class EffectAnalyzer {
     if (n.kind == NodeKind.MemberCallExpression) {
       const object: number = bindingChild(n,EdgeRole.Object); const receiver: string = memoryValue(this.receiver(module,id));
       if (nativeBuiltinSignatures(receiver+"."+n.get(AttributeKind.Method)).length > 0) return true;
-      return ["string","!Math","!JSON","!Date","Console"].includes(receiver) || receiver.endsWith("[]") || ["Optional","Result","Map","Set"].includes(genericBase(receiver));
+      return ["string","!Math","!JSON","!Date","!Object","!Array","Console"].includes(receiver) || receiver.endsWith("[]") || ["Optional","Result","Map","Set"].includes(genericBase(receiver));
     } return false;
   }
   unionReceiver(module: number, id: number): number {
@@ -277,7 +289,7 @@ export class EffectAnalyzer {
     // Discover all functions before resolving owners or allocating return vertices.
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.checked.files[m].types.length; id = id + 1) {
       if (this.binding.files[m].nodeScopes[id] >= 0 && isCallableNodeKind(this.node(m,id).kind)) {
-        let summary: EffectSummary = new EffectSummary(m,id); summary.unknown = !this.implemented(m,id); summary.external = this.opaque(m,id) || !this.implemented(m,id);
+        let summary: EffectSummary = new EffectSummary(m,id); summary.unknown = !this.implemented(m,id); summary.external = this.opaque(m,id) || !this.implemented(m,id) || this.native(m,id);
         for (const e of this.node(m,id).edges) if (e.role == EdgeRole.Params) summary.parameters.push(this.binding.files[m].declarations[e.node]);
         this.functionIndices[m][id] = this.summaries.length; this.summaries.push(summary);
       }
