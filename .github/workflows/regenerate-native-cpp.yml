@@ -62,6 +62,20 @@ jobs:
           if [ -n "$bad" ]; then echo "::error::Binaries in the seed"; printf '%s\n' "$bad"; exit 1; fi
           (cd native-cpp && find . -type f -not -path './native/*' -not -path './prebuilt/*' | LC_ALL=C sort | diff -u files.txt -)
 
+      - name: Upload the regenerated seed
+        # La regeneración solo se publica en main cuando se lanza a mano
+        # (workflow_dispatch). Con este artefacto, quien dispare el workflow
+        # desde una PR puede recoger la semilla regenerada y abrir la PR con
+        # ella sin tener que repetir la regeneración en local.
+        uses: actions/upload-artifact@v4
+        with:
+          name: seed-regenerated
+          path: |
+            native-cpp/compiler/unity.cpp
+            native-cpp/files.txt
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Build and smoke-test the regenerated seed
         run: |
           set -euo pipefail
