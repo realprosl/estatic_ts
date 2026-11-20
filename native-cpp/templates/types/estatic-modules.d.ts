@@ -227,6 +227,20 @@ declare module "estatic:http/drogon" {
 declare module "estatic:json" {
   export function stringify<T>(value: T, replacer?: string[], space?: number | string): string;
   export function parse<T = JsonValue>(text: string): Result<T, Error>;
+  export function objectGet(value: JsonValue, key: string): JsonValue;
+  export function objectKeys(value: JsonValue): string[];
+  export function arrayGet(value: JsonValue, index: number): JsonValue;
+  export function arrayLength(value: JsonValue): number;
+  export function asString(value: JsonValue): string;
+  export function asNumber(value: JsonValue): number;
+  export function asBool(value: JsonValue): boolean;
+  export function isObject(value: JsonValue): boolean;
+  export function isArray(value: JsonValue): boolean;
+  export function isString(value: JsonValue): boolean;
+  export function isNumber(value: JsonValue): boolean;
+  export function isBool(value: JsonValue): boolean;
+  export function isNull(value: JsonValue): boolean;
+  export function escape(text: string): string;
   export default class JSON {
   }
 }
