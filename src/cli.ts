@@ -128,7 +128,7 @@ try {
   // V15: si el usuario pasa `--multi`, escribimos header + un `.cpp` por módulo.
   if (multiMode) {
     await logger?.record("info", "transpile", "started", { input, mode: "multi", minimal: minimalMode });
-    const result = await compileFile(input, { moduleRoots: config?.moduleRoots, aliases: config?.aliases, minimal: minimalMode });
+    const result = await compileFile(input, { moduleRoots: config?.moduleRoots, aliases: config?.aliases, library: join(compilerRoot, "runtime", "lib"), minimal: minimalMode });
     const sources=result.ast.generatedSources ?? [];
     const sourceDirectory=generatedDirectory ?? output+".etsgen";
     if(generatedDirectory || sources.length) await writeGeneratedSources(sources,sourceDirectory);
@@ -150,7 +150,7 @@ try {
   // OJO: los módulos individuales emiten `#include "estatic_common.hpp"` que
   // solo tiene sentido en modo multi (donde el header está en disco). Aquí
   // tenemos que quitarlos para producir un .cpp monolítico válido.
-  const result = await compileFile(input, { moduleRoots: config?.moduleRoots, aliases: config?.aliases, minimal: minimalMode });
+  const result = await compileFile(input, { moduleRoots: config?.moduleRoots, aliases: config?.aliases, library: join(compilerRoot, "runtime", "lib"), minimal: minimalMode });
   const sources=result.ast.generatedSources ?? [];
   const sourceDirectory=generatedDirectory ?? output+".etsgen";
   if(generatedDirectory || sources.length) await writeGeneratedSources(sources,sourceDirectory);
