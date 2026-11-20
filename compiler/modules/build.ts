@@ -17,9 +17,7 @@ export async function buildLoader(directory: string, entry = "compiler/modules/d
   for (const file of sources) hash.update(file).update("\0").update(readFileSync(join(root, file))).update("\0");
   const identity = hash.digest("hex");
   detail(`Transpilando frontend: ${entry}`);
-  // Las librerías del runtime (`estatic:*`) se resuelven contra runtime/lib,
-  // igual que en el compilador nativo.
-  const result = await compileFile(join(root, entry), { baseDirectory: root, library: join(root, "runtime", "lib") });
+  const result = await compileFile(join(root, entry), { baseDirectory: root });
   const includes = result.externalHeaders.join("\n");
   writeFileSync(join(directory, "estatic_common.hpp"), includes + "\n" + result.header);
   let units = result.modules.map((module, index) => {

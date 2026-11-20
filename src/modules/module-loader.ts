@@ -50,10 +50,6 @@ export interface ModuleCompilationResult {
 export interface ModuleLoaderOptions {
   moduleRoots?: string[];
   aliases?: Record<string, string>;
-  /** Carpeta de las librerías del runtime: "estatic:math" -> <library>/math.ts.
-   *  Sin ella, los imports `estatic:*` no se resuelven (como en el compilador
-   *  nativo, que los resuelve contra <root>/runtime/lib). */
-  library?: string;
   minimal?: boolean;
   /** V30.6.1: raíz para derivar la identidad estable de módulo (H-01/H-02). */
   baseDirectory?: string;
@@ -139,11 +135,6 @@ export async function loadModuleGraph(entry: string, options: ModuleLoaderOption
       const {specifier,...metadata}=request;
       let dependency: string | undefined;
       if (specifier.startsWith(".")) dependency = resolve(dirname(file), specifier);
-      // Librerías del runtime escritas en Estatic: import Math from "estatic:math".
-      else if (specifier.startsWith("estatic:")) {
-        const library = options.library ?? "";
-        if (library != "") dependency = await resolveSourceFile(resolve(library, specifier.slice(8)));
-      }
       else {
         const alias = Object.entries(options.aliases ?? {}).sort(([left], [right]) => right.length - left.length).find(([name]) => specifier === name || specifier.startsWith(`${name}/`));
         if (alias) dependency = resolve(alias[1], specifier === alias[0] ? "" : specifier.slice(alias[0].length + 1));
