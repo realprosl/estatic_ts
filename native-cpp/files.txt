@@ -11,4 +11,5 @@
 ./templates/estatic.config.json
 ./templates/src/main.ts
 ./templates/tsconfig.json
+./templates/types/estatic-modules.d.ts
 ./templates/types/estatic.d.ts
