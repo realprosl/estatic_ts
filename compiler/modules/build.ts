@@ -25,7 +25,7 @@ function seedCompiler(): string {
 
 // Construye el frontend con el compilador nativo: el analiza y emite el IR,
 // y el mismo lo convierte en C++ y lo construye (el camino de produccion).
-function buildWithSeed(directory: string, entry: string, unity: boolean, optimization: string, detail: (text: string) => void): string {
+function buildWithSeed(directory: string, entry: string, unity: boolean, optimization: string, identity: string, detail: (text: string) => void): string {
   const seed = seedCompiler();
   const ir = join(directory, "frontend.ir.json");
   const binary = join(directory, "modules-demo");
@@ -36,6 +36,10 @@ function buildWithSeed(directory: string, entry: string, unity: boolean, optimiz
   const args = ["--from-ir", ir, "-o", join(directory, "app.cpp"), "--binary", binary, "--build", "--no-progress"];
   if (unity) args.push("--unity");
   args.push("--cxx-flag", optimization);
+  // La identidad del frontend: sin ella `syntaxIdentity()` (runtime/ets_runtime
+  // via compiler/modules/platform.hpp) devuelve un nonce por proceso y la cache
+  // de sintaxis no acierta nunca entre ejecuciones.
+  args.push("--cxx-flag", `-DESTATIC_FRONTEND_ID="${identity}"`);
   execFileSync(seed, args,
     { cwd: root, encoding: "utf8", timeout: 3600000, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, ESTC_ROOT: root } });
   return binary;
@@ -51,7 +55,7 @@ export async function buildLoader(directory: string, entry = "compiler/modules/d
       .map(file => `${folder}/${file}`))].sort();
   for (const file of sources) hash.update(file).update("\0").update(readFileSync(join(root, file))).update("\0");
   const identity = hash.digest("hex");
-  if (seedCompiler() != "") return buildWithSeed(directory, entry, unity, optimization, detail);
+  if (seedCompiler() != "") return buildWithSeed(directory, entry, unity, optimization, identity, detail);
   detail(`Transpilando frontend: ${entry}`);
   const result = await compileFile(join(root, entry), { baseDirectory: root });
   const includes = result.externalHeaders.join("\n");
