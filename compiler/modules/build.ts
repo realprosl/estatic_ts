@@ -33,7 +33,7 @@ function buildWithSeed(directory: string, entry: string, unity: boolean, optimiz
   execFileSync(seed, [join(root, entry), "--check", "--emit-ir", ir, "--no-progress"],
     { cwd: root, encoding: "utf8", timeout: 3600000, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, ESTC_ROOT: root } });
   detail(`Frontend · emitir C++ y construir con el compilador nativo`);
-  const args = ["--from-ir", ir, "-o", join(directory, "app.cpp"), "--binary", binary, "--no-progress"];
+  const args = ["--from-ir", ir, "-o", join(directory, "app.cpp"), "--binary", binary, "--build", "--no-progress"];
   if (unity) args.push("--unity");
   args.push("--cxx-flag", optimization);
   execFileSync(seed, args,
