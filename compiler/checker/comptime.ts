@@ -205,7 +205,7 @@ export class NativeComptime {
   }
   construct(module: number, id: number, environment: number, mode: string): number {
     this.depth = this.depth+1;
-    if (this.depth > 100) { this.depth = this.depth-1; return this.fail(module,id,"COMPTIME_RECURSION_LIMIT","profundidad máxima de construcción excedida"); }
+    if (this.depth > 32) { this.depth = this.depth-1; return this.fail(module,id,"COMPTIME_RECURSION_LIMIT","profundidad máxima de construcción excedida"); }
     const result: number = this.constructValue(module,id,environment,mode); this.depth = this.depth-1; return result;
   }
   constructValue(module: number, id: number, environment: number, mode: string): number {
@@ -463,7 +463,7 @@ export class NativeComptime {
     if (this.decorated(fn.module,fn.node,"cppgen")) return this.fail(module,id,mode == "input" ? "COMPTIME_VALUE_UNAVAILABLE" : "COMPTIME_FORBIDDEN_EFFECT","Escape opaco de backend; no se ejecuta durante el análisis del frontend");
     if (declaration.get(AttributeKind.Async) == "true" || declaration.get(AttributeKind.IsAsync) == "true") return this.fail(module,id,"COMPTIME_FORBIDDEN_EFFECT","tarea async durante evaluación");
     if (body < 0 || this.node(fn.module,body).start.kind == ";") return this.fail(module,id,mode == "input" ? "COMPTIME_VALUE_UNAVAILABLE" : "COMPTIME_FORBIDDEN_EFFECT","Implementación externa");
-    this.depth = this.depth+1; if (this.depth > 100) { this.depth = this.depth-1; return this.fail(module,id,"COMPTIME_RECURSION_LIMIT","profundidad máxima excedida"); }
+    this.depth = this.depth+1; if (this.depth > 32) { this.depth = this.depth-1; return this.fail(module,id,"COMPTIME_RECURSION_LIMIT","profundidad máxima excedida"); }
     const frame: number = this.environment(fn.environment); let parameters: number[] = []; for (const edge of declaration.edges) if (edge.role == EdgeRole.Params) { parameters.push(edge.node); this.reserve(frame,this.binding.files[fn.module].declarations[edge.node]); }
     const effective: string = fn.typeName.indexOf("@",0) >= 0 && signature != "" ? signature : fn.typeName;
     const types: string[] = functionParams(effective);
