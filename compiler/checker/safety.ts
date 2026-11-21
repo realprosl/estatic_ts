@@ -815,7 +815,7 @@ export class SafetyAnalyzer {
   }
   awaitTasks(module: number, id: number, input: number, state: ref<SafetyState>, active: number[], detached: boolean = false): void {
     // await de una promesa de C++ (@cpp_native): no toca el estado del programa.
-    if (this.node(module,input).kind == NodeKind.CallExpression && this.effects.nativeCall(module,input)) return;
+    if ((this.node(module,input).kind == NodeKind.CallExpression || this.node(module,input).kind == NodeKind.MemberCallExpression) && this.effects.nativeCall(module,input)) return;
     const sources: number[] = this.effects.taskSources(module,input); const before: SafetyState = state; let joined: SafetyState = state; joined.exit = "unreachable";
     if (sources.length == 0) { if (!this.effects.taskCollection(module,id) && this.node(module,id).kind != NodeKind.ForOfStatement) this.unknown(module,id,state); return; }
     for (const source of sources) {

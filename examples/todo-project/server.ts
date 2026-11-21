@@ -1,6 +1,7 @@
 // Backend alternativo: conserva el dominio y los servicios del CLI,
 // pero expone una API HTTP con Drogon.
 
+import http from "estatic:http";
 import { Priority, Todo, TodoStats } from "./model.ts";
 import { allTodos, resetRepository } from "./repository.ts";
 import { OperationResult, completeTodo, createTodo, getStats } from "./service.ts";

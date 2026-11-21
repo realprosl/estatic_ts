@@ -1,3 +1,4 @@
+import { argument } from "estatic:process";
 async function processFile(path: string): Promise<void> {
   const copy: string = path + ".copy";
 

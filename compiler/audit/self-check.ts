@@ -7,7 +7,8 @@ import { quoteSource, formatDiagnostic } from "../diag/index";
 // the executable reads and analyzes the requested sources itself.
 function checkSources(): void {
   const entry: string = argumentCount() > 1 ? argument(1) : "compiler/checker/demo.ts";
-  let loader = new ModuleLoader(new LoaderOptions()); const graph = loader.load(entry);
+  let loaderOptions: LoaderOptions = new LoaderOptions(); loaderOptions.library = compilerRoot() + "/runtime/lib";
+  let loader = new ModuleLoader(loaderOptions); const graph = loader.load(entry);
   const project = analyzeProject(graph,true); let typed: number = 0;
   for (const file of project.checked.files) for (const value of file.types) if (value != "") typed = typed+1;
   let diagnostics: string[] = [];

@@ -81,10 +81,43 @@ export class EffectAnalyzer {
     return false;
   }
   // La llamada solo va a funciones @cpp_native (await nativeRequest(...)).
+  awaitsNative(module: number, id: number): boolean {
+    for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Operand) {
+      const kind = this.node(module,edge.node).kind;
+      return (kind == NodeKind.CallExpression || kind == NodeKind.MemberCallExpression) && this.nativeCall(module,edge.node);
+    }
+    return false;
+  }
   nativeCall(module: number, id: number): boolean {
     const targets: number[] = this.callTargets(module,id); if (targets.length == 0) return false;
-    for (const target of targets) if (!this.native(this.summaries[target].module,this.summaries[target].node)) return false;
+    for (const target of targets) if (!this.nativeWrapper(target,0)) return false;
     return true;
+  }
+  // Una función @cpp_native, o una que solo la envuelve (sin escribir ni mover
+  // nada y llamando solo a envoltorios así): `static get(u) { return get(u); }`.
+  // Se mira la forma del cuerpo (un único `return llamada(...)`), no el resumen:
+  // puede que aún no esté calculado cuando se pregunta.
+  nativeWrapper(target: number, depth: number): boolean {
+    const summary = this.summaries[target];
+    if (this.native(summary.module,summary.node)) return true;
+    if (depth > 4) return false;
+    const body: number = bindingChild(this.node(summary.module,summary.node),EdgeRole.Body); if (body < 0) return false;
+    let statements: number[] = []; for (const edge of this.node(summary.module,body).edges) if (edge.role == EdgeRole.Statements) statements.push(edge.node);
+    if (statements.length != 1 || this.node(summary.module,statements[0]).kind != NodeKind.ReturnStatement) return false;
+    const value: number = bindingChild(this.node(summary.module,statements[0]),EdgeRole.Value); if (value < 0) return false;
+    const kind = this.node(summary.module,value).kind;
+    if (kind != NodeKind.CallExpression && kind != NodeKind.MemberCallExpression) return false;
+    for (const argument of this.node(summary.module,value).edges) if (argument.role == EdgeRole.Args && !this.plainArgument(summary.module,argument.node)) return false;
+    const targets: number[] = this.callTargets(summary.module,value); if (targets.length == 0) return false;
+    for (const callee of targets) if (callee == target || !this.nativeWrapper(callee,depth+1)) return false;
+    return true;
+  }
+  // Argumentos de un envoltorio: parámetros, this.campo o literales (sin efectos).
+  plainArgument(module: number, id: number): boolean {
+    const kind = this.node(module,id).kind;
+    if (kind == NodeKind.IdentifierExpression || kind == NodeKind.LiteralExpression) return true;
+    if (kind == NodeKind.MemberExpression) return this.plainArgument(module,bindingChild(this.node(module,id),EdgeRole.Object));
+    return false;
   }
   implemented(module: number, id: number): boolean { if (this.opaque(module,id)) return false; if (this.native(module,id)) return true; const body: number = bindingChild(this.node(module,id),EdgeRole.Body); return body >= 0 && this.node(module,body).start.kind != ";"; }
   asynchronous(target: number): boolean {
@@ -548,7 +581,9 @@ export class EffectAnalyzer {
       for (const callback of this.callOrigins(call.module,call.node)) if (this.summaries[call.owner].parameters.includes(callback)) for (const parameter of this.summaries[call.owner].parameters) if (borrowedType(this.checked.symbolTypes[parameter])) this.obligation(call.owner,call.node,callback,parameter,memoryMode(this.checked.symbolTypes[parameter]));
       if (this.arrayCallback(call.module,call.node) >= 0) for (const callback of this.callOrigins(call.module,call.node)) if (this.summaries[call.owner].parameters.includes(callback)) this.obligation(call.owner,call.node,callback,this.root(call.module,bindingChild(this.node(call.module,call.node),EdgeRole.Object)),"constRef");
       const targets: number[] = this.executionTargets(call.module,call.node);
-      if (targets.length == 0 && this.callOrigins(call.module,call.node).length == 0) this.summaries[call.owner].unknown = true;
+      // await de una promesa de C++ (@cpp_native o un envoltorio suyo): sin efectos.
+      const awaitsNative: boolean = this.node(call.module,call.node).kind == NodeKind.AwaitExpression && this.awaitsNative(call.module,call.node);
+      if (targets.length == 0 && this.callOrigins(call.module,call.node).length == 0 && !awaitsNative) this.summaries[call.owner].unknown = true;
       for (const lease of this.checked.borrows) if (lease.end > lease.begin && lease.module == call.module && lease.owner == this.vertex(this.summaries[call.owner].module,this.summaries[call.owner].node) && (lease.begin) <= nodeBegin(this.node(call.module,call.node)) && (nodeBegin(this.node(call.module,call.node))) <= lease.end) {
         for (const parameter of this.callOrigins(call.module,call.node)) if (this.summaries[call.owner].parameters.includes(parameter)) this.obligation(call.owner,call.node,parameter,lease.root,lease.mode);
       }

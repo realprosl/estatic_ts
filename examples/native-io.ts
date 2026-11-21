@@ -1,3 +1,4 @@
+import { argument } from "estatic:process";
 let error: string = "";
 const source: string = argument(1);
 const copy: string = source + ".copy";

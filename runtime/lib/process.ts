@@ -11,6 +11,8 @@
 @include("runtime/lib/process.hpp")
 @cpp_native("ets_process_lib::argv") function nativeArgv(): string[];
 @cpp_native("ets_process_lib::argc") function nativeArgc(): number;
+@cpp_native("ets_process_lib::argumentAt") function nativeArgumentAt(index: number): string;
+@cpp_native("ets_process_lib::argumentTotal") function nativeArgumentTotal(): number;
 @cpp_native("ets_process_lib::cwd") function nativeCwd(): string;
 @cpp_native("ets_process_lib::exit") function nativeExit(code: number): void;
 @cpp_native("ets_process_lib::pid") function nativePid(): number;
@@ -47,9 +49,9 @@ export default process;
 // `import { argument } from "estatic:process"` sombrea al builtin y el
 // código que lo usaba no cambia: solo la línea de import.
 
-/** El argumento `index` de la línea de comandos. */
-export function argument(index: number): string { return process.argv[index]; }
-/** Cuántos argumentos hay en la línea de comandos. */
-export function argumentCount(): number { return process.argv.length; }
+/** El argumento `index` de argv de C (0 es el ejecutable); "" fuera de rango. */
+export function argument(index: number): string { return nativeArgumentAt(index); }
+/** Cuántos argumentos tiene argv de C (el ejecutable incluido). */
+export function argumentCount(): number { return nativeArgumentTotal(); }
 /** Termina el proceso con el código `code`. */
 export function exitProcess(code: number): void { process.exit(code); }

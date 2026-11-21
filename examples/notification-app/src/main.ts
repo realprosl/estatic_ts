@@ -1,3 +1,4 @@
+import { exitProcess } from "estatic:process";
 import { Channel } from "@domain/channel";
 import { Message } from "@domain/message";
 import { SmsChannel } from "./channels/sms";

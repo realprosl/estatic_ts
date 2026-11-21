@@ -286,14 +286,12 @@ declare global {
   function trim(value: string): string;
   function lineCount(value: string): number;
   function lineAt(value: string, index: number): string;
-  /** Sale del proceso con el codigo dado. NUNCA retorna (decorado con @noreturn). */
   /** Reporta un mensaje de error via out-param (estilo C). Usado por el runtime. */
   function fail(message: string, error: string): boolean;
   /** Limpia el buffer de error. */
   function clearError(error: string): void;
   /** true si hay un mensaje de error pendiente. */
   function hasError(error: string): boolean;
-  /** Devuelve el numero de argumentos pasados al programa (equivalente a process.argv.length - 1). */
   function compilerRoot(): string;
   function resolveImportPath(from: string, specifier: string): string;
   function resolveProjectPath(root: string, path: string): string;
@@ -455,51 +453,142 @@ declare global {
     on(event: string, listener: (code: number) => void): ChildProcess;
     on(event: string, listener: (message: string) => void): ChildProcess;
   }
-      /** "GET", "POST", "PUT", "PATCH", "DELETE". */
-      readonly method: string;
-      /** Path sin query string. "/api/users". */
-      readonly path: string;
-      /** Query string cruda. "id=42&name=alice". Vacia si no hay. */
-      readonly rawQuery: string;
-      /** Cuerpo del request (POST/PUT/PATCH). Vacio si no hay body. */
-      readonly body: string;
-    }
+  function removeFile(path: string, error: string): boolean;
 
-    /** Response HTTP. El handler la muta encadenando status/header/send/json. */
-    interface Response {
-      /** Cambia el status code. Encadenable. */
-      status(code: number): Response;
-      /** Anyade un header. Encadenable. Si el header ya existe, lo sobreescribe. */
-      header(name: string, value: string): Response;
-      /** Envia un body de texto. Auto-set Content-Type: text/plain si no se dio uno. */
-      send(body: string): Response;
-      /** Envia un body JSON. Auto-set Content-Type: application/json. */
-      json(jsonString: string): Response;
-    }
+  function readFileAsync(path: string): Promise<Result<string>>;
+  function writeFileAsync(path: string, contents: string): Promise<Result<boolean>>;
+  function appendFileAsync(path: string, contents: string): Promise<Result<boolean>>;
+  function fileExistsAsync(path: string): Promise<Result<boolean>>;
+  function copyFileAsync(source: string, destination: string): Promise<Result<boolean>>;
+  function moveFileAsync(source: string, destination: string): Promise<Result<boolean>>;
+  function removeFileAsync(path: string): Promise<Result<boolean>>;
 
-    /** Respuesta HTTP del cliente. Resultado de http.get() / http.post(). */
-    interface HttpClientResponse {
-      /** Status code (200, 404, 500, ...). */
-      status(): number;
-      /** Cuerpo de la respuesta. */
-      body(): string;
-      /** Valor del header name (case-insensitive), o "" si no existe. */
-      header(name: string): string;
-    }
+  function readFileUntil(path: string, timeoutMs: number, token: CancellationToken): Promise<Result<string>>;
+  function writeFileUntil(path: string, contents: string, timeoutMs: number, token: CancellationToken): Promise<Result<boolean>>;
+  function appendFileUntil(path: string, contents: string, timeoutMs: number, token: CancellationToken): Promise<Result<boolean>>;
+  function copyFileUntil(source: string, destination: string, timeoutMs: number, token: CancellationToken): Promise<Result<boolean>>;
+  function moveFileUntil(source: string, destination: string, timeoutMs: number, token: CancellationToken): Promise<Result<boolean>>;
+  function removeFileUntil(path: string, timeoutMs: number, token: CancellationToken): Promise<Result<boolean>>;
 
-    /** Crea un nuevo Server listo para registrar handlers. */
-    function createServer(): Server;
-    /** Devuelve el path param name del request, o "" si no existe. */
-    function param(req: Request, name: string): string;
-    /** Devuelve el query string value de name, o "" si no existe. URL-decoded. */
-    function query(req: Request, name: string): string;
-    /** Devuelve el header name del request (case-insensitive), o "" si no existe. */
-    function header(req: Request, name: string): string;
-    /** GET HTTP asíncrono. */
-    function get(url: string): Promise<Result<HttpClientResponse, string>>;
-    /** POST HTTP asíncrono. contentType por defecto: "application/json". */
-    function post(url: string, body: string, contentType?: string): Promise<Result<HttpClientResponse, string>>;
+  function ioUringAvailable(): boolean;
+  function ioUringRead(path: string): Result<string>;
+  function ioUringWrite(path: string, contents: string): Result<boolean>;
+  function asyncIoUringRead(path: string): Promise<Result<string>>;
+  function asyncIoUringWrite(path: string, contents: string): Promise<Result<boolean>>;
+
+  // ─── Helpers de networking (runtime/ets_net_sync.hpp) ──────────────
+  function tcpListen(host: string, port: number): number;
+  function tcpAccept(listenerFd: number): number;
+  function tcpConnect(host: string, port: number): number;
+  function tcpRead(fd: number, maxBytes: number): string;
+  function tcpWrite(fd: number, data: string): boolean;
+  function tcpClose(fd: number): void;
+
+  // API async de red, cancelación y TLS.
+  function listenTcp(host: string, port: number): Result<TcpListener>;
+  function acceptTcp(listener: TcpListener): Promise<Result<TcpConnection>>;
+  function readTcp(connection: TcpConnection, maxBytes: number): Promise<Result<string>>;
+  function writeTcp(connection: TcpConnection, data: string): Promise<Result<number>>;
+  function closeTcp(listener: TcpListener): void;
+  function closeTcp(connection: TcpConnection): void;
+  function createCancellation(): CancellationSource;
+  function cancellationToken(source: CancellationSource): CancellationToken;
+  function cancel(source: CancellationSource): void;
+  function isCancelled(token: CancellationToken): boolean;
+  function acceptTcpUntil(listener: TcpListener, timeoutMs: number, token: CancellationToken): Promise<Result<TcpConnection>>;
+  function readTcpUntil(connection: TcpConnection, maxBytes: number, timeoutMs: number, token: CancellationToken): Promise<Result<string>>;
+  function writeTcpUntil(connection: TcpConnection, data: string, timeoutMs: number, token: CancellationToken): Promise<Result<number>>;
+  function createTlsServer(certificate: string, privateKey: string): Result<TlsContext>;
+  function acceptTls(listener: TcpListener, context: TlsContext, timeoutMs: number, token: CancellationToken): Promise<Result<TlsConnection>>;
+  function readTls(connection: TlsConnection, maxBytes: number, timeoutMs: number, token: CancellationToken): Promise<Result<string>>;
+  function writeTls(connection: TlsConnection, data: string, timeoutMs: number, token: CancellationToken): Promise<Result<number>>;
+  function closeTls(connection: TlsConnection): void;
+  function ok<T>(value: T): Result<T>;
+  function err<T>(message: string): Result<T>;
+
+  // ─── Cliente HTTP/1.1 (runtime/ets_http.hpp) ──────────────────────────
+  // Cliente HTTP plano (sin HTTPS todavia). Usa getaddrinfo para DNS y
+  // sockets POSIX bloqueantes. Lee el body completo (sin streaming).
+  //
+  // Limitaciones:
+  //   - HTTP/1.1 plano (puerto 80). HTTPS requiere TLS client que aun
+  //     no esta implementado en runtime/ets_tls.hpp (solo server).
+  //   - Sin redirecciones automaticas. Si status es 3xx, el caller
+  //     decide si hace otra peticion.
+  //   - Sin timeout por defecto.
+  //   - Sin cookies, gzip, autenticacion.
+  //
+  // Caso de uso: integraciones simples, health checks, webhooks, fetch
+  // de JSON publico.
+  // ─── API de string estilo TypeScript (V28) ─────────────────────────
+  // string es un primitivo del dialecto pero la API estilo metodo
+  // (s.charAt(i), s.length) vive documentada en una interface para
+  // que el LSP autocomplete tenga una pista. La interface se llama
+  // StringInstance (no String) porque el LSP de TS confunde
+  // String con el wrapper global de JS. La validacion real la hace
+  // STRING_METHODS en src/semantic/type-checker.ts y el codegen
+  // traduce 1:1 a ets::string_* (runtime/ets_string.hpp).
+  interface StringInstance {
+    /** Numero de bytes (= std::string::size). */
+    readonly length: number;
+    /** Byte en posicion i (defecto 0) como string (1 byte), o "" si fuera de rango. */
+    charAt(i?: number): string;
+    /** Byte en posicion i (defecto 0) como number (0-255), o NaN si fuera de rango. */
+    charCodeAt(i?: number): number;
+    /** Byte en i como string; i negativo cuenta desde el final. */
+    at(i: number): string | undefined;
+    /** Codigo Unicode del caracter UTF-8 que empieza en el byte i. */
+    codePointAt(i: number): number | undefined;
+    /** Primera posicion de search desde start (defecto 0), o -1. */
+    indexOf(search: string, start?: number): number;
+    /** Ultima posicion de search que empieza en from o antes, o -1. */
+    lastIndexOf(search: string, from?: number): number;
+    /** True si search aparece desde start. */
+    includes(search: string, start?: number): boolean;
+    /** True si value empieza por prefix en position (defecto 0). */
+    startsWith(prefix: string, position?: number): boolean;
+    /** True si los primeros endPosition bytes terminan por suffix. */
+    endsWith(suffix: string, endPosition?: number): boolean;
+    /** Substring desde start hasta end (acepta negativos desde el final). */
+    slice(start?: number, end?: number): string;
+    /** Substring clampeado a [0, length]; intercambia start/end. */
+    substring(start: number, end?: number): string;
+    /** Substring desde start con length (defecto hasta el final). */
+    substr(start: number, length?: number): string;
+    /** Partes separadas por separator (como mucho limit); "" separa cada byte. */
+    split(separator: string, limit?: number): string[];
+    /** value seguido de cada argumento. */
+    concat(...strings: string[]): string;
+    /** Quita espacios al principio y al final. */
+    trim(): string;
+    /** Quita espacios al principio. */
+    trimStart(): string;
+    /** Quita espacios al final. */
+    trimEnd(): string;
+    /** Alias de trimStart. */
+    trimLeft(): string;
+    /** Alias de trimEnd. */
+    trimRight(): string;
+    /** ASCII lower-case (byte-level). */
+    toLowerCase(): string;
+    /** ASCII upper-case (byte-level). */
+    toUpperCase(): string;
+    /** Repite el string count veces. */
+    repeat(count: number): string;
+    /** Rellena al inicio hasta targetLength con pad. */
+    padStart(targetLength: number, pad?: string): string;
+    /** Rellena al final hasta targetLength con pad. */
+    padEnd(targetLength: number, pad?: string): string;
+    /** Reemplaza la primera ocurrencia de search por replacement. */
+    replace(search: string, replacement: string): string;
+    /** Reemplaza todas las ocurrencias. */
+    replaceAll(search: string, replacement: string): string;
+    /** -1 si a<b, 0 si a==b, 1 si a>b (byte-level). */
+    localeCompare(other: string): number;
+    /** Identidad. */
+    toString(): string;
   }
+
 
   // El checker también acepta estos nombres planos en firmas ETS.
   type Request = http.Request;
@@ -527,7 +616,6 @@ declare global {
     listen(port: number): void;
   }
 
-  // ─── Helpers de JsonValue ──────────────────────────────────────────
 
   // ─── Built-in globals (RUNTIME_GLOBAL_NAMES en type-checker) ───────
   // Tipo estructural del objeto global. Permite conservar handles y usar
@@ -615,3 +703,14 @@ declare global {
     function unlinkSync(path: string): Result<boolean>;
     function existsSync(path: string): boolean;
   }
+  namespace JSON {
+    function stringify(value: string): string;
+    function stringifyNumber(value: number): string;
+    function stringifyBool(value: boolean): string;
+    function stringifyValue(value: JsonValue): string;
+    function parse(text: string): string;
+    function parseValue(text: string): JsonValue;
+  }
+}
+
+export {};

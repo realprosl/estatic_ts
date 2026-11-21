@@ -13,6 +13,7 @@
 //     `main`. Aquí usamos una función helper para evitar el problema.
 
 // Helper: dado un JSON object, imprime el valor asociado a `key`.
+import { jsonIsString, jsonIsNumber, jsonIsArray, jsonIsObject, jsonArrayLength, jsonArrayGet, jsonObjectGet, jsonAsString, jsonAsNumber } from "estatic:json";
 function printIfString(v: JsonValue, key: string): void {
   if (jsonIsObject(v)) {
     const field: JsonValue = jsonObjectGet(v, key);

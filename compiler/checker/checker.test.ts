@@ -750,13 +750,13 @@ for(const [name,source] of Object.entries({
  globals:'print(length("s"));print(charAt("abc",1));print(lineCount("x"));',
  arrayLength:'const a=[1,2];print(length(a));',
  math:'print(Math.sqrt(4));print(Math.max(1,2));print(Math.PI);',
- json:'const s=JSON.parse("{}");const j:JsonValue=JSON.parseValue("{}");print(jsonIsObject(j));',
+ json:'import JSON, { jsonIsObject } from "estatic:json"; const r=JSON.parse<JsonValue>("{}");if(r.isOk())print(jsonIsObject(r.value()));',
  console:'console.log("x",1,true);console.warn("warning");',
  files:'const r:Result<string> = readFile("input.txt");',
  date:'const n=Date.now();print(n);',
- processStdio:'import process from "estatic:process"; process.stdout.write("out");process.stderr.write("err");process.stdin.on("data",(chunk:string):void=>print(chunk));process.stdin.on("end",():void=>{});,
-     childProcess:'import process from "estatic:process"; const args:string[]=["hello"];const child=child_process.spawn("/bin/cat",args);child.stdout.on("data",(chunk:string):void=>write(chunk));child.stderr.on("data",(chunk:string):void=>writeError(chunk));child.stdin.write("payload");child.stdin.end();child.on("close",(code:number):void=>print(code));,
-   processStdin:'import process from "estatic:process"; process.stdin.on("data",(chunk:string):void=>print(chunk));process.stdin.on("end",():void=>{});,
+ processStdio:'import process from "estatic:process"; process.stdout.write("out");process.stderr.write("err");process.stdin.on("data",(chunk:string):void=>print(chunk));process.stdin.on("end",():void=>{});',
+     childProcess:'import child_process from "estatic:child_process"; const args:string[]=["hello"];const child=child_process.spawn("/bin/cat",args);child.stdout.on("data",(chunk:string):void=>write(chunk));child.stderr.on("data",(chunk:string):void=>writeError(chunk));child.stdin.write("payload");child.stdin.end();child.on("close",(code:number):void=>print(code));',
+   processStdin:'import process from "estatic:process"; process.stdin.on("data",(chunk:string):void=>print(chunk));process.stdin.on("end",():void=>{});',
 }))test(`native builtin contracts accept ${name}`,()=>check(source));
 for(const [name,source] of Object.entries({
  wrongLength:'print(length(1));',
@@ -766,13 +766,13 @@ for(const [name,source] of Object.entries({
  wrongJson:'const j=JSON.parseValue(1);',
  wrongFile:'const r=readFile(1);',
  voidPrint:'function f():void{}print(f());',
-  wrongChildProcess:'import process from "estatic:process"; child_process.spawn(1,[]);,
-  wrongProcessStreamCallback:'import process from "estatic:process"; process.stdin.on("data",(chunk:number):void=>{});,
+  wrongChildProcess:'import child_process from "estatic:child_process"; child_process.spawn(1,[]);',
+  wrongProcessStreamCallback:'import process from "estatic:process"; process.stdin.on("data",(chunk:number):void=>{});',
  }))test(`native builtin contracts reject ${name}`,()=>run(fixture(source),1));
-test("process.argv y process.argc son propiedades como en Node",()=>{const g=check('import process from "estatic:process"; const args:string[]=process.argv;const n:number=process.argc;for(let i:number=0;i<process.argc;i++)print(process.argv[i]);const user:string[]=process.argv.slice(2);print(user.length);print([1,2,3].slice(1,2).length););assert.equal(g.diagnostics.length,0);});
-for(const member of ["argv","argc"])test(`process.${member}() se rechaza: es una propiedad`,()=>error(`print(process.${member}());`,/es una propiedad, no una función/));
-test("retained Node stream callbacks reject mutable stack captures",()=>error('import process from "estatic:process"; function f():void{let count=0;process.stdin.on("data",(chunk:string):void=>{count=count+1;});},/E4210/));
-test("retained ChildProcess callbacks reject mutable stack captures",()=>error('import process from "estatic:process"; function f():void{let codeOut=0;const child=child_process.spawn("cat",[]);child.on("close",(code:number):void=>{codeOut=code;});},/E4210/));
+test("process.argv y process.argc son propiedades como en Node",()=>{const g=check('import process from "estatic:process"; const args:string[]=process.argv;const n:number=process.argc;for(let i:number=0;i<process.argc;i++)print(process.argv[i]);const user:string[]=process.argv.slice(2);print(user.length);print([1,2,3].slice(1,2).length);');assert.equal(g.diagnostics.length,0);});
+for(const member of ["argv","argc"])test(`process.${member}() se rechaza: es una propiedad`,()=>error(`import process from "estatic:process"; print(process.${member}());`,/es una propiedad, no una función|no es invocable/));
+test("retained Node stream callbacks reject mutable stack captures",()=>error('import process from "estatic:process"; function f():void{let count=0;process.stdin.on("data",(chunk:string):void=>{count=count+1;});}',/E4210/));
+test("retained ChildProcess callbacks reject mutable stack captures",()=>error('import child_process from "estatic:child_process"; function f():void{let codeOut=0;const child=child_process.spawn("cat",[]);child.on("close",(code:number):void=>{codeOut=code;});}',/E4210/));
 test('native effects preserve external effects separately from symbol reads',()=>{
  const g=check('function inner():void{console.log("x");}function outer():void{inner();}');assert.equal(effect(g,'inner').external,true);assert.equal(effect(g,'outer').external,true);
 });
@@ -1164,7 +1164,7 @@ for(const [name,source] of Object.entries({
  unusedLoan:'async function test():Promise<void>{let n=0;const r=constRef(n);await sleep(1);}',
  localFrame:'async function use(cb:()=>number):Promise<number>{await sleep(1);return cb();}async function outer():Promise<number>{let n=0;const t=use(():number=>{n+=1;return n;});return await t;}',
  detached:'async function f():Promise<void>{await sleep(1);print(1);}spawn(f());',
- detachedBuiltinMethod:'import http from "estatic:http"; async function d():Promise<void>{const r=await http.get("x");}spawn(d());,
+ detachedBuiltinMethod:'import http from "estatic:http"; async function d():Promise<void>{const r=await http.get("x");}spawn(d());',
  detachedFs:'async function d():Promise<void>{const r=await fs.readFile("x");}spawn(d());',
  notStarted:'class B{}async function f():Promise<void>{const q=move(p);}const t=f();let p:ptr<B> = new B();await t;',
  defaultAtCreation:'class B{}let p:ptr<B> = new B();async function f(x:ptr<B> = move(p)):Promise<void>{}const t=f();p=new B();const q=move(p);await t;',
@@ -1323,7 +1323,7 @@ test('native comptime defers only unavailable runtime arguments',()=>{
  const g=check('@comptime function f(n:number):number{return n+1;}function runtime(n:number):number{return f(n);}');assert.ok(g.files[0].constantStates.includes('deferred'));
 });
 test('native comptime never defers a genuine decorated body error',()=>error('@comptime function f():number{return 1/0;}const n=f();',/COMPTIME_(FLOAT|INTEGER)_DIVISION_ZERO/));
-test('native comptime never defers an external effect in a decorated body',()=>error('@comptime function f():number{return argumentCount();}const n=f();',/COMPTIME_FORBIDDEN_EFFECT/));
+test('native comptime never defers an external effect in a decorated body',()=>error('import { argumentCount } from "estatic:process"; @comptime function f():number{return argumentCount();}const n=f();',/COMPTIME_FORBIDDEN_EFFECT/));
 for(const [name,source] of Object.entries({
  deprecated:'@deprecated("use g") function f():number{return 1;}',
  sealed:'@sealed class C{x:number=1;}',
@@ -1414,7 +1414,7 @@ test('native comptime resets its budget for independent roots',()=>{
 test('native comptime records an error code independent of message text',()=>{
  const g=error('const n=comptime(():number=>1/0);',/COMPTIME_FLOAT_DIVISION_ZERO/);assert.ok(g.files[0].constantCodes.includes('COMPTIME_FLOAT_DIVISION_ZERO'));
 });
-test('native comptime rejects unknown runtime captures instead of inventing a constant',()=>error('const input=argument(0);const n=comptime(():string=>input);',/COMPTIME_VALUE_UNAVAILABLE/));
+test('native comptime rejects unknown runtime captures instead of inventing a constant',()=>error('import { argument } from "estatic:process"; const input=argument(0);const n=comptime(():string=>input);',/COMPTIME_VALUE_UNAVAILABLE/));
 test('native comptime rejects forward global reads with a TDZ diagnostic',()=>error('const n=comptime(():number=>later);const later=2;',/COMPTIME_TDZ|E4001/));
 test('native comptime does not discard source errors in an unused result',()=>error('const n=comptime(():number=>{const xs:number[]=["s"];return 1;});',/incompatible/));
 for(const [name,source] of Object.entries({
@@ -1814,10 +1814,10 @@ for(const [name,source] of Object.entries({
  asyncFiles:'async function f():Promise<void>{const a:Result<string> =await readFileAsync("x");const b:Result<boolean> =await writeFileAsync("x","y");}',
  cancellation:'const source=createCancellation();const token=cancellationToken(source);cancel(source);const done:boolean=isCancelled(token);',
  network:'async function f():Promise<void>{const listener:Result<TcpListener> =listenTcp("localhost",80);const r:Result<TcpConnection> =await acceptTcp(listener.value());}',
- fs:'import process from "estatic:process"; import path from "estatic:path"; const r:Result<string> =fs.readFileSync("x");const n:string=path.basename("x");const args:string[]=process.argv;,
+ fs:'import process from "estatic:process"; import path from "estatic:path"; const r:Result<string> =fs.readFileSync("x");const n:string=path.basename("x");const args:string[]=process.argv;',
  legacyOut:'let text="";let error="";const ok:boolean=readFile("x",text,error);const written:boolean=writeFile("x",text,error);',
  timer:'const callback=():void=>{};const timer:Timer=setTimeout(callback,1);cancelTimer(timer);const alive:boolean=timer.valid();',
- http:'import http from "estatic:http"; const app=http.express();app.get("/",(req:Request,res:Response):void=>{res.status(200).send(req.path());});app.listen(8080);,
+ http:'import http from "estatic:http"; const app=http.express();app.get("/",(req:Request,res:Response):void=>{res.status(200).send(req.path());});app.listen(8080);',
  terminal:'const a:boolean=console.writeLine("x");const columns:number=console.columns();console.moveTo(1,2);',
  size:'const m=new Map<string,number>();const n:number=m.size();const s=new Set<number>();print(s.size());',
 }))test(`frontend closure runtime catalog accepts ${name}`,()=>check(source));
@@ -1828,7 +1828,7 @@ for(const [name,source,pattern] of [
  ['outAlias','let text="";readFile("x",text,text);',/E4206/],
  ['callback','setTimeout((n:number):void=>{},1);',/builtin compatible/],
  ['timerCapture','function f():void{let n=0;setTimeout(():void=>{n+=1;},1);}',/E4210/],
- ['routeCapture','import http from "estatic:http"; function f():void{let n=0;const app=http.express();app.get("/",(req:Request,res:Response):void=>{n+=1;});},/E4210/],
+ ['routeCapture','import http from "estatic:http"; function f():void{let n=0;const app=http.express();app.get("/",(req:Request,res:Response):void=>{n+=1;});}',/E4210/],
  ['comptimeIO','const n=comptime(():boolean=>fileExists("x"));',/COMPTIME_FORBIDDEN_EFFECT/],
 ] as const)test(`frontend closure runtime catalog rejects ${name}`,()=>error(source,pattern));
 test('frontend closure runtime catalog is synchronized with stage zero',()=>{const p=spawnSync(process.execPath,['--experimental-strip-types','scripts/generate-native-builtins.ts','--check'],{cwd:root,encoding:'utf8'});assert.equal(p.status,0,p.stderr+p.stdout);});
@@ -1837,7 +1837,7 @@ for(const [name,source] of Object.entries({
  andThen:'const o:Optional<number> =optionalSome(3);const r:Optional<number> =optionalAndThen(o,(n:number):Optional<number> =>optionalSome(n+1));',
  abi:'@cpp_name("external_name") function f(n:number):number;const n:number=f(1);',
  typeABI:'@cpp_type("ExternalType") interface I{x:number;@cpp_name("external_method") f():number;}function f(i:I):number{return i.f();}',
- backend:'import http from "estatic:http"; @cpp_drogon let server:Server=http.createServer();server.listen(8080);,
+ backend:'import http from "estatic:http"; @cpp_drogon let server:Server=http.createServer();server.listen(8080);',
 }))test(`frontend closure runtime aliases and ABI accepts ${name}`,()=>check(source));
 for(const [name,source,pattern] of [
  ['mapArgument','optionalMap(1,(n:number):number=>n);',/requiere Optional/],
@@ -1913,7 +1913,7 @@ for(const [name,body,expected] of [
 ] as const)test(`frontend closure comptime enum ${name}`,()=>constantNumberResult(body,expected));
 
 test('frontend closure statically disjoint instanceof operands remain well typed',()=>check('class A{x:number=1;}const a=new A();const left=1 instanceof A;const right=a instanceof number;'));
-test('frontend closure HTTP Request fields support readonly property syntax',()=>check('import http from "estatic:http"; const app=http.createServer();app.post("/",(req:Request,res:Response):void=>{const body:string=req.body;res.send(body);});));
+test('frontend closure HTTP Request fields support readonly property syntax',()=>check('import http from "estatic:http"; const app=http.createServer();app.post("/",(req:Request,res:Response):void=>{const body:string=req.body;res.send(body);});'));
 test('frontend closure HTTP Request properties reject mutation',()=>error('function f(req:Request):void{req.body="changed";}',/E4300/));
 test('frontend closure known native IO task effects permit spawning a handler',()=>check('async function handle(c:TcpConnection):Promise<void>{const r:Result<string> =await readTcp(c,1024);if(r.isOk()){const written:Result<number> =await writeTcp(c,r.value());}closeTcp(c);}function start(c:TcpConnection):void{spawn(handle(c));}'));
 test('frontend closure external effects preserve borrows isolated in another frame',()=>check('@cpp_name("external") function external():number;class B{x:number=1;}function helper():number{return external();}function run():void{let b=new B();const r=constRef(b);print(helper());print(r.x);}run();'));
