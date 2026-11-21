@@ -76,7 +76,9 @@ jobs:
     needs: plan
     if: needs.plan.outputs.count != '0'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # El frontend se construye con la semilla: el analisis de compiler/ con el
+    # compilador nativo tarda mas que con stage 0.
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -121,10 +123,18 @@ jobs:
       - name: Install project (precompiles the C++ runtime)
         run: npm install
 
+      # El frontend nativo que usan los tests se construye con la semilla (el
+      # camino de produccion): es el unico que resuelve los imports `estatic:*`.
+      # Tarda mas que stage 0 (que no compila las librerias del runtime), pero
+      # quita a stage 0 de la via de las pruebas.
+      - name: Build the native compiler (seed)
+        run: bash native-cpp/build-all.sh --out "$RUNNER_TEMP/seed"
+
       - name: Tests del shard
         env:
           ESTATIC_ANALYSIS_JOBS: '2'
           ESTATIC_TEST_COMPARE_JOBS: '1'
+          ESTATIC_SEED: ${{ runner.temp }}/seed/etsc
         run: |
           set -o pipefail
           node --experimental-strip-types --test --test-concurrency=1 ${{ matrix.tests }} 2>&1 | tee unit-test.log

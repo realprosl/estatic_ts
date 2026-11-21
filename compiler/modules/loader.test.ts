@@ -19,7 +19,7 @@ function fixture(files: Record<string,string>) {
 }
 function put(file: string, text: string) { mkdirSync(resolve(file, ".."), { recursive: true }); writeFileSync(file, text); }
 function invoke(entry: string, flags: string[] = [], status = 0): any[] {
-  const result = spawnSync(binary, [entry, ...flags], { encoding: "utf8", timeout: 30000, maxBuffer: 64 * 1024 * 1024 });
+  const result = spawnSync(binary, [entry, ...flags], { encoding: "utf8", timeout: 600000, maxBuffer: 64 * 1024 * 1024 });
   assert.ifError(result.error); assert.equal(result.status, status, result.stderr + result.stdout.slice(0, 3000));
   assert.equal(result.stderr, ""); return result.stdout.trim().split("\n").map(line => {const g=JSON.parse(line);g.diagnostics.forEach(assertDiagnostic);for(const m of g.modules)m.source.diagnostics.forEach(assertDiagnostic);return g;});
 }

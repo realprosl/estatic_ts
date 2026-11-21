@@ -1,11 +1,50 @@
 // Build/I/O adapter only: the resulting binary opens and analyzes the project.
+//
+// El frontend se puede construir de dos maneras:
+//   - Con el compilador nativo (la semilla): es el camino de produccion y el
+//     unico que sabe resolver los imports `estatic:*`.
+//   - Con stage 0 (`src/`): el bootstrap. No compila las librerias del
+//     runtime, asi que solo sirve mientras `compiler/` no las importe.
+// La variable ESTATIC_SEED dice donde esta el compilador nativo; si no esta
+// (o no existe), se usa stage 0.
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { compileFile } from "../../src/modules/module-loader.ts";
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+
+// La semilla: el compilador nativo que construye el frontend.
+function seedCompiler(): string {
+  const seed = process.env.ESTATIC_SEED ?? "";
+  if (seed == "") return "";
+  if (!existsSync(seed)) throw new Error("ESTATIC_SEED no existe: " + seed);
+  return seed;
+}
+
+// Construye el frontend con el compilador nativo: el analiza y emite el IR,
+// y el mismo lo convierte en C++ y lo construye (el camino de produccion).
+function buildWithSeed(directory: string, entry: string, unity: boolean, optimization: string, identity: string, detail: (text: string) => void): string {
+  const seed = seedCompiler();
+  const ir = join(directory, "frontend.ir.json");
+  const binary = join(directory, "modules-demo");
+  detail(`Frontend · analizar con el compilador nativo: ${entry}`);
+  execFileSync(seed, [join(root, entry), "--check", "--emit-ir", ir, "--no-progress"],
+    { cwd: root, encoding: "utf8", timeout: 3600000, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, ESTC_ROOT: root } });
+  detail(`Frontend · emitir C++ y construir con el compilador nativo`);
+  const args = ["--from-ir", ir, "-o", join(directory, "app.cpp"), "--binary", binary, "--build", "--no-progress"];
+  if (unity) args.push("--unity");
+  args.push("--cxx-flag", optimization);
+  // La identidad del frontend: sin ella `syntaxIdentity()` (runtime/ets_runtime
+  // via compiler/modules/platform.hpp) devuelve un nonce por proceso y la cache
+  // de sintaxis no acierta nunca entre ejecuciones.
+  args.push("--cxx-flag", `-DESTATIC_FRONTEND_ID="${identity}"`);
+  execFileSync(seed, args,
+    { cwd: root, encoding: "utf8", timeout: 3600000, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, ESTC_ROOT: root } });
+  return binary;
+}
+
 export async function buildLoader(directory: string, entry = "compiler/modules/demo.ts", unity = false, optimization: "-O0" | "-O2" = "-O0", detail: (text:string)=>void = ()=>{}): Promise<string> {
   mkdirSync(directory, { recursive: true });
   // Bind persisted syntax to all stage-0/native sources used by this build.
@@ -16,6 +55,7 @@ export async function buildLoader(directory: string, entry = "compiler/modules/d
       .map(file => `${folder}/${file}`))].sort();
   for (const file of sources) hash.update(file).update("\0").update(readFileSync(join(root, file))).update("\0");
   const identity = hash.digest("hex");
+  if (seedCompiler() != "") return buildWithSeed(directory, entry, unity, optimization, identity, detail);
   detail(`Transpilando frontend: ${entry}`);
   const result = await compileFile(join(root, entry), { baseDirectory: root });
   const includes = result.externalHeaders.join("\n");
