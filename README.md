@@ -1051,9 +1051,10 @@ void increment(Counter& c);
 > por una referencia para optimizar el ABI. Si se quiere evitar una copia,
 > debe expresarse mediante `ref<T>` o `constRef<T>`.
 
-Las funciones `async` rechazan parámetros `ref<T>` y `constRef<T>` hasta
-disponer de análisis de lifetimes (PR#7). Si la corutina necesita el
-objeto, debe recibirlo por valor o tomar ownership con `ptr<T>`.
+Las funciones `async` rechazan parámetros `ref<T>` y `constRef<T>`: la
+corutina puede seguir viva después de la llamada y el dialecto no modela
+lifetimes (rechazado por diseño). Si la corutina necesita el objeto, debe
+recibirlo por valor o tomar ownership con `ptr<T>`.
 
 ## Arrays y tuplas
 

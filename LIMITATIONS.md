@@ -256,9 +256,10 @@ del dialecto (RAII puro, sin vtable, sin tipado dinámico).
 | Herencia (`extends`, `implements`) | Polimorfismo dinámico requiere vtable |
 | `Object`, `any` y `unknown` como tipos dinámicos generales | Sin tipado dinámico abierto; para datos externos se usa `JsonValue` o tipos explícitos |
 | `eval` | Seguridad + rendimiento |
+| **Lifetimes**: parámetros de lifetime (`<'a>`), análisis de lifetimes entre funciones y préstamos (`ref<T>`/`constRef<T>`) devueltos o guardados en campos | La propiedad se transfiere con `move`: lo que tiene que vivir más que la función que lo creó se devuelve o se mueve a su nuevo dueño (p. ej. el padre), que lo libera por RAII al dejar de existir. Los préstamos nunca se devuelven ni se guardan, así que no pueden sobrevivir al objeto y no hace falta modelar duraciones |
 | **Inserción de métodos dinámicos de clase después de la declaración** (añadir métodos a un objeto o a una clase ya declarada desde fuera, estilo *declaration merging* o *prototype augmentation*) | Los tipos del dialecto son nominales y cerrados: un tipo se declara una vez y su forma es fija. Abrirlo rompería el tipado nominal, la unicidad de los ids de símbolo y el aislamiento entre módulos |
 
-Estas cinco exclusiones son la **frontera del dialecto** y no carencias de
+Estas seis exclusiones son la **frontera del dialecto** y no carencias de
 implementación: se mantienen aunque el resto de TypeScript se incorpore.
 
 El **resto** de las formas que esta tabla rechazaba (`===`/`!==`, `>>>`,
@@ -313,16 +314,15 @@ semántica de copia para `T`. El checker implementa value semantics,
 `make_unique`, tracking de moves, conflictos `ref + ref`/`ref + constRef` y
 non-lexical lifetimes conservadores. También impide almacenar o devolver
 préstamos y aplica restricciones en closures, genéricos y funciones async.
-Siguen pendientes:
+Los lifetimes explícitos y los préstamos devueltos o guardados están
+**rechazados por diseño** (ver la tabla de rechazos): la propiedad se
+transfiere con `move`. Siguen pendientes:
 
-- Análisis de lifetimes interprocedural y parámetros de lifetime.
-- Permitir retornos o campos prestados cuando exista una demostración formal
-  de su duración.
-- **`Rc<T>`** (shared ownership): deprecado en V22. Se rediseñará con
-  `weak<T>` en un PR futuro.
+- **`Rc<T>`** (shared ownership): deprecado en V22. Se rediseñará como
+  `rc<T>` (#243) junto con `weak<T>` (#244).
 - **Nullable ptr explícito**: `let p: ptr<T> = null` no se admite
-  todavía. El estado vacío se obtiene únicamente vía `move()`.
-- **Lifetime parameters** (`<'a>`): no soportados.
+  todavía. El estado vacío se obtiene únicamente vía `move()`. Diseño
+  propuesto: `ptr<T>` nunca vacío y `Optional<ptr<T>>` con `take()` (#246).
 
 > Los códigos se interpretan junto con la fase y el contrato del frontend.
 > En bootstrap, E4102/E4103 cubren usos movidos/posiblemente movidos, E4203

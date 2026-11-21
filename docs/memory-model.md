@@ -87,14 +87,17 @@ class Holder {
 let arr: Array<ref<Data>> = [];  // E4205
 ```
 
-**No se pueden devolver** (todavía):
+**No se pueden devolver**:
 
 ```ets
 function get(): ref<Data> { ... }  // E42xx: borrowed references cannot be returned
 ```
 
-La razón: el type-checker no implementa lifetime analysis. Los préstamos
-son válidos solo dentro del scope de la llamada donde se reciben.
+La razón es de diseño, no una carencia: el dialecto no tiene lifetimes.
+Los préstamos son válidos solo dentro del scope de la llamada donde se
+reciben. Si un objeto tiene que vivir más que la función que lo creó, se
+devuelve por valor o se transfiere su propiedad con `move` a su nuevo dueño
+(p. ej. el padre), que lo libera por RAII cuando deja de existir.
 
 ### 3. `ptr<T>` y `constPtr<T>` son ownership explícito (V22)
 
@@ -142,12 +145,16 @@ pero semánticamente equivalentes a `ptr<T>`, `ref<T>`, `constRef<T>`.
 
 ## Límites y trabajo futuro
 
-- **Lifetime analysis**: permitiría devolver `ref<T>` y almacenarlo en
-  fields cuando el checker pueda demostrar su duración. No implementado.
-- **`weak<T>` real**: mencionado en E4404 pero no implementado.
-- **Lifetimes interprocedurales**: el checker detecta conflictos de aliasing y
-  aplica non-lexical lifetimes conservadores dentro de la función, pero no
-  modela relaciones de duración entre firmas.
+- **Sin lifetimes, por diseño**: no habrá parámetros de lifetime (`<'a>`)
+  ni análisis de lifetimes entre funciones, y `ref<T>`/`constRef<T>` no se
+  podrán devolver ni guardar en campos. El checker detecta conflictos de
+  aliasing y aplica non-lexical lifetimes conservadores dentro de la función;
+  lo que deba vivir más se mueve a su nuevo dueño. Ver la tabla de rechazos
+  de [`LIMITATIONS.md`](../LIMITATIONS.md).
+- **`rc<T>` y `weak<T>`**: `weak<T>` aparece en E4404 pero no está
+  implementado. Rediseño en #243 (`rc<T>`) y #244 (`weak<T>`).
+- **Punteros vacíos**: `ptr<T>` nunca vacío y `Optional<ptr<T>>` con
+  `take()` (#246).
 - **Runtime nativo**: el modelo del lenguaje no elimina los riesgos de vida
   útil de handles y corutinas descritos en [`MEMORY-AUDIT.md`](./MEMORY-AUDIT.md).
 
