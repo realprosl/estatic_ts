@@ -12,6 +12,7 @@
 // se pasan a bytes y a línea:columna, con la columna en caracteres. Un mensaje puede
 // llevar líneas extra "\nayuda: ..." o "\nnota: ..." que se muestran debajo.
 import {readText,exists,terminal,environment,environmentDefined,currentDirectory} from "../platform/index";
+import { jsonObjectGet, jsonAsString, jsonIsObject, jsonIsString } from "estatic:json";
 
 let colorDecided=false;let colorOn=false;
 function colors():boolean{

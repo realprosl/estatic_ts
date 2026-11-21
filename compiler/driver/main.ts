@@ -1,4 +1,7 @@
 import {configureAnalysisJobs,configureAnalysisProfile} from "../analysis/index";
+import { jsonObjectGet, jsonAsString, jsonAsNumber, jsonAsBool, jsonIsObject, jsonIsNumber, jsonIsBool } from "estatic:json";
+import { argument, argumentCount, exitProcess } from "estatic:process";
+import { normalizePath } from "estatic:path";
 import {ModuleLoader,LoaderOptions,PathAlias} from "../modules/index";
 import {analyzeProject,formatModuleInterface} from "../checker/index";
 import { lowerProject, IrProject, IrIssue, IrSource, formatIr } from "../ir/index";

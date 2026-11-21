@@ -1,4 +1,5 @@
 import {IrCppResult} from "./generator";
+import { jsonEscape } from "estatic:json";
 function quote(value:string):string{return '"'+jsonEscape(value)+'"';}
 function strings(values:string[]):string{
  let output:string[]=[];for(const value of values)output.push(quote(value));return "["+output.join(",")+"]";

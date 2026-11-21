@@ -932,17 +932,14 @@ export class NativeChecker {
     if (["when","whenType","otherwise"].includes(name)) return "!matchCase";
     if (name == "print" || name == "printError" || name == "write" || name == "writeError") return "!print";
     if (name == "numberToString") return "(number)=>string";
-    if (name == "argument") return "(number)=>string";
-    if (name == "argumentCount") return "()=>number";
     if (name == "sleep") return "(number)=>Promise<void>";
     if (["all","race","promiseAll","promiseRace"].includes(name)) return "!tasks:" + name;
     if (name == "spawn") return "(Promise<void>)=>void";
-    if (name == "exitProcess") return "(number)=>void";
     if (name == "move" || name == "ref" || name == "constRef") return "!" + name;
     if (name == "length") return "!length";
     if (["Math","JSON","Date","String","Array","Object","Promise"].includes(name)) return "!" + name;
     if (name == "console") return "Console";
-    if (["fs","path","process","http","child_process"].includes(name)) return "!"+name;
+    if (["fs"].includes(name)) return "!"+name;
     if (nativeBuiltinSignatures(name).length > 0) return "!builtin:"+name;
     if (name == "charAt" || name == "lineAt") return "(string,number)=>string";
     if (name == "substring") return "(string,number,number)=>string";
@@ -954,12 +951,8 @@ export class NativeChecker {
     if (["writeFile","appendFile","copyFile","moveFile"].includes(name)) return "(string,string)=>Result<boolean,string>";
     if (name == "removeFile") return "(string)=>Result<boolean,string>";
     if (name == "fileExists") return "(string)=>boolean";
-    if (["jsonIsString","jsonIsNumber","jsonIsBool","jsonIsArray","jsonIsObject","jsonIsNull"].includes(name)) return "(JsonValue)=>boolean";
-    if (name == "jsonAsString") return "(JsonValue)=>string";
+
     if (name == "jsonAsNumber" || name == "jsonArrayLength") return "(JsonValue)=>number";
-    if (name == "jsonAsBool") return "(JsonValue)=>boolean";
-    if (name == "jsonArrayGet") return "(JsonValue,number)=>JsonValue";
-    if (name == "jsonObjectGet") return "(JsonValue,string)=>JsonValue";
     if (["optionalSome","optionalNone","optionalIsPresent","optionalValueOr","optionalOrElse","resultOk","resultErr","resultIsOk","resultValueOr","ok","err"].includes(name)) return "!container:" + name;
     return "!error";
   }

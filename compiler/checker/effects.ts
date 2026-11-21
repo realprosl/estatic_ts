@@ -506,8 +506,8 @@ export class EffectAnalyzer {
       const scope: number = this.binding.files[m].nodeScopes[id]; if (scope < 0) continue; const owner: number = this.executionOwner(m,id); if (owner < 0) continue;
       const n: AstNode = this.node(m,id);
       const helper: string = this.helper(m,id);
-      if (nativeBuiltinSignatures(helper).length > 0 && !["numberToString","charAt","substring","indexOf","startsWith","trim","lineCount","lineAt","length","jsonEscape","jsonIsString","jsonIsNumber","jsonIsBool","jsonIsArray","jsonIsObject","jsonIsNull","jsonAsString","jsonAsNumber","jsonAsBool","jsonArrayLength","jsonArrayGet","jsonObjectGet"].includes(helper)) this.summaries[owner].external = true;
-      if (["print","printError","write","writeError","argument","argumentCount","exitProcess","readFile","writeFile","appendFile","copyFile","moveFile","removeFile","fileExists","spawn"].includes(helper)) this.summaries[owner].external = true;
+      if (nativeBuiltinSignatures(helper).length > 0 && !["numberToString","charAt","substring","indexOf","startsWith","trim","lineCount","lineAt","length"].includes(helper)) this.summaries[owner].external = true;
+      if (["print","printError","write","writeError","readFile","writeFile","appendFile","copyFile","moveFile","removeFile","fileExists","spawn"].includes(helper)) this.summaries[owner].external = true;
       if (n.kind == NodeKind.MemberCallExpression) {
         const receiver: string = this.receiver(m,id);
         if (["!fs","!http","!process","Server","Response","Request","FileReader","Timer","FsWatcher","FsEvent","HttpClientResponse"].includes(receiver)) this.summaries[owner].external = true;

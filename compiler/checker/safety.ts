@@ -1,4 +1,5 @@
 import { catalogArg, diagnosticAt, SourceDiagnostic, quoteSource } from "../diag/index";
+import { jsonObjectGet, jsonArrayGet, jsonArrayLength, jsonAsString, jsonAsNumber, jsonIsArray, jsonIsString, jsonIsNumber } from "estatic:json";
 import {analysisJobs,profileBegin,profileEnd} from "../analysis/index";
 import { forkWorker, finishWorker, waitWorker, temporaryDirectory, poll, pause, terminate, readText, writeText, remove, hostError, progressDetail } from "../platform/index";
 import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind, AstNode, nodeBegin, nodeEnd } from "../parser/index";

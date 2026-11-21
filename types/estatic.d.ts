@@ -287,7 +287,6 @@ declare global {
   function lineCount(value: string): number;
   function lineAt(value: string, index: number): string;
   /** Sale del proceso con el codigo dado. NUNCA retorna (decorado con @noreturn). */
-  function exitProcess(code: number): never;
   /** Reporta un mensaje de error via out-param (estilo C). Usado por el runtime. */
   function fail(message: string, error: string): boolean;
   /** Limpia el buffer de error. */
@@ -295,13 +294,8 @@ declare global {
   /** true si hay un mensaje de error pendiente. */
   function hasError(error: string): boolean;
   /** Devuelve el numero de argumentos pasados al programa (equivalente a process.argv.length - 1). */
-  function argumentCount(): number;
-  function argument(index: number): string;
-  function jsonEscape(value: string): string;
-  function normalizePath(path: string): string;
   function compilerRoot(): string;
   function resolveImportPath(from: string, specifier: string): string;
-  function pathDirectory(path: string): string;
   function resolveProjectPath(root: string, path: string): string;
   /** Asegura que el directorio padre del path existe. Crea los directorios necesarios. */
   function ensureParentDirectory(path: string, error: string): boolean;
@@ -461,162 +455,6 @@ declare global {
     on(event: string, listener: (code: number) => void): ChildProcess;
     on(event: string, listener: (message: string) => void): ChildProcess;
   }
-  namespace child_process {
-    function spawn(command: string, args: string[]): ChildProcess;
-  }
-  function removeFile(path: string, error: string): boolean;
-
-  function readFileAsync(path: string): Promise<Result<string>>;
-  function writeFileAsync(path: string, contents: string): Promise<Result<boolean>>;
-  function appendFileAsync(path: string, contents: string): Promise<Result<boolean>>;
-  function fileExistsAsync(path: string): Promise<Result<boolean>>;
-  function copyFileAsync(source: string, destination: string): Promise<Result<boolean>>;
-  function moveFileAsync(source: string, destination: string): Promise<Result<boolean>>;
-  function removeFileAsync(path: string): Promise<Result<boolean>>;
-
-  function readFileUntil(path: string, timeoutMs: number, token: CancellationToken): Promise<Result<string>>;
-  function writeFileUntil(path: string, contents: string, timeoutMs: number, token: CancellationToken): Promise<Result<boolean>>;
-  function appendFileUntil(path: string, contents: string, timeoutMs: number, token: CancellationToken): Promise<Result<boolean>>;
-  function copyFileUntil(source: string, destination: string, timeoutMs: number, token: CancellationToken): Promise<Result<boolean>>;
-  function moveFileUntil(source: string, destination: string, timeoutMs: number, token: CancellationToken): Promise<Result<boolean>>;
-  function removeFileUntil(path: string, timeoutMs: number, token: CancellationToken): Promise<Result<boolean>>;
-
-  function ioUringAvailable(): boolean;
-  function ioUringRead(path: string): Result<string>;
-  function ioUringWrite(path: string, contents: string): Result<boolean>;
-  function asyncIoUringRead(path: string): Promise<Result<string>>;
-  function asyncIoUringWrite(path: string, contents: string): Promise<Result<boolean>>;
-
-  // ─── Helpers de networking (runtime/ets_net_sync.hpp) ──────────────
-  function tcpListen(host: string, port: number): number;
-  function tcpAccept(listenerFd: number): number;
-  function tcpConnect(host: string, port: number): number;
-  function tcpRead(fd: number, maxBytes: number): string;
-  function tcpWrite(fd: number, data: string): boolean;
-  function tcpClose(fd: number): void;
-
-  // API async de red, cancelación y TLS.
-  function listenTcp(host: string, port: number): Result<TcpListener>;
-  function acceptTcp(listener: TcpListener): Promise<Result<TcpConnection>>;
-  function readTcp(connection: TcpConnection, maxBytes: number): Promise<Result<string>>;
-  function writeTcp(connection: TcpConnection, data: string): Promise<Result<number>>;
-  function closeTcp(listener: TcpListener): void;
-  function closeTcp(connection: TcpConnection): void;
-  function createCancellation(): CancellationSource;
-  function cancellationToken(source: CancellationSource): CancellationToken;
-  function cancel(source: CancellationSource): void;
-  function isCancelled(token: CancellationToken): boolean;
-  function acceptTcpUntil(listener: TcpListener, timeoutMs: number, token: CancellationToken): Promise<Result<TcpConnection>>;
-  function readTcpUntil(connection: TcpConnection, maxBytes: number, timeoutMs: number, token: CancellationToken): Promise<Result<string>>;
-  function writeTcpUntil(connection: TcpConnection, data: string, timeoutMs: number, token: CancellationToken): Promise<Result<number>>;
-  function createTlsServer(certificate: string, privateKey: string): Result<TlsContext>;
-  function acceptTls(listener: TcpListener, context: TlsContext, timeoutMs: number, token: CancellationToken): Promise<Result<TlsConnection>>;
-  function readTls(connection: TlsConnection, maxBytes: number, timeoutMs: number, token: CancellationToken): Promise<Result<string>>;
-  function writeTls(connection: TlsConnection, data: string, timeoutMs: number, token: CancellationToken): Promise<Result<number>>;
-  function closeTls(connection: TlsConnection): void;
-  function ok<T>(value: T): Result<T>;
-  function err<T>(message: string): Result<T>;
-
-  // ─── Cliente HTTP/1.1 (runtime/ets_http.hpp) ──────────────────────────
-  // Cliente HTTP plano (sin HTTPS todavia). Usa getaddrinfo para DNS y
-  // sockets POSIX bloqueantes. Lee el body completo (sin streaming).
-  //
-  // Limitaciones:
-  //   - HTTP/1.1 plano (puerto 80). HTTPS requiere TLS client que aun
-  //     no esta implementado en runtime/ets_tls.hpp (solo server).
-  //   - Sin redirecciones automaticas. Si status es 3xx, el caller
-  //     decide si hace otra peticion.
-  //   - Sin timeout por defecto.
-  //   - Sin cookies, gzip, autenticacion.
-  //
-  // Caso de uso: integraciones simples, health checks, webhooks, fetch
-  // de JSON publico.
-  // ─── API de string estilo TypeScript (V28) ─────────────────────────
-  // string es un primitivo del dialecto pero la API estilo metodo
-  // (s.charAt(i), s.length) vive documentada en una interface para
-  // que el LSP autocomplete tenga una pista. La interface se llama
-  // StringInstance (no String) porque el LSP de TS confunde
-  // String con el wrapper global de JS. La validacion real la hace
-  // STRING_METHODS en src/semantic/type-checker.ts y el codegen
-  // traduce 1:1 a ets::string_* (runtime/ets_string.hpp).
-  interface StringInstance {
-    /** Numero de bytes (= std::string::size). */
-    readonly length: number;
-    /** Byte en posicion i (defecto 0) como string (1 byte), o "" si fuera de rango. */
-    charAt(i?: number): string;
-    /** Byte en posicion i (defecto 0) como number (0-255), o NaN si fuera de rango. */
-    charCodeAt(i?: number): number;
-    /** Byte en i como string; i negativo cuenta desde el final. */
-    at(i: number): string | undefined;
-    /** Codigo Unicode del caracter UTF-8 que empieza en el byte i. */
-    codePointAt(i: number): number | undefined;
-    /** Primera posicion de search desde start (defecto 0), o -1. */
-    indexOf(search: string, start?: number): number;
-    /** Ultima posicion de search que empieza en from o antes, o -1. */
-    lastIndexOf(search: string, from?: number): number;
-    /** True si search aparece desde start. */
-    includes(search: string, start?: number): boolean;
-    /** True si value empieza por prefix en position (defecto 0). */
-    startsWith(prefix: string, position?: number): boolean;
-    /** True si los primeros endPosition bytes terminan por suffix. */
-    endsWith(suffix: string, endPosition?: number): boolean;
-    /** Substring desde start hasta end (acepta negativos desde el final). */
-    slice(start?: number, end?: number): string;
-    /** Substring clampeado a [0, length]; intercambia start/end. */
-    substring(start: number, end?: number): string;
-    /** Substring desde start con length (defecto hasta el final). */
-    substr(start: number, length?: number): string;
-    /** Partes separadas por separator (como mucho limit); "" separa cada byte. */
-    split(separator: string, limit?: number): string[];
-    /** value seguido de cada argumento. */
-    concat(...strings: string[]): string;
-    /** Quita espacios al principio y al final. */
-    trim(): string;
-    /** Quita espacios al principio. */
-    trimStart(): string;
-    /** Quita espacios al final. */
-    trimEnd(): string;
-    /** Alias de trimStart. */
-    trimLeft(): string;
-    /** Alias de trimEnd. */
-    trimRight(): string;
-    /** ASCII lower-case (byte-level). */
-    toLowerCase(): string;
-    /** ASCII upper-case (byte-level). */
-    toUpperCase(): string;
-    /** Repite el string count veces. */
-    repeat(count: number): string;
-    /** Rellena al inicio hasta targetLength con pad. */
-    padStart(targetLength: number, pad?: string): string;
-    /** Rellena al final hasta targetLength con pad. */
-    padEnd(targetLength: number, pad?: string): string;
-    /** Reemplaza la primera ocurrencia de search por replacement. */
-    replace(search: string, replacement: string): string;
-    /** Reemplaza todas las ocurrencias. */
-    replaceAll(search: string, replacement: string): string;
-    /** -1 si a<b, 0 si a==b, 1 si a>b (byte-level). */
-    localeCompare(other: string): number;
-    /** Identidad. */
-    toString(): string;
-  }
-
-  // ─── Servidor HTTP ───────────────────────────────────────────────
-  // API de routing sobre cpp-httplib por defecto, o Drogon con @cpp_drogon.
-  // Implementaciones: runtime/ets_http_httplib.hpp y ets_http_drogon.hpp.
-  //
-  // Cada handler es una funcion sincrona (req, res) => void. El server
-  // parsea el request antes de invocar al handler y serializa la
-  // response al volver. Una tarea en background no puede conservar prestamos
-  // a req/res ni completar la respuesta despues de que vuelva el handler.
-  //
-  // Limitaciones: HTTP/1.1 plano, sin HTTPS, sin middlewares, sin
-  // streaming, sin cookies, sin compresion.
-  // Los nombres "Request" y "Response" pertenecen al namespace "http" para
-  // evitar choques con cualquier otra cosa del usuario. Se accede a ellos
-  // como http.Request y http.Response en los handlers.
-  namespace http {
-    /** Request HTTP pre-parseado. El server rellena los campos antes de invocar al handler. */
-    interface Request {
       /** "GET", "POST", "PUT", "PATCH", "DELETE". */
       readonly method: string;
       /** Path sin query string. "/api/users". */
@@ -690,18 +528,6 @@ declare global {
   }
 
   // ─── Helpers de JsonValue ──────────────────────────────────────────
-  function jsonIsString(v: JsonValue): boolean;
-  function jsonIsNumber(v: JsonValue): boolean;
-  function jsonIsBool(v: JsonValue): boolean;
-  function jsonIsArray(v: JsonValue): boolean;
-  function jsonIsObject(v: JsonValue): boolean;
-  function jsonIsNull(v: JsonValue): boolean;
-  function jsonAsString(v: JsonValue): string;
-  function jsonAsNumber(v: JsonValue): number;
-  function jsonAsBool(v: JsonValue): boolean;
-  function jsonArrayLength(v: JsonValue): number;
-  function jsonArrayGet(v: JsonValue, index: number): JsonValue;
-  function jsonObjectGet(v: JsonValue, key: string): JsonValue;
 
   // ─── Built-in globals (RUNTIME_GLOBAL_NAMES en type-checker) ───────
   // Tipo estructural del objeto global. Permite conservar handles y usar
@@ -789,34 +615,3 @@ declare global {
     function unlinkSync(path: string): Result<boolean>;
     function existsSync(path: string): boolean;
   }
-  namespace path {
-    function dirname(p: string): string;
-    function basename(p: string): string;
-    function extname(p: string): string;
-    function isAbsolute(p: string): boolean;
-    function normalize(p: string): string;
-    function join(parts: string[]): string;
-    function resolve(parts: string[]): string;
-  }
-  namespace process {
-    /** Como en Node: [ejecutable, programa, ...argumentos]. Los argumentos del usuario empiezan en argv[2]: `process.argv.slice(2)`. */
-    const argv: string[];
-    /** Extension del dialecto: `process.argv.length`. */
-    const argc: number;
-    const stdin: ProcessReadable;
-    const stdout: ProcessWritable;
-    const stderr: ProcessWritable;
-    function cwd(): string;
-    function exit(code: number): void;
-  }
-  namespace JSON {
-    function stringify(value: string): string;
-    function stringifyNumber(value: number): string;
-    function stringifyBool(value: boolean): string;
-    function stringifyValue(value: JsonValue): string;
-    function parse(text: string): string;
-    function parseValue(text: string): JsonValue;
-  }
-}
-
-export {};

@@ -1,4 +1,5 @@
 import { catalogArg, catalogVariant, SourceDiagnostic, SourceResult, quoteSource, formatSource, formatDiagnostic } from "../diag/index";
+import { normalizePath, pathDirectory } from "estatic:path";
 import { progressDetail, canonicalFile, readSnapshot } from "../platform/index";
 import { AttributeKind, NodeKind, nodeKindName, ParserToken, AstNode, ParseResult } from "../parser/index";
 import { SyntaxCache, CachedSource, FileRecord } from "./syntax-cache";

@@ -1,4 +1,6 @@
 import { LoaderOptions, PathAlias, ModuleLoader, formatGraph } from "./loader";
+import { argument, argumentCount, exitProcess } from "estatic:process";
+import { normalizePath } from "estatic:path";
 
 function runDemo(): void {
   let options: LoaderOptions = new LoaderOptions(); let entry: string = ""; let repeat: number = 1;
