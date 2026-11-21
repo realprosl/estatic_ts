@@ -36,8 +36,16 @@ jobs:
     name: Native backend copy regressions
     if: github.event.action != 'labeled' || github.event.label.name == 'ci-completa'
     runs-on: ubuntu-24.04
-    # Construye ademas la semilla (el frontend de los tests).
-    timeout-minutes: 30
+    env:
+      # El analisis de compiler/ con el frontend nativo usa dos procesos: el
+      # runner tiene 4 nucleos y los tests ya compilan en paralelo.
+      ESTATIC_ANALYSIS_JOBS: '2'
+    # Construye ademas la semilla (el frontend de los tests) y analiza compiler/
+    # con el frontend nativo (no stage 0): cada fichero de test paga un analisis
+    # completo de compiler/ (~5-11 min con el frontend nativo frente a ~3 min
+    # con stage 0). Con 30 min el job se cancelaba y el job `selfhost` (que
+    # depende de este) no se ejecutaba nunca.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -74,14 +82,16 @@ jobs:
       - name: Build the native compiler (seed)
         run: bash native-cpp/build-all.sh --out "$RUNNER_TEMP/seed"
 
-      - name: Verify aggregate fast paths and value semantics
+      - name: Verify aggregate fast paths, value semantics and readonly receivers
+        # Un solo invocation: cada fichero de test paga un analisis completo de
+        # compiler/ con el frontend nativo, asi que separar los dos patrones
+        # analizaba native.test.ts dos veces por el mismo precio.
         env:
           ESTATIC_SEED: ${{ runner.temp }}/seed/etsc
-        run: node --experimental-strip-types --test --test-name-pattern='native aggregate fast paths|temporary argument value semantics|temporary constructor value semantics|length snapshot semantics|length mutation ordering' compiler/ir/native.test.ts
-      - name: Verify readonly receivers and malformed IR rejection
-        env:
-          ESTATIC_SEED: ${{ runner.temp }}/seed/etsc
-        run: node --experimental-strip-types --test --test-concurrency=1 --test-name-pattern='readonly' compiler/checker/checker.test.ts compiler/ir/readonly-verifier.test.ts compiler/ir/native.test.ts
+        run: >-
+          node --experimental-strip-types --test --test-concurrency=1
+          --test-name-pattern='native aggregate fast paths|temporary argument value semantics|temporary constructor value semantics|length snapshot semantics|length mutation ordering|readonly'
+          compiler/checker/checker.test.ts compiler/ir/readonly-verifier.test.ts compiler/ir/native.test.ts
   selfhost:
     needs: native-copy-regressions
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci-completa')
