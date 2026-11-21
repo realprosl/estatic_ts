@@ -52,9 +52,12 @@ prebuilt="$seed/prebuilt/$platform"
 # Huella de TODO lo que entra en el binario. Cambia si cambia cualquiera.
 sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
 seed_inputs() {
+  # Los scripts de construccion tambien entran: si cambia la receta (por
+  # ejemplo la identidad del compilador), el precompilado se rehace.
   (cd "$root" && find native-cpp/compiler/unity.cpp compiler/modules runtime \
       -type f \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) \
-      | LC_ALL=C sort | while IFS= read -r f; do sha256 "$f"; done) | sha256 | cut -d' ' -f1
+      | LC_ALL=C sort | while IFS= read -r f; do sha256 "$f"; done
+   sha256 native-cpp/build-all.sh native-cpp/build-compiler.sh) | sha256 | cut -d' ' -f1
 }
 
 mkdir -p "$out"
@@ -82,7 +85,12 @@ if ((static)); then
 fi
 
 label="semilla · C++20"; ((static)) && label="$label · estático"
+# La identidad del compilador: sin ella `syntaxIdentity()` (compiler/modules/
+# platform.hpp) devuelve un nonce por proceso y la cache de sintaxis no acierta
+# nunca entre ejecuciones. Es la huella de las fuentes de la semilla: cambia
+# cuando cambia la semilla, asi que una cache vieja no se reutiliza.
 etsc_spin "$label" "$cxx" -std=c++20 -O1 -pthread -fno-exceptions -I"$root" \
+  "-DESTATIC_FRONTEND_ID=\"$(seed_inputs)\"" \
   "$seed/compiler/unity.cpp" -o "$out/etsc" ${link[@]+"${link[@]}"}
 
 if ((update_prebuilt)); then

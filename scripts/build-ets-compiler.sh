@@ -9,6 +9,12 @@ if ! etsc_color || [[ ${ESTATIC_BUILD_VERBOSE:-0} == 1 ]]; then trace=(--verbose
 export ESTC_ROOT="$root"
 export TMPDIR="${TMPDIR:-$root/build/tmp}"
 output=${ESTATIC_ETS_BUILD_DIR:-build/ets-compiler}
+# La huella de compiler/: identifica al compilador que se construye (la cache de
+# sintaxis la usa como clave).
+compiler_fingerprint() {
+  (cd "$root" && find compiler -type f \( -name '*.ts' -o -name '*.hpp' -o -name '*.cpp' \) \
+      -not -name '*.test.ts' | LC_ALL=C sort | while IFS= read -r f; do sha256sum "$f"; done) | sha256sum | cut -d' ' -f1
+}
 mkdir -p "$TMPDIR" "$output"
 stage=${1:-stage1}
 optimization=${ESTATIC_ETS_OPTIMIZATION:--O1}
@@ -31,12 +37,14 @@ fi
 ETSC_LOG_FILE="$output/stage1-analysis.log" measure seed-analysis etsc_spin "Generación 1 · analizar fuentes ETS" native-cpp/native/etsc compiler/driver/main.ts --check \
   --emit-ir "$output/stage1.ir.json" "${trace[@]}"
 measure stage1-build etsc_step "Generación 1 · construir ejecutable" native-cpp/native/etsc --from-ir "$output/stage1.ir.json" --build \
-  -o "$output/stage1.cpp" --binary "$output/etsc" --cxx-flag "$optimization" "${trace[@]}"
+  -o "$output/stage1.cpp" --binary "$output/etsc" --cxx-flag "$optimization" \
+  --cxx-flag "-DESTATIC_FRONTEND_ID=\"$compiler_fingerprint\"" "${trace[@]}"
 if [[ "$stage" == stage2 ]]; then
   # This generation performs analysis, lowering, emission and orchestration in ETS.
   ETSC_LOG_FILE="$output/stage2-analysis.log" measure stage2-analysis etsc_spin "Generación 2 · analizar con el compilador ETS" "$output/etsc" compiler/driver/main.ts --check \
     --emit-ir "$output/stage2.ir.json" \
     "${trace[@]}"
   measure stage2-build etsc_step "Generación 2 · construir ejecutable" "$output/etsc" --from-ir "$output/stage2.ir.json" --build \
-    -o "$output/stage2.cpp" --binary "$output/etsc-stage2" --cxx-flag "$optimization" "${trace[@]}"
+    -o "$output/stage2.cpp" --binary "$output/etsc-stage2" --cxx-flag "$optimization" \
+    --cxx-flag "-DESTATIC_FRONTEND_ID=\"$compiler_fingerprint\"" "${trace[@]}"
 fi

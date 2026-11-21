@@ -65,7 +65,13 @@ fi
 [[ -x $seed/etsc ]] || { echo "Falta la semilla en $seed (--seed)" >&2; exit 1; }
 work="$(mktemp -d "${TMPDIR:-/tmp}/etsc-compiler.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
-flags=(--cxx-flag "$opt" --cxx-flag "-I$root")
+# La identidad del compilador que se construye: la huella de compiler/. Sin
+# ella la cache de sintaxis del compilador publicado no acierta entre procesos.
+compiler_fingerprint() {
+  (cd "$root" && find compiler -type f \( -name '*.ts' -o -name '*.hpp' -o -name '*.cpp' \) \
+      -not -name '*.test.ts' | LC_ALL=C sort | while IFS= read -r f; do sha256sum "$f"; done) | sha256sum | cut -d' ' -f1
+}
+flags=(--cxx-flag "$opt" --cxx-flag "-I$root" --cxx-flag "-DESTATIC_FRONTEND_ID=\"$(compiler_fingerprint)\"")
 if ((static)); then
   if [[ $os == linux ]]; then flags+=(--cxx-flag -static)
   else export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-13.3}"; fi
