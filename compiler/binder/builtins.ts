@@ -56,8 +56,6 @@ export function nativeBuiltinSignatures(key: string): string[] {
   if (key == "appendFile") return ["(string,string,ref<string>)=>boolean","(string,string)=>Result<boolean,string>"];
   if (key == "appendFileAsync") return ["(string,string)=>Promise<Result<boolean,string>>"];
   if (key == "appendFileUntil") return ["(string,string,number,CancellationToken)=>Promise<Result<boolean,string>>"];
-  if (key == "argument") return ["(number)=>string"];
-  if (key == "argumentCount") return ["()=>number"];
   if (key == "asyncIoUringRead") return ["(string)=>Promise<Result<string,string>>"];
   if (key == "asyncIoUringWrite") return ["(string,string)=>Promise<Result<boolean,string>>"];
   if (key == "cancel") return ["(CancellationSource)=>void"];
@@ -98,7 +96,6 @@ export function nativeBuiltinSignatures(key: string): string[] {
   if (key == "estaticTypedAstRecords") return ["(string,ref<string>,ref<string>)=>boolean"];
   if (key == "etsNetSyncEcho") return ["(string,number,string,number)=>string"];
   if (key == "etsNetSyncLarge") return ["(string,number,number)=>string"];
-  if (key == "exitProcess") return ["(number)=>void"];
   if (key == "fail") return ["(string,ref<string>)=>boolean"];
   if (key == "fileAppend") return ["(string,string)=>boolean"];
   if (key == "fileCopy") return ["(string,string)=>boolean"];
@@ -127,7 +124,6 @@ export function nativeBuiltinSignatures(key: string): string[] {
   if (key == "ioUringRead") return ["(string)=>Result<string,string>"];
   if (key == "ioUringWrite") return ["(string,string)=>Result<boolean,string>"];
   if (key == "isCancelled") return ["(CancellationToken)=>boolean"];
-  if (key == "jsonEscape") return ["(string)=>string"];
   if (key == "length") return ["(string)=>number"];
   if (key == "lineAt") return ["(string,number)=>string"];
   if (key == "lineCount") return ["(string)=>number"];
@@ -135,10 +131,8 @@ export function nativeBuiltinSignatures(key: string): string[] {
   if (key == "moveFile") return ["(string,string,ref<string>)=>boolean","(string,string)=>Result<boolean,string>"];
   if (key == "moveFileAsync") return ["(string,string)=>Promise<Result<boolean,string>>"];
   if (key == "moveFileUntil") return ["(string,string,number,CancellationToken)=>Promise<Result<boolean,string>>"];
-  if (key == "normalizePath") return ["(string)=>string"];
   if (key == "numberToString") return ["(number)=>string"];
   if (key == "openFileReader") return ["(string)=>FileReader"];
-  if (key == "pathDirectory") return ["(string)=>string"];
   if (key == "print") return ["()=>void"];
   if (key == "printError") return ["()=>void"];
   if (key == "ProcessReadable.on") return ["(string,(string)=>void)=>ProcessReadable","(string,()=>void)=>ProcessReadable"];

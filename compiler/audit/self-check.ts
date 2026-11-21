@@ -1,4 +1,5 @@
 import { ModuleLoader, LoaderOptions } from "../modules/index";
+import { argument, argumentCount, exitProcess } from "estatic:process";
 import { analyzeProject } from "../checker/index";
 import { quoteSource, formatDiagnostic } from "../diag/index";
 

@@ -1,4 +1,5 @@
 import { inspectSource } from "./source";
+import { argument, argumentCount, exitProcess } from "estatic:process";
 
 if (argumentCount() == 1) print(inspectSource('const text=`Hola ${1+2}`; print(text);', "<demo>"));
 else {

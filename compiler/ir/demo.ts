@@ -1,4 +1,6 @@
 import {configureAnalysisJobs,configureAnalysisProfile} from "../analysis/index";
+import { argument, argumentCount, exitProcess } from "estatic:process";
+import { normalizePath } from "estatic:path";
 import { ModuleLoader, LoaderOptions, PathAlias } from "../modules/index";
 import { analyzeProject } from "../checker/index";
 import { lowerProject } from "./lower";

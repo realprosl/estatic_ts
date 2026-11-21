@@ -1,4 +1,6 @@
 import {IrSource,IrPlace,IrInstruction,IrBlock,IrFunction,IrModule,IrIssue,IrProject,IrDispatch,IrType,IrRuntimeContract,IrCleanupScope,IrLease,IrEffectBorrow,IrEffectContract,IrAnnotation} from "../../ir/model";
+import { jsonObjectGet, jsonArrayGet, jsonArrayLength, jsonAsString, jsonAsNumber, jsonAsBool } from "estatic:json";
+import { exitProcess } from "estatic:process";
 function decodestringArray(value:constRef<JsonValue>):string[]{let decoded:string[]=[];const count:number=jsonArrayLength(value);for(let k:number=0;k<count;k=k+1){const item:JsonValue=jsonArrayGet(value,k);decoded.push(jsonAsString(item));}return decoded;}
 function decodenumberArray(value:constRef<JsonValue>):number[]{let decoded:number[]=[];const count:number=jsonArrayLength(value);for(let k:number=0;k<count;k=k+1){const item:JsonValue=jsonArrayGet(value,k);decoded.push(jsonAsNumber(item));}return decoded;}
 function decodeIrSourceArray(value:constRef<JsonValue>):IrSource[]{let decoded:IrSource[]=[];const count:number=jsonArrayLength(value);for(let k:number=0;k<count;k=k+1){const item:JsonValue=jsonArrayGet(value,k);decoded.push(decodeIrSource(item));}return decoded;}

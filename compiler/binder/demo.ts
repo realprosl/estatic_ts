@@ -1,4 +1,6 @@
 import { ModuleLoader, LoaderOptions, PathAlias } from "../modules/index";
+import { argument, argumentCount, exitProcess } from "estatic:process";
+import { normalizePath } from "estatic:path";
 import { bindProject, BindingResult } from "./binder";
 import { formatBinding } from "./format";
 import { formatSource } from "../diag/index";
