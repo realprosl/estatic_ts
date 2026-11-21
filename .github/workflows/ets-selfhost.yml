@@ -36,7 +36,8 @@ jobs:
     name: Native backend copy regressions
     if: github.event.action != 'labeled' || github.event.label.name == 'ci-completa'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Construye ademas la semilla (el frontend de los tests).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -68,9 +69,18 @@ jobs:
           for item in runtime bootstrap src types; do
             if [ -e "native-cpp/$item" ]; then echo "::error::native-cpp/$item must not exist"; exit 1; fi
           done
+      # El frontend que usan estos tests se construye con la semilla (el camino
+      # de produccion): stage 0 no compila las librerias del runtime.
+      - name: Build the native compiler (seed)
+        run: bash native-cpp/build-all.sh --out "$RUNNER_TEMP/seed"
+
       - name: Verify aggregate fast paths and value semantics
+        env:
+          ESTATIC_SEED: ${{ runner.temp }}/seed/etsc
         run: node --experimental-strip-types --test --test-name-pattern='native aggregate fast paths|temporary argument value semantics|temporary constructor value semantics|length snapshot semantics|length mutation ordering' compiler/ir/native.test.ts
       - name: Verify readonly receivers and malformed IR rejection
+        env:
+          ESTATIC_SEED: ${{ runner.temp }}/seed/etsc
         run: node --experimental-strip-types --test --test-concurrency=1 --test-name-pattern='readonly' compiler/checker/checker.test.ts compiler/ir/readonly-verifier.test.ts compiler/ir/native.test.ts
   selfhost:
     needs: native-copy-regressions
