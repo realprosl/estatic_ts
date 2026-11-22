@@ -11,6 +11,12 @@ import { BindingResult, BindingSymbol, bindingChild, callableBinding } from "../
 import { CheckResult, NativeCapture, BorrowLease, argumentParameter, readonlyMethodReceiver } from "./model";
 import { memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticElement, semanticTuple, splitTypes, functionClose, functionParams, functionReturn, argumentType, fixedArraySize, fixedArrayElement, localBinding, genericBase, genericArguments, replaceType, canonicalSymbol } from "./types";
 
+// "#12" o "#12<...>" → 12; cualquier otro tipo → -1.
+function classOfType(text: string): number {
+  if (!text.startsWith("#")) return -1; let value: number = 0; let at: number = 1;
+  while (at < text.length) { const c: number = text.charCodeAt(at); if (c < 48 || c > 57) break; value = value * 10 + (c - 48); at = at + 1; }
+  if (at == 1 || (at < text.length && text.charCodeAt(at) != 60)) return -1; return value;
+}
 export class FlowFinding {
  module:number;node:number;message:string;
  constructor(module:number,node:number,message:string){this.module=module;this.node=node;this.message=message;}
@@ -61,6 +67,12 @@ export class SafetyAnalyzer {
   offsets: number[]; nodes: number; edges: SafetyEdge[]; seeds: number[]; escapes: EscapeSite[]; owners: number[]; trace: boolean; resourceTypes: Map<string,boolean>; valueTypes: Map<string,boolean>; carrierTypes: Map<string,boolean>; plainTypes: Map<string,boolean>; defaultReads: Map<number,boolean>; valueDefaults: Map<number,boolean>;
   substitutions: string[]; substitutionTypes: string[]; memoryPath: string[]; borrowSources: number[]; leases: BorrowLease[]; breaks: SafetyState[]; continues: SafetyState[]; returns: SafetyState[]; sites: SafetyCallSite[];
   visits: number; collectFlow:boolean; findings:FlowFinding[]; moveLines: number[];
+  // Índices para no recorrer todos los símbolos en cada llamada analizada:
+  // símbolos de cada función (por vértice, en orden de sid) y nodos que son
+  // ClassField. Se construyen en el primer uso.
+  indexed: boolean; ownedStart: number[]; ownedSymbols: number[]; classFieldNodes: boolean[];
+  // Visibilidad: símbolos exportados y referencias de tipo por nodo (vértice).
+  visibilityIndexed: boolean; publicSymbols: boolean[]; typeRefStart: number[]; typeRefs: number[];
   constructor(graph: ModuleGraph, binding: BindingResult, result: CheckResult) {
     this.graph = graph; this.binding = binding; this.result = result; this.effects = new EffectAnalyzer(graph,binding,result); this.arguments = []; this.offsets = []; this.nodes = 0;
     this.substitutions = []; this.substitutionTypes = []; this.edges = []; this.seeds = []; this.escapes = []; this.memoryPath = []; this.borrowSources = []; this.leases = []; this.breaks = []; this.continues = []; this.returns = []; this.sites = []; this.arguments = []; this.moveLines = []; for (let k: number = 0; k < binding.symbols.length; k = k + 1) this.moveLines.push(-1);
@@ -69,6 +81,23 @@ export class SafetyAnalyzer {
     this.owners = []; for (const scope of binding.scopes) this.owners.push(-2); this.trace = false; this.resourceTypes = new Map<string,boolean>(); this.valueTypes = new Map<string,boolean>(); this.carrierTypes = new Map<string,boolean>(); this.plainTypes = new Map<string,boolean>();
     this.defaultReads = new Map<number,boolean>(); this.valueDefaults = new Map<number,boolean>();
     this.visits = 0; this.collectFlow=false;this.findings=[];
+    this.indexed = false; this.ownedStart = []; this.ownedSymbols = []; this.classFieldNodes = [];
+    this.visibilityIndexed = false; this.publicSymbols = []; this.typeRefStart = []; this.typeRefs = [];
+  }
+  index(): void {
+    if (this.indexed) return; this.indexed = true;
+    for (let v: number = 0; v <= this.nodes; v = v + 1) this.ownedStart.push(0);
+    for (let v: number = 0; v < this.nodes; v = v + 1) this.classFieldNodes.push(false);
+    let owned: number[] = [];
+    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
+      const o: number = this.owner(this.binding.symbols[sid].scope); owned.push(o); if (o >= 0 && o < this.nodes) this.ownedStart[o + 1] = this.ownedStart[o + 1] + 1;
+      const module: number = this.binding.symbols[sid].module; const node: number = this.binding.symbols[sid].node;
+      if (this.binding.symbols[sid].kind == "ClassField" && module >= 0 && node >= 0 && this.vertex(module,node) < this.nodes) this.classFieldNodes[this.vertex(module,node)] = true;
+    }
+    for (let v: number = 0; v < this.nodes; v = v + 1) this.ownedStart[v + 1] = this.ownedStart[v + 1] + this.ownedStart[v];
+    let cursor: number[] = []; for (let v: number = 0; v < this.nodes; v = v + 1) cursor.push(this.ownedStart[v]);
+    for (let sid: number = 0; sid < owned.length; sid = sid + 1) this.ownedSymbols.push(-1);
+    for (let sid: number = 0; sid < owned.length; sid = sid + 1) if (owned[sid] >= 0 && owned[sid] < this.nodes) { this.ownedSymbols[cursor[owned[sid]]] = sid; cursor[owned[sid]] = cursor[owned[sid]] + 1; }
   }
   node(module: number, id: number): AstNode { return this.graph.modules[module].cached.result.ast.nodes[id]; }
   report(module: number, id: number, message: string): void {
@@ -249,8 +278,7 @@ export class SafetyAnalyzer {
     return [NodeKind.AwaitExpression,NodeKind.CallExpression,NodeKind.MemberCallExpression,NodeKind.NewExpression,NodeKind.ArrayLiteralExpression,NodeKind.ObjectLiteralExpression,NodeKind.TernaryExpression].includes(n.kind);
   }
   parameterProperty(module: number, node: number): boolean {
-    for (const symbol of this.binding.symbols) if (symbol.module == module && symbol.node == node && symbol.kind == "ClassField") return true;
-    return false;
+    this.index(); if (module < 0 || node < 0) return false; const v: number = this.vertex(module,node); return v < this.nodes && this.classFieldNodes[v];
   }
   memoryType(module: number, id: number, text: string, position: string): void {
     const key: string = position + ":" + text; if (this.memoryPath.includes(key)) return;
@@ -536,10 +564,24 @@ export class SafetyAnalyzer {
       }
     }
   }
+  indexVisibility(): void {
+    if (this.visibilityIndexed) return; this.visibilityIndexed = true;
+    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) this.publicSymbols.push(false);
+    for (const entry of this.binding.exports) { const sid: number = this.origin(entry.symbol); if (sid >= 0 && sid < this.binding.symbols.length && entry.module == this.binding.symbols[sid].module) this.publicSymbols[sid] = true; }
+    for (let v: number = 0; v <= this.nodes; v = v + 1) this.typeRefStart.push(0);
+    let vertices: number[] = [];
+    for (let r: number = 0; r < this.binding.references.length; r = r + 1) {
+      const module: number = this.binding.references[r].module; const node: number = this.binding.references[r].node; let v: number = -1;
+      if (module >= 0 && module < this.offsets.length && node >= 0 && this.binding.references[r].space == "type" && this.binding.references[r].target >= 0) { v = this.vertex(module,node); if (v >= this.nodes) v = -1; }
+      vertices.push(v); if (v >= 0) this.typeRefStart[v + 1] = this.typeRefStart[v + 1] + 1;
+    }
+    for (let v: number = 0; v < this.nodes; v = v + 1) this.typeRefStart[v + 1] = this.typeRefStart[v + 1] + this.typeRefStart[v];
+    let cursor: number[] = []; for (let v: number = 0; v < this.nodes; v = v + 1) cursor.push(this.typeRefStart[v]);
+    for (let r: number = 0; r < vertices.length; r = r + 1) this.typeRefs.push(-1);
+    for (let r: number = 0; r < vertices.length; r = r + 1) if (vertices[r] >= 0) { this.typeRefs[cursor[vertices[r]]] = r; cursor[vertices[r]] = cursor[vertices[r]] + 1; }
+  }
   isPublic(sid: number): boolean {
-    const s: BindingSymbol = this.binding.symbols[sid];
-    for (const entry of this.binding.exports) if (entry.module == s.module && this.origin(entry.symbol) == sid) return true;
-    return false;
+    this.indexVisibility(); return sid >= 0 && sid < this.publicSymbols.length && this.publicSymbols[sid];
   }
   publicType(module: number, id: number, text: string): void {
     for (let at: number = 0; at < text.length; at = at + 1) if (text.charAt(at) == "#") {
@@ -548,7 +590,8 @@ export class SafetyAnalyzer {
       at = at - 1;
       if (sid < this.binding.symbols.length && !this.isPublic(sid)) this.report(module,id,"E4401: la API pública expone el tipo privado '" + this.binding.symbols[sid].name + "'");
     }
-    for (const ref of this.binding.references) if (ref.module == module && ref.node == id && ref.space == "type" && ref.target >= 0) {
+    this.indexVisibility(); const v: number = module >= 0 && module < this.offsets.length && id >= 0 ? this.vertex(module,id) : this.nodes; const refEnd: number = v < this.nodes ? this.typeRefStart[v + 1] : 0;
+    for (let at: number = v < this.nodes ? this.typeRefStart[v] : 0; at < refEnd; at = at + 1) { const ref = this.binding.references[this.typeRefs[at]];
       const s: BindingSymbol = this.binding.symbols[ref.target];
       if (s.kind == "TypeAliasDeclaration" && !this.isPublic(ref.target)) this.report(module,id,"E4401: la API pública expone el alias privado '" + s.name + "'");
       if (["ClassDeclaration","InterfaceDeclaration","UnionDeclaration","EnumDeclaration"].includes(s.kind) && !this.isPublic(ref.target)) this.report(module,id,"E4401: la API pública expone el tipo privado '" + s.name + "'");
@@ -905,7 +948,8 @@ export class SafetyAnalyzer {
     const argumentStart: number = this.arguments.length; const leaseStart: number = this.leases.length;
     let saved: SafetyState = state; const returnStart: number = this.returns.length; if (phase != "resume") this.sites.push(new SafetyCallSite(module,id));
     this.initializeFields(target.module,target.node,state);
-    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (this.owner(this.binding.symbols[sid].scope) == owner) {
+    this.index(); const ownedEnd: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner + 1] : 0;
+    for (let at: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner] : 0; at < ownedEnd; at = at + 1) { const sid: number = this.ownedSymbols[at];
       state.slots[sid] = (this.binding.symbols[sid].kind == "receiver" ? 1 : 0); this.initializePath(state,"s" + numberToString(sid));
       const object: number = bindingChild(this.node(module,id),EdgeRole.Object);
       if (this.binding.symbols[sid].kind == "receiver" && object >= 0) { const pendingPush = new SafetyArgument(sid,module,object,this.root(module,object)); this.arguments.push(pendingPush); }
@@ -952,7 +996,7 @@ export class SafetyAnalyzer {
     for (let at: number = returnStart; at < this.returns.length; at = at + 1) { const incoming = this.returns[at]; state = this.join(state,incoming); }
     while (this.returns.length > returnStart) this.returns.pop(); if (phase != "resume") this.sites.pop();
     state.exit = "";
-    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (this.owner(this.binding.symbols[sid].scope) == owner) { state.slots[sid] = saved.slots[sid]; this.restorePaths(state,saved,sid); }
+    for (let at: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner] : 0; at < ownedEnd; at = at + 1) { const sid: number = this.ownedSymbols[at]; state.slots[sid] = saved.slots[sid]; this.restorePaths(state,saved,sid); }
     for (const sid of this.constructorFields(target.module,target.node)) state.slots[sid] = saved.slots[sid];
     while (this.arguments.length > argumentStart) this.arguments.pop(); while (this.leases.length > leaseStart) this.leases.pop();
     while (this.breaks.length > breakStart) this.breaks.pop(); while (this.continues.length > continueStart) this.continues.pop();
@@ -1058,10 +1102,11 @@ export class SafetyAnalyzer {
       const present: string = conditional ? this.presence(module,object) : "true";
       if (conditional && present == "false") return;
       const skipped: SafetyState = state;
-      if (n.kind == NodeKind.NewExpression) for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
+      // El tipo de un new es "#sid" o "#sid<...>": la clase se lee del propio tipo.
+      if (n.kind == NodeKind.NewExpression) { const sid: number = classOfType(this.result.files[module].types[id]); if (sid >= 0 && sid < this.binding.symbols.length) {
         const s: BindingSymbol = this.binding.symbols[sid];
-        if ((this.result.files[module].types[id] == "#" + numberToString(sid) || this.result.files[module].types[id].startsWith("#" + numberToString(sid) + "<")) && s.kind == "ClassDeclaration") for (const edge of this.node(s.module,s.node).edges) if (edge.role == EdgeRole.Fields && this.node(s.module,edge.node).get(AttributeKind.IsStatic) != "true") this.expression(s.module,bindingChild(this.node(s.module,edge.node),EdgeRole.DefaultValue),state,active);
-      }
+        if (s.kind == "ClassDeclaration") for (const edge of this.node(s.module,s.node).edges) if (edge.role == EdgeRole.Fields && this.node(s.module,edge.node).get(AttributeKind.IsStatic) != "true") this.expression(s.module,bindingChild(this.node(s.module,edge.node),EdgeRole.DefaultValue),state,active);
+      } }
       for (const edge of n.edges) if (edge.role == EdgeRole.Args) this.expression(module,edge.node,state,active);
       if (this.helper(module,id) == "move") {
         const arg: number = bindingChild(n,EdgeRole.Args); const sid: number = this.root(module,arg); this.access(module,id,sid,"move");
@@ -1190,7 +1235,8 @@ export class SafetyAnalyzer {
     const n=this.node(m,id);
       const owner: number = this.vertex(m,id); let state: SafetyState = new SafetyState(this.binding.symbols.length);
       this.initializeFields(m,id,state);
-      for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (this.owner(this.binding.symbols[sid].scope) == owner && (localBinding(this.binding.symbols[sid].kind) || this.binding.symbols[sid].kind == "Parameter")) state.slots[sid] = 0;
+      this.index(); const ownedEnd: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner + 1] : 0;
+      for (let at: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner] : 0; at < ownedEnd; at = at + 1) { const sid: number = this.ownedSymbols[at]; if (localBinding(this.binding.symbols[sid].kind) || this.binding.symbols[sid].kind == "Parameter") state.slots[sid] = 0; }
       for (const edge of n.edges) if (edge.role == EdgeRole.Params) {
         this.expression(m,bindingChild(this.node(m,edge.node),EdgeRole.DefaultValue),state,[owner]);
         const sid: number = this.binding.files[m].declarations[edge.node]; if (sid >= 0) { state.slots[sid] = 1; if (this.parameterProperty(m,edge.node) && this.transferType(this.result.symbolTypes[sid])) state.slots[sid] = 2; }
