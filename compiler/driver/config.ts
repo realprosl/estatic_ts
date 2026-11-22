@@ -1,4 +1,6 @@
 // Declarative configuration only: importing TypeScript never executes it.
+import { jsonArrayGet, jsonArrayLength, jsonAsString, jsonIsObject, jsonEscape } from "estatic:json";
+import { exitProcess } from "estatic:process/args";
 class ConfigReader {
  source:string;at:number;
  constructor(source:string){this.source=source;this.at=0;}

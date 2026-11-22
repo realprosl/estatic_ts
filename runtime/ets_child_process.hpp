@@ -333,20 +333,29 @@ inline std::shared_ptr<WritableState> openProcessWritable(int fd) {
 }
 } // namespace child_process_detail
 
+class ProcessReadableProperty;
+class ProcessWritableProperty;
 class ProcessReadable {
 public:
     ProcessReadable() = default;
     explicit ProcessReadable(std::shared_ptr<child_process_detail::ReadableState> state) : state_(std::move(state)) {}
+    // Un stream del proceso que no se abre hasta el primer uso (estatic:process):
+    // abrir stdin/stdout/stderr al arrancar rompe con algunas redirecciones.
+    static ProcessReadable deferred(ProcessReadableProperty& owner) { ProcessReadable stream; stream.owner_ = &owner; return stream; }
     ProcessReadable& on(const std::string& event, std::function<void(std::string)> callback) {
+        resolve();
         if (event == "data" && state_) { state_->dataCallbacks.push_back(std::move(callback)); state_->start(); }
         return *this;
     }
     ProcessReadable& on(const std::string& event, std::function<void()> callback) {
+        resolve();
         if (event == "end" && state_) { state_->endCallbacks.push_back(std::move(callback)); state_->start(); }
         return *this;
     }
 private:
+    void resolve();
     std::shared_ptr<child_process_detail::ReadableState> state_;
+    ProcessReadableProperty* owner_ = nullptr;
     friend class ChildProcess;
     friend class ProcessReadableProperty;
 };
@@ -355,10 +364,13 @@ class ProcessWritable {
 public:
     ProcessWritable() = default;
     explicit ProcessWritable(std::shared_ptr<child_process_detail::WritableState> state) : state_(std::move(state)) {}
-    bool write(const std::string& contents) { return state_ && state_->write(contents); }
-    void end() { if (state_) state_->end(); }
+    static ProcessWritable deferred(ProcessWritableProperty& owner) { ProcessWritable stream; stream.owner_ = &owner; return stream; }
+    bool write(const std::string& contents) { resolve(); return state_ && state_->write(contents); }
+    void end() { resolve(); if (state_) state_->end(); }
 private:
+    void resolve();
     std::shared_ptr<child_process_detail::WritableState> state_;
+    ProcessWritableProperty* owner_ = nullptr;
     friend class ChildProcess;
     friend class ProcessWritableProperty;
 };
@@ -374,6 +386,7 @@ private:
     ProcessReadable ensure() { if (!state_) state_ = child_process_detail::openProcessReadable(fd_); return ProcessReadable(state_); }
     int fd_;
     std::shared_ptr<child_process_detail::ReadableState> state_;
+    friend class ProcessReadable;
 };
 class ProcessWritableProperty {
 public:
@@ -386,7 +399,10 @@ private:
     ProcessWritable ensure() { if (!state_) state_ = child_process_detail::openProcessWritable(fd_); return ProcessWritable(state_); }
     int fd_;
     std::shared_ptr<child_process_detail::WritableState> state_;
+    friend class ProcessWritable;
 };
+inline void ProcessReadable::resolve() { if (!state_ && owner_) state_ = owner_->ensure().state_; }
+inline void ProcessWritable::resolve() { if (!state_ && owner_) state_ = owner_->ensure().state_; }
 
 struct ChildProcessState {
     uv_process_t* process = nullptr;

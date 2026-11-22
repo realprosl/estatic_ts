@@ -1,10 +1,12 @@
 import { ModuleLoader, LoaderOptions, PathAlias } from "../modules/index";
+import { argument, argumentCount, exitProcess } from "estatic:process/args";
+import { normalizePath } from "estatic:path";
 import { bindProject, BindingResult } from "./binder";
 import { formatBinding } from "./format";
 import { formatSource } from "../diag/index";
 import { contentHash } from "../platform/index";
 function runBindingDemo(): void {
-  let options: LoaderOptions = new LoaderOptions(); let entry: string = "";
+  let options: LoaderOptions = new LoaderOptions(); options.library = compilerRoot() + "/runtime/lib"; let entry: string = "";
   for (let i: number = 1; i < argumentCount(); i = i + 1) {
     const arg: string = argument(i);
     if (arg == "--cache" || arg == "--root") {

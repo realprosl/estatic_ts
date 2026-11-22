@@ -36,7 +36,7 @@ print(json.dumps({'status':p.returncode,'stdout':stdout.decode(),'stderr':data.d
  assert.equal(p.status,0,p.stderr);return JSON.parse(p.stdout) as {status:number;stdout:string;stderr:string};
 }
 test("native etsc verbose preserves program arguments and exit codes without Node",()=>{
- const input=source("arguments",'print(argument(1));exitProcess(7);');
+ const input=source("arguments",'import { argument, exitProcess } from "estatic:process";print(argument(1));exitProcess(7);');
  const p=run(["run",input,"--frontend",frontend,"--verbose","--no-progress","--","--verbose"],{NODE:"/missing/node"});
  assert.equal(p.status,7,p.stderr);assert.equal(p.stdout,"--verbose\n");
  for(const label of ["Analizando fuentes y verificando IR","Generando C++","Preparando runtime","Compilando y enlazando C++","Comando:","Compilación completada"])assert(p.stderr.includes(label),p.stderr);

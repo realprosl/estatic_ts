@@ -1,4 +1,5 @@
 @include("runtime/ets_compiler_host.hpp")
+import { jsonObjectKeys } from "estatic:json";
 // Only target-runtime OS calls cross this boundary; compiler policy stays in ETS.
 @cppgen function hostCode(code:string):string{return code;}
 export function environment(name:string):string{hostCode("return ets_compiler_host::environment(name);");return "";}

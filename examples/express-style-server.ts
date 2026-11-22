@@ -48,6 +48,7 @@
 
 // Crea el server con el backend por defecto (httplib).
 // Usa `@cpp_drogon` justo encima para forzar Drogon.
+import http from "estatic:http";
 let server: Server = http.createServer();
 
 // --- handlers estilo express --------------------------------------

@@ -567,7 +567,7 @@ test("bootstrap parser: accepts repository examples accepted by the stage 0 gram
     if (result.diagnostics.length) failures.push(`${file}: ${JSON.stringify(result.diagnostics.slice(0, 3))}`);
   }
   t.diagnostic(`${accepted}/${files.length} examples accepted by stage 0; excluded with stage 0 diagnostics: ${excluded.join(", ")}`);
-  assert.deepEqual(excluded, ["exports-demo.ts", "generated-module-exports/index.ts", "generated-module-exports/main.ts", "generated-module-exports/producer.ts", "imports-as/main.ts", "module-exports/counter.ts", "module-exports/index.ts", "module-exports/main.ts"], "a new stage 0 rejection must not silently remove an example from the audit");
+  assert.deepEqual(excluded, ["exports-demo.ts", "express-style-server.ts", "generated-module-exports/index.ts", "generated-module-exports/main.ts", "generated-module-exports/producer.ts", "imports-as/main.ts", "module-exports/counter.ts", "module-exports/index.ts", "module-exports/main.ts", "node-api-demo.ts", "todo-project/server.ts"], "a new stage 0 rejection must not silently remove an example from the audit");
   assert.ok(accepted >= 120); assert.deepEqual(failures, []);
 });
 test("bootstrap parser: graph contains only schema, parser and its driver", () => {

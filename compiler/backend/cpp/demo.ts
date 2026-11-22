@@ -1,4 +1,5 @@
 import {parseIrProject} from "./decode";
+import { argument, exitProcess } from "estatic:process/args";
 import {generateCppFromIr} from "./generator";
 import {formatCppResult} from "./wire";
 import {readText,stdinText,hostError} from "../../platform/index";

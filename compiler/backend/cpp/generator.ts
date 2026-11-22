@@ -1,4 +1,5 @@
 import {IrProject,IrType,IrFunction,IrInstruction,IrSource,IrDispatch,IrAnnotation,IrPlace,IrBlock,IrRuntimeContract} from "../../ir/model";
+import { exitProcess } from "estatic:process/args";
 import {cppType,fileCallee,regexCallee,netCallee,asyncCallee,networkCallee,globalCalls,asyncCalls,stringMethods,terminalMethods,objectMethod,backend_libuv,backend_curl,backend_tls,backend_ioUring} from "./tables";
 import {contentHash} from "../../platform/index";
 import {quoteCpp,integerIndex,uniqueStrings,parseNumber,numericBase,validNumber,validCppSymbol,validHeader,binaryHelper,arrayIndex,inspectString} from "./support";

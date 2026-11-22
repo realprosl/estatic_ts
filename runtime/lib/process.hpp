@@ -42,8 +42,8 @@ inline ets::Map<std::string, std::string> env() {
     }
     return result;
 }
-inline ets::ProcessReadable stdinStream() { return ets::processStdio.stdin.stream(); }
-inline ets::ProcessWritable stdoutStream() { return ets::processStdio.stdout.stream(); }
-inline ets::ProcessWritable stderrStream() { return ets::processStdio.stderr.stream(); }
+inline ets::ProcessReadable stdinStream() { return ets::ProcessReadable::deferred(ets::processStdio.stdin); }
+inline ets::ProcessWritable stdoutStream() { return ets::ProcessWritable::deferred(ets::processStdio.stdout); }
+inline ets::ProcessWritable stderrStream() { return ets::ProcessWritable::deferred(ets::processStdio.stderr); }
 
 }  // namespace ets_process_lib

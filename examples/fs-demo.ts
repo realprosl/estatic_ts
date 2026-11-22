@@ -2,6 +2,7 @@
 // (Sin `async function main` porque el `int main` de C++ no puede ser corutina;
 //  el codegen traduce `await` a top-level a `ets::syncWait`.)
 
+import { argument, argumentCount } from "estatic:process";
 const file:string=argumentCount()>1?argument(1):"fs-demo.txt";
 
 // --- Sync ---------------------------------------------------------------

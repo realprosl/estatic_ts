@@ -16,6 +16,9 @@
 // así todo el árbol queda fijado en un solo sitio. Una sola versión por nombre:
 // manda la directa del proyecto; entre indirectas, la más alta (con aviso).
 import { canonicalFile, temporaryDirectory, environment, exists, readText, writeText, rename, directories, currentDirectory, objectKeys, hostError, now } from "../platform/index";
+import { jsonObjectGet, jsonAsString, jsonAsBool, jsonIsObject, jsonIsBool } from "estatic:json";
+import { exitProcess } from "estatic:process/args";
+import { normalizePath } from "estatic:path";
 import { PathAlias } from "../modules/index";
 import { parseConfig, configStrings } from "./config";
 import { parseVersionTags, versionParts, versionBefore, run } from "./update";

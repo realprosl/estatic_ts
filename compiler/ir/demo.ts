@@ -1,11 +1,13 @@
 import {configureAnalysisJobs,configureAnalysisProfile} from "../analysis/index";
+import { argument, argumentCount, exitProcess } from "estatic:process/args";
+import { normalizePath } from "estatic:path";
 import { ModuleLoader, LoaderOptions, PathAlias } from "../modules/index";
 import { analyzeProject } from "../checker/index";
 import { lowerProject } from "./lower";
 import { IrProject, IrIssue, IrSource } from "./model";
 import { formatIr } from "./format";
 function runIr(): void {
-  let verbose: boolean = false; let entry: string = ""; let options = new LoaderOptions();
+  let verbose: boolean = false; let entry: string = ""; let options = new LoaderOptions(); options.library = compilerRoot() + "/runtime/lib";
   for (let at: number = 1; at < argumentCount(); at = at+1) {
     const arg: string = argument(at);
     if(arg=="--profile-analysis"){if(!configureAnalysisProfile())exitProcess(2);}

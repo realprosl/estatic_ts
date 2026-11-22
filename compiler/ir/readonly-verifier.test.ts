@@ -16,6 +16,7 @@ import { IrProject, IrType, IrSource, IrFunction, IrPlace, IrInstruction, IrDisp
 import { IrVerifier } from "../compiler/ir/verify";
 import { irAssignable } from "../compiler/ir/verify-shapes";
 import { verifyFunctionContracts } from "../compiler/ir/verify-contracts";
+import { exitProcess } from "estatic:process";
 function expect(value:boolean, label:string):void { if (!value) { printError(label); exitProcess(1); } }
 function run():void {
   let p = new IrProject();

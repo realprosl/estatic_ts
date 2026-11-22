@@ -1,3 +1,4 @@
+import { argument } from "estatic:process";
 async function secureServer(certificate: string, privateKey: string): Promise<void> {
   const contextResult: Result<TlsContext> = createTlsServer(certificate, privateKey);
   if (contextResult.isOk() == false) { printError(contextResult.error()); return; }

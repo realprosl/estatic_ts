@@ -1,4 +1,6 @@
 import {configureAnalysisJobs,configureAnalysisProfile} from "../analysis/index";
+import { argument, argumentCount, exitProcess } from "estatic:process/args";
+import { normalizePath } from "estatic:path";
 import { ModuleLoader, LoaderOptions, PathAlias } from "../modules/index";
 import { bindProject, BindingResult, formatBinding } from "../binder/index";
 import { checkProject, CheckResult } from "./checker";
@@ -7,7 +9,7 @@ import { formatChecked } from "./format";
 import { formatSource } from "../diag/index";
 import { contentHash } from "../platform/index";
 function runCheckingDemo(): void {
-  let options: LoaderOptions = new LoaderOptions(); let entry: string = "";
+  let options: LoaderOptions = new LoaderOptions(); options.library = compilerRoot() + "/runtime/lib"; let entry: string = "";
   for (let i: number = 1; i < argumentCount(); i = i + 1) {
     const arg: string = argument(i);
     if(arg=="--profile-analysis"){if(!configureAnalysisProfile())exitProcess(2);}

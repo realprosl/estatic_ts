@@ -1,4 +1,5 @@
 import { inspectTokens } from "./lexer";
+import { argument, argumentCount } from "estatic:process/args";
 
 function demonstrateLexer(source: string): void {
   print(inspectTokens(source));

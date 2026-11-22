@@ -26,6 +26,15 @@ export function param(request: Request, name: string): string { return nativePar
 export function query(request: Request, name: string): string { return nativeQuery(request, name); }
 export function header(request: Request, name: string): string { return nativeHeader(request, name); }
 
+@cpp_native("ets::httpClientGetAsync") function nativeGet(url: string): Promise<Result<HttpClientResponse, string>>;
+@cpp_native("ets::httpClientPostAsync") function nativePost(url: string, body: string, contentType: string): Promise<Result<HttpClientResponse, string>>;
+
+// Los nombres del antiguo builtin http (express/server y el cliente get/post).
+export function express(): Server { return nativeCreateServer(); }
+export function server(): Server { return nativeCreateServer(); }
+export function get(url: string): Promise<Result<HttpClientResponse, string>> { return nativeGet(url); }
+export function post(url: string, body: string, contentType: string = "text/plain"): Promise<Result<HttpClientResponse, string>> { return nativePost(url, body, contentType); }
+
 export function fetch(url: string, init?: RequestInit): Promise<Result<FetchResponse, Error>> { return fetchUrl(url, init); }
 
 export default class http {
@@ -33,5 +42,9 @@ export default class http {
   static param(request: Request, name: string): string { return param(request, name); }
   static query(request: Request, name: string): string { return query(request, name); }
   static header(request: Request, name: string): string { return header(request, name); }
+  static express(): Server { return express(); }
+  static server(): Server { return server(); }
+  static get(url: string): Promise<Result<HttpClientResponse, string>> { return get(url); }
+  static post(url: string, body: string, contentType: string = "text/plain"): Promise<Result<HttpClientResponse, string>> { return post(url, body, contentType); }
   static fetch(url: string, init?: RequestInit): Promise<Result<FetchResponse, Error>> { return fetchUrl(url, init); }
 }

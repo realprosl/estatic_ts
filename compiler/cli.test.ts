@@ -103,7 +103,7 @@ echo '{"success":true}'
   assert.equal((await result).success,true);
 });
 test("bootstrap CLI verbose reports real phases and preserves stdout and exit status",()=>{
-  const input=source("arguments",'print(argument(1));exitProcess(7);');
+  const input=source("arguments",'import { argument, exitProcess } from "estatic:process";print(argument(1));exitProcess(7);');
   const p=command(["run",input,"--frontend",frontend,"--verbose","--no-progress","--","--verbose"]);
   assert.equal(p.status,7,p.stderr);assert.equal(p.stdout,"--verbose\n");
   for(const label of ["Analizando fuentes y verificando IR","Validando frontera","Generando C++","Preparando runtime, compilando y enlazando C++","Compilación completada","Ejecutable:","Comando frontend:","Compilando y enlazando C++:","frontend: reading/parsing","frontend: checking [","frontend: lowering IR"])assert(p.stderr.includes(label),p.stderr);

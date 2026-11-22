@@ -58,7 +58,7 @@ for(const [name,source,expected] of [
  ["push con un argumento que modifica this (#195)",'class G{names:string[];used:Map<string,number>;constructor(){this.names=[];this.used=new Map<string,number>();}name(label:string):string{this.used.set(label,1);return label;}fill():void{this.names.push(this.name("a"));}}let g=new G();g.fill();print(g.names.length);',"1\n"],
  ["T | undefined: literal, comparación y narrowing",'let x:number|undefined=undefined;if(x===undefined)print("vacio");x=5;if(x!==undefined)print(x+1);let y:string|undefined="hola";print(y===undefined);print(y!==undefined);',"vacio\n6\nfalse\ntrue\n"],
  ["T | undefined: retorno, ?? y parámetro opcional",'function buscar(n:number):string|undefined{if(n>0)return "positivo";return undefined;}const r=buscar(3);if(r!==undefined)print(r.toUpperCase());print(buscar(-1)??"nada");function f(a:number,b?:number):number{return b===undefined?a:a+b;}print(f(1));print(f(1,2));',"POSITIVO\nnada\n1\n3\n"],
- ["process argv and argc as Node properties",'print(process.argc);print(process.argv.length);print(process.argv[0]==process.argv[1]?"igual":"distinto");print(process.argv.slice(2).length);',"2\n2\nigual\n0\n"],
+ ["process argv and argc as Node properties",'import process from "estatic:process"; print(process.argc);print(process.argv.length);print(process.argv[0]==process.argv[1]?"igual":"distinto");print(process.argv.slice(2).length);',"2\n2\nigual\n0\n"],
  ["update comptime exact integers",'const n:u64=comptime(():u64=>{let value:u64=9007199254740993;const old:u64=value++;const next:u64=++value;return old+(next-value);});print(n);',"9007199254740993\n"],
  ["update references fields and closures",'function inc(n:ref<number>):number{return n++;}let n=4;print(inc(n));print(n);class C{x:number=1;inc():number{return ++this.x;}}let c=new C();print(c.inc());function run():number{let value=0;const bump=():number=>++value;bump();return bump();}print(run());',"4\n5\n2\n2\n"],
  ["update numeric widths and exact integers",'let small:i8=126;print(small++);print(++small);let exact:u64=9007199254740993;print(exact++);print(++exact);let single:f32=1.5;print(single++);print(single);',"126\n-128\n9007199254740993\n9007199254740995\n1.5\n2.5\n"],
@@ -141,7 +141,7 @@ for(const [name,source,expected] of [
  ["optional callback",'const x=optionalSome(3);const y=optionalMap(x,(n:number):number=>n+1);print(optionalValueOr(y,0));',"4\n"],
  ["optional owner",'class C{x:number=5;}const p=optionalSome<ptr<C>>(new C());const q=move(p).value();print(q.x);',"5\n"],
  ["string runtime",'const s=" hello ";print(s.trim().toUpperCase());print(Math.floor(3.8));',"HELLO\n3\n"],
- ["json runtime",'const value=JSON.parseValue("true");print(jsonIsBool(value));',"true\n"],
+ ["json runtime",'import { jsonIsBool } from "estatic:json";const value=JSON.parseValue("true");print(jsonIsBool(value));',"true\n"],
  ["boolean places",'function yes(n:ref<boolean>):void{n=true;}let a:boolean[]=[false];yes(a[0]);print(a[0]);const b=a.map((x:boolean):boolean=>!x);print(b[0]);',"true\nfalse\n"],
  ["variadic pack",'function f<...T>(...values:T):void{print(values);}f(1,"s");',"1s\n"],
  ["patrones anidados, resto de array y huecos (#223)","interface D { calle: string; ciudad?: string }interface U { nombre: string; dir: D }const u: U = { nombre: \"Ana\", dir: { calle: \"Mayor\" } };const { nombre, dir: { calle, ciudad = \"Madrid\" } } = u;const xs: number[] = [1, 2, 3, 4];const [a, ...resto] = xs;const [, b, , d] = xs;function f(): number[] { return [5, 6, 7]; }const [p, ...q] = f();const m: number[][] = [[1, 2], [3, 4]];const [[m1, m2], [m3]] = m;function g({ dir: { ciudad = \"Sevilla\" } }: { dir: { ciudad?: string } }): string { return ciudad; }console.log(nombre, calle, ciudad, a, resto.length, resto[0], b, d, p, q.length, m1, m2, m3, g({ dir: {} }), g({ dir: { ciudad: \"Vigo\" } }));const pares: [string, number[]][] = [[\"a\", [1, 2]], [\"b\", [3]]];for (const [k, [first, ...others]] of pares) console.log(k, first, others.length);","Ana Mayor Madrid 1 3 2 2 4 5 2 1 2 3 Sevilla Vigo\na 1 1\nb 3 0\n"],
@@ -342,7 +342,7 @@ test("IR C++ writes back builtin ref parameters through runtime references",()=>
 });
 
 
-for(const backend of ["httplib","drogon","estatic:http","estatic:http/drogon"] as const)test(`IR C++ retains callbacks and routes real HTTP through ${backend}`,async()=>{
+for(const backend of ["estatic:http","estatic:http/drogon"] as const)test(`IR C++ retains callbacks and routes real HTTP through ${backend}`,async()=>{
  const reservation=createServer();reservation.listen(0,"127.0.0.1");await once(reservation,"listening");const port=(reservation.address() as {port:number}).port;await new Promise<void>(resolve=>reservation.close(()=>resolve()));
  const source=`let server=http.createServer();const greeting="hello ";server.get("/users/:id",(req:Request,res:Response):void=>{res.status(202).header("X-Reply","yes").send(greeting+http.param(req,"id")+":"+http.query(req,"q")+":"+http.header(req,"X-Test")+":"+req.method+":"+req.path);});server.post("/echo",(req:Request,res:Response):void=>{res.status(201).send(req.body);});server.delete("/item",(req:Request,res:Response):void=>{res.status(203).json(${JSON.stringify('{"ok":true}')});});server.listen("127.0.0.1",${port});`;
  // #292: con los módulos, el servidor lo elige el import (sin @cpp_drogon).
@@ -361,7 +361,7 @@ for(const backend of ["httplib","drogon","estatic:http","estatic:http/drogon"] a
 });
 
 test("IR C++ selects the existing Drogon wrapper through its annotation",()=>{
- const p=ir('@cpp_drogon let server:Server=http.createServer();server.get("/",(req:Request,res:Response):void=>{res.send("ok");});');
+ const p=ir('import http from "estatic:http/drogon"; @cpp_drogon let server:Server=http.createServer();server.get("/",(req:Request,res:Response):void=>{res.send("ok");});');
  const result=generateCppFromIr(p);assert(result.headers.includes("runtime/ets_http_drogon.hpp"));assert(!result.headers.includes("runtime/ets_http_httplib.hpp"));
 });
 
@@ -375,7 +375,7 @@ test("IR C++ estatic:http/drogon elige Drogon por el import, sin decorador (#292
 test("IR C++ libcurl client executes GET and POST through native async",async()=>{
  const server=createServer((req,res)=>{let body="";req.on("data",chunk=>body+=chunk);req.on("end",()=>{res.writeHead(202,{"X-Test":"curl"});res.end(req.method=== "POST"?body:"hello");});});server.listen(0,"127.0.0.1");await once(server,"listening");const port=(server.address() as {port:number}).port;
  try {
-  const project=ir(`const a=await http.get("http://127.0.0.1:${port}/");if(a.isOk()){const r=a.value();print(r.status());print(r.body());print(r.header("X-Test"));}const b=await http.post("http://127.0.0.1:${port}/","payload");if(b.isOk())print(b.value().body());`);
+  const project=ir(`import http from "estatic:http";const a=await http.get("http://127.0.0.1:${port}/");if(a.isOk()){const r=a.value();print(r.status());print(r.body());print(r.header("X-Test"));}const b=await http.post("http://127.0.0.1:${port}/","payload");if(b.isOk())print(b.value().body());`);
   const result=generateCppFromIr(project);assert(result.runtimeBackends.curl);assert(result.runtimeBackends.libuv);
   const cpp=join(directory,"client.cpp"),binary=join(directory,"client");writeFileSync(cpp,result.cpp);buildIrCpp(result,cpp,binary);
   const child=spawn(binary,[],{stdio:["ignore","pipe","pipe"]});let stdout="",stderr="";child.stdout.on("data",chunk=>stdout+=chunk);child.stderr.on("data",chunk=>stderr+=chunk);
@@ -386,11 +386,11 @@ test("IR C++ libcurl client executes GET and POST through native async",async()=
 test("bootstrap CLI connects native frontend, IR, C++, build and execution",()=>{
  const cli=join(root,"compiler/cli.ts"),dir=mkdtempSync(join(directory,"cli-"));
  const command=(args:string[])=>spawnSync(process.execPath,["--experimental-strip-types",cli,...args],{cwd:root,encoding:"utf8",timeout:120000});
- const source=join(dir,"main.ets"),cpp=join(dir,"app.cpp"),json=join(dir,"app.ir.json"),binary=join(dir,"app");writeFileSync(source,'print(argument(1));');
+ const source=join(dir,"main.ets"),cpp=join(dir,"app.cpp"),json=join(dir,"app.ir.json"),binary=join(dir,"app");writeFileSync(source,'import { argument } from "estatic:process";print(argument(1));');
  let p=command([source,"--frontend",lower,"-o",cpp,"--binary",binary,"--emit-ir",json,"--run","--","hello"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"hello\n");
  p=command(["--from-ir",json,"-o",cpp,"--binary",binary,"--run","--","IR"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"IR\n");
  p=command([source,"--frontend",lower,"--check"]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/Comprobado/);
- writeFileSync(source,'exitProcess(7);');p=command([source,"--frontend",lower,"-o",cpp,"--binary",binary,"--run"]);assert.equal(p.status,7,p.stderr);
+ writeFileSync(source,'import { exitProcess } from "estatic:process";exitProcess(7);');p=command([source,"--frontend",lower,"-o",cpp,"--binary",binary,"--run"]);assert.equal(p.status,7,p.stderr);
  writeFileSync(source,'let n:number="bad";');p=command([source,"--frontend",lower,"--check"]);assert.equal(p.status,1);assert.match(p.stderr,/IR_INPUT|incompatible|comprobado/);
  assert.equal(command(["--unknown"]).status,2);assert.equal(command(["--version"]).status,0);assert.equal(command(["--help"]).status,0);
 });

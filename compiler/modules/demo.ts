@@ -1,7 +1,9 @@
 import { LoaderOptions, PathAlias, ModuleLoader, formatGraph } from "./loader";
+import { argument, argumentCount, exitProcess } from "estatic:process/args";
+import { normalizePath } from "estatic:path";
 
 function runDemo(): void {
-  let options: LoaderOptions = new LoaderOptions(); let entry: string = ""; let repeat: number = 1;
+  let options: LoaderOptions = new LoaderOptions(); options.library = compilerRoot() + "/runtime/lib"; let entry: string = ""; let repeat: number = 1;
   for (let i: number = 1; i < argumentCount(); i = i + 1) {
     const arg: string = argument(i);
     if (arg == "--cache" || arg == "--root" || arg == "--syntax-key") {

@@ -1,3 +1,4 @@
+import { argument } from "estatic:process";
 function safeDivide(left: number, right: number): Result<number> {
   if (right == 0) {
     return err<number>("division by zero");

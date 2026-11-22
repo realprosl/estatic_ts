@@ -37,7 +37,7 @@ jobs:
     if: github.event.action != 'labeled' || github.event.label.name == 'ci-completa'
     runs-on: ubuntu-24.04
     # Construye ademas la semilla (el frontend de los tests).
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

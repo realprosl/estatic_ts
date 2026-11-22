@@ -286,22 +286,14 @@ declare global {
   function trim(value: string): string;
   function lineCount(value: string): number;
   function lineAt(value: string, index: number): string;
-  /** Sale del proceso con el codigo dado. NUNCA retorna (decorado con @noreturn). */
-  function exitProcess(code: number): never;
   /** Reporta un mensaje de error via out-param (estilo C). Usado por el runtime. */
   function fail(message: string, error: string): boolean;
   /** Limpia el buffer de error. */
   function clearError(error: string): void;
   /** true si hay un mensaje de error pendiente. */
   function hasError(error: string): boolean;
-  /** Devuelve el numero de argumentos pasados al programa (equivalente a process.argv.length - 1). */
-  function argumentCount(): number;
-  function argument(index: number): string;
-  function jsonEscape(value: string): string;
-  function normalizePath(path: string): string;
   function compilerRoot(): string;
   function resolveImportPath(from: string, specifier: string): string;
-  function pathDirectory(path: string): string;
   function resolveProjectPath(root: string, path: string): string;
   /** Asegura que el directorio padre del path existe. Crea los directorios necesarios. */
   function ensureParentDirectory(path: string, error: string): boolean;
@@ -461,9 +453,6 @@ declare global {
     on(event: string, listener: (code: number) => void): ChildProcess;
     on(event: string, listener: (message: string) => void): ChildProcess;
   }
-  namespace child_process {
-    function spawn(command: string, args: string[]): ChildProcess;
-  }
   function removeFile(path: string, error: string): boolean;
 
   function readFileAsync(path: string): Promise<Result<string>>;
@@ -600,68 +589,6 @@ declare global {
     toString(): string;
   }
 
-  // ─── Servidor HTTP ───────────────────────────────────────────────
-  // API de routing sobre cpp-httplib por defecto, o Drogon con @cpp_drogon.
-  // Implementaciones: runtime/ets_http_httplib.hpp y ets_http_drogon.hpp.
-  //
-  // Cada handler es una funcion sincrona (req, res) => void. El server
-  // parsea el request antes de invocar al handler y serializa la
-  // response al volver. Una tarea en background no puede conservar prestamos
-  // a req/res ni completar la respuesta despues de que vuelva el handler.
-  //
-  // Limitaciones: HTTP/1.1 plano, sin HTTPS, sin middlewares, sin
-  // streaming, sin cookies, sin compresion.
-  // Los nombres "Request" y "Response" pertenecen al namespace "http" para
-  // evitar choques con cualquier otra cosa del usuario. Se accede a ellos
-  // como http.Request y http.Response en los handlers.
-  namespace http {
-    /** Request HTTP pre-parseado. El server rellena los campos antes de invocar al handler. */
-    interface Request {
-      /** "GET", "POST", "PUT", "PATCH", "DELETE". */
-      readonly method: string;
-      /** Path sin query string. "/api/users". */
-      readonly path: string;
-      /** Query string cruda. "id=42&name=alice". Vacia si no hay. */
-      readonly rawQuery: string;
-      /** Cuerpo del request (POST/PUT/PATCH). Vacio si no hay body. */
-      readonly body: string;
-    }
-
-    /** Response HTTP. El handler la muta encadenando status/header/send/json. */
-    interface Response {
-      /** Cambia el status code. Encadenable. */
-      status(code: number): Response;
-      /** Anyade un header. Encadenable. Si el header ya existe, lo sobreescribe. */
-      header(name: string, value: string): Response;
-      /** Envia un body de texto. Auto-set Content-Type: text/plain si no se dio uno. */
-      send(body: string): Response;
-      /** Envia un body JSON. Auto-set Content-Type: application/json. */
-      json(jsonString: string): Response;
-    }
-
-    /** Respuesta HTTP del cliente. Resultado de http.get() / http.post(). */
-    interface HttpClientResponse {
-      /** Status code (200, 404, 500, ...). */
-      status(): number;
-      /** Cuerpo de la respuesta. */
-      body(): string;
-      /** Valor del header name (case-insensitive), o "" si no existe. */
-      header(name: string): string;
-    }
-
-    /** Crea un nuevo Server listo para registrar handlers. */
-    function createServer(): Server;
-    /** Devuelve el path param name del request, o "" si no existe. */
-    function param(req: Request, name: string): string;
-    /** Devuelve el query string value de name, o "" si no existe. URL-decoded. */
-    function query(req: Request, name: string): string;
-    /** Devuelve el header name del request (case-insensitive), o "" si no existe. */
-    function header(req: Request, name: string): string;
-    /** GET HTTP asíncrono. */
-    function get(url: string): Promise<Result<HttpClientResponse, string>>;
-    /** POST HTTP asíncrono. contentType por defecto: "application/json". */
-    function post(url: string, body: string, contentType?: string): Promise<Result<HttpClientResponse, string>>;
-  }
 
   // El checker también acepta estos nombres planos en firmas ETS.
   type Request = http.Request;
@@ -689,19 +616,6 @@ declare global {
     listen(port: number): void;
   }
 
-  // ─── Helpers de JsonValue ──────────────────────────────────────────
-  function jsonIsString(v: JsonValue): boolean;
-  function jsonIsNumber(v: JsonValue): boolean;
-  function jsonIsBool(v: JsonValue): boolean;
-  function jsonIsArray(v: JsonValue): boolean;
-  function jsonIsObject(v: JsonValue): boolean;
-  function jsonIsNull(v: JsonValue): boolean;
-  function jsonAsString(v: JsonValue): string;
-  function jsonAsNumber(v: JsonValue): number;
-  function jsonAsBool(v: JsonValue): boolean;
-  function jsonArrayLength(v: JsonValue): number;
-  function jsonArrayGet(v: JsonValue, index: number): JsonValue;
-  function jsonObjectGet(v: JsonValue, key: string): JsonValue;
 
   // ─── Built-in globals (RUNTIME_GLOBAL_NAMES en type-checker) ───────
   // Tipo estructural del objeto global. Permite conservar handles y usar
@@ -788,26 +702,6 @@ declare global {
     function renameSync(oldPath: string, newPath: string): Result<boolean>;
     function unlinkSync(path: string): Result<boolean>;
     function existsSync(path: string): boolean;
-  }
-  namespace path {
-    function dirname(p: string): string;
-    function basename(p: string): string;
-    function extname(p: string): string;
-    function isAbsolute(p: string): boolean;
-    function normalize(p: string): string;
-    function join(parts: string[]): string;
-    function resolve(parts: string[]): string;
-  }
-  namespace process {
-    /** Como en Node: [ejecutable, programa, ...argumentos]. Los argumentos del usuario empiezan en argv[2]: `process.argv.slice(2)`. */
-    const argv: string[];
-    /** Extension del dialecto: `process.argv.length`. */
-    const argc: number;
-    const stdin: ProcessReadable;
-    const stdout: ProcessWritable;
-    const stderr: ProcessWritable;
-    function cwd(): string;
-    function exit(code: number): void;
   }
   namespace JSON {
     function stringify(value: string): string;
