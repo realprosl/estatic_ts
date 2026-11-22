@@ -46,7 +46,7 @@ ETS
 printf 'GET\nno\n0\n1\n2\n0\n2\n' > "$work/regressions.expected"
 "$work/regressions" > "$work/regressions.actual"
 cmp "$work/regressions.expected" "$work/regressions.actual"
-printf 'print(argument(1));\n' > "$work/args.ts"
+printf 'import { argument } from "estatic:process/args";\nprint(argument(1));\n' > "$work/args.ts"
 [[ "$("$compiler" run "$work/args.ts" --binary "$work/args" --no-progress -- 'argument with spaces')" == 'argument with spaces' ]]
 printf '{"entry":"main.ts","output":{"cpp":"configured.cpp","binary":"configured"},"compiler":{"enabled":true}}\n' > "$work/estatic.config.json"
 "$compiler" --config "$work/estatic.config.json" --no-progress
