@@ -328,10 +328,21 @@ export class SafetyAnalyzer {
       }
     }
     // Alias use extends the source lease, including aliases declared later.
-    for (let pass: number = 0; pass < this.leases.length; pass = pass + 1) for (let a: number = 0; a < this.leases.length; a = a + 1) for (let b: number = 0; b < this.leases.length; b = b + 1) {
-      const left: BorrowLease = this.leases[a]; const right: BorrowLease = this.leases[b];
-      const init: number = bindingChild(this.node(right.module,this.binding.symbols[right.symbol].node),EdgeRole.Initializer);
-      if (this.reference(right.module,init) == left.symbol && right.end > left.end) this.leases[a].end = right.end;
+    // Cada préstamo cuyo inicializador nombra otro (alias) le alarga la vida.
+    // Se propaga hasta el punto fijo: mismo resultado que relajar todos los
+    // pares en L pasadas, pero sin el coste O(L³).
+    let aliased: number[] = []; let head: number[] = []; let next: number[] = [];
+    for (let i: number = 0; i < this.binding.symbols.length; i = i + 1) head.push(-1);
+    for (let b: number = 0; b < this.leases.length; b = b + 1) {
+      const symbol: number = this.leases[b].symbol; const init: number = bindingChild(this.node(this.leases[b].module,this.binding.symbols[symbol].node),EdgeRole.Initializer);
+      aliased.push(this.reference(this.leases[b].module,init)); next.push(head[symbol]); head[symbol] = b;
+    }
+    let changed: boolean = true;
+    while (changed) {
+      changed = false;
+      for (let b: number = 0; b < this.leases.length; b = b + 1) if (aliased[b] >= 0 && aliased[b] < head.length) for (let a: number = head[aliased[b]]; a >= 0; a = next[a]) {
+        if (this.leases[b].end > this.leases[a].end) { this.leases[a].end = this.leases[b].end; changed = true; }
+      }
     }
     for (let a: number = 0; a < this.leases.length; a = a + 1) for (let b: number = 0; b < a; b = b + 1) {
       const left: BorrowLease = this.leases[a]; const right: BorrowLease = this.leases[b];
@@ -342,6 +353,8 @@ export class SafetyAnalyzer {
     }
   }
   captures(): void {
+    // Capturas ya registradas: búsqueda por clave en lugar de recorrer la lista.
+    let captured = new Map<string,boolean>(); for (const c of this.result.captures) captured.set(numberToString(c.module)+":"+numberToString(c.closure)+":"+numberToString(c.symbol),true);
     for (const r of this.binding.references) {
       if (r.deferred || r.space != "value" || (r.target) < 0) continue;
       const s: BindingSymbol = this.binding.symbols[r.target];
@@ -351,8 +364,8 @@ export class SafetyAnalyzer {
         const owner = this.binding.scopes[scope];
         if ((owner.kind == "arrow" || owner.kind == "function") && this.owner(s.scope) != this.vertex(owner.module,owner.node)) {
           {
-            let found: boolean = false; for (const c of this.result.captures) if (c.module == owner.module && c.closure == owner.node && c.symbol == r.target) found = true;
-            if (!found) this.result.captures.push(new NativeCapture(owner.module,owner.node,r.target));
+            const key: string = numberToString(owner.module)+":"+numberToString(owner.node)+":"+numberToString(r.target);
+            if (!captured.has(key)) { captured.set(key,true); this.result.captures.push(new NativeCapture(owner.module,owner.node,r.target)); }
           }
         }
         scope = owner.parent;
