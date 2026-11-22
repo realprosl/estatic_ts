@@ -154,7 +154,7 @@ assert(!diagnosed.stderr.includes("\x1b["),"Sin terminal no hay colores");
   // #143: cacheDirectory propio.
   config.incremental={enabled:true,cacheDirectory:"custom cache"};writeFileSync(configPath,JSON.stringify(config));
   p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");assert(existsSync(join(project,"custom cache/objects")));
-  writeFileSync(join(project,"src/main.ts"),'print(argument(1));exitProcess(7);');p=runMoved(["run","--","forwarded"]);assert.equal(p.status,7,p.stderr);assert.equal(p.stdout,"forwarded\n");assert(!existsSync(sentinel),"The installed compiler must never execute Node");
+  writeFileSync(join(project,"src/main.ts"),'import { argument, exitProcess } from "estatic:process";print(argument(1));exitProcess(7);');p=runMoved(["run","--","forwarded"]);assert.equal(p.status,7,p.stderr);assert.equal(p.stdout,"forwarded\n");assert(!existsSync(sentinel),"The installed compiler must never execute Node");
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
@@ -324,7 +324,9 @@ test("install builds compiler/ with the seed and publishes that executable",asyn
    writeFileSync(join(project,"estatic.config.json"),JSON.stringify({entry:"src/main.ts",prelude:["src/std/saludo.ts","src/std/otra.ts"]}));
    p=etsc("--check","--no-progress");assert.notEqual(p.status,0);assert.match(p.stderr,/Dos módulos del prelude exportan 'saludar'/);}
    const source=join(dir,"node-streams.ets"),app=join(dir,"node-streams-app");
-   writeFileSync(source,`process.stdin.on("data",(chunk:string):void=>{process.stdout.write("parent:"+chunk);});
+   writeFileSync(source,`import process from "estatic:process";
+import child_process from "estatic:child_process";
+process.stdin.on("data",(chunk:string):void=>{process.stdout.write("parent:"+chunk);});
 const childArgs:string[]=["-c","printf child-out; printf child-err >&2; cat"];
 const child=child_process.spawn("/bin/sh",childArgs);
 child.stdout.on("data",(chunk:string):void=>{process.stdout.write("child:"+chunk);});

@@ -133,6 +133,10 @@ export async function loadModuleGraph(entry: string, options: ModuleLoaderOption
     const dependencies:string[]=[], imports:ModuleImport[]=[];
     for(const request of syntax.requests) {
       const {specifier,...metadata}=request;
+      // Stage 0 no compila las librerías del runtime (runtime/lib): conserva
+      // sus builtins globales, así que un import estatic:* se resuelve con
+      // ellos (#310). El compilador nativo sí carga los módulos.
+      if (specifier.startsWith("estatic:")) continue;
       let dependency: string | undefined;
       if (specifier.startsWith(".")) dependency = resolve(dirname(file), specifier);
       else {

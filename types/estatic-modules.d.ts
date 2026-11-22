@@ -182,12 +182,20 @@ declare module "estatic:http" {
   export function param(request: Request, name: string): string;
   export function query(request: Request, name: string): string;
   export function header(request: Request, name: string): string;
+  export function express(): Server;
+  export function server(): Server;
+  export function get(url: string): Promise<Result<HttpClientResponse, string>>;
+  export function post(url: string, body: string, contentType?: string): Promise<Result<HttpClientResponse, string>>;
   export function fetch(url: string, init?: RequestInit): Promise<Result<FetchResponse, Error>>;
   export default class http {
   static createServer(): Server;
   static param(request: Request, name: string): string;
   static query(request: Request, name: string): string;
   static header(request: Request, name: string): string;
+  static express(): Server;
+  static server(): Server;
+  static get(url: string): Promise<Result<HttpClientResponse, string>>;
+  static post(url: string, body: string, contentType?: string): Promise<Result<HttpClientResponse, string>>;
   static fetch(url: string, init?: RequestInit): Promise<Result<FetchResponse, Error>>;
   }
 }
@@ -214,12 +222,20 @@ declare module "estatic:http/drogon" {
   export function param(request: Request, name: string): string;
   export function query(request: Request, name: string): string;
   export function header(request: Request, name: string): string;
+  export function express(): Server;
+  export function server(): Server;
+  export function get(url: string): Promise<Result<HttpClientResponse, string>>;
+  export function post(url: string, body: string, contentType?: string): Promise<Result<HttpClientResponse, string>>;
   export function fetch(url: string, init?: RequestInit): Promise<Result<FetchResponse, Error>>;
   export default class http {
   static createServer(): Server;
   static param(request: Request, name: string): string;
   static query(request: Request, name: string): string;
   static header(request: Request, name: string): string;
+  static express(): Server;
+  static server(): Server;
+  static get(url: string): Promise<Result<HttpClientResponse, string>>;
+  static post(url: string, body: string, contentType?: string): Promise<Result<HttpClientResponse, string>>;
   static fetch(url: string, init?: RequestInit): Promise<Result<FetchResponse, Error>>;
   }
 }

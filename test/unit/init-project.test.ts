@@ -98,8 +98,10 @@ test("init-project: estatic.d.ts declara los built-ins del dialecto", async () =
   // Globales de runtime (RUNTIME_GLOBAL_NAMES en type-checker).
   assert.match(dts, /\bnamespace\s+console\b/);
   assert.match(dts, /\bnamespace\s+fs\b/);
-  assert.match(dts, /\bnamespace\s+path\b/);
-  assert.match(dts, /\bnamespace\s+process\b/);
+  // path y process ya no son globales: se importan de estatic:path y
+  // estatic:process (#292, #310).
+  assert.doesNotMatch(dts, /\bnamespace\s+path\b/);
+  assert.doesNotMatch(dts, /\bnamespace\s+process\b/);
   assert.match(dts, /\bnamespace\s+JSON\b/);
   // fs.*Sync (versiones síncronas que devuelve Result<...> o boolean).
   assert.match(dts, /\breadFileSync\b/);
@@ -153,8 +155,11 @@ test("init-project: tipos recientes están disponibles para el editor", async ()
   for (const method of ["writeLine", "color", "moveTo", "hideCursor", "showCursor"]) {
     assert.match(dts, new RegExp(`\\b${method}\\s*\\(`), `falta Console.${method}`);
   }
-  assert.match(dts, /function\s+get\(url:\s*string\):\s*Promise<Result<HttpClientResponse,\s*string>>/);
+  // El cliente HTTP es estatic:fetch / estatic:http (#292), no un global.
+  assert.doesNotMatch(dts, /\bnamespace\s+http\b/);
 });
+
+const retiredBuiltins = new Set(["argument", "argumentCount", "exitProcess", "jsonEscape", "normalizePath", "pathDirectory"]);
 
 test("init-project: todo builtin registrado tiene declaración para el editor", () => {
   const registry = readFileSync(join(compilerRoot, "src", "semantic", "builtin-registry.ts"), "utf8");
@@ -166,7 +171,9 @@ test("init-project: todo builtin registrado tiene declaración para el editor", 
     [...registry.matchAll(/global\.define\("([^"]+)"/g)].map(match => match[1]),
   );
   assert.deepEqual(
-    [...registeredFunctions].filter(name => !declaredFunctions.has(name)),
+    // Retirados de los globales (#310): stage 0 los conserva, etsc los importa
+    // de estatic:process, estatic:path y estatic:json.
+    [...registeredFunctions].filter(name => !declaredFunctions.has(name) && !retiredBuiltins.has(name)),
     [],
     "hay funciones builtin sin declarar en types/estatic.d.ts",
   );

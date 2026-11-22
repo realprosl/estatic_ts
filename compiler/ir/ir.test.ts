@@ -320,8 +320,10 @@ test("native IR preserves opaque runtime requirements explicitly",()=>{
   const contract=ir.runtimeContracts.find((c:any)=>c.name==="builtin.readFile");assert.ok(contract);assert.ok(contract.effects.includes("opaque"));assert.equal(contract.capability,"runtime:builtin.readFile");
 });
 test("native IR declares Node-style process streams and child-process contracts",()=>{
- const ir=run('const args:string[]=["hello"];const child=child_process.spawn("/bin/echo",args);child.stdout.on("data",(chunk:string):void=>write(chunk));process.stdin.on("data",(chunk:string):void=>{process.stdout.write(chunk);});');
- for(const name of ["!child_process.spawn","ChildProcess.stdout","process.stdin","ProcessReadable.on","ProcessWritable.write"]){
+ // #310: spawn y process.stdin vienen de estatic:child_process y estatic:process
+ // (funciones @cpp_native); los métodos de los streams siguen siendo del runtime.
+ const ir=run('import process from "estatic:process";import child_process from "estatic:child_process";const args:string[]=["hello"];const child=child_process.spawn("/bin/echo",args);child.stdout.on("data",(chunk:string):void=>write(chunk));process.stdin.on("data",(chunk:string):void=>{process.stdout.write(chunk);});');
+ for(const name of ["ChildProcess.stdout","ProcessReadable.on","ProcessWritable.write"]){
   const contract=ir.runtimeContracts.find((c:any)=>c.name==name);assert.ok(contract,name);assert.ok(contract.effects.includes("runtime"),name);assert.equal(contract.capability,"runtime:"+name);
  }
 });

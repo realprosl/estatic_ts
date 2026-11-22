@@ -141,7 +141,7 @@ for(const [name,source,expected] of [
  ["optional callback",'const x=optionalSome(3);const y=optionalMap(x,(n:number):number=>n+1);print(optionalValueOr(y,0));',"4\n"],
  ["optional owner",'class C{x:number=5;}const p=optionalSome<ptr<C>>(new C());const q=move(p).value();print(q.x);',"5\n"],
  ["string runtime",'const s=" hello ";print(s.trim().toUpperCase());print(Math.floor(3.8));',"HELLO\n3\n"],
- ["json runtime",'const value=JSON.parseValue("true");print(jsonIsBool(value));',"true\n"],
+ ["json runtime",'import { jsonIsBool } from "estatic:json";const value=JSON.parseValue("true");print(jsonIsBool(value));',"true\n"],
  ["boolean places",'function yes(n:ref<boolean>):void{n=true;}let a:boolean[]=[false];yes(a[0]);print(a[0]);const b=a.map((x:boolean):boolean=>!x);print(b[0]);',"true\nfalse\n"],
  ["variadic pack",'function f<...T>(...values:T):void{print(values);}f(1,"s");',"1s\n"],
  ["patrones anidados, resto de array y huecos (#223)","interface D { calle: string; ciudad?: string }interface U { nombre: string; dir: D }const u: U = { nombre: \"Ana\", dir: { calle: \"Mayor\" } };const { nombre, dir: { calle, ciudad = \"Madrid\" } } = u;const xs: number[] = [1, 2, 3, 4];const [a, ...resto] = xs;const [, b, , d] = xs;function f(): number[] { return [5, 6, 7]; }const [p, ...q] = f();const m: number[][] = [[1, 2], [3, 4]];const [[m1, m2], [m3]] = m;function g({ dir: { ciudad = \"Sevilla\" } }: { dir: { ciudad?: string } }): string { return ciudad; }console.log(nombre, calle, ciudad, a, resto.length, resto[0], b, d, p, q.length, m1, m2, m3, g({ dir: {} }), g({ dir: { ciudad: \"Vigo\" } }));const pares: [string, number[]][] = [[\"a\", [1, 2]], [\"b\", [3]]];for (const [k, [first, ...others]] of pares) console.log(k, first, others.length);","Ana Mayor Madrid 1 3 2 2 4 5 2 1 2 3 Sevilla Vigo\na 1 1\nb 3 0\n"],
@@ -342,7 +342,7 @@ test("IR C++ writes back builtin ref parameters through runtime references",()=>
 });
 
 
-for(const backend of ["httplib","drogon","estatic:http","estatic:http/drogon"] as const)test(`IR C++ retains callbacks and routes real HTTP through ${backend}`,async()=>{
+for(const backend of ["estatic:http","estatic:http/drogon"] as const)test(`IR C++ retains callbacks and routes real HTTP through ${backend}`,async()=>{
  const reservation=createServer();reservation.listen(0,"127.0.0.1");await once(reservation,"listening");const port=(reservation.address() as {port:number}).port;await new Promise<void>(resolve=>reservation.close(()=>resolve()));
  const source=`let server=http.createServer();const greeting="hello ";server.get("/users/:id",(req:Request,res:Response):void=>{res.status(202).header("X-Reply","yes").send(greeting+http.param(req,"id")+":"+http.query(req,"q")+":"+http.header(req,"X-Test")+":"+req.method+":"+req.path);});server.post("/echo",(req:Request,res:Response):void=>{res.status(201).send(req.body);});server.delete("/item",(req:Request,res:Response):void=>{res.status(203).json(${JSON.stringify('{"ok":true}')});});server.listen("127.0.0.1",${port});`;
  // #292: con los módulos, el servidor lo elige el import (sin @cpp_drogon).
@@ -375,7 +375,7 @@ test("IR C++ estatic:http/drogon elige Drogon por el import, sin decorador (#292
 test("IR C++ libcurl client executes GET and POST through native async",async()=>{
  const server=createServer((req,res)=>{let body="";req.on("data",chunk=>body+=chunk);req.on("end",()=>{res.writeHead(202,{"X-Test":"curl"});res.end(req.method=== "POST"?body:"hello");});});server.listen(0,"127.0.0.1");await once(server,"listening");const port=(server.address() as {port:number}).port;
  try {
-  const project=ir(`const a=await http.get("http://127.0.0.1:${port}/");if(a.isOk()){const r=a.value();print(r.status());print(r.body());print(r.header("X-Test"));}const b=await http.post("http://127.0.0.1:${port}/","payload");if(b.isOk())print(b.value().body());`);
+  const project=ir(`import http from "estatic:http";const a=await http.get("http://127.0.0.1:${port}/");if(a.isOk()){const r=a.value();print(r.status());print(r.body());print(r.header("X-Test"));}const b=await http.post("http://127.0.0.1:${port}/","payload");if(b.isOk())print(b.value().body());`);
   const result=generateCppFromIr(project);assert(result.runtimeBackends.curl);assert(result.runtimeBackends.libuv);
   const cpp=join(directory,"client.cpp"),binary=join(directory,"client");writeFileSync(cpp,result.cpp);buildIrCpp(result,cpp,binary);
   const child=spawn(binary,[],{stdio:["ignore","pipe","pipe"]});let stdout="",stderr="";child.stdout.on("data",chunk=>stdout+=chunk);child.stderr.on("data",chunk=>stderr+=chunk);
@@ -386,11 +386,11 @@ test("IR C++ libcurl client executes GET and POST through native async",async()=
 test("bootstrap CLI connects native frontend, IR, C++, build and execution",()=>{
  const cli=join(root,"compiler/cli.ts"),dir=mkdtempSync(join(directory,"cli-"));
  const command=(args:string[])=>spawnSync(process.execPath,["--experimental-strip-types",cli,...args],{cwd:root,encoding:"utf8",timeout:120000});
- const source=join(dir,"main.ets"),cpp=join(dir,"app.cpp"),json=join(dir,"app.ir.json"),binary=join(dir,"app");writeFileSync(source,'print(argument(1));');
+ const source=join(dir,"main.ets"),cpp=join(dir,"app.cpp"),json=join(dir,"app.ir.json"),binary=join(dir,"app");writeFileSync(source,'import { argument } from "estatic:process";print(argument(1));');
  let p=command([source,"--frontend",lower,"-o",cpp,"--binary",binary,"--emit-ir",json,"--run","--","hello"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"hello\n");
  p=command(["--from-ir",json,"-o",cpp,"--binary",binary,"--run","--","IR"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"IR\n");
  p=command([source,"--frontend",lower,"--check"]);assert.equal(p.status,0,p.stderr);assert.match(p.stdout,/Comprobado/);
- writeFileSync(source,'exitProcess(7);');p=command([source,"--frontend",lower,"-o",cpp,"--binary",binary,"--run"]);assert.equal(p.status,7,p.stderr);
+ writeFileSync(source,'import { exitProcess } from "estatic:process";exitProcess(7);');p=command([source,"--frontend",lower,"-o",cpp,"--binary",binary,"--run"]);assert.equal(p.status,7,p.stderr);
  writeFileSync(source,'let n:number="bad";');p=command([source,"--frontend",lower,"--check"]);assert.equal(p.status,1);assert.match(p.stderr,/IR_INPUT|incompatible|comprobado/);
  assert.equal(command(["--unknown"]).status,2);assert.equal(command(["--version"]).status,0);assert.equal(command(["--help"]).status,0);
 });
