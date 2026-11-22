@@ -6,7 +6,7 @@ import { verifyIr } from "./verify";
 import { formatIr } from "./format";
 import { IrInstruction } from "./model";
 function testIr(): void {
-  let loader = new ModuleLoader(new LoaderOptions()); const graph = loader.load(argument(1)); let project = analyzeProject(graph);
+  let options = new LoaderOptions(); options.library = compilerRoot() + "/runtime/lib"; let loader = new ModuleLoader(options); const graph = loader.load(argument(1)); let project = analyzeProject(graph);
   const mode: string = argumentCount() > 2 ? argument(2) : "";
   if (mode == "input") project.checked.success = false;
   if (mode == "table") project.checked.files[0].types.pop();
