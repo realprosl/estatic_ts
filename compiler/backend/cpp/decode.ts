@@ -1,5 +1,14 @@
 import {IrSource,IrPlace,IrInstruction,IrBlock,IrFunction,IrModule,IrIssue,IrProject,IrDispatch,IrType,IrRuntimeContract,IrCleanupScope,IrLease,IrEffectBorrow,IrEffectContract,IrAnnotation} from "../../ir/model";
-import { jsonObjectGet, jsonArrayGet, jsonArrayLength, jsonAsString, jsonAsNumber, jsonAsBool } from "estatic:json";
+// Lectura del IR sin copias: estatic:json recibe el JsonValue por valor y cada
+// campo leído copiaba el objeto padre entero (leer el IR del compilador costaba
+// ~5 min). Estas declaraciones lo leen por referencia. Se quitan cuando
+// estatic:json reciba constRef<JsonValue> (#320).
+@cpp_native("jsonObjectGet") function jsonObjectGet(value: constRef<JsonValue>, key: string): JsonValue;
+@cpp_native("jsonArrayGet") function jsonArrayGet(value: constRef<JsonValue>, index: number): JsonValue;
+@cpp_native("jsonArrayLength") function jsonArrayLength(value: constRef<JsonValue>): number;
+@cpp_native("jsonAsString") function jsonAsString(value: constRef<JsonValue>): string;
+@cpp_native("jsonAsNumber") function jsonAsNumber(value: constRef<JsonValue>): number;
+@cpp_native("jsonAsBool") function jsonAsBool(value: constRef<JsonValue>): boolean;
 import { exitProcess } from "estatic:process/args";
 function decodestringArray(value:constRef<JsonValue>):string[]{let decoded:string[]=[];const count:number=jsonArrayLength(value);for(let k:number=0;k<count;k=k+1){const item:JsonValue=jsonArrayGet(value,k);decoded.push(jsonAsString(item));}return decoded;}
 function decodenumberArray(value:constRef<JsonValue>):number[]{let decoded:number[]=[];const count:number=jsonArrayLength(value);for(let k:number=0;k<count;k=k+1){const item:JsonValue=jsonArrayGet(value,k);decoded.push(jsonAsNumber(item));}return decoded;}
@@ -296,22 +305,26 @@ class WireCursor {
  at:number;end:number;
  constructor(size:number){this.at=0;this.end=size;}
  fail():void{printError("Se requiere ets-ir-2 verificado con success:true (JSON inválido)");exitProcess(1);}
- skip(text:constRef<string>):void{while(this.at<this.end&&" \t\r\n".includes(text.charAt(this.at)))this.at+=1;}
- take(text:constRef<string>,token:string):boolean{this.skip(text);if(text.charAt(this.at)!=token)return false;this.at+=1;return true;}
+ // Bytes con charCodeAt: charAt crea un string por carácter (#319).
+ skip(text:constRef<string>):void{while(this.at<this.end){const c:number=text.charCodeAt(this.at);if(c!=32&&c!=9&&c!=13&&c!=10)break;this.at+=1;}}
+ take(text:constRef<string>,token:string):boolean{this.skip(text);if(this.at>=this.end||text.charCodeAt(this.at)!=token.charCodeAt(0))return false;this.at+=1;return true;}
  expect(text:constRef<string>,token:string):void{if(!this.take(text,token))this.fail();}
  read(text:constRef<string>):string{
   this.skip(text);const start:number=this.at;let depth:number=0;let quoted:boolean=false;
-  while(this.at<this.end){const c:string=text.charAt(this.at);
-   if(quoted){this.at+=1;if(c=="\\"){if(this.at>=this.end)this.fail();this.at+=1;}else if(c=="\""){quoted=false;if(depth==0)return text.slice(start,this.at);}continue;}
-   if(c=="\""){quoted=true;this.at+=1;continue;}
-   if(c=="["||c=="{"){depth+=1;this.at+=1;continue;}
-   if(c=="]"||c=="}"){if(depth==0)break;depth-=1;this.at+=1;if(depth==0)return text.slice(start,this.at);continue;}
-   if(depth==0&&(c==","||" \t\r\n".includes(c)))break;
+  while(this.at<this.end){const c:number=text.charCodeAt(this.at);
+   if(quoted){this.at+=1;if(c==92){if(this.at>=this.end)this.fail();this.at+=1;}else if(c==34){quoted=false;if(depth==0)return text.slice(start,this.at);}continue;}
+   if(c==34){quoted=true;this.at+=1;continue;}
+   if(c==91||c==123){depth+=1;this.at+=1;continue;}
+   if(c==93||c==125){if(depth==0)break;depth-=1;this.at+=1;if(depth==0)return text.slice(start,this.at);continue;}
+   if(depth==0&&(c==44||c==32||c==9||c==13||c==10))break;
    this.at+=1;
   }
   if(quoted||depth!=0||start==this.at)this.fail();return text.slice(start,this.at);
  }
 }
+function scalarString(cursor:ref<WireCursor>,text:constRef<string>):string{const value:JsonValue=JSON.parseValue(cursor.read(text));return jsonAsString(value);}
+function scalarNumber(cursor:ref<WireCursor>,text:constRef<string>):number{const value:JsonValue=JSON.parseValue(cursor.read(text));return jsonAsNumber(value);}
+function scalarBool(cursor:ref<WireCursor>,text:constRef<string>):boolean{const value:JsonValue=JSON.parseValue(cursor.read(text));return jsonAsBool(value);}
 function streamIrAnnotationArray(cursor:ref<WireCursor>,text:constRef<string>):IrAnnotation[]{
  let decoded:IrAnnotation[]=[];cursor.expect(text,"[");if(cursor.take(text,"]"))return decoded;
  while(true){const item:JsonValue=JSON.parseValue(cursor.read(text));decoded.push(decodeIrAnnotation(item));if(cursor.take(text,"]"))break;cursor.expect(text,",");}return decoded;
@@ -359,8 +372,8 @@ function streamstringArray(cursor:ref<WireCursor>,text:constRef<string>):string[
 export function parseIrProject(text:string):IrProject{
  let cursor=new WireCursor(text.length);let project=new IrProject();let format:string="";let sawDiagnostics:boolean=false;cursor.expect(text,"{");
  while(!cursor.take(text,"}")){
-  const key:string=jsonAsString(JSON.parseValue(cursor.read(text)));cursor.expect(text,":");
-  if(key=="format")format=jsonAsString(JSON.parseValue(cursor.read(text)));
+  const key:string=scalarString(cursor,text);cursor.expect(text,":");
+  if(key=="format")format=scalarString(cursor,text);
   else if(key=="dispatches"){project.dispatches=streamIrDispatchArray(cursor,text);}
   else if(key=="effectContracts"){project.effectContracts=streamIrEffectContractArray(cursor,text);}
   else if(key=="annotations"){project.annotations=streamIrAnnotationArray(cursor,text);}
@@ -372,9 +385,9 @@ export function parseIrProject(text:string):IrProject{
   else if(key=="globals"){project.globals=streamIrPlaceArray(cursor,text);}
   else if(key=="functions"){project.functions=streamIrFunctionArray(cursor,text);}
   else if(key=="initializationOrder"){project.initializationOrder=streamnumberArray(cursor,text);}
-  else if(key=="entry"){project.entry=jsonAsNumber(JSON.parseValue(cursor.read(text)));}
+  else if(key=="entry"){project.entry=scalarNumber(cursor,text);}
   else if(key=="diagnostics"){project.diagnostics=streamIrIssueArray(cursor,text);sawDiagnostics=true;}
-  else if(key=="success"){project.success=jsonAsBool(JSON.parseValue(cursor.read(text)));}
+  else if(key=="success"){project.success=scalarBool(cursor,text);}
   else cursor.read(text);
   if(cursor.take(text,"}"))break;cursor.expect(text,",");
  }
