@@ -15,6 +15,7 @@ compiler_fingerprint() {
   (cd "$root" && find compiler -type f \( -name '*.ts' -o -name '*.hpp' -o -name '*.cpp' \) \
       -not -name '*.test.ts' | LC_ALL=C sort | while IFS= read -r f; do sha256sum "$f"; done) | sha256sum | cut -d' ' -f1
 }
+compiler_fingerprint="$(compiler_fingerprint)"
 mkdir -p "$TMPDIR" "$output"
 stage=${1:-stage1}
 optimization=${ESTATIC_ETS_OPTIMIZATION:--O1}
