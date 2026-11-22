@@ -334,12 +334,14 @@ probe="$work/probe"
 mkdir -p "$release/build/objects"
 if ESTC_ROOT="$current" "$destination" init "$probe" >"$work/warm.log" 2>&1; then
   cat > "$probe/src/main.ts" <<'EOF'
+import http from "estatic:http";
+import process from "estatic:process";
 async function main(): Promise<void> {
   const server = http.createServer();
   process.stdin.on("data", (chunk: string): void => { print(chunk); });
   print("runtime listo");
 }
-main();
+await main();
 EOF
 fi
 if [ -f "$probe/estatic.config.json" ] && (cd "$probe" && ESTC_ROOT="$current" ESTC_OBJECT_CACHE="$release/build/objects" "$destination" build --no-progress) >>"$work/warm.log" 2>&1; then
