@@ -426,11 +426,17 @@ export class Binder {
     }
     // Resolve static namespace chains after lexical names, in dependency order
     // of expression nodes (parser allocates member parents after their object).
+    // receivers[n]: símbolo de la última referencia de valor resuelta al nodo n
+    // de este módulo. Se mantiene al día con las referencias que se añaden en el
+    // bucle (cadenas a.b.c), en lugar de recorrer todas las del proyecto por cada
+    // acceso a miembro, que era cuadrático.
+    let receivers: number[] = []; for (let n: number = 0; n < arena.length; n = n + 1) receivers.push(-1);
+    let seen: number = 0;
     for (let id: number = 0; id < arena.length; id = id + 1) {
       const node: AstNode = arena[id]; const scope: number = this.result.files[module].nodeScopes[id];
       if (scope < 0 || (node.kind != NodeKind.MemberExpression && node.kind != NodeKind.MemberCallExpression)) continue;
-      const object: number = bindingChild(node, EdgeRole.Object); let receiver: number = -1;
-      for (const reference of this.result.references) { if (reference.module == module && reference.node == object && reference.space == "value" && !reference.deferred) receiver = reference.symbol; }
+      for (; seen < this.result.references.length; seen = seen + 1) { const reference: BoundReference = this.result.references[seen]; if (reference.module == module && reference.space == "value" && !reference.deferred && reference.node >= 0 && reference.node < receivers.length) receivers[reference.node] = reference.symbol; }
+      const object: number = bindingChild(node, EdgeRole.Object); const receiver: number = object >= 0 && object < receivers.length ? receivers[object] : -1;
       const origin: number = this.origin(receiver);
       const member: string = node.kind == NodeKind.MemberExpression ? node.get(AttributeKind.Member) : node.get(AttributeKind.Method);
       if (origin >= 0 && this.result.symbols[origin].namespaceModule >= 0) {
