@@ -16,10 +16,6 @@ namespace ets_process_lib {
 
 inline std::vector<std::string> argv() { return ets::processArgv(); }
 inline double argc() { return ets::processArgc(); }
-// Los builtins antiguos: argv de C tal cual (argument(0) es el ejecutable, sin
-// duplicar como en process.argv) y "" fuera de rango.
-inline std::string argumentAt(double index) { return ::argument(index); }
-inline double argumentTotal() { return ::argumentCount(); }
 inline std::string cwd() {
     std::error_code error;
     const auto current = std::filesystem::current_path(error);

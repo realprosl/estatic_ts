@@ -4,7 +4,7 @@
 // "<nombre>/<ruta>". Su estatic.config.json da el nombre, alias internos,
 // dependencias y flags de enlazado; las versiones son etiquetas git vX.Y.Z.
 import { exists, readText, writeText, currentDirectory, hostError } from "../platform/index";
-import { exitProcess } from "estatic:process";
+import { exitProcess } from "estatic:process/args";
 import { normalizePath } from "estatic:path";
 
 function libraryError(message: string): void { printError(message); exitProcess(1); }

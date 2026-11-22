@@ -1,5 +1,5 @@
 import { LoaderOptions, PathAlias, ModuleLoader, formatGraph } from "./loader";
-import { argument, argumentCount, exitProcess } from "estatic:process";
+import { argument, argumentCount, exitProcess } from "estatic:process/args";
 import { normalizePath } from "estatic:path";
 
 function runDemo(): void {

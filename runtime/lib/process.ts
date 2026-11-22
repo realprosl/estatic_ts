@@ -9,10 +9,9 @@
 // global `process` sigue existiendo mientras compiler/ lo use.
 
 @include("runtime/lib/process.hpp")
+import { argument as argumentOf, argumentCount as argumentTotal, exitProcess as exitWith } from "./process/args";
 @cpp_native("ets_process_lib::argv") function nativeArgv(): string[];
 @cpp_native("ets_process_lib::argc") function nativeArgc(): number;
-@cpp_native("ets_process_lib::argumentAt") function nativeArgumentAt(index: number): string;
-@cpp_native("ets_process_lib::argumentTotal") function nativeArgumentTotal(): number;
 @cpp_native("ets_process_lib::cwd") function nativeCwd(): string;
 @cpp_native("ets_process_lib::exit") function nativeExit(code: number): void;
 @cpp_native("ets_process_lib::pid") function nativePid(): number;
@@ -44,14 +43,12 @@ const process: Process = new Process();
 export default process;
 
 // ── Los mismos nombres que tenían los builtins ────────────────────────────
-// El runtime exponía esta API como builtin global (argument, argumentCount,
-// exitProcess). Aquí están con el mismo nombre, asi que un
-// `import { argument } from "estatic:process"` sombrea al builtin y el
-// código que lo usaba no cambia: solo la línea de import.
-
+// argument, argumentCount y exitProcess viven en estatic:process/args (sin
+// libuv); aquí se reexportan para que `import { argument } from
+// "estatic:process"` siga funcionando.
 /** El argumento `index` de argv de C (0 es el ejecutable); "" fuera de rango. */
-export function argument(index: number): string { return nativeArgumentAt(index); }
+export function argument(index: number): string { return argumentOf(index); }
 /** Cuántos argumentos tiene argv de C (el ejecutable incluido). */
-export function argumentCount(): number { return nativeArgumentTotal(); }
+export function argumentCount(): number { return argumentTotal(); }
 /** Termina el proceso con el código `code`. */
-export function exitProcess(code: number): void { process.exit(code); }
+export function exitProcess(code: number): void { exitWith(code); }

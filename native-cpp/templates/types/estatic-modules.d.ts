@@ -439,6 +439,9 @@ declare module "estatic:path" {
 }
 
 declare module "estatic:process" {
+    function argumentOf(index: number): string;
+    function argumentTotal(): number;
+    function exitWith(code: number): void;
   export class Process {
   argv: string[];
   argc: number;
@@ -454,6 +457,12 @@ declare module "estatic:process" {
   }
   const process: Process;
   export default process;
+  export function argument(index: number): string;
+  export function argumentCount(): number;
+  export function exitProcess(code: number): void;
+}
+
+declare module "estatic:process/args" {
   export function argument(index: number): string;
   export function argumentCount(): number;
   export function exitProcess(code: number): void;

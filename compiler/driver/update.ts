@@ -8,7 +8,7 @@
 // versión anterior sigue funcionando.
 import { environment, executable, exists, readText, writeText, remove, temporaryDirectory, launch, poll, pause, hostError } from "../platform/index";
 import { jsonObjectGet, jsonAsString, jsonIsObject } from "estatic:json";
-import { exitProcess } from "estatic:process";
+import { exitProcess } from "estatic:process/args";
 
 const defaultRepository: string = "https://github.com/realprosl/estatic_ts.git";
 

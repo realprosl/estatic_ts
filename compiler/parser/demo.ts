@@ -1,5 +1,5 @@
 import { ParserToken, inspectAst } from "./parser";
-import { argument, argumentCount, exitProcess } from "estatic:process";
+import { argument, argumentCount, exitProcess } from "estatic:process/args";
 
 // Decimal conversion is only for the host-to-demo token transport.
 function decimal(text: string): number {

@@ -1,5 +1,5 @@
 import { ModuleLoader, LoaderOptions } from "../modules/index";
-import { argument, argumentCount, exitProcess } from "estatic:process";
+import { argument, argumentCount, exitProcess } from "estatic:process/args";
 import { analyzeProject } from "../checker/index";
 import { lowerProject } from "./lower";
 import { verifyIr } from "./verify";
