@@ -1,7 +1,7 @@
 {
   "name": "estatic-ts-cpp",
-  "version": "1.145.0",
-  "estaticRevision": 183,
+  "version": "1.146.0",
+  "estaticRevision": 184,
   "private": true,
   "type": "module",
   "description": "Transpilador modular de un subconjunto estático de TypeScript a C++20",
