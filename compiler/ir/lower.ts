@@ -1122,7 +1122,8 @@ export class IrLowering {
       } else {
         const actual: number = this.typeId(this.checked.files[this.module].types[receiver],receiver);
         // Read-only calls on collection places borrow them too: loading by value copies the whole Map/Set/array per call.
-        const collection: boolean = ["Map","Set"].includes(genericBase(receiverType)) || receiverType.endsWith("[]");
+        // Strings también: this.text.charAt(i) copiaba el string entero en cada llamada.
+        const collection: boolean = ["Map","Set"].includes(genericBase(receiverType)) || receiverType.endsWith("[]") || receiverType == "string";
         let borrowed: number = -1;
         if (!this.result.typeDefinitions[actual].resource && collection && this.purePlace(receiver)) {
           const element: number = this.typeId(receiverType,id); const p: number = this.unwrappedPlace(receiver,element);
