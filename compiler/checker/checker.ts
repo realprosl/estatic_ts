@@ -1,5 +1,6 @@
 import { catalogArg, catalogVariant, closestName, diagnosticAt, SourceDiagnostic } from "../diag/index";
 import {progressDetail} from "../platform/index";
+import {profileBegin,profileEnd} from "../analysis/index";
 import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind, nodeKindName, AstNode } from "../parser/index";
 import { nativeBuiltinSignatures, BindingResult, BindingSymbol, bindingChild, callableBinding } from "../binder/index";
 import { ModuleGraph } from "../modules/index";
@@ -27,10 +28,63 @@ export class NativeChecker {
   literalShapeKeys: string[]; literalShapeTypes: string[];
   // #273: comprobación en compilación de JSON.parse<T>("texto constante").
   jsonText: string; jsonAt: number;
+  // Índices para no recorrer todos los símbolos/referencias en cada consulta:
+  // miembros por ámbito ("módulo:nodo" → símbolos en orden de sid), referencias
+  // por nodo (vértice = offset del módulo + nodo) y campos aún sin tipo.
+  indexed: boolean; memberGroups: Map<string,number>; memberStart: number[]; memberList: number[];
+  offsets: number[]; referenceStart: number[]; referenceList: number[]; pendingFields: number[];
   constructor(graph: ModuleGraph, binding: BindingResult) {
     this.graph = graph; this.binding = binding; this.result = new CheckResult(); this.symbolStates = []; this.depth = 0; this.switches = 0; this.compatibilityDepth = 0;
     this.narrowedSymbols = []; this.narrowedTypes = []; this.trace = false; this.narrowedPaths = [];
     this.mutationCache = new Map<string,number>(); this.literalShapeKeys = []; this.literalShapeTypes = []; this.jsonText = ""; this.jsonAt = 0;
+    this.indexed = false; this.memberGroups = new Map<string,number>(); this.memberStart = []; this.memberList = [];
+    this.offsets = []; this.referenceStart = []; this.referenceList = []; this.pendingFields = [];
+  }
+  index(): void {
+    if (this.indexed) return; this.indexed = true;
+    // Miembros: grupos por ámbito, en orden de sid.
+    let groups: number[] = []; let counts: number[] = [];
+    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
+      const scope: number = this.binding.symbols[sid].scope; let group: number = -1;
+      if (scope >= 0) {
+        const key: string = numberToString(this.binding.symbols[sid].module) + ":" + numberToString(this.binding.scopes[scope].node);
+        const found: Optional<number> = this.memberGroups.get(key);
+        if (found.isPresent()) group = found.value(); else { group = counts.length; this.memberGroups.set(key,group); counts.push(0); }
+        counts[group] = counts[group] + 1;
+      }
+      groups.push(group);
+      const kind: string = this.binding.symbols[sid].kind;
+      if (kind == "ClassField" || kind == "InterfaceField" || kind == "UnionVariant") this.pendingFields.push(sid);
+    }
+    this.memberStart.push(0); for (let g: number = 0; g < counts.length; g = g + 1) this.memberStart.push(this.memberStart[g] + counts[g]);
+    let cursor: number[] = []; for (let g: number = 0; g < counts.length; g = g + 1) cursor.push(this.memberStart[g]);
+    for (let sid: number = 0; sid < groups.length; sid = sid + 1) this.memberList.push(-1);
+    for (let sid: number = 0; sid < groups.length; sid = sid + 1) if (groups[sid] >= 0) { this.memberList[cursor[groups[sid]]] = sid; cursor[groups[sid]] = cursor[groups[sid]] + 1; }
+    // Referencias por nodo.
+    let total: number = 0; for (const m of this.graph.modules) { this.offsets.push(total); total = total + m.cached.result.ast.nodes.length; }
+    for (let v: number = 0; v <= total; v = v + 1) this.referenceStart.push(0);
+    let vertices: number[] = [];
+    for (const ref of this.binding.references) {
+      let v: number = -1; if (ref.module >= 0 && ref.module < this.offsets.length && ref.node >= 0) { v = this.offsets[ref.module] + ref.node; if (v >= total) v = -1; }
+      vertices.push(v); if (v >= 0) this.referenceStart[v + 1] = this.referenceStart[v + 1] + 1;
+    }
+    for (let v: number = 0; v < total; v = v + 1) this.referenceStart[v + 1] = this.referenceStart[v + 1] + this.referenceStart[v];
+    let at: number[] = []; for (let v: number = 0; v < total; v = v + 1) at.push(this.referenceStart[v]);
+    for (let r: number = 0; r < vertices.length; r = r + 1) this.referenceList.push(-1);
+    for (let r: number = 0; r < vertices.length; r = r + 1) if (vertices[r] >= 0) { this.referenceList[at[vertices[r]]] = r; at[vertices[r]] = at[vertices[r]] + 1; }
+  }
+  // Símbolos declarados en el ámbito del nodo (module, node), en orden de sid.
+  scopeMembers(module: number, node: number): number[] {
+    this.index(); const found: Optional<number> = this.memberGroups.get(numberToString(module) + ":" + numberToString(node)); let result: number[] = [];
+    if (found.isPresent()) { const g: number = found.value(); for (let at: number = this.memberStart[g]; at < this.memberStart[g + 1]; at = at + 1) result.push(this.memberList[at]); }
+    return result;
+  }
+  // Índices (en binding.references) de las referencias del nodo, en orden.
+  nodeReferences(module: number, node: number): number[] {
+    this.index(); let result: number[] = []; if (module < 0 || module >= this.offsets.length || node < 0) return result;
+    const v: number = this.offsets[module] + node; if (v + 1 >= this.referenceStart.length) return result;
+    for (let at: number = this.referenceStart[v]; at < this.referenceStart[v + 1]; at = at + 1) result.push(this.referenceList[at]);
+    return result;
   }
   // JSON.parse<T>("...") de estatic:json con texto constante: el texto se
   // comprueba contra T al compilar y no encajar es un error de compilación.
@@ -185,10 +239,10 @@ export class NativeChecker {
     this.compatibilityDepth = this.compatibilityDepth + 1; const result: boolean = this.compatibleInner(actual,expected); this.compatibilityDepth = this.compatibilityDepth - 1; return result;
   }
   parameterBound(text: string): string {
-    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (text == "@" + numberToString(sid)) {
-      const s = this.binding.symbols[sid]; const n: AstNode = this.node(s.module,s.node);
-      if (n.get(AttributeKind.Constraint) != "") return this.annotation(s.module,s.node,n.get(AttributeKind.Constraint));
-    } return "";
+    const sid: number = parameterToken(text,this.binding.symbols.length); if (sid < 0) return "";
+    const s = this.binding.symbols[sid]; const n: AstNode = this.node(s.module,s.node);
+    if (n.get(AttributeKind.Constraint) != "") return this.annotation(s.module,s.node,n.get(AttributeKind.Constraint));
+    return "";
   }
   compatibleInner(actual: string, expected: string): boolean {
     if (actual == "!never") return true;
@@ -366,7 +420,7 @@ export class NativeChecker {
     let sid: number = -1;
     // Query space permits a type-only import of an original runtime declaration.
     // Resolve from the root, not a terminal name shared by unrelated query paths.
-    for (const ref of this.binding.references) if (ref.module == module && ref.node == id && ref.name == names[0] && ref.space == "query" && !ref.deferred) { sid = ref.target; break; }
+    for (const r of this.nodeReferences(module,id)) { const ref = this.binding.references[r]; if (ref.name == names[0] && ref.space == "query" && !ref.deferred) { sid = ref.target; break; } }
     if (sid < 0) { this.report(module,id,"No se pudo resolver typeof '" + text + "'"); return "!error"; }
     let symbols: number[] = [sid]; let value: string = "";
     for (let part: number = 1; part < names.length; part = part+1) {
@@ -783,17 +837,20 @@ export class NativeChecker {
     return n.get(AttributeKind.Optional) == "true" && genericBase(text) != "Optional" ? "Optional<" + text + ">" : text;
   }
   transferType(text: string): boolean {
-    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
+    // Mismo recorrido que antes sobre todos los símbolos, pero solo por los
+    // campos que siguen sin tipo (los demás ya no cambian).
+    this.index(); const pending: number[] = this.pendingFields; let rest: number[] = [];
+    for (const sid of pending) {
       const field = this.binding.symbols[sid];
-      if (["ClassField","InterfaceField","UnionVariant"].includes(field.kind) && this.result.symbolTypes[sid] == "" && this.symbolStates[sid] != 1) this.symbolType(sid,field.module,field.node);
+      if (this.result.symbolTypes[sid] == "" && this.symbolStates[sid] != 1) this.symbolType(sid,field.module,field.node);
+      if (this.result.symbolTypes[sid] == "") rest.push(sid);
     }
+    this.pendingFields = rest;
     return resourceType(this.graph,this.binding,this.result,text,[]);
   }
   packToken(text: string): boolean {
-    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (text == "@" + numberToString(sid)) {
-      const symbol = this.binding.symbols[sid]; return symbol.kind == "TypeParameter" && this.node(symbol.module,symbol.node).get(AttributeKind.Variadic) == "true";
-    }
-    return false;
+    const sid: number = parameterToken(text,this.binding.symbols.length); if (sid < 0) return false;
+    const symbol = this.binding.symbols[sid]; return symbol.kind == "TypeParameter" && this.node(symbol.module,symbol.node).get(AttributeKind.Variadic) == "true";
   }
   packActuals(module: number, args: number[], actual: string[], positions: number[], rest: number): string[] {
     let values: string[] = [];
@@ -1065,7 +1122,7 @@ export class NativeChecker {
     for (const part of splitTypes(receiver,"&")) {
       const owner: number = this.nominalSymbol(part); if (owner < 0) continue;
       const s: BindingSymbol = this.binding.symbols[owner];
-      for (const item of this.binding.symbols) if (item.module == s.module && item.scope >= 0 && this.binding.scopes[item.scope].node == s.node && item.name != "constructor" && !names.includes(item.name)) names.push(item.name);
+      for (const i of this.scopeMembers(s.module,s.node)) { const item = this.binding.symbols[i]; if (item.name != "constructor" && !names.includes(item.name)) names.push(item.name); }
     }
     return names;
   }
@@ -1087,10 +1144,8 @@ export class NativeChecker {
     if (parts.length > 1) { for (const part of parts) { const found: number = this.memberSymbol(part,name); if (found >= 0) return found; } return -1; }
     const owner: number = this.nominalSymbol(receiver); if (owner < 0) return -1;
     const s: BindingSymbol = this.binding.symbols[owner];
-    for (let i: number = 0; i < this.binding.symbols.length; i = i + 1) {
-      const item: BindingSymbol = this.binding.symbols[i];
-      if (item.name == name && item.module == s.module && item.scope >= 0 && this.binding.scopes[item.scope].node == s.node) return i;
-    } return -1;
+    for (const i of this.scopeMembers(s.module,s.node)) if (this.binding.symbols[i].name == name) return i;
+    return -1;
   }
   member(module: number, id: number, input: string, name: string, query: boolean = false): string {
     const boundType: string = this.parameterBound(memoryValue(input));
@@ -1424,7 +1479,7 @@ export class NativeChecker {
       // contenido (campos, push, set...) se modifica a través de ellos (through).
       // La inmutabilidad en profundidad se pide con el tipo: readonly<T>, constRef<T>.
       if ((variable && declaration.get(AttributeKind.Mutable) != "true" && !through) || (declaration.get(AttributeKind.Readonly) == "true" && !initialization && !through) || (!variable && s.kind != "ClassField" && s.kind != "InterfaceField" && s.kind != "Parameter")) this.report(module,id,variable && declaration.get(AttributeKind.Mutable) != "true" ? "E3003: No se puede modificar '" + s.name + "': es inmutable porque se declaró con 'const'\nayuda: declárala con 'let' si tiene que cambiar" + catalogArg("nombre", s.name) : "E3003: No se puede modificar '" + s.name + "': es inmutable (readonly)" + catalogArg("nombre", s.name) + catalogVariant("readonly"));
-      for (const ref of this.binding.references) if (ref.module == module && ref.node == id && ref.symbol >= 0 && this.binding.symbols[ref.symbol].kind == "import") this.report(module,id,"E3006: No se puede reasignar un import\nayuda: copia el valor a una variable local con 'let' si necesitas cambiarlo");
+      for (const r of this.nodeReferences(module,id)) if (this.binding.references[r].symbol >= 0 && this.binding.symbols[this.binding.references[r].symbol].kind == "import") this.report(module,id,"E3006: No se puede reasignar un import\nayuda: copia el valor a una variable local con 'let' si necesitas cambiarlo");
     }
   }
   containerCall(module: number, id: number, helper: string, expected: string): string {
@@ -2650,15 +2705,18 @@ export class NativeChecker {
     if (!this.binding.success) return this.result;
     for (const s of this.binding.symbols) { this.result.symbolTypes.push(""); this.symbolStates.push(0); }
     for (const m of this.graph.modules) this.result.files.push(new TypedFile(m.cached.result.ast.nodes.length));
+    const statementsProfile = profileBegin();
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) {
       if (this.trace) progressDetail("frontend: checking ["+numberToString(m+1)+"/"+numberToString(this.graph.modules.length)+"] "+this.graph.modules[m].file);
       this.statement(m,this.graph.modules[m].cached.result.ast.root,"",0);
     }
+    profileEnd("types-statements",statementsProfile); const arrowsProfile = profileBegin();
     // Arrows may be reached only as values, not statements. Validate their bodies too.
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.result.files[m].types.length; id = id + 1) {
       if (this.binding.files[m].nodeScopes[id] >= 0 && this.node(m,id).kind == NodeKind.ArrowFunctionExpression) this.statement(m,id,"",0);
       if (this.binding.files[m].nodeScopes[id] >= 0 && this.node(m,id).kind == NodeKind.Decorator) this.decorator(m,id);
     }
+    profileEnd("types-arrows",arrowsProfile); const signaturesProfile = profileBegin();
     // Safety checks also need the types of unused fields/parameters/receivers.
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
       const symbol: BindingSymbol = this.binding.symbols[sid];
@@ -2669,10 +2727,20 @@ export class NativeChecker {
       const sid: number = this.origin(item.symbol); const symbol: BindingSymbol = this.binding.symbols[sid];
       if (symbol.module >= 0 && (symbol.namespaceModule) < 0) this.symbolType(sid,symbol.module,symbol.node);
     }
+    profileEnd("types-signatures",signaturesProfile); const safetyProfile = profileBegin();
     if (this.result.diagnostics.length == 0) { let checked: CheckResult = this.result; validateSafety(this.graph,this.binding,checked,this.trace); this.result = checked; }
+    profileEnd("safety",safetyProfile); const comptimeProfile = profileBegin();
     if (this.result.diagnostics.length == 0) { if (this.trace) progressDetail("frontend: comptime"); this.result = evaluateNativeComptime(this.graph,this.binding,this.result); }
+    profileEnd("comptime",comptimeProfile);
     this.result.success = this.result.diagnostics.length == 0; return this.result;
   }
+}
+// "@12" → 12 si es exactamente "@" + numberToString(sid) con sid < count; si no, -1.
+function parameterToken(text: string, count: number): number {
+  if (text.length < 2 || text.charCodeAt(0) != 64) return -1; if (text.length > 2 && text.charCodeAt(1) == 48) return -1;
+  let value: number = 0;
+  for (let at: number = 1; at < text.length; at = at + 1) { const digit: number = text.charCodeAt(at) - 48; if (digit < 0 || digit > 9) return -1; value = value * 10 + digit; if (value >= count) return -1; }
+  return value;
 }
 // Optional<X> se muestra como en TypeScript: "X | undefined".
 function undefinedDisplay(text: string): string {

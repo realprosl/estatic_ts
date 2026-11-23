@@ -1,4 +1,4 @@
-import {configureAnalysisJobs,configureAnalysisProfile} from "../analysis/index";
+import {configureAnalysisJobs,configureAnalysisProfile,profileBegin,profileEnd} from "../analysis/index";
 import { jsonObjectGet, jsonAsString, jsonAsNumber, jsonAsBool, jsonIsObject, jsonIsNumber, jsonIsBool } from "estatic:json";
 import { argument, argumentCount, exitProcess } from "estatic:process/args";
 import { normalizePath } from "estatic:path";
@@ -32,7 +32,7 @@ function emitModuleInterface(entry:string,options:LoaderOptions):void{
  driverError("No se encontró la interfaz de "+entry);
 }
 function sourceIr(entry:string,options:LoaderOptions,verbose:boolean):IrProject{
- let loader=new ModuleLoader(options);const graph=loader.load(entry);for(const file of graph.modules)analyzedFiles.push(file.file);const project=analyzeProject(graph,verbose||progressInteractive());
+ const loadProfile=profileBegin();let loader=new ModuleLoader(options);const graph=loader.load(entry);profileEnd("load",loadProfile);for(const file of graph.modules)analyzedFiles.push(file.file);const project=analyzeProject(graph,verbose||progressInteractive());
  let diagnostics=project.graph.diagnostics;for(const d of project.binding.diagnostics)diagnostics.push(d);for(const d of project.checked.diagnostics)diagnostics.push(d);
  let ir=new IrProject();if(diagnostics.length==0){progressDetail("Generando IR verificado");ir=lowerProject(project.graph,project.binding,project.checked,verbose||progressInteractive());}
  let seen:string[]=[];for(const d of diagnostics){const key=d.file+":"+numberToString(d.token.offset)+":"+d.code+":"+d.message;if(!seen.includes(key)){seen.push(key);ir.diagnostics.push(new IrIssue(d.code,d.message,new IrSource("","",d.file,-1,d.token.offset,d.endToken.endOffset)));}}
