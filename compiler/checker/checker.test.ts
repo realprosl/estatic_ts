@@ -312,6 +312,7 @@ test('native public surface validates imported public types',()=>check('import {
 
 test('native safety: mutable scalar references write their referent',()=>check('function inc(x:ref<number>):void{x+=1;}function f():void{let n=1;const r=ref(n);r=2;inc(r);print(r);}'));
 test('native safety: borrow of temporary call argument is rejected',()=>error(box+'function f(x:ref<Box>):void{}f(new Box());',/E4208/));
+test('native safety: a temporary may be lent as constRef (#320)',()=>check(box+'function f(x:constRef<Box>):void{}f(new Box());'));
 test('native safety: const borrow cannot become mutable',()=>error(box+'function f(x:constRef<Box>):void{const r=ref(x);}',/E4300|incompatible/));
 test('native safety: readonly array cannot be mutated by a method',()=>error('let a:readonly number[]=[1];a.push(2);',/E4300/));
 test('native safety: borrowed array element mutation remains allowed',()=>check('function f(a:ref<number[]>):void{a[0]=2;a.push(3);}let a=[1];f(a);'));
