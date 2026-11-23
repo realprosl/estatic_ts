@@ -74,6 +74,7 @@ export class SafetyAnalyzer {
   // Campos de instancia por ámbito de clase, en orden de sid.
   fieldStart: number[]; fieldSymbols: number[];
   // Visibilidad: símbolos exportados y referencias de tipo por nodo (vértice).
+  readonlyReceivers: Map<string,boolean>; memoReceivers: boolean; classFieldSymbols: boolean[];
   visibilityIndexed: boolean; publicSymbols: boolean[]; typeRefStart: number[]; typeRefs: number[];
   constructor(graph: ModuleGraph, binding: BindingResult, result: CheckResult) {
     this.graph = graph; this.binding = binding; this.result = result; this.effects = new EffectAnalyzer(graph,binding,result); this.arguments = []; this.offsets = []; this.nodes = 0;
@@ -84,6 +85,7 @@ export class SafetyAnalyzer {
     this.defaultReads = new Map<number,boolean>(); this.valueDefaults = new Map<number,boolean>();
     this.visits = 0; this.collectFlow=false;this.findings=[];
     this.indexed = false; this.ownedStart = []; this.ownedSymbols = []; this.classFieldNodes = []; this.fieldStart = []; this.fieldSymbols = [];
+    this.readonlyReceivers = new Map<string,boolean>(); this.memoReceivers = false; this.classFieldSymbols = [];
     this.visibilityIndexed = false; this.publicSymbols = []; this.typeRefStart = []; this.typeRefs = [];
   }
   index(): void {
@@ -104,7 +106,7 @@ export class SafetyAnalyzer {
     for (let at: number = 0; at <= scopes; at = at + 1) this.fieldStart.push(0);
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
       const s = this.binding.symbols[sid]; let scope: number = -1;
-      if (s.kind == "ClassField" && s.scope >= 0 && s.scope < scopes && this.node(s.module,s.node).get(AttributeKind.IsStatic) != "true") { scope = s.scope; this.fieldStart[scope + 1] = this.fieldStart[scope + 1] + 1; }
+      if (s.kind == "ClassField" && s.scope >= 0 && s.scope < scopes && this.attributeOf(s.module,s.node,AttributeKind.IsStatic) != "true") { scope = s.scope; this.fieldStart[scope + 1] = this.fieldStart[scope + 1] + 1; }
       fieldScope.push(scope);
     }
     for (let at: number = 0; at < scopes; at = at + 1) this.fieldStart[at + 1] = this.fieldStart[at + 1] + this.fieldStart[at];
@@ -113,6 +115,11 @@ export class SafetyAnalyzer {
     for (let sid: number = 0; sid < fieldScope.length; sid = sid + 1) if (fieldScope[sid] >= 0) { this.fieldSymbols[next[fieldScope[sid]]] = sid; next[fieldScope[sid]] = next[fieldScope[sid]] + 1; }
   }
   node(module: number, id: number): AstNode { return this.graph.modules[module].cached.result.ast.nodes[id]; }
+  // Lecturas de un nodo sin copiarlo: node() devuelve una copia del AstNode
+  // (atributos, aristas y tokens) en cada llamada.
+  kindOf(module: number, id: number): NodeKind { return this.graph.modules[module].cached.result.ast.nodes[id].kind; }
+  attributeOf(module: number, id: number, name: AttributeKind): string { return this.graph.modules[module].cached.result.ast.nodes[id].get(name); }
+  childOf(module: number, id: number, role: EdgeRole): number { for (const edge of this.graph.modules[module].cached.result.ast.nodes[id].edges) if (edge.role == role) return edge.node; return -1; }
   report(module: number, id: number, message: string): void {
     const token = this.node(module,id).start;
     const candidate = diagnosticAt("checker",message,this.graph.modules[module].file,this.node(module,id));
@@ -125,7 +132,7 @@ export class SafetyAnalyzer {
     return id < 0 ? -1 : this.binding.files[module].valueTargets[id];
   }
   helper(module: number, id: number): string {
-    if (id < 0 || this.node(module,id).kind != NodeKind.CallExpression) return "";
+    if (id < 0 || this.kindOf(module,id) != NodeKind.CallExpression) return "";
     const sid: number = this.reference(module,id);
     return sid >= 0 && (this.binding.symbols[sid].module) < 0 ? this.binding.symbols[sid].name : "";
   }
@@ -182,7 +189,7 @@ export class SafetyAnalyzer {
             const argument = this.arguments[a]; at = argument.node; currentModule = argument.module; substituted = true; break;
           }
           if (!substituted && this.borrowSources[sid] >= 0) {
-            const symbol = this.binding.symbols[sid]; const init: number = bindingChild(this.node(symbol.module,symbol.node),EdgeRole.Initializer);
+            const symbol = this.binding.symbols[sid]; const init: number = this.childOf(symbol.module,symbol.node,EdgeRole.Initializer);
             if (init >= 0) { currentModule = symbol.module; at = init; substituted = true; }
           }
         }
@@ -375,7 +382,7 @@ export class SafetyAnalyzer {
     let aliased: number[] = []; let head: number[] = []; let next: number[] = [];
     for (let i: number = 0; i < this.binding.symbols.length; i = i + 1) head.push(-1);
     for (let b: number = 0; b < this.leases.length; b = b + 1) {
-      const symbol: number = this.leases[b].symbol; const init: number = bindingChild(this.node(this.leases[b].module,this.binding.symbols[symbol].node),EdgeRole.Initializer);
+      const symbol: number = this.leases[b].symbol; const init: number = this.childOf(this.leases[b].module,this.binding.symbols[symbol].node,EdgeRole.Initializer);
       aliased.push(this.reference(this.leases[b].module,init)); next.push(head[symbol]); head[symbol] = b;
     }
     let changed: boolean = true;
@@ -459,7 +466,11 @@ export class SafetyAnalyzer {
       }
       return false;
     }
-    return !readonlyMethodReceiver(this.binding,this.result,targetModule,target);
+    // Memoizado: recorre todas las capturas y resúmenes de efectos, que ya no
+    // cambian durante los flujos.
+    const key: string = numberToString(targetModule) + ":" + numberToString(target); const known: Optional<boolean> = this.readonlyReceivers.get(key);
+    if (this.memoReceivers && known.isPresent()) return !known.value();
+    const isReadonly: boolean = readonlyMethodReceiver(this.binding,this.result,targetModule,target); if (this.memoReceivers) this.readonlyReceivers.set(key,isReadonly); return !isReadonly;
   }
   within(scope: number, ancestor: number): boolean {
     let at: number = scope; while (at >= 0) { if (at == ancestor) return true; at = this.binding.scopes[at].parent; } return false;
@@ -472,7 +483,7 @@ export class SafetyAnalyzer {
       if (n.kind == NodeKind.CallExpression || n.kind == NodeKind.MemberCallExpression) for (const target of this.effects.callTargets(m,id)) if (this.effects.asynchronous(target)) {
         const summary = this.effects.summaries[target]; let position: number = 0;
         for (const edge of this.node(summary.module,summary.node).edges) if (edge.role == EdgeRole.Params) {
-          const actual: number = this.effects.actualInput(m,id,position); const fallback: number = bindingChild(this.node(summary.module,edge.node),EdgeRole.DefaultValue);
+          const actual: number = this.effects.actualInput(m,id,position); const fallback: number = this.childOf(summary.module,edge.node,EdgeRole.DefaultValue);
           if (actual >= 0) this.edge(this.vertex(m,actual),this.symbolVertex(summary.parameters[position]));
           else if (fallback >= 0) { this.edge(this.vertex(summary.module,fallback),this.symbolVertex(summary.parameters[position])); this.edge(this.vertex(summary.module,fallback),vertex); }
           position = position+1;
@@ -498,7 +509,7 @@ export class SafetyAnalyzer {
         // la de un bloque de nivel superior (cuerpo de un for, {}) vive lo que el bloque.
         if (sid >= 0 && this.owner(this.binding.symbols[sid].scope) < 0 && this.binding.scopes[this.binding.symbols[sid].scope].kind == "module" && value >= 0) { const pendingPush = new EscapeSite(m,id,this.vertex(m,value),"almacenamiento global"); this.escapes.push(pendingPush); }
         for (const edge of n.edges) if (edge.role == EdgeRole.ArrayBindings || edge.role == EdgeRole.ObjectBindings) {
-          const target: number = this.binding.files[m].declarations[edge.node]; const fallback: number = bindingChild(this.node(m,edge.node),EdgeRole.DefaultValue);
+          const target: number = this.binding.files[m].declarations[edge.node]; const fallback: number = this.childOf(m,edge.node,EdgeRole.DefaultValue);
           if (target >= 0) {
             if (value >= 0) this.edge(this.vertex(m,value),this.symbolVertex(target));
             if (fallback >= 0) this.edge(this.vertex(m,fallback),this.symbolVertex(target));
@@ -531,10 +542,10 @@ export class SafetyAnalyzer {
       if (this.carrier(this.result.files[m].types[id],[]) || (n.kind == NodeKind.ForOfStatement && n.get(AttributeKind.Await) == "true")) {
         if (this.effects.suspensionNode(m,id)) {
           for (const target of this.effects.callTargets(m,id)) {
-            const summary = this.effects.summaries[target]; const body: number = bindingChild(this.node(summary.module,summary.node),EdgeRole.Body);
-            if (body >= 0 && this.node(summary.module,body).kind != NodeKind.BlockStatement) this.edge(this.vertex(summary.module,body),vertex);
-            for (let child: number = 0; child < this.result.files[summary.module].types.length; child = child+1) if (this.node(summary.module,child).kind == NodeKind.ReturnStatement && this.owner(this.binding.files[summary.module].nodeScopes[child]) == this.vertex(summary.module,summary.node)) {
-              const value: number = bindingChild(this.node(summary.module,child),EdgeRole.Value); if (value >= 0) this.edge(this.vertex(summary.module,value),vertex);
+            const summary = this.effects.summaries[target]; const body: number = this.childOf(summary.module,summary.node,EdgeRole.Body);
+            if (body >= 0 && this.kindOf(summary.module,body) != NodeKind.BlockStatement) this.edge(this.vertex(summary.module,body),vertex);
+            for (let child: number = 0; child < this.result.files[summary.module].types.length; child = child+1) if (this.kindOf(summary.module,child) == NodeKind.ReturnStatement && this.owner(this.binding.files[summary.module].nodeScopes[child]) == this.vertex(summary.module,summary.node)) {
+              const value: number = this.childOf(summary.module,child,EdgeRole.Value); if (value >= 0) this.edge(this.vertex(summary.module,value),vertex);
             }
           }
         } else if (this.effects.synchronousCallbacks(m,id).length > 0) {
@@ -547,10 +558,10 @@ export class SafetyAnalyzer {
             this.edge(this.vertex(m,initial >= 0 ? initial : bindingChild(n,EdgeRole.Object)),vertex);
           }
           for (const target of this.effects.callTargets(m,id)) {
-            const summary = this.effects.summaries[target]; const body: number = bindingChild(this.node(summary.module,summary.node),EdgeRole.Body);
-            if (body >= 0 && this.node(summary.module,body).kind != NodeKind.BlockStatement) this.edge(this.vertex(summary.module,body),vertex);
-            for (let child: number = 0; child < this.result.files[summary.module].types.length; child = child + 1) if (this.node(summary.module,child).kind == NodeKind.ReturnStatement && this.owner(this.binding.files[summary.module].nodeScopes[child]) == this.vertex(summary.module,summary.node)) {
-              const value: number = bindingChild(this.node(summary.module,child),EdgeRole.Value); if (value >= 0) this.edge(this.vertex(summary.module,value),vertex);
+            const summary = this.effects.summaries[target]; const body: number = this.childOf(summary.module,summary.node,EdgeRole.Body);
+            if (body >= 0 && this.kindOf(summary.module,body) != NodeKind.BlockStatement) this.edge(this.vertex(summary.module,body),vertex);
+            for (let child: number = 0; child < this.result.files[summary.module].types.length; child = child + 1) if (this.kindOf(summary.module,child) == NodeKind.ReturnStatement && this.owner(this.binding.files[summary.module].nodeScopes[child]) == this.vertex(summary.module,summary.node)) {
+              const value: number = this.childOf(summary.module,child,EdgeRole.Value); if (value >= 0) this.edge(this.vertex(summary.module,value),vertex);
             }
           }
         } else if (n.kind != NodeKind.ArrowFunctionExpression) for (const edge of n.edges) this.edge(this.vertex(m,edge.node),vertex);
@@ -562,7 +573,7 @@ export class SafetyAnalyzer {
       }
       if (n.kind == NodeKind.ArrowFunctionExpression) {
         const body: number = bindingChild(n,EdgeRole.Body);
-        if (this.node(m,body).kind != NodeKind.BlockStatement) { const pendingPush = new EscapeSite(m,body,this.vertex(m,body),"retorno implícito"); this.escapes.push(pendingPush); }
+        if (this.kindOf(m,body) != NodeKind.BlockStatement) { const pendingPush = new EscapeSite(m,body,this.vertex(m,body),"retorno implícito"); this.escapes.push(pendingPush); }
       }
       if (n.kind == NodeKind.CallExpression || n.kind == NodeKind.MemberCallExpression || n.kind == NodeKind.NewExpression) {
         const knownPush: boolean = n.kind == NodeKind.MemberCallExpression && ["push","set","add"].includes(n.get(AttributeKind.Method));
@@ -644,9 +655,10 @@ export class SafetyAnalyzer {
     if (left.exit != "") return right;
     if (right.exit != "") return left;
     let result: SafetyState = left;
+    if (this.classFieldSymbols.length != this.binding.symbols.length) { this.classFieldSymbols = []; for (const s of this.binding.symbols) this.classFieldSymbols.push(s.kind == "ClassField"); }
     for (let sid: number = 0; sid < left.slots.length; sid = sid + 1) {
       const a: number = left.slots[sid]; const b: number = right.slots[sid];
-      if (a == b) result.slots[sid] = a; else if (this.binding.symbols[sid].kind == "ClassField") result.slots[sid] = 3; else if (a == 0 || b == 0) result.slots[sid] = 0; else result.slots[sid] = 3;
+      if (a == b) continue; if (this.classFieldSymbols[sid]) result.slots[sid] = 3; else if (a == 0 || b == 0) result.slots[sid] = 0; else result.slots[sid] = 3;
     }
     for (let at: number = 0; at < left.paths.length; at = at+1) { const a: number = left.resources[at]; const b: number = this.pathState(right,left.paths[at]); setSafetyPath(result,left.paths[at],a == b ? a : 3); }
     for (let at: number = 0; at < right.paths.length; at = at+1) { const a: number = this.pathState(left,right.paths[at]); const b: number = right.resources[at]; setSafetyPath(result,right.paths[at],a == b ? a : 3); }
@@ -682,7 +694,7 @@ export class SafetyAnalyzer {
   constructorField(module: number, id: number): number {
     const n: AstNode = this.node(module,id); if (n.kind != NodeKind.MemberExpression) return -1;
     const object: number = bindingChild(n,EdgeRole.Object);
-    if (this.node(module,object).kind != NodeKind.IdentifierExpression || this.node(module,object).get(AttributeKind.Name) != "this") return -1;
+    if (this.kindOf(module,object) != NodeKind.IdentifierExpression || this.attributeOf(module,object,AttributeKind.Name) != "this") return -1;
     const sid: number = this.result.files[module].members[id];
     return sid >= 0 && this.constructorFields(module,id).includes(sid) ? sid : -1;
   }
@@ -719,12 +731,12 @@ export class SafetyAnalyzer {
     let roots: number[] = []; let modes: string[] = []; let at: number = 0;
     for (const edge of n.edges) if (edge.role == EdgeRole.Args) {
       const position: number = argumentParameter(this.result.files[module],edge.node,at);
-      const arg: number = this.node(module,edge.node).kind == NodeKind.NamedArgumentExpression ? bindingChild(this.node(module,edge.node),EdgeRole.Value) : edge.node;
-      const actual: string = this.resolved(this.result.files[module].types[arg]); let expected: string = this.resolved(position < params.length ? argumentType(params[position],this.node(module,edge.node).kind == NodeKind.SpreadElement) : actual);
+      const arg: number = this.kindOf(module,edge.node) == NodeKind.NamedArgumentExpression ? this.childOf(module,edge.node,EdgeRole.Value) : edge.node;
+      const actual: string = this.resolved(this.result.files[module].types[arg]); let expected: string = this.resolved(position < params.length ? argumentType(params[position],this.kindOf(module,edge.node) == NodeKind.SpreadElement) : actual);
       if (position < params.length && params[position].startsWith("...") && genericBase(params[position].slice(3,params[position].length)) == "pack") {
         const bundle: string = this.resolved(params[position].slice(3,params[position].length)); const elements: string[] = genericArguments(bundle); const slot: number = this.result.files[module].argumentElements[edge.node];
         this.memoryType(module,id,bundle,"argument");
-        expected = (this.node(module,edge.node).kind == NodeKind.SpreadElement ? bundle : slot >= 0 && slot < elements.length ? elements[slot] : actual);
+        expected = (this.kindOf(module,edge.node) == NodeKind.SpreadElement ? bundle : slot >= 0 && slot < elements.length ? elements[slot] : actual);
       }
       const root: number = this.root(module,arg); const mode: string = borrowedType(expected) ? memoryMode(expected) : this.helper(module,arg) == "move" ? "move" : (display || comparison) && this.transferType(actual) ? "constRef" : "read";
       if (!display && !comparison && this.transferType(expected) && (borrowedType(actual) || (this.transferType(actual) && !this.freshTransfer(module,arg)))) this.report(module,arg,"E4101: argumento owner requiere move(identifier)");
@@ -737,7 +749,7 @@ export class SafetyAnalyzer {
         const s: BindingSymbol = this.binding.symbols[root];
         if (s.module >= 0 && localBinding(s.kind)) {
           const declaration: number = s.kind == "ArrayBinding" || s.kind == "ObjectBinding" ? this.binding.files[s.module].parents[s.node] : s.node;
-          if (this.node(s.module,declaration).get(AttributeKind.Mutable) != "true") this.report(module,arg,"E4208: préstamo mutable de una constante");
+          if (this.attributeOf(s.module,declaration,AttributeKind.Mutable) != "true") this.report(module,arg,"E4208: préstamo mutable de una constante");
         }
         if (readonlyType(actual)) this.report(module,arg,"E4300: préstamo mutable de readonly");
       }
@@ -759,7 +771,7 @@ export class SafetyAnalyzer {
       if (!this.borrowedSymbol(sid)) return -1;
       return this.root(module,this.effects.actualInput(module,id,at));
     }
-    if (this.binding.symbols[sid].kind == "receiver") return this.root(module,bindingChild(this.node(module,id),EdgeRole.Object));
+    if (this.binding.symbols[sid].kind == "receiver") return this.root(module,this.childOf(module,id,EdgeRole.Object));
     if (this.owner(this.binding.symbols[sid].scope) == this.vertex(this.effects.summaries[summaryId].module,this.effects.summaries[summaryId].node)) return -1;
     for (const c of this.result.captures) if (c.module == this.effects.summaries[summaryId].module && c.closure == this.effects.summaries[summaryId].node && c.symbol == sid && c.mode == "value") return -1;
     return sid;
@@ -767,7 +779,7 @@ export class SafetyAnalyzer {
   summaryPosition(summaryId: number, symbol: number, module: number, id: number): number {
     const parameters: number[] = this.effects.summaries[summaryId].parameters;
     for (let at: number = 0; at < parameters.length; at = at+1) if (parameters[at] == symbol && this.borrowedSymbol(symbol)) { const argument: number = this.effects.actualInput(module,id,at); return argument >= 0 ? argument : id; }
-    if (this.binding.symbols[symbol].kind == "receiver") { const object: number = bindingChild(this.node(module,id),EdgeRole.Object); if (object >= 0) return object; }
+    if (this.binding.symbols[symbol].kind == "receiver") { const object: number = this.childOf(module,id,EdgeRole.Object); if (object >= 0) return object; }
     return id;
   }
   summary(summaryId: number, module: number, id: number, state: ref<SafetyState>): void {
@@ -789,10 +801,10 @@ export class SafetyAnalyzer {
       if (this.valueDefaults.has(target)) continue;
       const declaration = this.effects.summaries[target];
       for (const edge of this.node(declaration.module,declaration.node).edges) if (edge.role == EdgeRole.Params) {
-        const value: number = bindingChild(this.node(declaration.module,edge.node),EdgeRole.DefaultValue);
+        const value: number = this.childOf(declaration.module,edge.node,EdgeRole.DefaultValue);
         if (value >= 0) { const expression: AstNode = this.node(declaration.module,value);
           const unary: number = expression.kind == NodeKind.UnaryExpression ? bindingChild(expression,EdgeRole.Operand) : -1;
-          if (expression.kind != NodeKind.LiteralExpression && !(expression.kind == NodeKind.ArrayLiteralExpression && expression.edges.length == 0) && !(unary >= 0 && this.node(declaration.module,unary).kind == NodeKind.LiteralExpression)) { this.defaultReads.set(summaryId,true); return true; }
+          if (expression.kind != NodeKind.LiteralExpression && !(expression.kind == NodeKind.ArrayLiteralExpression && expression.edges.length == 0) && !(unary >= 0 && this.kindOf(declaration.module,unary) == NodeKind.LiteralExpression)) { this.defaultReads.set(summaryId,true); return true; }
         }
       }
       for (const callee of declaration.callees) if (!declarations.includes(callee)) declarations.push(callee);
@@ -800,7 +812,7 @@ export class SafetyAnalyzer {
     this.valueDefaults.set(summaryId,true); return false;
   }
   summaryReason(summaryId: number, reason: string): boolean {
-    if (this.trace && (this.visits) < 40) { const summary = this.effects.summaries[summaryId]; progressDetail("frontend: precise "+this.graph.modules[summary.module].file+":"+this.node(summary.module,summary.node).get(AttributeKind.Name)+" "+reason); }
+    if (this.trace && (this.visits) < 40) { const summary = this.effects.summaries[summaryId]; progressDetail("frontend: precise "+this.graph.modules[summary.module].file+":"+this.attributeOf(summary.module,summary.node,AttributeKind.Name)+" "+reason); }
     return false;
   }
   valueSummary(summaryId: number, module: number, id: number, state: constRef<SafetyState>): boolean {
@@ -810,7 +822,7 @@ export class SafetyAnalyzer {
     // captures and defaults remain on the precise path below.
     if (summary.invokes.length > 0 || summary.moves.length > 0 || call.kind == NodeKind.NewExpression) return this.summaryReason(summaryId,"effects invokes="+numberToString(summary.invokes.length)+" moves="+numberToString(summary.moves.length));
     const frame: number = this.owner(this.binding.files[module].nodeScopes[id]);
-    if (frame >= 0 && this.node(module,frame-this.offsets[module]).get(AttributeKind.Name) == "constructor") {
+    if (frame >= 0 && this.attributeOf(module,frame-this.offsets[module],AttributeKind.Name) == "constructor") {
       for (const field of this.constructorFields(module,id)) if (state.slots[field] != 1) return this.summaryReason(summaryId,"constructor fields pending");
     }
     for (const input of functionParams(this.result.files[module].signatures[id])) {
@@ -868,11 +880,11 @@ export class SafetyAnalyzer {
     }
   }
   suspension(module: number, id: number): void {
-    const offset: number = this.node(module,id).kind == NodeKind.AwaitExpression ? nodeEnd(this.node(module,id)) : nodeBegin(this.node(module,id)); const owner: number = this.owner(this.binding.files[module].nodeScopes[id]);
+    const offset: number = this.kindOf(module,id) == NodeKind.AwaitExpression ? nodeEnd(this.node(module,id)) : nodeBegin(this.node(module,id)); const owner: number = this.owner(this.binding.files[module].nodeScopes[id]);
     for (const lease of this.leases) if (lease.end > lease.begin) {
       let live: boolean = lease.module == module && lease.owner == owner && lease.begin <= offset && offset < lease.end;
       for (const site of this.sites) {
-        const use: number = this.node(site.module,site.node).kind == NodeKind.AwaitExpression ? nodeEnd(this.node(site.module,site.node)) : nodeBegin(this.node(site.module,site.node));
+        const use: number = this.kindOf(site.module,site.node) == NodeKind.AwaitExpression ? nodeEnd(this.node(site.module,site.node)) : nodeBegin(this.node(site.module,site.node));
         if (lease.module == site.module && lease.owner == this.owner(this.binding.files[site.module].nodeScopes[site.node]) && lease.begin <= use && use < lease.end) live = true;
       }
       if (live) this.report(module,id,"E4204: un préstamo vivo no puede atravesar una suspensión");
@@ -881,14 +893,14 @@ export class SafetyAnalyzer {
   consumeTask(module: number, id: number, state: ref<SafetyState>): void {
     const root: number = this.root(module,id); this.access(module,id,root,"move");
     if (this.helper(module,id) == "move") return;
-    if (this.node(module,id).kind == NodeKind.IdentifierExpression) { if (root >= 0) state.slots[root] = 2; }
-    else if (this.node(module,id).kind == NodeKind.MemberExpression || this.node(module,id).kind == NodeKind.IndexExpression) setSafetyPath(state,this.projectionKey(module,id),2);
+    if (this.kindOf(module,id) == NodeKind.IdentifierExpression) { if (root >= 0) state.slots[root] = 2; }
+    else if (this.kindOf(module,id) == NodeKind.MemberExpression || this.kindOf(module,id) == NodeKind.IndexExpression) setSafetyPath(state,this.projectionKey(module,id),2);
   }
   awaitTasks(module: number, id: number, input: number, state: ref<SafetyState>, active: number[], detached: boolean = false): void {
     // await de una promesa de C++ (@cpp_native): no toca el estado del programa.
-    if ((this.node(module,input).kind == NodeKind.CallExpression || this.node(module,input).kind == NodeKind.MemberCallExpression) && this.effects.nativeCall(module,input)) return;
+    if ((this.kindOf(module,input) == NodeKind.CallExpression || this.kindOf(module,input) == NodeKind.MemberCallExpression) && this.effects.nativeCall(module,input)) return;
     const sources: number[] = this.effects.taskSources(module,input); const before: SafetyState = state; let joined: SafetyState = state; joined.exit = "unreachable";
-    if (sources.length == 0) { if (!this.effects.taskCollection(module,id) && this.node(module,id).kind != NodeKind.ForOfStatement) this.unknown(module,id,state); return; }
+    if (sources.length == 0) { if (!this.effects.taskCollection(module,id) && this.kindOf(module,id) != NodeKind.ForOfStatement) this.unknown(module,id,state); return; }
     for (const source of sources) {
       let choice: SafetyState = before;
       if (source < 0) { this.unknown(module,id,choice); joined = this.join(joined,choice); continue; }
@@ -955,13 +967,13 @@ export class SafetyAnalyzer {
   }
   invokeTarget(module: number, id: number, target: SafetyTarget, state: ref<SafetyState>, active: number[], phase: string = "body"): void {
     this.visits = this.visits+1;
-    if (this.trace && this.visits % 10000 == 0) progressDetail("frontend: flow calls "+numberToString(this.visits)+" "+this.graph.modules[target.module].file+":"+this.node(target.module,target.node).get(AttributeKind.Name)+" depth "+numberToString(active.length));
+    if (this.trace && this.visits % 10000 == 0) progressDetail("frontend: flow calls "+numberToString(this.visits)+" "+this.graph.modules[target.module].file+":"+this.attributeOf(target.module,target.node,AttributeKind.Name)+" depth "+numberToString(active.length));
     const owner: number = this.vertex(target.module,target.node);
     const substitutionStart: number = this.substitutions.length;
     let classScope: number = this.binding.files[target.module].nodeScopes[target.node];
     while (classScope >= 0 && this.binding.scopes[classScope].kind != "ClassDeclaration") classScope = this.binding.scopes[classScope].parent;
     if (classScope >= 0) {
-      const scope = this.binding.scopes[classScope]; const declaration: AstNode = this.node(scope.module,scope.node); const object: number = bindingChild(this.node(module,id),EdgeRole.Object);
+      const scope = this.binding.scopes[classScope]; const declaration: AstNode = this.node(scope.module,scope.node); const object: number = this.childOf(module,id,EdgeRole.Object);
       const receiver: string = this.resolved(memoryValue(object >= 0 ? this.effects.receiver(module,id) : this.result.files[module].types[id])); const inputs: string[] = genericArguments(receiver); let at: number = 0;
       for (const edge of declaration.edges) if (edge.role == EdgeRole.TypeParameters) { if (at < inputs.length) { this.substitutions.push("@" + numberToString(this.binding.files[scope.module].declarations[edge.node])); this.substitutionTypes.push(inputs[at]); } at = at+1; }
     }
@@ -979,7 +991,7 @@ export class SafetyAnalyzer {
     this.index(); const ownedEnd: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner + 1] : 0;
     for (let at: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner] : 0; at < ownedEnd; at = at + 1) { const sid: number = this.ownedSymbols[at];
       state.slots[sid] = (this.binding.symbols[sid].kind == "receiver" ? 1 : 0); this.initializePath(state,"s" + numberToString(sid));
-      const object: number = bindingChild(this.node(module,id),EdgeRole.Object);
+      const object: number = this.childOf(module,id,EdgeRole.Object);
       if (this.binding.symbols[sid].kind == "receiver" && object >= 0) { const pendingPush = new SafetyArgument(sid,module,object,this.root(module,object)); this.arguments.push(pendingPush); }
     }
     let next: number[] = active; next.push(owner);
@@ -989,8 +1001,8 @@ export class SafetyAnalyzer {
     for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Args) {
       const position: number = argumentParameter(this.result.files[module],edge.node,sourcePosition);
       if (position < actualNodes.length) {
-        let value: number = edge.node; if (this.node(module,edge.node).kind == NodeKind.NamedArgumentExpression) value = bindingChild(this.node(module,edge.node),EdgeRole.Value);
-        else if (this.node(module,edge.node).kind == NodeKind.SpreadElement) value = bindingChild(this.node(module,edge.node),EdgeRole.Expression);
+        let value: number = edge.node; if (this.kindOf(module,edge.node) == NodeKind.NamedArgumentExpression) value = this.childOf(module,edge.node,EdgeRole.Value);
+        else if (this.kindOf(module,edge.node) == NodeKind.SpreadElement) value = this.childOf(module,edge.node,EdgeRole.Expression);
         actualNodes[position] = value;
       }
       sourcePosition = sourcePosition + 1;
@@ -1002,14 +1014,14 @@ export class SafetyAnalyzer {
       while (actualNodes.length < count) actualNodes.push(-1);
     }
     for (const edge of this.node(target.module,target.node).edges) if (edge.role == EdgeRole.Params) {
-      if (phase != "resume" && actualNodes[parameterIndex] < 0) this.expression(target.module,bindingChild(this.node(target.module,edge.node),EdgeRole.DefaultValue),state,next);
+      if (phase != "resume" && actualNodes[parameterIndex] < 0) this.expression(target.module,this.childOf(target.module,edge.node,EdgeRole.DefaultValue),state,next);
       const parameter: number = this.binding.files[target.module].declarations[edge.node]; if (parameter >= 0) state.slots[parameter] = 1;
-      const value: number = actualNodes[parameterIndex] >= 0 ? actualNodes[parameterIndex] : bindingChild(this.node(target.module,edge.node),EdgeRole.DefaultValue);
+      const value: number = actualNodes[parameterIndex] >= 0 ? actualNodes[parameterIndex] : this.childOf(target.module,edge.node,EdgeRole.DefaultValue);
       const valueModule: number = actualNodes[parameterIndex] >= 0 ? module : target.module;
       if (value >= 0) {
         const root: number = this.root(valueModule,value); this.arguments.push(new SafetyArgument(parameter,valueModule,value,root));
         if (root >= 0 && this.borrowedSymbol(parameter)) {
-          const bodyNode: number = bindingChild(this.node(target.module,target.node),EdgeRole.Body);
+          const bodyNode: number = this.childOf(target.module,target.node,EdgeRole.Body);
           let lease: BorrowLease = new BorrowLease(target.module,parameter,root,owner,nodeBegin(this.node(target.module,bodyNode)),this.borrowMode(parameter));
           lease.end = nodeEnd(this.node(target.module,bodyNode)); this.leases.push(lease);
         }
@@ -1017,9 +1029,9 @@ export class SafetyAnalyzer {
       if (parameter >= 0 && this.parameterProperty(target.module,edge.node) && this.transferType(this.result.symbolTypes[parameter])) state.slots[parameter] = 2;
       parameterIndex = parameterIndex + 1;
     }
-    const body: number = bindingChild(this.node(target.module,target.node),EdgeRole.Body);
+    const body: number = this.childOf(target.module,target.node,EdgeRole.Body);
     const breakStart: number = this.breaks.length; const continueStart: number = this.continues.length;
-    if (phase != "creation") { if (this.node(target.module,body).kind == NodeKind.BlockStatement) this.walk(target.module,body,state,next); else this.expression(target.module,body,state,next); }
+    if (phase != "creation") { if (this.kindOf(target.module,body) == NodeKind.BlockStatement) this.walk(target.module,body,state,next); else this.expression(target.module,body,state,next); }
     if (state.exit == "") this.fieldsInitialized(target.module,target.node,state);
     for (let at: number = returnStart; at < this.returns.length; at = at + 1) { const incoming = this.returns[at]; state = this.join(state,incoming); }
     while (this.returns.length > returnStart) this.returns.pop(); if (phase != "resume") this.sites.pop();
@@ -1068,7 +1080,7 @@ export class SafetyAnalyzer {
       if (!this.projection(module,id)) this.readPaths(module,id,state);
       if (n.get(AttributeKind.Name) == "this") {
         const parent: number = this.binding.files[module].parents[id];
-        if (parent < 0 || this.node(module,parent).kind != NodeKind.MemberExpression) this.fieldsInitialized(module,id,state);
+        if (parent < 0 || this.kindOf(module,parent) != NodeKind.MemberExpression) this.fieldsInitialized(module,id,state);
       } return;
     }
     if ((n.kind == NodeKind.MemberExpression || n.kind == NodeKind.IndexExpression) && !this.projection(module,id)) this.readPaths(module,id,state);
@@ -1084,22 +1096,22 @@ export class SafetyAnalyzer {
       const target: number = bindingChild(n,EdgeRole.Target); const value: number = bindingChild(n,EdgeRole.Value);
       if (value >= 0) this.expression(module,value,state,active);
       const field: number = this.constructorField(module,target);
-      if (n.kind == NodeKind.AssignmentExpression && [NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.node(module,target).kind)) {
-        const object: number = bindingChild(this.node(module,target),EdgeRole.Object);
+      if (n.kind == NodeKind.AssignmentExpression && [NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.kindOf(module,target))) {
+        const object: number = this.childOf(module,target,EdgeRole.Object);
         // Read storage/projection roots without reading the moved field being replaced.
         const root: number = this.directRoot(module,object); this.read(module,object,root,state);
-        const index: number = bindingChild(this.node(module,target),EdgeRole.Index); if (index >= 0) this.expression(module,index,state,active);
-      } else if (this.node(module,target).kind != NodeKind.IdentifierExpression || n.kind != NodeKind.AssignmentExpression) this.expression(module,target,state,active);
+        const index: number = this.childOf(module,target,EdgeRole.Index); if (index >= 0) this.expression(module,index,state,active);
+      } else if (this.kindOf(module,target) != NodeKind.IdentifierExpression || n.kind != NodeKind.AssignmentExpression) this.expression(module,target,state,active);
       if (field >= 0) {
         const f = this.binding.symbols[field];
-        if (this.node(f.module,f.node).get(AttributeKind.Readonly) == "true" && state.slots[field] != 0) this.report(module,target,"Campo readonly ya inicializado en alguna ruta: '" + f.name + "'");
+        if (this.attributeOf(f.module,f.node,AttributeKind.Readonly) == "true" && state.slots[field] != 0) this.report(module,target,"Campo readonly ya inicializado en alguna ruta: '" + f.name + "'");
         state.slots[field] = 1;
       }
       const sid: number = this.root(module,target);
-      if (sid >= 0 && this.node(module,target).kind == NodeKind.IdentifierExpression && state.slots[sid] == 0) this.report(module,target,"E4001: escritura antes de inicializar");
+      if (sid >= 0 && this.kindOf(module,target) == NodeKind.IdentifierExpression && state.slots[sid] == 0) this.report(module,target,"E4001: escritura antes de inicializar");
       this.access(module,target,sid,"write");
       this.writePaths(module,target,state); this.initializePath(state,this.projectionKey(module,target));
-      if (this.node(module,target).kind == NodeKind.IdentifierExpression && sid >= 0) state.slots[sid] = 1;
+      if (this.kindOf(module,target) == NodeKind.IdentifierExpression && sid >= 0) state.slots[sid] = 1;
       return;
     }
     if (n.kind == NodeKind.BinaryExpression && (n.get(AttributeKind.Operator) == "&&" || n.get(AttributeKind.Operator) == "||")) {
@@ -1133,12 +1145,12 @@ export class SafetyAnalyzer {
       // El tipo de un new es "#sid" o "#sid<...>": la clase se lee del propio tipo.
       if (n.kind == NodeKind.NewExpression) { const sid: number = classOfType(this.result.files[module].types[id]); if (sid >= 0 && sid < this.binding.symbols.length) {
         const s: BindingSymbol = this.binding.symbols[sid];
-        if (s.kind == "ClassDeclaration") for (const edge of this.node(s.module,s.node).edges) if (edge.role == EdgeRole.Fields && this.node(s.module,edge.node).get(AttributeKind.IsStatic) != "true") this.expression(s.module,bindingChild(this.node(s.module,edge.node),EdgeRole.DefaultValue),state,active);
+        if (s.kind == "ClassDeclaration") for (const edge of this.node(s.module,s.node).edges) if (edge.role == EdgeRole.Fields && this.attributeOf(s.module,edge.node,AttributeKind.IsStatic) != "true") this.expression(s.module,this.childOf(s.module,edge.node,EdgeRole.DefaultValue),state,active);
       } }
       for (const edge of n.edges) if (edge.role == EdgeRole.Args) this.expression(module,edge.node,state,active);
       if (this.helper(module,id) == "move") {
         const arg: number = bindingChild(n,EdgeRole.Args); const sid: number = this.root(module,arg); this.access(module,id,sid,"move");
-        if (this.node(module,arg).kind == NodeKind.IdentifierExpression) { if (sid >= 0) { state.slots[sid] = 2; this.moveLines[sid] = this.node(module,id).start.line; } }
+        if (this.kindOf(module,arg) == NodeKind.IdentifierExpression) { if (sid >= 0) { state.slots[sid] = 2; this.moveLines[sid] = this.node(module,id).start.line; } }
         else { const projectionKey: string = this.projectionKey(module,arg); if (projectionKey == "") this.report(module,arg,"E4104: move requiere una procedencia de campo demostrada"); else setSafetyPath(state,projectionKey,2); }
       } else if (this.helper(module,id) != "ref" && this.helper(module,id) != "constRef") {
         this.callBorrows(module,id);
@@ -1200,7 +1212,7 @@ export class SafetyAnalyzer {
     if (n.kind == NodeKind.VariableDeclaration || n.kind == NodeKind.UsingDeclaration) {
       this.expression(module,bindingChild(n,EdgeRole.Initializer),state,active);
       for (const edge of n.edges) if (edge.role == EdgeRole.ArrayBindings || edge.role == EdgeRole.ObjectBindings) {
-        const fallback: number = bindingChild(this.node(module,edge.node),EdgeRole.DefaultValue);
+        const fallback: number = this.childOf(module,edge.node,EdgeRole.DefaultValue);
         if (fallback >= 0) { let choice: SafetyState = state; this.expression(module,fallback,choice,active); state = this.join(state,choice); }
         const target: number = this.binding.files[module].declarations[edge.node]; if (target >= 0) state.slots[target] = 1;
       }
@@ -1243,17 +1255,18 @@ export class SafetyAnalyzer {
     }
     if (n.kind == NodeKind.ExportDefaultDeclaration) {
       const declaration: number = bindingChild(n,EdgeRole.Declaration);
-      if (isExpressionNodeKind(this.node(module,declaration).kind)) this.expression(module,declaration,state,active); else this.walk(module,declaration,state,active);
+      if (isExpressionNodeKind(this.kindOf(module,declaration))) this.expression(module,declaration,state,active); else this.walk(module,declaration,state,active);
     }
   }
   flow(): void {
+    this.readonlyReceivers = new Map<string,boolean>(); this.memoReceivers = true; // capturas y efectos ya son definitivos
     const globalProfile=profileBegin();
     let globals: SafetyState = new SafetyState(this.binding.symbols.length);
     for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (localBinding(this.binding.symbols[sid].kind)) globals.slots[sid] = 0;
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) { if (this.trace) progressDetail("frontend: global flow "+numberToString(m)); this.walk(m,this.graph.modules[m].cached.result.ast.root,globals,[]); }
     profileEnd("flow-globals",globalProfile);
     let modules:number[]=[];let nodes:number[]=[];
-    for(let m:number=0;m<this.graph.modules.length;m=m+1)for(let id:number=0;id<this.result.files[m].types.length;id=id+1)if(isCallableNodeKind(this.node(m,id).kind)&&this.binding.files[m].nodeScopes[id]>=0){modules.push(m);nodes.push(id);}
+    for(let m:number=0;m<this.graph.modules.length;m=m+1)for(let id:number=0;id<this.result.files[m].types.length;id=id+1)if(isCallableNodeKind(this.kindOf(m,id))&&this.binding.files[m].nodeScopes[id]>=0){modules.push(m);nodes.push(id);}
     const definitionsProfile=profileBegin();const jobs:number=analysisJobs();
     if(jobs>1&&nodes.length>1)this.parallelDefinitions(modules,nodes,jobs);else this.definitions(modules,nodes,0,nodes.length);
     profileEnd("flow-definitions",definitionsProfile,"functions="+numberToString(nodes.length)+" jobs="+numberToString(jobs)+" precise_calls="+numberToString(this.visits));
@@ -1266,12 +1279,12 @@ export class SafetyAnalyzer {
       this.index(); const ownedEnd: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner + 1] : 0;
       for (let at: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner] : 0; at < ownedEnd; at = at + 1) { const sid: number = this.ownedSymbols[at]; if (localBinding(this.binding.symbols[sid].kind) || this.binding.symbols[sid].kind == "Parameter") state.slots[sid] = 0; }
       for (const edge of n.edges) if (edge.role == EdgeRole.Params) {
-        this.expression(m,bindingChild(this.node(m,edge.node),EdgeRole.DefaultValue),state,[owner]);
+        this.expression(m,this.childOf(m,edge.node,EdgeRole.DefaultValue),state,[owner]);
         const sid: number = this.binding.files[m].declarations[edge.node]; if (sid >= 0) { state.slots[sid] = 1; if (this.parameterProperty(m,edge.node) && this.transferType(this.result.symbolTypes[sid])) state.slots[sid] = 2; }
       }
       const body: number = bindingChild(n,EdgeRole.Body); if (body < 0) return;
       this.breaks = []; this.continues = []; this.returns = []; this.sites = []; this.arguments = [];
-      if (this.node(m,body).kind == NodeKind.BlockStatement) {
+      if (this.kindOf(m,body) == NodeKind.BlockStatement) {
         this.walk(m,body,state,[owner]);
         if (state.exit == "") this.fieldsInitialized(m,id,state);
         if (this.node(m,body).start.kind != ";" && (functionReturn(this.result.files[m].types[id]) != "void" && !((n.get(AttributeKind.Async) == "true" || n.get(AttributeKind.IsAsync) == "true") && functionReturn(this.result.files[m].types[id]) == "Promise<void>")) && state.exit != "return") this.report(m,id,"E3004: No todas las rutas de la función devuelven un valor\nayuda: añade un 'return' de tipo '" + functionReturn(this.result.files[m].types[id]) + "' al final, o cambia el tipo de retorno a 'void' si no debe devolver nada" + catalogArg("tipo", functionReturn(this.result.files[m].types[id])));
