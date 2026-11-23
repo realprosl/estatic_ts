@@ -44,9 +44,10 @@ export function irAssignable(project: constRef<IrProject>, from: number, to: num
   return false;
 }
 export function irConstantIndex(f: constRef<IrFunction>, value: number): number {
-  for (const b of f.blocks) for (const i of b.instructions) if (i.result == value && i.op == "constant") {
-    let result: number = 0; if (i.text == "") return -1;
-    for (let at: number = 0; at < i.text.length; at = at+1) { const digit: number = i.text.charCodeAt(at)-48; if (digit < 0 || digit > 9) return -1; result = result*10+digit; } return result;
+  // Por índice: for-of copiaría cada instrucción (operandos, efectos...).
+  for (let b: number = 0; b < f.blocks.length; b = b+1) for (let k: number = 0; k < f.blocks[b].instructions.length; k = k+1) if (f.blocks[b].instructions[k].result == value && f.blocks[b].instructions[k].op == "constant") {
+    const text: string = f.blocks[b].instructions[k].text; let result: number = 0; if (text == "") return -1;
+    for (let at: number = 0; at < text.length; at = at+1) { const digit: number = text.charCodeAt(at)-48; if (digit < 0 || digit > 9) return -1; result = result*10+digit; } return result;
   } return -1;
 }
 export function irElement(project: constRef<IrProject>, f: constRef<IrFunction>, container: number, index: number): number {

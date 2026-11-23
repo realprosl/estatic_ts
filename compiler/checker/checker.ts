@@ -190,9 +190,9 @@ export class NativeChecker {
       const sid: number = this.nominalSymbol(jtype);
       if (sid < 0 || !["InterfaceDeclaration","ClassDeclaration"].includes(this.binding.symbols[sid].kind)) return "el tipo '" + this.displayType(jtype) + "' no se puede leer de JSON (" + where + ")";
       const owner = this.binding.symbols[sid];
-      for (const edge of this.node(owner.module,owner.node).edges) if (edge.role == EdgeRole.Fields && this.node(owner.module,edge.node).get(AttributeKind.IsStatic) != "true") {
+      for (const edge of this.node(owner.module,owner.node).edges) if (edge.role == EdgeRole.Fields && this.attributeOf(owner.module,edge.node,AttributeKind.IsStatic) != "true") {
         const field: number = this.binding.files[owner.module].declarations[edge.node];
-        fieldNames.push(this.node(owner.module,edge.node).get(AttributeKind.Name)); fieldTypes.push(this.instantiateMember(jtype,this.symbolType(field,owner.module,edge.node)));
+        fieldNames.push(this.attributeOf(owner.module,edge.node,AttributeKind.Name)); fieldTypes.push(this.instantiateMember(jtype,this.symbolType(field,owner.module,edge.node)));
       }
     }
     if (kind != "object") return "se esperaba object en " + where + " y hay " + kind;
@@ -217,7 +217,7 @@ export class NativeChecker {
     const owner = this.binding.symbols[sid]; let entries: string[] = [];
     for (const edge of this.node(owner.module,owner.node).edges) if (edge.role == EdgeRole.Fields) {
       const field: number = this.binding.files[owner.module].declarations[edge.node];
-      entries.push(this.node(owner.module,edge.node).get(AttributeKind.Name) + ":" + this.symbolType(field,owner.module,edge.node));
+      entries.push(this.attributeOf(owner.module,edge.node,AttributeKind.Name) + ":" + this.symbolType(field,owner.module,edge.node));
     }
     // La forma no depende del orden de los campos.
     for (let at: number = 1; at < entries.length; at = at + 1) for (let back: number = at; back > 0 && entries[back - 1].localeCompare(entries[back]) > 0; back = back - 1) { const swap: string = entries[back]; entries[back] = entries[back - 1]; entries[back - 1] = swap; }
@@ -226,6 +226,11 @@ export class NativeChecker {
     this.literalShapeKeys.push(key); this.literalShapeTypes.push(typeText); return typeText;
   }
   node(module: number, id: number): AstNode { return this.graph.modules[module].cached.result.ast.nodes[id]; }
+  // Lecturas de un nodo sin copiarlo: node() devuelve una copia del AstNode
+  // (atributos, aristas y tokens) en cada llamada.
+  kindOf(module: number, id: number): NodeKind { return this.graph.modules[module].cached.result.ast.nodes[id].kind; }
+  attributeOf(module: number, id: number, name: AttributeKind): string { return this.graph.modules[module].cached.result.ast.nodes[id].get(name); }
+  childOf(module: number, id: number, role: EdgeRole): number { for (const edge of this.graph.modules[module].cached.result.ast.nodes[id].edges) if (edge.role == role) return edge.node; return -1; }
   report(module: number, id: number, message: string): void {
     // Suppress cascades with the exact same owner/message, not independent errors.
     const token = this.node(module, id).start;
@@ -292,8 +297,8 @@ export class NativeChecker {
           for (let at: number = 0; at < sourceParameters.length; at = at+1) {
             const from: string = "@"+numberToString(this.binding.files[source.module].declarations[sourceParameters[at]]);
             const to: string = "@"+numberToString(this.binding.files[owner.module].declarations[targetParameters[at]]);
-            const sourceBound: string = this.node(source.module,sourceParameters[at]).get(AttributeKind.Constraint);
-            const targetBound: string = this.node(owner.module,targetParameters[at]).get(AttributeKind.Constraint);
+            const sourceBound: string = this.attributeOf(source.module,sourceParameters[at],AttributeKind.Constraint);
+            const targetBound: string = this.attributeOf(owner.module,targetParameters[at],AttributeKind.Constraint);
             if (sourceBound != targetBound) return false;
             supplied = replaceType(supplied,from,to);
           }
@@ -303,14 +308,14 @@ export class NativeChecker {
     }
     const sid: number = this.nominalSymbol(actual);
     if (sid >= 0 && this.binding.symbols[sid].kind == "EnumDeclaration") {
-      const s = this.binding.symbols[sid]; return this.node(s.module,s.node).get(AttributeKind.Underlying) == expected;
+      const s = this.binding.symbols[sid]; return this.attributeOf(s.module,s.node,AttributeKind.Underlying) == expected;
     } return false;
   }
   requireType(module: number, id: number, actual: string, expected: string): void {
     if (borrowedType(actual) && this.transferType(expected)) this.report(module,id,"E4101: una vista prestada no puede copiarse como owner");
     this.literalRange(module,id,expected);
     if (this.literalMismatch(module,id,actual,expected)) return;
-    if (ownedType(expected) && actual == memoryInner(expected) && id >= 0 && this.node(module,id).kind == NodeKind.NewExpression) return;
+    if (ownedType(expected) && actual == memoryInner(expected) && id >= 0 && this.kindOf(module,id) == NodeKind.NewExpression) return;
     if (id >= 0 && actual != expected && actual != "!error" && expected != "!error" && expected != "" && this.compatible(actual,expected)) this.result.files[module].conversions[id] = expected;
     if (!this.compatible(actual, expected)) this.report(module, id, "E3001: Tipos incompatibles: se esperaba '" + this.displayType(expected) + "' y se encontró '" + this.displayType(actual) + "'" + catalogArg("esperado", this.displayType(expected)) + catalogArg("encontrado", this.displayType(actual)));
   }
@@ -505,7 +510,7 @@ export class NativeChecker {
   flowType(sid: number, module: number, id: number): string {
     for (let at: number = this.narrowedSymbols.length - 1; at >= 0; at = at - 1) if (this.narrowedSymbols[at] == sid) return this.narrowedTypes[at];
     const declared: string = this.symbolType(sid,module,id);
-    if (sid >= 0) { const s = this.binding.symbols[sid]; if (s.kind == "VariableDeclaration" && this.node(s.module,s.node).get(AttributeKind.Mutable) != "true") { const init: number = bindingChild(this.node(s.module,s.node),EdgeRole.Initializer); if (init >= 0 && genericBase(this.result.files[s.module].types[init]) == "variant") return this.result.files[s.module].types[init]; } }
+    if (sid >= 0) { const s = this.binding.symbols[sid]; if (s.kind == "VariableDeclaration" && this.attributeOf(s.module,s.node,AttributeKind.Mutable) != "true") { const init: number = this.childOf(s.module,s.node,EdgeRole.Initializer); if (init >= 0 && genericBase(this.result.files[s.module].types[init]) == "variant") return this.result.files[s.module].types[init]; } }
     return declared;
   }
   alwaysReturns(module: number, id: number): boolean {
@@ -540,7 +545,7 @@ export class NativeChecker {
     if (n.kind == NodeKind.UnaryExpression && n.get(AttributeKind.Operator) == "!") { this.narrowCondition(module,bindingChild(n,EdgeRole.Operand),!truth); return; }
     if (n.kind == NodeKind.BinaryExpression && ((n.get(AttributeKind.Operator) == "&&" && truth) || (n.get(AttributeKind.Operator) == "||" && !truth))) { this.narrowCondition(module,bindingChild(n,EdgeRole.Left),truth); this.narrowCondition(module,bindingChild(n,EdgeRole.Right),truth); return; }
     if (n.kind == NodeKind.BinaryExpression && n.get(AttributeKind.Operator) == "instanceof") {
-      const source: number = bindingChild(n,EdgeRole.Left); if (this.node(module,source).kind != NodeKind.IdentifierExpression) return;
+      const source: number = bindingChild(n,EdgeRole.Left); if (this.kindOf(module,source) != NodeKind.IdentifierExpression) return;
       const sid: number = this.reference(module,source); const receiver: string = this.result.files[module].types[bindingChild(n,EdgeRole.Right)]; const target: string = receiver.slice(6,receiver.length); const nominal: number = this.nominalSymbol(target);
       let parts: string[] = [];
       for (const part of splitTypes(this.flowType(sid,module,id),"|")) { const value: string = memoryValue(part); const matches: boolean = value == target || (target == "number" && numericType(value)) || (nominal >= 0 && this.nominalSymbol(value) == nominal); if (matches == truth) parts.push(part); }
@@ -552,7 +557,7 @@ export class NativeChecker {
       const leftUndefined: boolean = this.undefinedLiteral(module,left); const rightUndefined: boolean = this.undefinedLiteral(module,right);
       if (leftUndefined != rightUndefined) {
         const subject: number = leftUndefined ? right : left;
-        if (this.node(module,subject).kind == NodeKind.MemberExpression) {
+        if (this.kindOf(module,subject) == NodeKind.MemberExpression) {
           // #213: x.cause !== undefined estrecha la ruta completa x.cause.
           const route: string = this.accessPath(module,subject); if (route.indexOf(".",0) < 0) return;
           let currentPath: string = this.narrowedPath(module,subject); if (currentPath == "") currentPath = this.result.files[module].types[subject];
@@ -561,7 +566,7 @@ export class NativeChecker {
           if (presentPath) { this.narrowedSymbols.push(this.pathSymbol(route)); this.narrowedTypes.push(genericArguments(memoryValue(currentPath))[0]); }
           return;
         }
-        if (this.node(module,subject).kind != NodeKind.IdentifierExpression) return;
+        if (this.kindOf(module,subject) != NodeKind.IdentifierExpression) return;
         const sid: number = this.reference(module,subject); const current: string = this.flowType(sid,module,id);
         if (genericBase(memoryValue(current)) != "Optional") return;
         const present: boolean = (n.get(AttributeKind.Operator) == "!=" || n.get(AttributeKind.Operator) == "!==") == truth;
@@ -569,11 +574,11 @@ export class NativeChecker {
         return;
       }
       let query: number = bindingChild(n,EdgeRole.Left); let literal: number = bindingChild(n,EdgeRole.Right);
-      if (this.node(module,query).kind != NodeKind.UnaryExpression) { query = bindingChild(n,EdgeRole.Right); literal = bindingChild(n,EdgeRole.Left); }
+      if (this.kindOf(module,query) != NodeKind.UnaryExpression) { query = bindingChild(n,EdgeRole.Right); literal = bindingChild(n,EdgeRole.Left); }
       const op: AstNode = this.node(module,query); const tag: AstNode = this.node(module,literal);
       if (op.kind == NodeKind.UnaryExpression && op.get(AttributeKind.Operator) == "typeof" && tag.kind == NodeKind.LiteralExpression && tag.get(AttributeKind.LiteralType) == "string") {
         const operand: number = bindingChild(op,EdgeRole.Operand);
-        if (this.node(module,operand).kind == NodeKind.IdentifierExpression) {
+        if (this.kindOf(module,operand) == NodeKind.IdentifierExpression) {
           const sid: number = this.reference(module,operand); let parts: string[] = [];
           const match: boolean = n.get(AttributeKind.Operator) == "!=" || n.get(AttributeKind.Operator) == "!==" ? !truth : truth;
           for (const alternative of splitTypes(this.flowType(sid,module,id),"|")) {
@@ -587,12 +592,12 @@ export class NativeChecker {
     let member: number = id; let key: string = "boolean:true";
     if (n.kind == NodeKind.BinaryExpression && ["==","!=","===","!=="].includes(n.get(AttributeKind.Operator))) {
       member = bindingChild(n,EdgeRole.Left); let literal: number = bindingChild(n,EdgeRole.Right);
-      if (this.node(module,member).kind != NodeKind.MemberExpression) { member = bindingChild(n,EdgeRole.Right); literal = bindingChild(n,EdgeRole.Left); }
+      if (this.kindOf(module,member) != NodeKind.MemberExpression) { member = bindingChild(n,EdgeRole.Right); literal = bindingChild(n,EdgeRole.Left); }
       key = this.caseKey(module,literal,[]);
       if (n.get(AttributeKind.Operator) == "!=" || n.get(AttributeKind.Operator) == "!==") truth = !truth;
     }
     const access: AstNode = this.node(module,member); if (access.kind != NodeKind.MemberExpression || key == "") return;
-    const object: number = bindingChild(access,EdgeRole.Object); if (this.node(module,object).kind != NodeKind.IdentifierExpression) return;
+    const object: number = bindingChild(access,EdgeRole.Object); if (this.kindOf(module,object) != NodeKind.IdentifierExpression) return;
     const sid: number = this.reference(module,object); const valueType: string = this.flowType(sid,module,id); let parts: string[] = [];
     for (const alternative of splitTypes(valueType,"|")) {
     const owner: number = this.nominalSymbol(alternative);
@@ -736,7 +741,7 @@ export class NativeChecker {
     if (text.startsWith("$valueof$")) { let node: number = 0; for (let at: number = 9; at < text.length; at = at + 1) node = node * 10 + text.charCodeAt(at) - 48;
       // Un literal de objeto anidado no se comprueba aquí: lo hará su propio literal,
       // quizá con contexto (o se quedaría tipado sin él y en caché).
-      if (this.node(module,node).kind == NodeKind.ObjectLiteralExpression && this.node(module,node).get(AttributeKind.DeclaredType) != "") return this.annotation(module,node,this.node(module,node).get(AttributeKind.DeclaredType));
+      if (this.kindOf(module,node) == NodeKind.ObjectLiteralExpression && this.attributeOf(module,node,AttributeKind.DeclaredType) != "") return this.annotation(module,node,this.attributeOf(module,node,AttributeKind.DeclaredType));
       const valueType: string = this.expression(module,node,""); return literalType(valueType) ? literalKind(valueType) : valueType; }
     const generic: number = text.indexOf("<",0);
     if (generic > 0 && text.endsWith(">")) {
@@ -789,7 +794,7 @@ export class NativeChecker {
   signature(module: number, id: number): string {
     const n: AstNode = this.node(module,id); let params: string[] = [];
     for (const e of n.edges) if (e.role == EdgeRole.Params) {
-      let value: string = this.parameterType(module,e.node); const rest: boolean = this.node(module,e.node).get(AttributeKind.Variadic) == "true";
+      let value: string = this.parameterType(module,e.node); const rest: boolean = this.attributeOf(module,e.node,AttributeKind.Variadic) == "true";
       if (rest && genericBase(value) == "pack") value = genericArguments(value)[0];
       params.push((rest ? "..." : "") + value);
     }
@@ -797,7 +802,7 @@ export class NativeChecker {
     if (returns == "") {
       const symbols: number[] = this.narrowedSymbols; const types: string[] = this.narrowedTypes; this.narrowedSymbols = []; this.narrowedTypes = [];
       const body: number = bindingChild(n,EdgeRole.Body);
-      if (body >= 0 && this.node(module,body).kind == NodeKind.BlockStatement) {
+      if (body >= 0 && this.kindOf(module,body) == NodeKind.BlockStatement) {
         let values: string[] = []; this.inferReturns(module,body,values);
         if (values.length == 0) returns = "void"; else returns = joinTypes(values,"|");
       } else returns = this.expression(module,body,"");
@@ -850,13 +855,13 @@ export class NativeChecker {
   }
   packToken(text: string): boolean {
     const sid: number = parameterToken(text,this.binding.symbols.length); if (sid < 0) return false;
-    const symbol = this.binding.symbols[sid]; return symbol.kind == "TypeParameter" && this.node(symbol.module,symbol.node).get(AttributeKind.Variadic) == "true";
+    const symbol = this.binding.symbols[sid]; return symbol.kind == "TypeParameter" && this.attributeOf(symbol.module,symbol.node,AttributeKind.Variadic) == "true";
   }
   packActuals(module: number, args: number[], actual: string[], positions: number[], rest: number): string[] {
     let values: string[] = [];
     for (let at: number = 0; at < args.length; at = at + 1) if (positions[at] == rest) {
       if (genericBase(actual[at]) == "pack") { for (const item of genericArguments(actual[at])) values.push(item); }
-      else if (this.node(module,args[at]).kind == NodeKind.SpreadElement) {
+      else if (this.kindOf(module,args[at]) == NodeKind.SpreadElement) {
         if (semanticTuple(actual[at])) for (const item of splitTypes(actual[at].slice(1,actual[at].length-1),",")) values.push(item);
         else values.push("!invalid-pack-spread");
       } else values.push(actual[at]);
@@ -905,8 +910,8 @@ export class NativeChecker {
     let used: number[] = [];
     for (let a: number = 0; a < args.length; a = a + 1) {
       const position: number = positions[a]; if (position < 0 || position > rest) return "";
-      if (position == rest) { if (this.node(module,args[a]).kind == NodeKind.NamedArgumentExpression) return ""; continue; }
-      if (used.includes(position) || this.node(module,args[a]).kind == NodeKind.SpreadElement) return ""; used.push(position);
+      if (position == rest) { if (this.kindOf(module,args[a]) == NodeKind.NamedArgumentExpression) return ""; continue; }
+      if (used.includes(position) || this.kindOf(module,args[a]) == NodeKind.SpreadElement) return ""; used.push(position);
       let target: string = instantiated[position];
       if (this.optionalParameter(ownerModule,candidate,position) && genericBase(target) == "Optional" && genericBase(actual[a]) != "Optional" && actual[a] != "undefined") target = genericArguments(target)[0];
       if (!this.compatible(actual[a],target)) return "";
@@ -914,7 +919,7 @@ export class NativeChecker {
     return signature;
   }
   optionalParameter(module: number, id: number, position: number): boolean {
-    let at: number = 0; for (const e of this.node(module,id).edges) if (e.role == EdgeRole.Params) { if (at == position) return this.node(module,e.node).get(AttributeKind.Optional) == "true"; at = at + 1; } return false;
+    let at: number = 0; for (const e of this.node(module,id).edges) if (e.role == EdgeRole.Params) { if (at == position) return this.attributeOf(module,e.node,AttributeKind.Optional) == "true"; at = at + 1; } return false;
   }
   argumentPosition(module: number, declaration: number, sourceModule: number, argument: number, position: number): number {
     const n: AstNode = this.node(sourceModule,argument);
@@ -924,7 +929,7 @@ export class NativeChecker {
     }
     let at: number = 0;
     for (const edge of this.node(module,declaration).edges) if (edge.role == EdgeRole.Params) {
-      if (this.node(module,edge.node).get(AttributeKind.Name) == n.get(AttributeKind.Name)) return at;
+      if (this.attributeOf(module,edge.node,AttributeKind.Name) == n.get(AttributeKind.Name)) return at;
       at = at + 1;
     } return -1;
   }
@@ -1055,7 +1060,7 @@ export class NativeChecker {
       const sid: number = this.nominalSymbol(source);
       if (sid < 0 || !["InterfaceDeclaration","ClassDeclaration"].includes(this.binding.symbols[sid].kind)) { this.report(module,args[0],"Object." + method + " acepta un Record o un objeto con campos, no " + this.displayType(source)); return "!error"; }
       const owner = this.binding.symbols[sid];
-      for (const edge of this.node(owner.module,owner.node).edges) if (edge.role == EdgeRole.Fields && this.node(owner.module,edge.node).get(AttributeKind.IsStatic) != "true") {
+      for (const edge of this.node(owner.module,owner.node).edges) if (edge.role == EdgeRole.Fields && this.attributeOf(owner.module,edge.node,AttributeKind.IsStatic) != "true") {
         const field: string = memoryValue(this.instantiateMember(source,this.symbolType(this.binding.files[owner.module].declarations[edge.node],owner.module,edge.node)));
         if (valueType == "") valueType = field;
         else if (valueType != field && method != "keys") { this.report(module,id,"Object." + method + " necesita que todos los campos de " + this.displayType(source) + " tengan el mismo tipo"); return "!error"; }
@@ -1161,7 +1166,7 @@ export class NativeChecker {
       const receiver: string = valueType.slice(6,valueType.length); const owner: number = this.nominalSymbol(receiver);
       if (owner >= 0 && this.binding.symbols[owner].kind == "UnionDeclaration") {
         const declaration = this.binding.symbols[owner];
-        for (const edge of this.node(declaration.module,declaration.node).edges) if (edge.role == EdgeRole.Variants && this.node(declaration.module,edge.node).get(AttributeKind.Name) == name) {
+        for (const edge of this.node(declaration.module,declaration.node).edges) if (edge.role == EdgeRole.Variants && this.attributeOf(declaration.module,edge.node,AttributeKind.Name) == name) {
           const sid: number = this.binding.files[declaration.module].declarations[edge.node]; if (!query) this.result.files[module].members[id] = sid;
           return this.instantiateMember(receiver,this.symbolType(sid,module,id));
         }
@@ -1176,11 +1181,11 @@ export class NativeChecker {
         const variant: AstNode = this.node(declaration.module,edge.node); let found: string = "";
         const discriminator: number = bindingChild(variant,EdgeRole.Discriminator);
         if (name == "kind") found = "string";
-        if (discriminator >= 0 && this.node(declaration.module,discriminator).get(AttributeKind.Field) == name) found = this.node(declaration.module,discriminator).get(AttributeKind.LiteralType);
+        if (discriminator >= 0 && this.attributeOf(declaration.module,discriminator,AttributeKind.Field) == name) found = this.attributeOf(declaration.module,discriminator,AttributeKind.LiteralType);
         let bindings: number = 0;
         for (const field of variant.edges) if (field.role == EdgeRole.Bindings) {
           bindings = bindings + 1;
-          if (this.node(declaration.module,field.node).get(AttributeKind.Name) == name) { selectedMember = this.binding.files[declaration.module].declarations[field.node]; found = this.instantiateMember(base,this.symbolType(selectedMember,module,id)); }
+          if (this.attributeOf(declaration.module,field.node,AttributeKind.Name) == name) { selectedMember = this.binding.files[declaration.module].declarations[field.node]; found = this.instantiateMember(base,this.symbolType(selectedMember,module,id)); }
         }
         if (name == "value" && bindings == 0 && variant.get(AttributeKind.Payload) != "") found = this.instantiateMember(base,this.annotation(declaration.module,edge.node,variant.get(AttributeKind.Payload)));
         if (found == "") { this.report(module,id,"El miembro '" + name + "' requiere narrowing a una variante que lo declare"); return "!error"; }
@@ -1288,7 +1293,7 @@ export class NativeChecker {
     }
     const container: string = genericBase(valueType); const parts: string[] = genericArguments(valueType);
     if (container == "Map" || container == "Set") {
-      if (name == "size") return this.node(module,id).kind == NodeKind.MemberCallExpression ? "()=>number" : "number";
+      if (name == "size") return this.kindOf(module,id) == NodeKind.MemberCallExpression ? "()=>number" : "number";
       if (name == "forEach") return "!array.forEach";
       if (name == "has" || name == "delete") return "(" + parts[0] + ")=>boolean";
       if (name == "clear") return "()=>void";
@@ -1313,14 +1318,14 @@ export class NativeChecker {
     // process.argv y process.argc son propiedades, como en Node (process.argv es
     // string[]). argc es una extensión del dialecto: process.argv.length.
     if (valueType == "!process" && ["argv","argc"].includes(name)) {
-      if (this.node(module,id).kind == NodeKind.MemberCallExpression) { this.report(module,id,"process."+name+" es una propiedad, no una función (como en Node)\nayuda: escribe process."+name+" sin paréntesis"); return "!error"; }
+      if (this.kindOf(module,id) == NodeKind.MemberCallExpression) { this.report(module,id,"process."+name+" es una propiedad, no una función (como en Node)\nayuda: escribe process."+name+" sin paréntesis"); return "!error"; }
       return name == "argv" ? "string[]" : "number";
     }
     if (valueType == "!process" && ["stdin"].includes(name)) return "ProcessReadable";
     if (valueType == "!process" && ["stdout","stderr"].includes(name)) return "ProcessWritable";
     if (valueType == "ChildProcess" && name == "stdin") return "ProcessWritable";
     if (valueType == "ChildProcess" && ["stdout","stderr"].includes(name)) return "ProcessReadable";
-    if (valueType == "Request" && this.node(module,id).kind == NodeKind.MemberExpression && ["method","path","rawQuery","body"].includes(name)) return "string";
+    if (valueType == "Request" && this.kindOf(module,id) == NodeKind.MemberExpression && ["method","path","rawQuery","body"].includes(name)) return "string";
     const catalog: string = valueType+"."+name;
     if (nativeBuiltinSignatures(catalog).length > 0) return "!builtin:"+catalog;
     const sid: number = this.memberSymbol(valueType,name);
@@ -1394,18 +1399,18 @@ export class NativeChecker {
   writable(module: number, id: number): void { this.writableTarget(module,id,false); }
   mutableArgument(module: number, id: number, actual: string): void {
     if (borrowedType(actual)) return;
-    if (![NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.node(module,id).kind)) { this.report(module,id,"E4208: un préstamo mutable necesita un lvalue"); return; }
+    if (![NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.kindOf(module,id))) { this.report(module,id,"E4208: un préstamo mutable necesita un lvalue"); return; }
     const before: number = this.result.diagnostics.length; this.writableTarget(module,id,false);
     if (this.result.diagnostics.length > before) this.report(module,id,"E4208: el argumento no admite un préstamo mutable");
   }
   compositionFields(sid: number): number[] {
     let fields: number[] = []; const owner = this.binding.symbols[sid];
-    for (const edge of this.node(owner.module,owner.node).edges) if (edge.role == EdgeRole.Fields && this.node(owner.module,edge.node).get(AttributeKind.IsStatic) != "true") fields.push(this.binding.files[owner.module].declarations[edge.node]);
+    for (const edge of this.node(owner.module,owner.node).edges) if (edge.role == EdgeRole.Fields && this.attributeOf(owner.module,edge.node,AttributeKind.IsStatic) != "true") fields.push(this.binding.files[owner.module].declarations[edge.node]);
     return fields;
   }
   compositionConstructor(module: number, id: number, valueType: string, sid: number): void {
     const fields: number[] = this.compositionFields(sid); let defaults: boolean = false; let parameters: string[] = [];
-    for (const field of fields) { const s = this.binding.symbols[field]; if (bindingChild(this.node(s.module,s.node),EdgeRole.DefaultValue) >= 0) defaults = true; parameters.push(this.instantiateMember(valueType,this.symbolType(field,module,id))); }
+    for (const field of fields) { const s = this.binding.symbols[field]; if (this.childOf(s.module,s.node,EdgeRole.DefaultValue) >= 0) defaults = true; parameters.push(this.instantiateMember(valueType,this.symbolType(field,module,id))); }
     this.result.files[module].constructionFields[id] = fields;
     let seen: number[] = []; let count: number = 0; let named: boolean = false;
     for (const edge of this.node(module,id).edges) if (edge.role == EdgeRole.Args) {
@@ -1424,17 +1429,17 @@ export class NativeChecker {
     if ((defaults && count != 0) || (!defaults && seen.length != fields.length)) this.report(module,id,defaults ? "El constructor con inicializadores de campo no admite argumentos" : "Aridad incorrecta del constructor de composición");
     if (defaults) for (let at: number = 0; at < fields.length; at = at+1) {
       const field = this.binding.symbols[fields[at]];
-      if (this.transferType(parameters[at]) && bindingChild(this.node(field.module,field.node),EdgeRole.DefaultValue) < 0) this.report(module,id,"E4100: un campo con ownership necesita inicialización en el constructor");
+      if (this.transferType(parameters[at]) && this.childOf(field.module,field.node,EdgeRole.DefaultValue) < 0) this.report(module,id,"E4100: un campo con ownership necesita inicialización en el constructor");
     }
     this.result.files[module].signatures[id] = "(" + (defaults ? "" : parameters.join(",")) + ")=>" + valueType;
   }
   constructorInitialization(module: number, id: number, sid: number): boolean {
     const n: AstNode = this.node(module,id); if (n.kind != NodeKind.MemberExpression) return false;
-    const object: number = bindingChild(n,EdgeRole.Object); if (this.node(module,object).kind != NodeKind.IdentifierExpression || this.node(module,object).get(AttributeKind.Name) != "this") return false;
+    const object: number = bindingChild(n,EdgeRole.Object); if (this.kindOf(module,object) != NodeKind.IdentifierExpression || this.attributeOf(module,object,AttributeKind.Name) != "this") return false;
     let scope: number = this.binding.files[module].nodeScopes[id];
     while (scope >= 0) {
       const current = this.binding.scopes[scope];
-      if (current.kind == "function" || current.kind == "arrow") return this.node(current.module,current.node).kind == NodeKind.ClassMethod && this.node(current.module,current.node).get(AttributeKind.Name) == "constructor" && current.parent == this.binding.symbols[sid].scope;
+      if (current.kind == "function" || current.kind == "arrow") return this.kindOf(current.module,current.node) == NodeKind.ClassMethod && this.attributeOf(current.module,current.node,AttributeKind.Name) == "constructor" && current.parent == this.binding.symbols[sid].scope;
       scope = current.parent;
     } return false;
   }
@@ -1455,8 +1460,8 @@ export class NativeChecker {
         const declaration = this.binding.symbols[owner];
         if (n.get(AttributeKind.Member) == "kind") this.report(module,id,"El discriminador de una unión es inmutable");
         for (const edge of this.node(declaration.module,declaration.node).edges) if (edge.role == EdgeRole.Variants) {
-          const discriminator: number = bindingChild(this.node(declaration.module,edge.node),EdgeRole.Discriminator);
-          if (discriminator >= 0 && this.node(declaration.module,discriminator).get(AttributeKind.Field) == n.get(AttributeKind.Member)) this.report(module,id,"El discriminador de una unión es inmutable");
+          const discriminator: number = this.childOf(declaration.module,edge.node,EdgeRole.Discriminator);
+          if (discriminator >= 0 && this.attributeOf(declaration.module,discriminator,AttributeKind.Field) == n.get(AttributeKind.Member)) this.report(module,id,"El discriminador de una unión es inmutable");
         }
       }
       if (receiver == "Request" && ["method","path","rawQuery","body"].includes(n.get(AttributeKind.Member))) this.report(module,id,"E4300: campo readonly de Request");
@@ -1682,7 +1687,7 @@ export class NativeChecker {
     if (patternType == "boolean") domain = ["boolean:true","boolean:false"];
     if (args.length == 2 && splitTypes(subject,"|").length > 1) for (const part of splitTypes(subject,"|")) domain.push("type:"+part);
     if (args.length == 3) {
-      const field: string = this.node(module,args[1]).get(AttributeKind.Value);
+      const field: string = this.attributeOf(module,args[1],AttributeKind.Value);
       if (genericBase(subject) == "Result") { if (field == "kind") domain = ["string:Ok","string:Err"]; if (field == "ok") domain = ["boolean:true","boolean:false"]; }
       const owner: number = this.nominalSymbol(subject);
       if (owner >= 0 && this.binding.symbols[owner].kind == "UnionDeclaration") {
@@ -1690,7 +1695,7 @@ export class NativeChecker {
         for (const edge of this.node(declaration.module,declaration.node).edges) if (edge.role == EdgeRole.Variants) {
           const variant: AstNode = this.node(declaration.module,edge.node);
           if (field == "kind") domain.push("string:"+variant.get(AttributeKind.Name));
-          else { const discriminator: number = bindingChild(variant,EdgeRole.Discriminator); if (discriminator >= 0 && this.node(declaration.module,discriminator).get(AttributeKind.Field) == field) domain.push(this.node(declaration.module,discriminator).get(AttributeKind.LiteralType)+":"+this.node(declaration.module,discriminator).get(AttributeKind.Value)); }
+          else { const discriminator: number = bindingChild(variant,EdgeRole.Discriminator); if (discriminator >= 0 && this.attributeOf(declaration.module,discriminator,AttributeKind.Field) == field) domain.push(this.attributeOf(declaration.module,discriminator,AttributeKind.LiteralType)+":"+this.attributeOf(declaration.module,discriminator,AttributeKind.Value)); }
         }
       }
     }
@@ -1700,7 +1705,7 @@ export class NativeChecker {
     this.result.files[module].matchCoverage[id] = (total ? "total" : "traps");
     this.result.files[module].types[list] = "!matchCase[]"; const result: string = results.length == 0 ? "void" : joinTypes(results,"|");
     let formal: string = subject;
-    if (this.transferType(subject) && !consumes && [NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.node(module,args[0]).kind)) {
+    if (this.transferType(subject) && !consumes && [NodeKind.IdentifierExpression,NodeKind.MemberExpression,NodeKind.IndexExpression].includes(this.kindOf(module,args[0]))) {
       formal = mode+"<"+subject+">"; if (mode == "ref") this.mutableArgument(module,args[0],subject);
     }
     this.result.files[module].signatures[id] = "(" + formal + (args.length == 3 ? ",string" : "") + ",!matchCase[])=>" + result; return result;
@@ -1715,7 +1720,7 @@ export class NativeChecker {
     if (base == "" || (parameters.length > 0 && genericBase(base) == "")) {
       let values: string[] = []; for (const attr of n.attributes) if (attr.name == AttributeKind.TypeArgument) values.push(this.annotation(module,id,attr.value));
       if (values.length == 0 && parameters.length > 0 && args.length == 1) {
-        const payload: string = this.annotation(symbol.module,symbol.node,this.node(symbol.module,symbol.node).get(AttributeKind.Payload));
+        const payload: string = this.annotation(symbol.module,symbol.node,this.attributeOf(symbol.module,symbol.node,AttributeKind.Payload));
         for (const parameter of parameters) {
           const token: string = "@" + numberToString(this.binding.files[symbol.module].declarations[parameter]);
           values.push(payload == token ? this.expression(module,args[0],"") : "");
@@ -1736,9 +1741,9 @@ export class NativeChecker {
     const declaration = this.binding.symbols[owner]; const n: AstNode = this.node(module,id); let selected: number = -1;
     const base: string = genericBase(expected) == "variant" ? genericArguments(expected)[0] : expected;
     for (const edge of this.node(declaration.module,declaration.node).edges) if (edge.role == EdgeRole.Variants) {
-      const discriminator: number = bindingChild(this.node(declaration.module,edge.node),EdgeRole.Discriminator); if (discriminator < 0) continue;
+      const discriminator: number = this.childOf(declaration.module,edge.node,EdgeRole.Discriminator); if (discriminator < 0) continue;
       const d: AstNode = this.node(declaration.module,discriminator); const key: string = d.get(AttributeKind.LiteralType) + ":" + d.get(AttributeKind.Value);
-      for (const property of n.edges) if (property.role == EdgeRole.Properties && this.node(module,property.node).get(AttributeKind.Key) == d.get(AttributeKind.Field) && this.caseKey(module,bindingChild(this.node(module,property.node),EdgeRole.Value),[]) == key) selected = edge.node;
+      for (const property of n.edges) if (property.role == EdgeRole.Properties && this.attributeOf(module,property.node,AttributeKind.Key) == d.get(AttributeKind.Field) && this.caseKey(module,this.childOf(module,property.node,EdgeRole.Value),[]) == key) selected = edge.node;
     }
     if (selected < 0) { this.report(module,id,"El objeto no selecciona una variante por un discriminador literal válido"); return "!error"; }
     const result: string = "variant<" + base + "," + numberToString(selected) + ">"; let provided: string[] = [];
@@ -1747,7 +1752,7 @@ export class NativeChecker {
       if (provided.includes(name)) this.report(module,edge.node,"Campo duplicado '" + name + "'"); provided.push(name);
       const field: string = this.member(module,edge.node,result,name); this.requireType(module,value,this.expression(module,value,field),field);
     }
-    for (const field of this.node(declaration.module,selected).edges) if (field.role == EdgeRole.Bindings && !provided.includes(this.node(declaration.module,field.node).get(AttributeKind.Name))) this.report(module,id,"Falta el campo requerido '" + this.node(declaration.module,field.node).get(AttributeKind.Name) + "'");
+    for (const field of this.node(declaration.module,selected).edges) if (field.role == EdgeRole.Bindings && !provided.includes(this.attributeOf(declaration.module,field.node,AttributeKind.Name))) this.report(module,id,"Falta el campo requerido '" + this.attributeOf(declaration.module,field.node,AttributeKind.Name) + "'");
     return result;
   }
   taskCollectionCall(module: number, id: number, name: string): string {
@@ -1793,7 +1798,7 @@ export class NativeChecker {
     if (callable == "!matchCase") { this.report(module,id,"Un caso sólo puede aparecer en el array literal de match"); return "!error"; }
     if (sid >= 0 && this.binding.symbols[sid].kind == "UnionVariant") return this.unionCall(module,id,sid,receiver,expected);
     if (callable.startsWith("!optionalGlobal:")) {
-      const object: number = bindingChild(this.node(module,id),EdgeRole.Args);
+      const object: number = this.childOf(module,id,EdgeRole.Args);
       if (object < 0) { this.report(module,id,"El helper de Optional requiere un receptor y un callback"); return "!error"; }
       const value: string = this.expression(module,object,"");
       if (genericBase(value) != "Optional") { this.report(module,id,"El helper requiere Optional<T>"); return "!error"; }
@@ -1857,7 +1862,7 @@ export class NativeChecker {
           if (numericType(value) || ["boolean","void","null","undefined"].includes(value)) { this.report(module,id,"E4100: move() no se aplica a '" + value + "': los valores escalares se copian sin coste\nayuda: quita el move()"); return actual[0]; }
           if (arg.kind != NodeKind.IdentifierExpression) { this.report(module,id,"E4100: move() de un valor sin ownership solo admite una variable local o un parámetro\nayuda: guarda el valor en una variable con 'let' y muévela"); return actual[0]; }
           const sid: number = this.reference(module,args[0]);
-          if (sid >= 0 && this.binding.symbols[sid].kind == "VariableDeclaration" && this.node(this.binding.symbols[sid].module,this.binding.symbols[sid].node).get(AttributeKind.Mutable) != "true") { this.report(module,id,"E4100: move() necesita una variable declarada con 'let': '" + this.binding.symbols[sid].name + "' es 'const'\nayuda: declárala con 'let' para poder transferirla"); return actual[0]; }
+          if (sid >= 0 && this.binding.symbols[sid].kind == "VariableDeclaration" && this.attributeOf(this.binding.symbols[sid].module,this.binding.symbols[sid].node,AttributeKind.Mutable) != "true") { this.report(module,id,"E4100: move() necesita una variable declarada con 'let': '" + this.binding.symbols[sid].name + "' es 'const'\nayuda: declárala con 'let' para poder transferirla"); return actual[0]; }
           this.writable(module,args[0]);
           return actual[0];
         }
@@ -1900,7 +1905,7 @@ export class NativeChecker {
       const params: string[] = functionParams(selected);
       for (let a: number = 0; a < args.length; a = a+1) {
         const value: number = this.argumentValue(module,args[a]); this.result.files[module].argumentParameters[args[a]] = a;
-        if (memoryMode(params[a]) == "ref") { if (this.node(module,value).kind != NodeKind.IdentifierExpression) this.report(module,value,"Un argumento ref de builtin debe ser una variable mutable"); this.writableTarget(module,value,false); }
+        if (memoryMode(params[a]) == "ref") { if (this.kindOf(module,value) != NodeKind.IdentifierExpression) this.report(module,value,"Un argumento ref de builtin debe ser una variable mutable"); this.writableTarget(module,value,false); }
         this.requireType(module,value,actual[a],params[a]);
       }
       this.result.files[module].signatures[id] = selected; return functionReturn(selected);
@@ -1915,7 +1920,7 @@ export class NativeChecker {
       if ((rest < 0 && args.length != parameters.length) || (rest >= 0 && (args.length) < rest)) this.report(module,id,"Aridad incorrecta: esperaba " + numberToString(parameters.length));
       for (let i: number = 0; i < args.length; i = i + 1) {
         const p: number = rest >= 0 && i >= rest ? rest : i; if (p >= parameters.length) continue;
-        const spread: boolean = this.node(module,args[i]).kind == NodeKind.SpreadElement;
+        const spread: boolean = this.kindOf(module,args[i]) == NodeKind.SpreadElement;
         if (spread && p != rest) this.report(module,args[i],"El spread dinámico requiere un parámetro rest");
         this.result.files[module].argumentParameters[args[i]] = p;
         if (memoryMode(argumentType(parameters[p],spread)) == "ref") this.mutableArgument(module,this.argumentValue(module,args[i]),actual[i]);
@@ -1929,7 +1934,7 @@ export class NativeChecker {
       let parameters: string[] = functionParams(signature); let returns: string = functionReturn(signature);
       let positions: number[] = [];
       for (let at: number = 0; at < args.length; at = at + 1) positions.push(this.argumentPosition(ownerModule,candidate,module,args[at],at));
-      let pack: boolean = false; for (const edge of declaration.edges) if (edge.role == EdgeRole.TypeParameters && this.node(ownerModule,edge.node).get(AttributeKind.Variadic) == "true") pack = true;
+      let pack: boolean = false; for (const edge of declaration.edges) if (edge.role == EdgeRole.TypeParameters && this.attributeOf(ownerModule,edge.node,AttributeKind.Variadic) == "true") pack = true;
       if (pack) {
         const instantiated: string = this.packSignature(module,id,ownerModule,candidate,args,actual,positions,expected);
         if (instantiated != "") {
@@ -1949,7 +1954,7 @@ export class NativeChecker {
         if (g < explicitTypes.length) genericValues[g] = explicitTypes[g];
         else for (let a: number = 0; a < actual.length; a = a + 1) {
           const p: number = positions[a]; if (p < 0 || p >= parameters.length) continue;
-          const pattern: string = argumentType(parameters[p],this.node(module,args[a]).kind == NodeKind.SpreadElement);
+          const pattern: string = argumentType(parameters[p],this.kindOf(module,args[a]) == NodeKind.SpreadElement);
           let inferred: string = this.inferToken(pattern,actual[a],genericNames[g]);
           if (memoryMode(pattern) == "ref" && memoryMode(actual[a]) != "ref") {
             inferred = this.inferToken(memoryInner(pattern),memoryValue(actual[a]),genericNames[g]);
@@ -1989,15 +1994,15 @@ export class NativeChecker {
       let used: number[] = [];
       for (let a: number = 0; a < actual.length; a = a + 1) {
         const p: number = positions[a]; if (p < 0 || p >= parameters.length || (used.includes(p) && p != rest)) { matches = false; continue; } used.push(p);
-        const spread: boolean = this.node(module,args[a]).kind == NodeKind.SpreadElement;
-        if ((spread && p != rest) || (p == rest && this.node(module,args[a]).kind == NodeKind.NamedArgumentExpression)) matches = false;
+        const spread: boolean = this.kindOf(module,args[a]) == NodeKind.SpreadElement;
+        if ((spread && p != rest) || (p == rest && this.kindOf(module,args[a]) == NodeKind.NamedArgumentExpression)) matches = false;
         const parameter: string = argumentType(parameters[p],spread);
         const target: string = this.optionalParameter(ownerModule,candidate,p) && genericBase(parameter) == "Optional" && genericBase(actual[a]) != "Optional" && actual[a] != "undefined" ? genericArguments(parameter)[0] : parameter;
-        if (!this.compatible(actual[a],target) && !(ownedType(target) && actual[a] == memoryInner(target) && this.node(module,this.argumentValue(module,args[a])).kind == NodeKind.NewExpression)) matches = false;
+        if (!this.compatible(actual[a],target) && !(ownedType(target) && actual[a] == memoryInner(target) && this.kindOf(module,this.argumentValue(module,args[a])) == NodeKind.NewExpression)) matches = false;
       }
       if (matches) {
         let score: number = rest >= 0 ? -1 : 0; const patterns: string[] = functionParams(signature);
-        for (let a: number = 0; a < args.length; a = a+1) { const p: number = positions[a]; const pattern: string = argumentType(patterns[p],this.node(module,args[a]).kind == NodeKind.SpreadElement); score = score+(genericNames.includes(pattern) ? 2 : 4); }
+        for (let a: number = 0; a < args.length; a = a+1) { const p: number = positions[a]; const pattern: string = argumentType(patterns[p],this.kindOf(module,args[a]) == NodeKind.SpreadElement); score = score+(genericNames.includes(pattern) ? 2 : 4); }
         if (score > selectedScore) { selected = candidate; selectedScore = score; ambiguous = false; selectedType = returns; selectedPositions = positions; this.result.files[module].signatures[id] = "(" + parameters.join(",") + ")=>" + returns; }
         else if (score == selectedScore) ambiguous = true;
       }
@@ -2016,20 +2021,20 @@ export class NativeChecker {
         const rest: number = restPosition(this.result.files[module].signatures[id]);
         if (p == rest && genericBase(parameters[p].slice(3,parameters[p].length)) == "pack") {
           const wanted: string[] = genericArguments(parameters[p].slice(3,parameters[p].length)); let offset: number = 0;
-          for (let previous: number = 0; previous < a; previous = previous + 1) if (selectedPositions[previous] == rest) offset = offset + (genericBase(actual[previous]) == "pack" ? genericArguments(actual[previous]).length : semanticTuple(actual[previous]) && this.node(module,args[previous]).kind == NodeKind.SpreadElement ? splitTypes(actual[previous].slice(1,actual[previous].length-1),",").length : 1);
+          for (let previous: number = 0; previous < a; previous = previous + 1) if (selectedPositions[previous] == rest) offset = offset + (genericBase(actual[previous]) == "pack" ? genericArguments(actual[previous]).length : semanticTuple(actual[previous]) && this.kindOf(module,args[previous]) == NodeKind.SpreadElement ? splitTypes(actual[previous].slice(1,actual[previous].length-1),",").length : 1);
           this.result.files[module].argumentElements[args[a]] = offset;
-          if (genericBase(actual[a]) != "pack" && this.node(module,args[a]).kind != NodeKind.SpreadElement && offset < wanted.length) this.requireType(module,value,actual[a],wanted[offset]);
+          if (genericBase(actual[a]) != "pack" && this.kindOf(module,args[a]) != NodeKind.SpreadElement && offset < wanted.length) this.requireType(module,value,actual[a],wanted[offset]);
         } else {
-          const target: string = wrap ? genericArguments(parameters[p])[0] : argumentType(parameters[p],this.node(module,args[a]).kind == NodeKind.SpreadElement);
+          const target: string = wrap ? genericArguments(parameters[p])[0] : argumentType(parameters[p],this.kindOf(module,args[a]) == NodeKind.SpreadElement);
           if (memoryMode(target) == "ref") this.mutableArgument(module,value,actual[a]);
           this.requireType(module,value,actual[a],target);
         }
         if (wrap) this.result.files[module].conversions[value] = parameters[p];
       }
     }
-    if (selected >= 0) for (const edge of this.node(ownerModule,selected).edges) if (edge.role == EdgeRole.Decorators && this.node(ownerModule,edge.node).get(AttributeKind.Name) == "cppgen") {
+    if (selected >= 0) for (const edge of this.node(ownerModule,selected).edges) if (edge.role == EdgeRole.Decorators && this.attributeOf(ownerModule,edge.node,AttributeKind.Name) == "cppgen") {
       const parent: number = this.binding.files[module].parents[id];
-      if (parent < 0 || this.node(module,parent).kind != NodeKind.ExpressionStatement) this.report(module,id,"Un escape @cppgen requiere una sentencia opaca; no declara un valor runtime");
+      if (parent < 0 || this.kindOf(module,parent) != NodeKind.ExpressionStatement) this.report(module,id,"Un escape @cppgen requiere una sentencia opaca; no declara un valor runtime");
       const parameters: string[] = functionParams(this.result.files[module].signatures[id]); this.result.files[module].signatures[id] = "("+parameters.join(",")+")=>void"; return "void";
     }
     return selectedType;
@@ -2049,8 +2054,8 @@ export class NativeChecker {
     if (this.result.files[module].states[id] == 1) { this.report(module,id,"Inferencia circular; añade una anotación de tipo"); return "!error"; }
     this.result.files[module].states[id] = 1; this.depth = this.depth + 1;
     let valueType: string = this.expressionInner(module,id,expected);
-    if (this.node(module,id).kind == NodeKind.MemberExpression && genericBase(memoryValue(valueType)) == "Optional") { const narrowed: string = this.narrowedPath(module,id); if (narrowed != "") valueType = narrowed; }
-    if ([NodeKind.CallExpression,NodeKind.MemberCallExpression,NodeKind.NewExpression].includes(this.node(module,id).kind)) { this.narrowedSymbols = []; this.narrowedTypes = []; }
+    if (this.kindOf(module,id) == NodeKind.MemberExpression && genericBase(memoryValue(valueType)) == "Optional") { const narrowed: string = this.narrowedPath(module,id); if (narrowed != "") valueType = narrowed; }
+    if ([NodeKind.CallExpression,NodeKind.MemberCallExpression,NodeKind.NewExpression].includes(this.kindOf(module,id))) { this.narrowedSymbols = []; this.narrowedTypes = []; }
     this.depth = this.depth - 1; this.result.files[module].types[id] = valueType; this.result.files[module].states[id] = 2; return valueType;
   }
   expressionInner(module: number, id: number, expected: string): string {
@@ -2075,7 +2080,7 @@ export class NativeChecker {
       if (sid >= 0) {
         const s: BindingSymbol = this.binding.symbols[sid];
         if (s.module >= 0 && s.kind == "FunctionDeclaration" && s.declarations.length == 1 && this.genericParameters(sid).length > 0) { this.report(module,id,"Una función genérica requiere una llamada; usa un arrow para fijar sus argumentos de tipo"); return "!error"; }
-        if (s.module >= 0 && s.kind == "FunctionDeclaration") for (const edge of this.node(s.module,s.node).edges) if (edge.role == EdgeRole.Decorators && this.node(s.module,edge.node).get(AttributeKind.Name) == "cppgen") this.report(module,id,"Un escape @cppgen requiere una llamada directa como sentencia opaca");
+        if (s.module >= 0 && s.kind == "FunctionDeclaration") for (const edge of this.node(s.module,s.node).edges) if (edge.role == EdgeRole.Decorators && this.attributeOf(s.module,edge.node,AttributeKind.Name) == "cppgen") this.report(module,id,"Un escape @cppgen requiere una llamada directa como sentencia opaca");
         if ((s.module) < 0 && numericType(s.name)) { this.report(module,id,"Un cast numérico requiere una llamada directa"); return "!error"; }
         if (s.declarations.length > 1) {
           if (functionClose(expected) < 0) { this.report(module,id,"Una sobrecarga como valor requiere una firma contextual"); return "!error"; }
@@ -2098,8 +2103,8 @@ export class NativeChecker {
       const valueType: string = this.flowType(sid,module,id);
       if (genericBase(valueType) == "pack") {
         let parent: number = this.binding.files[module].parents[id];
-        if (parent >= 0 && this.node(module,parent).kind == NodeKind.SpreadElement) parent = this.binding.files[module].parents[parent];
-        if (parent < 0 || ![NodeKind.CallExpression,NodeKind.MemberCallExpression].includes(this.node(module,parent).kind)) this.report(module,id,"Un pack sólo puede expandirse como argumento de llamada");
+        if (parent >= 0 && this.kindOf(module,parent) == NodeKind.SpreadElement) parent = this.binding.files[module].parents[parent];
+        if (parent < 0 || ![NodeKind.CallExpression,NodeKind.MemberCallExpression].includes(this.kindOf(module,parent))) this.report(module,id,"Un pack sólo puede expandirse como argumento de llamada");
       }
       return valueType;
     }
@@ -2162,7 +2167,7 @@ export class NativeChecker {
             let at: number = 0;
             for (const edge of n.edges) if (edge.role == EdgeRole.Args) {
               const actual: string = this.expression(module,edge.node,"");
-              if (constructor < 0 && this.node(module,edge.node).kind == NodeKind.NamedArgumentExpression) { at = -1; for (let p: number = 0; p < names.length; p = p+1) if (names[p] == this.node(module,edge.node).get(AttributeKind.Name)) at = p; }
+              if (constructor < 0 && this.kindOf(module,edge.node) == NodeKind.NamedArgumentExpression) { at = -1; for (let p: number = 0; p < names.length; p = p+1) if (names[p] == this.attributeOf(module,edge.node,AttributeKind.Name)) at = p; }
               if (at >= 0 && at < patterns.length) for (let g: number = 0; g < generic.length; g = g + 1) {
                 const token: string = "@" + numberToString(this.binding.files[owner.module].declarations[generic[g]]); let inferred: string = "";
                 if (patterns[at] == token) inferred = actual; else if (patterns[at] == token + "[]" && actual.endsWith("[]")) inferred = semanticElement(actual);
@@ -2204,7 +2209,7 @@ export class NativeChecker {
         const keyType: string = genericArguments(container)[0]; this.requireType(module,leftId,this.expression(module,leftId,keyType),keyType); return "boolean";
       }
       if (n.get(AttributeKind.Operator) == "instanceof") {
-        this.expression(module,leftId,""); let name: string = this.node(module,rightId).get(AttributeKind.Name); let types: string[] = [];
+        this.expression(module,leftId,""); let name: string = this.attributeOf(module,rightId,AttributeKind.Name); let types: string[] = [];
         for (const attr of this.node(module,rightId).attributes) if (attr.name == AttributeKind.TypeArgument) types.push(attr.value);
         if (types.length > 0) name = name+"<"+types.join(",")+">";
         const target: string = this.annotation(module,rightId,name); const sid: number = this.nominalSymbol(target);
@@ -2279,13 +2284,13 @@ export class NativeChecker {
     }
     if (kind == NodeKind.AssignmentExpression || kind == NodeKind.CompoundAssignmentExpression) {
       const target: number = bindingChild(n,EdgeRole.Target); this.forgetPaths(); let valueType: string = this.expression(module,target,"");
-      if (this.node(module,target).kind == NodeKind.IdentifierExpression) { const sid: number = this.reference(module,target); valueType = this.symbolType(sid,module,target); this.narrowedSymbols.push(sid); this.narrowedTypes.push(valueType); this.result.files[module].types[target] = valueType; }
+      if (this.kindOf(module,target) == NodeKind.IdentifierExpression) { const sid: number = this.reference(module,target); valueType = this.symbolType(sid,module,target); this.narrowedSymbols.push(sid); this.narrowedTypes.push(valueType); this.result.files[module].types[target] = valueType; }
       // Asignar a un ref<T> escribe un T a través de la referencia.
       let assigned: string = memoryMode(valueType) == "ref" ? memoryInner(valueType) : valueType;
       // r[k] = v en un Record (Map) guarda un V; r[k] += 1 no (r[k] es V | undefined).
-      if (this.node(module,target).kind == NodeKind.IndexExpression && genericBase(memoryValue(this.result.files[module].types[bindingChild(this.node(module,target),EdgeRole.Object)])) == "Map") {
+      if (this.kindOf(module,target) == NodeKind.IndexExpression && genericBase(memoryValue(this.result.files[module].types[this.childOf(module,target,EdgeRole.Object)])) == "Map") {
         if (kind == NodeKind.CompoundAssignmentExpression) { this.report(module,id,"r[k] es V | undefined en un Record: usa r[k] = (r[k] ?? 0) + 1"); return "!error"; }
-        assigned = genericArguments(memoryValue(this.result.files[module].types[bindingChild(this.node(module,target),EdgeRole.Object)]))[1];
+        assigned = genericArguments(memoryValue(this.result.files[module].types[this.childOf(module,target,EdgeRole.Object)]))[1];
       }
       const value: string = this.expression(module,bindingChild(n,EdgeRole.Value),assigned); this.requireType(module,bindingChild(n,EdgeRole.Value),value,assigned); this.writable(module,target);
       if (kind == NodeKind.CompoundAssignmentExpression && !numericType(memoryValue(valueType)) && !(memoryValue(valueType) == "string" && n.get(AttributeKind.Operator) == "+=")) this.report(module,id,"Asignación compuesta inválida"); return valueType;
@@ -2296,7 +2301,7 @@ export class NativeChecker {
       const tuple: string[] = semanticTuple(expected) ? splitTypes(expected.slice(1,expected.length-1),",") : [];
       let items: string[] = []; let length: number = 0; let knownLength: boolean = true;
       for (const edge of n.edges) if (edge.role == EdgeRole.Elements) {
-        const spread: boolean = this.node(module,edge.node).kind == NodeKind.SpreadElement;
+        const spread: boolean = this.kindOf(module,edge.node) == NodeKind.SpreadElement;
         if (spread) {
           const source: string = memoryValue(this.expression(module,edge.node,element == "" ? "" : semanticArray(element)));
           let additions: string[] = []; let extent: number = 1;
@@ -2446,14 +2451,14 @@ export class NativeChecker {
     if (sid >= 0) {
       sid = this.origin(sid); if (seen.includes(sid)) return "";
       const s = this.binding.symbols[sid]; if ((s.module) < 0) return ""; let next: number[] = seen; next.push(sid);
-      if (s.kind == "EnumMember") return this.caseKey(s.module,bindingChild(this.node(s.module,s.node),EdgeRole.Value),next);
-      if (s.kind == "VariableDeclaration" && this.node(s.module,s.node).get(AttributeKind.Mutable) != "true") return this.caseKey(s.module,bindingChild(this.node(s.module,s.node),EdgeRole.Initializer),next);
+      if (s.kind == "EnumMember") return this.caseKey(s.module,this.childOf(s.module,s.node,EdgeRole.Value),next);
+      if (s.kind == "VariableDeclaration" && this.attributeOf(s.module,s.node,AttributeKind.Mutable) != "true") return this.caseKey(s.module,this.childOf(s.module,s.node,EdgeRole.Initializer),next);
     } return "";
   }
   destructure(module: number, id: number): void {
     const n: AstNode = this.node(module,id); const init: number = bindingChild(n,EdgeRole.Initializer);
     let context: string = this.annotation(module,id,n.get(AttributeKind.DeclaredType));
-    if (context == "" && n.get(AttributeKind.Pattern) == "array" && this.node(module,init).kind == NodeKind.ArrayLiteralExpression && this.node(module,init).edges.length == 0) {
+    if (context == "" && n.get(AttributeKind.Pattern) == "array" && this.kindOf(module,init) == NodeKind.ArrayLiteralExpression && this.node(module,init).edges.length == 0) {
       let element: string = ""; let same: boolean = true;
       for (const e of n.edges) if (e.role == EdgeRole.ArrayBindings) {
         const b: AstNode = this.node(module,e.node); let text: string = this.annotation(module,e.node,b.get(AttributeKind.DeclaredType));
@@ -2546,7 +2551,7 @@ export class NativeChecker {
       const bodyReturns: string = this.asynchronous(module,id) && genericBase(functionReturn(valueType)) == "Promise" ? genericArguments(functionReturn(valueType))[0] : functionReturn(valueType);
       const body: number = bindingChild(n,EdgeRole.Body);
       if (body >= 0) {
-        if (this.node(module,body).kind == NodeKind.BlockStatement) {
+        if (this.kindOf(module,body) == NodeKind.BlockStatement) {
           this.statement(module,body,bodyReturns,0);
 
         } else this.requireType(module,body,this.expression(module,body,bodyReturns),bodyReturns);
@@ -2583,7 +2588,7 @@ export class NativeChecker {
         else element = genericArguments(element)[0];
       }
       const binding: number = bindingChild(n,EdgeRole.Binding); const sid: number = this.binding.files[module].declarations[binding];
-      const declared: string = this.annotation(module,binding,this.node(module,binding).get(AttributeKind.DeclaredType));
+      const declared: string = this.annotation(module,binding,this.attributeOf(module,binding,AttributeKind.DeclaredType));
       if (declared != "") this.requireType(module,binding,element,declared);
       if (n.get(AttributeKind.Await) == "true" && borrowedType(declared)) this.report(module,binding,"E4203: el resultado de for await necesita almacenamiento local por valor");
       if (n.get(AttributeKind.Await) != "true" && this.transferType(element) && memoryMode(declared) != "constRef") this.report(module,binding,"E4101: iterar un elemento con ownership requiere constRef");
@@ -2648,14 +2653,14 @@ export class NativeChecker {
     if (kind == NodeKind.EnumDeclaration) {
       const sid: number = this.binding.files[module].declarations[id]; this.symbolType(sid,module,id);
       for (const edge of n.edges) if (edge.role == EdgeRole.Members) {
-        const member: number = this.binding.files[module].declarations[edge.node]; const value: number = bindingChild(this.node(module,edge.node),EdgeRole.Value);
+        const member: number = this.binding.files[module].declarations[edge.node]; const value: number = this.childOf(module,edge.node,EdgeRole.Value);
         this.result.files[module].types[edge.node] = this.symbolType(member,module,edge.node);
         if (value >= 0) { this.expression(module,value,""); if (n.get(AttributeKind.Underlying) == "number") this.literalRange(module,value,"i32"); }
       } return;
     }
     if (kind == NodeKind.ExportDefaultDeclaration) {
       const declaration: number = bindingChild(n,EdgeRole.Declaration);
-      if (isExpressionNodeKind(this.node(module,declaration).kind)) this.expression(module,declaration,""); else this.statement(module,declaration,returns,loop); return;
+      if (isExpressionNodeKind(this.kindOf(module,declaration))) this.expression(module,declaration,""); else this.statement(module,declaration,returns,loop); return;
     }
     if ([NodeKind.ImportDeclaration,NodeKind.ExportAllDeclaration,NodeKind.ExportNamedDeclaration].includes(kind)) return;
     this.unsupported(module,id,nodeKindName(kind));
@@ -2713,8 +2718,8 @@ export class NativeChecker {
     profileEnd("types-statements",statementsProfile); const arrowsProfile = profileBegin();
     // Arrows may be reached only as values, not statements. Validate their bodies too.
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.result.files[m].types.length; id = id + 1) {
-      if (this.binding.files[m].nodeScopes[id] >= 0 && this.node(m,id).kind == NodeKind.ArrowFunctionExpression) this.statement(m,id,"",0);
-      if (this.binding.files[m].nodeScopes[id] >= 0 && this.node(m,id).kind == NodeKind.Decorator) this.decorator(m,id);
+      if (this.binding.files[m].nodeScopes[id] >= 0 && this.kindOf(m,id) == NodeKind.ArrowFunctionExpression) this.statement(m,id,"",0);
+      if (this.binding.files[m].nodeScopes[id] >= 0 && this.kindOf(m,id) == NodeKind.Decorator) this.decorator(m,id);
     }
     profileEnd("types-arrows",arrowsProfile); const signaturesProfile = profileBegin();
     // Safety checks also need the types of unused fields/parameters/receivers.
