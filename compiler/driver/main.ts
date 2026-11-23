@@ -138,6 +138,13 @@ function linkCommand(plan:constRef<CppPlan>,objects:string[],links:string[],bina
 function generatedIncludes(cpp:string):string[]{
  let lines:string[]=[];for(const line of readText(cpp).split("\n")){if(line.startsWith("#include")){lines.push(line);continue;}if(line==""||line.startsWith("//")||line=="#pragma once")continue;break;}return lines;
 }
+// Identidad de las cabeceras que entran en la PCH: su ruta y su fecha/tamaño.
+// Sin ella, una PCH vieja se reutilizaba tras cambiar una cabecera fuera de
+// runtime/ (p. ej. compiler/modules/platform.hpp) y el build fallaba (#340).
+function includesIdentity(root:string,includes:string[]):string{
+ let text="";for(const line of includes){const open=line.indexOf("\"",0);const close=open>=0?line.indexOf("\"",open+1):-1;if(open<0||close<0)continue;const path=line.slice(open+1,close);const file=exists(path)?path:root+"/"+path;if(exists(file))text=text+path+" "+fileMetadata(file)+"\n";}
+ return text;
+}
 function pchArtifact(header:string,compiler:string):string{return header+(compiler.includes("clang",0)?".pch":".gch");}
 // Deja solo las `keep` PCH usadas más recientemente en la caché del usuario.
 function prunePch(directory:string,keep:number):void{
@@ -225,7 +232,7 @@ function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:s
  if(buildsProgram){
   const includes=generatedIncludes(includeSource);const compiler=compilerIdentity(cxx,binary);
   if(includes.length>0){
-   const key=contentHash(identity+"\n"+plan.programFlags.join("\n")+"\n"+includes.join("\n"));
+   const key=contentHash(identity+"\n"+plan.programFlags.join("\n")+"\n"+includes.join("\n")+"\n"+includesIdentity(root,includes));
    const shippedHeader=shipped+"/../pch/"+key+"/pch.hpp";
    if(cacheObjects&&exists(pchArtifact(shippedHeader,compiler)))plan.pchHeader=shippedHeader;
    else if(userCache!=""&&directories(userCache+"/../pch/"+key)){

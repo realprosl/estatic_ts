@@ -1163,7 +1163,10 @@ export class IrLowering {
     if (receiver == "!process" && ["argv","argc"].includes(name)) return this.runtime("process."+name,typeId,[],id,["runtime","read"]);
     if (receiver == "ChildProcess" && ["stdin","stdout","stderr"].includes(name)) return this.runtime("ChildProcess."+name,typeId,[this.expression(bindingChild(n,EdgeRole.Object))],id,["runtime","read"]);
     if (receiver == "Request" && ["method","path","rawQuery","body"].includes(name)) return this.runtime("Request.property."+name,typeId,[this.expression(bindingChild(n,EdgeRole.Object))],id,["runtime","read"]);
-    if (["length","size","kind","ok"].includes(name) && (receiver == "string" || receiver.endsWith("[]") || fixedArraySize(receiver) >= 0 || semanticTuple(receiver) || ["Map","Set","Optional","Result"].includes(genericBase(receiver)))) { const input: number = bindingChild(n,EdgeRole.Object); const actual: number = this.typeId(this.checked.files[this.module].types[input],input); let value: number = -1;
+    // #334: con un receptor constRef<string> / ref<T[]> el tipo llega sin
+    // desenvolver; se mira el tipo del valor, como en las llamadas a métodos.
+    const valueReceiver: string = memoryValue(receiver);
+    if (["length","size","kind","ok"].includes(name) && (valueReceiver == "string" || valueReceiver.endsWith("[]") || fixedArraySize(valueReceiver) >= 0 || semanticTuple(valueReceiver) || ["Map","Set","Optional","Result"].includes(genericBase(valueReceiver)))) { const input: number = bindingChild(n,EdgeRole.Object); const actual: number = this.typeId(this.checked.files[this.module].types[input],input); let value: number = -1;
       // #289: si el receptor es un place se lee prestado (sin copiar el array o el string).
       if (this.result.typeDefinitions[actual].resource || (this.purePlace(input) && (["array","Map","Set"].includes(this.result.typeDefinitions[actual].kind) || this.result.types[actual] == "string"))) value = this.emit("borrow",this.typeId("constRef<"+this.result.types[actual]+">",id),[],this.rootPlace(input),-1,"constRef",id); else value = this.expression(input); return this.emit("property",typeId,[value],-1,-1,name,id); }
     return this.emit("load",typeId,[],this.rootPlace(id),-1,"",id);
