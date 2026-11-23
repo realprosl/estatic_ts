@@ -39,47 +39,47 @@ export function parse<T = JsonValue>(text: string): Result<T, Error> {
 //   const v = JSON.parse(texto).value();
 //   if (isObject(v)) print(asString(objectGet(v, "nombre")));
 
-@cpp_native("jsonObjectGet") function nativeObjectGet(value: JsonValue, key: string): JsonValue;
-@cpp_native("jsonObjectKeys") function nativeObjectKeys(value: JsonValue): string[];
-@cpp_native("jsonArrayGet") function nativeArrayGet(value: JsonValue, index: number): JsonValue;
-@cpp_native("jsonArrayLength") function nativeArrayLength(value: JsonValue): number;
-@cpp_native("jsonAsString") function nativeAsString(value: JsonValue): string;
-@cpp_native("jsonAsNumber") function nativeAsNumber(value: JsonValue): number;
-@cpp_native("jsonAsBool") function nativeAsBool(value: JsonValue): boolean;
-@cpp_native("jsonIsObject") function nativeIsObject(value: JsonValue): boolean;
-@cpp_native("jsonIsArray") function nativeIsArray(value: JsonValue): boolean;
-@cpp_native("jsonIsString") function nativeIsString(value: JsonValue): boolean;
-@cpp_native("jsonIsNumber") function nativeIsNumber(value: JsonValue): boolean;
-@cpp_native("jsonIsBool") function nativeIsBool(value: JsonValue): boolean;
-@cpp_native("jsonIsNull") function nativeIsNull(value: JsonValue): boolean;
+@cpp_native("jsonObjectGet") function nativeObjectGet(value: constRef<JsonValue>, key: string): JsonValue;
+@cpp_native("jsonObjectKeys") function nativeObjectKeys(value: constRef<JsonValue>): string[];
+@cpp_native("jsonArrayGet") function nativeArrayGet(value: constRef<JsonValue>, index: number): JsonValue;
+@cpp_native("jsonArrayLength") function nativeArrayLength(value: constRef<JsonValue>): number;
+@cpp_native("jsonAsString") function nativeAsString(value: constRef<JsonValue>): string;
+@cpp_native("jsonAsNumber") function nativeAsNumber(value: constRef<JsonValue>): number;
+@cpp_native("jsonAsBool") function nativeAsBool(value: constRef<JsonValue>): boolean;
+@cpp_native("jsonIsObject") function nativeIsObject(value: constRef<JsonValue>): boolean;
+@cpp_native("jsonIsArray") function nativeIsArray(value: constRef<JsonValue>): boolean;
+@cpp_native("jsonIsString") function nativeIsString(value: constRef<JsonValue>): boolean;
+@cpp_native("jsonIsNumber") function nativeIsNumber(value: constRef<JsonValue>): boolean;
+@cpp_native("jsonIsBool") function nativeIsBool(value: constRef<JsonValue>): boolean;
+@cpp_native("jsonIsNull") function nativeIsNull(value: constRef<JsonValue>): boolean;
 @cpp_native("jsonEscape") function nativeEscape(text: string): string;
 
 /** El valor de `key` en un objeto; un valor vacío si no está o no es objeto. */
-export function objectGet(value: JsonValue, key: string): JsonValue { return nativeObjectGet(value, key); }
+export function objectGet(value: constRef<JsonValue>, key: string): JsonValue { return nativeObjectGet(value, key); }
 /** Las claves de un objeto, en orden de inserción. */
-export function objectKeys(value: JsonValue): string[] { return nativeObjectKeys(value); }
+export function objectKeys(value: constRef<JsonValue>): string[] { return nativeObjectKeys(value); }
 /** El elemento `index` de un array; un valor vacío si no existe. */
-export function arrayGet(value: JsonValue, index: number): JsonValue { return nativeArrayGet(value, index); }
+export function arrayGet(value: constRef<JsonValue>, index: number): JsonValue { return nativeArrayGet(value, index); }
 /** Cuántos elementos tiene un array (0 si no es un array). */
-export function arrayLength(value: JsonValue): number { return nativeArrayLength(value); }
+export function arrayLength(value: constRef<JsonValue>): number { return nativeArrayLength(value); }
 /** El texto de un valor de tipo string ("" si no lo es). */
-export function asString(value: JsonValue): string { return nativeAsString(value); }
+export function asString(value: constRef<JsonValue>): string { return nativeAsString(value); }
 /** El número de un valor de tipo number (0 si no lo es). */
-export function asNumber(value: JsonValue): number { return nativeAsNumber(value); }
+export function asNumber(value: constRef<JsonValue>): number { return nativeAsNumber(value); }
 /** El booleano de un valor de tipo boolean (false si no lo es). */
-export function asBool(value: JsonValue): boolean { return nativeAsBool(value); }
+export function asBool(value: constRef<JsonValue>): boolean { return nativeAsBool(value); }
 /** ¿El valor es un objeto? */
-export function isObject(value: JsonValue): boolean { return nativeIsObject(value); }
+export function isObject(value: constRef<JsonValue>): boolean { return nativeIsObject(value); }
 /** ¿El valor es un array? */
-export function isArray(value: JsonValue): boolean { return nativeIsArray(value); }
+export function isArray(value: constRef<JsonValue>): boolean { return nativeIsArray(value); }
 /** ¿El valor es un string? */
-export function isString(value: JsonValue): boolean { return nativeIsString(value); }
+export function isString(value: constRef<JsonValue>): boolean { return nativeIsString(value); }
 /** ¿El valor es un number? */
-export function isNumber(value: JsonValue): boolean { return nativeIsNumber(value); }
+export function isNumber(value: constRef<JsonValue>): boolean { return nativeIsNumber(value); }
 /** ¿El valor es un boolean? */
-export function isBool(value: JsonValue): boolean { return nativeIsBool(value); }
+export function isBool(value: constRef<JsonValue>): boolean { return nativeIsBool(value); }
 /** ¿El valor es null? */
-export function isNull(value: JsonValue): boolean { return nativeIsNull(value); }
+export function isNull(value: constRef<JsonValue>): boolean { return nativeIsNull(value); }
 /** Escapa un texto para escribirlo dentro de un JSON. */
 export function escape(text: string): string { return nativeEscape(text); }
 
@@ -90,49 +90,49 @@ export function escape(text: string): string { return nativeEscape(text); }
 // código que lo usaba no cambia: solo la línea de import.
 
 /** @see objectGet */
-export function jsonObjectGet(value: JsonValue, key: string): JsonValue { return objectGet(value, key); }
+export function jsonObjectGet(value: constRef<JsonValue>, key: string): JsonValue { return objectGet(value, key); }
 /** @see objectKeys */
-export function jsonObjectKeys(value: JsonValue): string[] { return objectKeys(value); }
+export function jsonObjectKeys(value: constRef<JsonValue>): string[] { return objectKeys(value); }
 /** @see arrayGet */
-export function jsonArrayGet(value: JsonValue, index: number): JsonValue { return arrayGet(value, index); }
+export function jsonArrayGet(value: constRef<JsonValue>, index: number): JsonValue { return arrayGet(value, index); }
 /** @see arrayLength */
-export function jsonArrayLength(value: JsonValue): number { return arrayLength(value); }
+export function jsonArrayLength(value: constRef<JsonValue>): number { return arrayLength(value); }
 /** @see asString */
-export function jsonAsString(value: JsonValue): string { return asString(value); }
+export function jsonAsString(value: constRef<JsonValue>): string { return asString(value); }
 /** @see asNumber */
-export function jsonAsNumber(value: JsonValue): number { return asNumber(value); }
+export function jsonAsNumber(value: constRef<JsonValue>): number { return asNumber(value); }
 /** @see asBool */
-export function jsonAsBool(value: JsonValue): boolean { return asBool(value); }
+export function jsonAsBool(value: constRef<JsonValue>): boolean { return asBool(value); }
 /** @see isObject */
-export function jsonIsObject(value: JsonValue): boolean { return isObject(value); }
+export function jsonIsObject(value: constRef<JsonValue>): boolean { return isObject(value); }
 /** @see isArray */
-export function jsonIsArray(value: JsonValue): boolean { return isArray(value); }
+export function jsonIsArray(value: constRef<JsonValue>): boolean { return isArray(value); }
 /** @see isString */
-export function jsonIsString(value: JsonValue): boolean { return isString(value); }
+export function jsonIsString(value: constRef<JsonValue>): boolean { return isString(value); }
 /** @see isNumber */
-export function jsonIsNumber(value: JsonValue): boolean { return isNumber(value); }
+export function jsonIsNumber(value: constRef<JsonValue>): boolean { return isNumber(value); }
 /** @see isBool */
-export function jsonIsBool(value: JsonValue): boolean { return isBool(value); }
+export function jsonIsBool(value: constRef<JsonValue>): boolean { return isBool(value); }
 /** @see isNull */
-export function jsonIsNull(value: JsonValue): boolean { return isNull(value); }
+export function jsonIsNull(value: constRef<JsonValue>): boolean { return isNull(value); }
 /** @see escape */
 export function jsonEscape(text: string): string { return escape(text); }
 
 export default class JSON {
   static stringify<T>(value: T, replacer?: string[], space?: number | string): string { return stringify<T>(value, replacer, space); }
   static parse<T = JsonValue>(text: string): Result<T, Error> { return parse<T>(text); }
-  static objectGet(value: JsonValue, key: string): JsonValue { return objectGet(value, key); }
-  static objectKeys(value: JsonValue): string[] { return objectKeys(value); }
-  static arrayGet(value: JsonValue, index: number): JsonValue { return arrayGet(value, index); }
-  static arrayLength(value: JsonValue): number { return arrayLength(value); }
-  static asString(value: JsonValue): string { return asString(value); }
-  static asNumber(value: JsonValue): number { return asNumber(value); }
-  static asBool(value: JsonValue): boolean { return asBool(value); }
-  static isObject(value: JsonValue): boolean { return isObject(value); }
-  static isArray(value: JsonValue): boolean { return isArray(value); }
-  static isString(value: JsonValue): boolean { return isString(value); }
-  static isNumber(value: JsonValue): boolean { return isNumber(value); }
-  static isBool(value: JsonValue): boolean { return isBool(value); }
-  static isNull(value: JsonValue): boolean { return isNull(value); }
+  static objectGet(value: constRef<JsonValue>, key: string): JsonValue { return objectGet(value, key); }
+  static objectKeys(value: constRef<JsonValue>): string[] { return objectKeys(value); }
+  static arrayGet(value: constRef<JsonValue>, index: number): JsonValue { return arrayGet(value, index); }
+  static arrayLength(value: constRef<JsonValue>): number { return arrayLength(value); }
+  static asString(value: constRef<JsonValue>): string { return asString(value); }
+  static asNumber(value: constRef<JsonValue>): number { return asNumber(value); }
+  static asBool(value: constRef<JsonValue>): boolean { return asBool(value); }
+  static isObject(value: constRef<JsonValue>): boolean { return isObject(value); }
+  static isArray(value: constRef<JsonValue>): boolean { return isArray(value); }
+  static isString(value: constRef<JsonValue>): boolean { return isString(value); }
+  static isNumber(value: constRef<JsonValue>): boolean { return isNumber(value); }
+  static isBool(value: constRef<JsonValue>): boolean { return isBool(value); }
+  static isNull(value: constRef<JsonValue>): boolean { return isNull(value); }
   static escape(text: string): string { return escape(text); }
 }

@@ -43,7 +43,7 @@ export class BindingResult {
   files: BoundFile[]; diagnostics: SourceDiagnostic[]; success: boolean;
   constructor() { this.scopes = []; this.symbols = []; this.references = []; this.exports = []; this.files = []; this.diagnostics = []; this.success = false; }
 }
-export function bindingChild(node: AstNode, role: EdgeRole): number {
+export function bindingChild(node: constRef<AstNode>, role: EdgeRole): number {
   for (const edge of node.edges) { if (edge.role == role) return edge.node; } return -1;
 }
 export function isBindingMember(kind: string): boolean {

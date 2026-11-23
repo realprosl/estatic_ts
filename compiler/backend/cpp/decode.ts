@@ -1,14 +1,5 @@
 import {IrSource,IrPlace,IrInstruction,IrBlock,IrFunction,IrModule,IrIssue,IrProject,IrDispatch,IrType,IrRuntimeContract,IrCleanupScope,IrLease,IrEffectBorrow,IrEffectContract,IrAnnotation} from "../../ir/model";
-// Lectura del IR sin copias: estatic:json recibe el JsonValue por valor y cada
-// campo leído copiaba el objeto padre entero (leer el IR del compilador costaba
-// ~5 min). Estas declaraciones lo leen por referencia. Se quitan cuando
-// estatic:json reciba constRef<JsonValue> (#320).
-@cpp_native("jsonObjectGet") function jsonObjectGet(value: constRef<JsonValue>, key: string): JsonValue;
-@cpp_native("jsonArrayGet") function jsonArrayGet(value: constRef<JsonValue>, index: number): JsonValue;
-@cpp_native("jsonArrayLength") function jsonArrayLength(value: constRef<JsonValue>): number;
-@cpp_native("jsonAsString") function jsonAsString(value: constRef<JsonValue>): string;
-@cpp_native("jsonAsNumber") function jsonAsNumber(value: constRef<JsonValue>): number;
-@cpp_native("jsonAsBool") function jsonAsBool(value: constRef<JsonValue>): boolean;
+import { jsonObjectGet, jsonArrayGet, jsonArrayLength, jsonAsString, jsonAsNumber, jsonAsBool } from "estatic:json";
 import { exitProcess } from "estatic:process/args";
 function decodestringArray(value:constRef<JsonValue>):string[]{let decoded:string[]=[];const count:number=jsonArrayLength(value);for(let k:number=0;k<count;k=k+1){const item:JsonValue=jsonArrayGet(value,k);decoded.push(jsonAsString(item));}return decoded;}
 function decodenumberArray(value:constRef<JsonValue>):number[]{let decoded:number[]=[];const count:number=jsonArrayLength(value);for(let k:number=0;k<count;k=k+1){const item:JsonValue=jsonArrayGet(value,k);decoded.push(jsonAsNumber(item));}return decoded;}
