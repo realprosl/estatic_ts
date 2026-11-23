@@ -22,8 +22,13 @@ export class FlowFinding {
  constructor(module:number,node:number,message:string){this.module=module;this.node=node;this.message=message;}
 }
 export class SafetyState {
-  slots: number[]; paths: string[]; resources: number[]; exit: string;
-  constructor(count: number) { this.slots = []; this.paths = []; this.resources = []; this.exit = ""; for (let i: number = 0; i < count; i = i + 1) this.slots.push(1); }
+  // Estado por símbolo, disperso: solo los que no valen 1 (inicializado y
+  // disponible). Antes era un array con una entrada por símbolo del proyecto,
+  // y cada copia del estado (en cada rama) copiaba cientos de miles.
+  // localsZero: en el flujo global las variables locales empiezan sin
+  // inicializar (0) en vez de 1; así no hace falta guardar una por una.
+  slots: Map<number,number>; localsZero: boolean; paths: string[]; resources: number[]; exit: string;
+  constructor(count: number) { this.slots = new Map<number,number>(); this.localsZero = false; this.paths = []; this.resources = []; this.exit = ""; }
 }
 export class SafetyEdge {
   source: number; target: number;
@@ -74,7 +79,7 @@ export class SafetyAnalyzer {
   // Campos de instancia por ámbito de clase, en orden de sid.
   fieldStart: number[]; fieldSymbols: number[];
   // Visibilidad: símbolos exportados y referencias de tipo por nodo (vértice).
-  readonlyReceivers: Map<string,boolean>; memoReceivers: boolean; classFieldSymbols: boolean[];
+  readonlyReceivers: Map<string,boolean>; memoReceivers: boolean; classFieldSymbols: boolean[]; localSymbols: boolean[];
   visibilityIndexed: boolean; publicSymbols: boolean[]; typeRefStart: number[]; typeRefs: number[];
   constructor(graph: ModuleGraph, binding: BindingResult, result: CheckResult) {
     this.graph = graph; this.binding = binding; this.result = result; this.effects = new EffectAnalyzer(graph,binding,result); this.arguments = []; this.offsets = []; this.nodes = 0;
@@ -85,7 +90,7 @@ export class SafetyAnalyzer {
     this.defaultReads = new Map<number,boolean>(); this.valueDefaults = new Map<number,boolean>();
     this.visits = 0; this.collectFlow=false;this.findings=[];
     this.indexed = false; this.ownedStart = []; this.ownedSymbols = []; this.classFieldNodes = []; this.fieldStart = []; this.fieldSymbols = [];
-    this.readonlyReceivers = new Map<string,boolean>(); this.memoReceivers = false; this.classFieldSymbols = [];
+    this.readonlyReceivers = new Map<string,boolean>(); this.memoReceivers = false; this.classFieldSymbols = []; this.localSymbols = [];
     this.visibilityIndexed = false; this.publicSymbols = []; this.typeRefStart = []; this.typeRefs = [];
   }
   index(): void {
@@ -651,15 +656,28 @@ export class SafetyAnalyzer {
       if (s.module >= 0 && s.node >= 0 && (s.namespaceModule) < 0) for (const declaration of s.declarations) this.publicSurface(s.module,declaration);
     }
   }
+  slotDefault(state: constRef<SafetyState>, sid: number): number {
+    if (!state.localsZero) return 1;
+    if (this.localSymbols.length != this.binding.symbols.length) { this.localSymbols = []; for (const s of this.binding.symbols) this.localSymbols.push(localBinding(s.kind)); }
+    return this.localSymbols[sid] ? 0 : 1;
+  }
+  slot(state: constRef<SafetyState>, sid: number): number { const value: Optional<number> = state.slots.get(sid); return value.isPresent() ? value.value() : this.slotDefault(state,sid); }
+  putSlot(state: ref<SafetyState>, sid: number, value: number): void { if (value == this.slotDefault(state,sid)) { if (state.slots.has(sid)) state.slots.delete(sid); } else state.slots.set(sid,value); }
+  sameSlots(left: constRef<SafetyState>, right: constRef<SafetyState>): boolean {
+    if (left.localsZero != right.localsZero || left.slots.size != right.slots.size) return false;
+    for (const sid of left.slots.keys()) if (this.slot(right,sid) != this.slot(left,sid)) return false;
+    return true;
+  }
+  joinSlot(result: ref<SafetyState>, sid: number, a: number, b: number): void {
+    if (a == b) return; if (this.classFieldSymbols[sid]) this.putSlot(result,sid,3); else if (a == 0 || b == 0) this.putSlot(result,sid,0); else this.putSlot(result,sid,3);
+  }
   join(left: constRef<SafetyState>, right: constRef<SafetyState>): SafetyState {
     if (left.exit != "") return right;
     if (right.exit != "") return left;
     let result: SafetyState = left;
     if (this.classFieldSymbols.length != this.binding.symbols.length) { this.classFieldSymbols = []; for (const s of this.binding.symbols) this.classFieldSymbols.push(s.kind == "ClassField"); }
-    for (let sid: number = 0; sid < left.slots.length; sid = sid + 1) {
-      const a: number = left.slots[sid]; const b: number = right.slots[sid];
-      if (a == b) continue; if (this.classFieldSymbols[sid]) result.slots[sid] = 3; else if (a == 0 || b == 0) result.slots[sid] = 0; else result.slots[sid] = 3;
-    }
+    for (const sid of left.slots.keys()) this.joinSlot(result,sid,this.slot(left,sid),this.slot(right,sid));
+    for (const sid of right.slots.keys()) if (!left.slots.has(sid)) this.joinSlot(result,sid,this.slot(left,sid),this.slot(right,sid));
     for (let at: number = 0; at < left.paths.length; at = at+1) { const a: number = left.resources[at]; const b: number = this.pathState(right,left.paths[at]); setSafetyPath(result,left.paths[at],a == b ? a : 3); }
     for (let at: number = 0; at < right.paths.length; at = at+1) { const a: number = this.pathState(left,right.paths[at]); const b: number = right.resources[at]; setSafetyPath(result,right.paths[at],a == b ? a : 3); }
     return result;
@@ -685,11 +703,11 @@ export class SafetyAnalyzer {
   initializeFields(module: number, id: number, state: ref<SafetyState>): void {
     for (const sid of this.constructorFields(module,id)) {
       const s = this.binding.symbols[sid]; const field: AstNode = this.node(s.module,s.node);
-      if (field.kind == NodeKind.Parameter || bindingChild(field,EdgeRole.DefaultValue) >= 0) state.slots[sid] = 1; else state.slots[sid] = 0;
+      if (field.kind == NodeKind.Parameter || bindingChild(field,EdgeRole.DefaultValue) >= 0) this.putSlot(state,sid,1); else this.putSlot(state,sid,0);
     }
   }
   fieldsInitialized(module: number, id: number, state: constRef<SafetyState>): void {
-    for (const sid of this.constructorFields(module,id)) if (state.slots[sid] != 1) this.report(module,id,"Campo no inicializado en todas las rutas: '" + this.binding.symbols[sid].name + "'");
+    for (const sid of this.constructorFields(module,id)) if (this.slot(state,sid) != 1) this.report(module,id,"Campo no inicializado en todas las rutas: '" + this.binding.symbols[sid].name + "'");
   }
   constructorField(module: number, id: number): number {
     const n: AstNode = this.node(module,id); if (n.kind != NodeKind.MemberExpression) return -1;
@@ -715,12 +733,12 @@ export class SafetyAnalyzer {
   read(module: number, id: number, sid: number, state: constRef<SafetyState>): void {
     if (sid < 0 || (this.binding.symbols[sid].module) < 0) return;
     const s: BindingSymbol = this.binding.symbols[sid]; if (!localBinding(s.kind) && !["Parameter","receiver"].includes(s.kind)) return;
-    if (state.slots[sid] == 0) this.report(module,id,"E4001: uso antes de inicializar '" + s.name + "'");
-    if (state.slots[sid] == 2 || state.slots[sid] == 3) {
+    if (this.slot(state,sid) == 0) this.report(module,id,"E4001: uso antes de inicializar '" + s.name + "'");
+    if (this.slot(state,sid) == 2 || this.slot(state,sid) == 3) {
       // #153: señalar dónde se movió (la última transferencia vista de ese símbolo).
       const site: string = this.moveLines[sid] >= 0 ? " en la línea " + numberToString(this.moveLines[sid]) : "";
       const help: string = "\nayuda: si necesitas los dos valores, copia antes de mover, o reasigna '" + s.name + "' antes de usarla";
-      this.report(module,id,state.slots[sid] == 2 ? "E4102: '" + s.name + "' ya no se puede usar: se transfirió con move()" + site + help : "E4103: '" + s.name + "' puede haberse transferido con move() en algún camino" + (site == "" ? "" : " (" + "línea " + numberToString(this.moveLines[sid]) + ")") + help);
+      this.report(module,id,this.slot(state,sid) == 2 ? "E4102: '" + s.name + "' ya no se puede usar: se transfirió con move()" + site + help : "E4103: '" + s.name + "' puede haberse transferido con move() en algún camino" + (site == "" ? "" : " (" + "línea " + numberToString(this.moveLines[sid]) + ")") + help);
     }
     if (this.borrowSources[sid] < 0) this.access(module,id,sid,"read");
   }
@@ -790,7 +808,7 @@ export class SafetyAnalyzer {
     for (const sid of summary.writes) { const root: number = this.observable(summaryId,sid,module,id); if (root >= 0) this.access(module,this.summaryPosition(summaryId,sid,module,id),root,"write"); }
     for (const sid of summary.moves) {
       const root: number = this.observable(summaryId,sid,module,id);
-      if (root >= 0) { const position: number = this.summaryPosition(summaryId,sid,module,id); this.read(module,position,root,state); this.access(module,position,root,"move"); if (state.slots[root] != 2) state.slots[root] = 3; }
+      if (root >= 0) { const position: number = this.summaryPosition(summaryId,sid,module,id); this.read(module,position,root,state); this.access(module,position,root,"move"); if (this.slot(state,root) != 2) this.putSlot(state,root,3); }
     }
   }
   defaultsNeedFlow(summaryId: number): boolean {
@@ -823,7 +841,7 @@ export class SafetyAnalyzer {
     if (summary.invokes.length > 0 || summary.moves.length > 0 || call.kind == NodeKind.NewExpression) return this.summaryReason(summaryId,"effects invokes="+numberToString(summary.invokes.length)+" moves="+numberToString(summary.moves.length));
     const frame: number = this.owner(this.binding.files[module].nodeScopes[id]);
     if (frame >= 0 && this.attributeOf(module,frame-this.offsets[module],AttributeKind.Name) == "constructor") {
-      for (const field of this.constructorFields(module,id)) if (state.slots[field] != 1) return this.summaryReason(summaryId,"constructor fields pending");
+      for (const field of this.constructorFields(module,id)) if (this.slot(state,field) != 1) return this.summaryReason(summaryId,"constructor fields pending");
     }
     for (const input of functionParams(this.result.files[module].signatures[id])) {
       const value: string = input.startsWith("...") ? input.slice(3,input.length) : input;
@@ -846,7 +864,7 @@ export class SafetyAnalyzer {
       // summary() checks each projected read/write against live caller leases.
       // A lexical lease elsewhere is not a reason to replay the whole body.
     }
-    for (const symbol of summary.writes) { const root: number = this.observable(summaryId,symbol,module,id); if (root >= 0 && state.slots[root] != 1) return this.summaryReason(summaryId,"uninitialized write"); }
+    for (const symbol of summary.writes) { const root: number = this.observable(summaryId,symbol,module,id); if (root >= 0 && this.slot(state,root) != 1) return this.summaryReason(summaryId,"uninitialized write"); }
     return true;
   }
   unknown(module: number, id: number, state: constRef<SafetyState>): void {
@@ -876,7 +894,7 @@ export class SafetyAnalyzer {
     }
     for (let global: number = 0; global < this.binding.symbols.length; global = global + 1) {
       const s = this.binding.symbols[global];
-      if (localBinding(s.kind) && this.owner(s.scope) < 0 && (this.transferType(this.result.symbolTypes[global]) || state.slots[global] == 2 || state.slots[global] == 3)) this.report(module,id,"E4104: efectos opacos sobre globals no demostrados");
+      if (localBinding(s.kind) && this.owner(s.scope) < 0 && (this.transferType(this.result.symbolTypes[global]) || this.slot(state,global) == 2 || this.slot(state,global) == 3)) this.report(module,id,"E4104: efectos opacos sobre globals no demostrados");
     }
   }
   suspension(module: number, id: number): void {
@@ -893,7 +911,7 @@ export class SafetyAnalyzer {
   consumeTask(module: number, id: number, state: ref<SafetyState>): void {
     const root: number = this.root(module,id); this.access(module,id,root,"move");
     if (this.helper(module,id) == "move") return;
-    if (this.kindOf(module,id) == NodeKind.IdentifierExpression) { if (root >= 0) state.slots[root] = 2; }
+    if (this.kindOf(module,id) == NodeKind.IdentifierExpression) { if (root >= 0) this.putSlot(state,root,2); }
     else if (this.kindOf(module,id) == NodeKind.MemberExpression || this.kindOf(module,id) == NodeKind.IndexExpression) setSafetyPath(state,this.projectionKey(module,id),2);
   }
   awaitTasks(module: number, id: number, input: number, state: ref<SafetyState>, active: number[], detached: boolean = false): void {
@@ -910,7 +928,7 @@ export class SafetyAnalyzer {
         const summary = this.effects.summaries[target]; const owner: number = this.vertex(summary.module,summary.node);
         if (detached) {
           if (summary.unknown) this.report(module,id,"E4204: spawn requiere efectos de la tarea demostrados");
-          for (const sid of summary.reads) if (this.owner(this.binding.symbols[sid].scope) < 0 && (this.transferType(this.result.symbolTypes[sid]) || state.slots[sid] != 1)) this.report(module,id,"E4204: spawn no puede retener un global con ownership o sin inicializar");
+          for (const sid of summary.reads) if (this.owner(this.binding.symbols[sid].scope) < 0 && (this.transferType(this.result.symbolTypes[sid]) || this.slot(state,sid) != 1)) this.report(module,id,"E4204: spawn no puede retener un global con ownership o sin inicializar");
           for (const sid of summary.moves) if (this.owner(this.binding.symbols[sid].scope) < 0) this.report(module,id,"E4204: spawn no puede mover un global sin duración demostrada");
           for (const sid of summary.writes) if (this.owner(this.binding.symbols[sid].scope) < 0 && this.transferType(this.result.symbolTypes[sid])) this.report(module,id,"E4204: spawn no puede modificar un global con ownership");
         } else if (active.includes(owner) || active.length >= 64) this.summary(target,module,id,choice);
@@ -942,7 +960,7 @@ export class SafetyAnalyzer {
       while (true) {
         let iteration: SafetyState = head; this.invoke(module,id,iteration,active,false);
         const merged: SafetyState = this.join(head,iteration); let same: boolean = true;
-        for (let sid: number = 0; sid < head.slots.length; sid = sid + 1) if (head.slots[sid] != merged.slots[sid]) same = false;
+        if (!this.sameSlots(head,merged)) same = false;
         if (!this.samePaths(head,merged)) same = false; head = merged; if (same) break;
       }
       state = head; while (this.leases.length > leaseStart) this.leases.pop(); return;
@@ -990,7 +1008,7 @@ export class SafetyAnalyzer {
     this.initializeFields(target.module,target.node,state);
     this.index(); const ownedEnd: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner + 1] : 0;
     for (let at: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner] : 0; at < ownedEnd; at = at + 1) { const sid: number = this.ownedSymbols[at];
-      state.slots[sid] = (this.binding.symbols[sid].kind == "receiver" ? 1 : 0); this.initializePath(state,"s" + numberToString(sid));
+      this.putSlot(state,sid,(this.binding.symbols[sid].kind == "receiver" ? 1 : 0)); this.initializePath(state,"s" + numberToString(sid));
       const object: number = this.childOf(module,id,EdgeRole.Object);
       if (this.binding.symbols[sid].kind == "receiver" && object >= 0) { const pendingPush = new SafetyArgument(sid,module,object,this.root(module,object)); this.arguments.push(pendingPush); }
     }
@@ -1015,7 +1033,7 @@ export class SafetyAnalyzer {
     }
     for (const edge of this.node(target.module,target.node).edges) if (edge.role == EdgeRole.Params) {
       if (phase != "resume" && actualNodes[parameterIndex] < 0) this.expression(target.module,this.childOf(target.module,edge.node,EdgeRole.DefaultValue),state,next);
-      const parameter: number = this.binding.files[target.module].declarations[edge.node]; if (parameter >= 0) state.slots[parameter] = 1;
+      const parameter: number = this.binding.files[target.module].declarations[edge.node]; if (parameter >= 0) this.putSlot(state,parameter,1);
       const value: number = actualNodes[parameterIndex] >= 0 ? actualNodes[parameterIndex] : this.childOf(target.module,edge.node,EdgeRole.DefaultValue);
       const valueModule: number = actualNodes[parameterIndex] >= 0 ? module : target.module;
       if (value >= 0) {
@@ -1026,7 +1044,7 @@ export class SafetyAnalyzer {
           lease.end = nodeEnd(this.node(target.module,bodyNode)); this.leases.push(lease);
         }
       }
-      if (parameter >= 0 && this.parameterProperty(target.module,edge.node) && this.transferType(this.result.symbolTypes[parameter])) state.slots[parameter] = 2;
+      if (parameter >= 0 && this.parameterProperty(target.module,edge.node) && this.transferType(this.result.symbolTypes[parameter])) this.putSlot(state,parameter,2);
       parameterIndex = parameterIndex + 1;
     }
     const body: number = this.childOf(target.module,target.node,EdgeRole.Body);
@@ -1036,8 +1054,8 @@ export class SafetyAnalyzer {
     for (let at: number = returnStart; at < this.returns.length; at = at + 1) { const incoming = this.returns[at]; state = this.join(state,incoming); }
     while (this.returns.length > returnStart) this.returns.pop(); if (phase != "resume") this.sites.pop();
     state.exit = "";
-    for (let at: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner] : 0; at < ownedEnd; at = at + 1) { const sid: number = this.ownedSymbols[at]; state.slots[sid] = saved.slots[sid]; this.restorePaths(state,saved,sid); }
-    for (const sid of this.constructorFields(target.module,target.node)) state.slots[sid] = saved.slots[sid];
+    for (let at: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner] : 0; at < ownedEnd; at = at + 1) { const sid: number = this.ownedSymbols[at]; this.putSlot(state,sid,this.slot(saved,sid)); this.restorePaths(state,saved,sid); }
+    for (const sid of this.constructorFields(target.module,target.node)) this.putSlot(state,sid,this.slot(saved,sid));
     while (this.arguments.length > argumentStart) this.arguments.pop(); while (this.leases.length > leaseStart) this.leases.pop();
     while (this.breaks.length > breakStart) this.breaks.pop(); while (this.continues.length > continueStart) this.continues.pop();
     while (this.substitutions.length > substitutionStart) { this.substitutions.pop(); this.substitutionTypes.pop(); }
@@ -1086,7 +1104,7 @@ export class SafetyAnalyzer {
     if ((n.kind == NodeKind.MemberExpression || n.kind == NodeKind.IndexExpression) && !this.projection(module,id)) this.readPaths(module,id,state);
     if (n.kind == NodeKind.MemberExpression) {
       const field: number = this.constructorField(module,id);
-      if (field >= 0 && state.slots[field] != 1) this.report(module,id,"Lectura de campo antes de inicializar '" + this.binding.symbols[field].name + "'");
+      if (field >= 0 && this.slot(state,field) != 1) this.report(module,id,"Lectura de campo antes de inicializar '" + this.binding.symbols[field].name + "'");
     }
     if (n.kind == NodeKind.ArrowFunctionExpression) { for (const c of this.result.captures) if (c.module == module && c.closure == id) {
       this.read(module,id,c.symbol,state);
@@ -1104,14 +1122,14 @@ export class SafetyAnalyzer {
       } else if (this.kindOf(module,target) != NodeKind.IdentifierExpression || n.kind != NodeKind.AssignmentExpression) this.expression(module,target,state,active);
       if (field >= 0) {
         const f = this.binding.symbols[field];
-        if (this.attributeOf(f.module,f.node,AttributeKind.Readonly) == "true" && state.slots[field] != 0) this.report(module,target,"Campo readonly ya inicializado en alguna ruta: '" + f.name + "'");
-        state.slots[field] = 1;
+        if (this.attributeOf(f.module,f.node,AttributeKind.Readonly) == "true" && this.slot(state,field) != 0) this.report(module,target,"Campo readonly ya inicializado en alguna ruta: '" + f.name + "'");
+        this.putSlot(state,field,1);
       }
       const sid: number = this.root(module,target);
-      if (sid >= 0 && this.kindOf(module,target) == NodeKind.IdentifierExpression && state.slots[sid] == 0) this.report(module,target,"E4001: escritura antes de inicializar");
+      if (sid >= 0 && this.kindOf(module,target) == NodeKind.IdentifierExpression && this.slot(state,sid) == 0) this.report(module,target,"E4001: escritura antes de inicializar");
       this.access(module,target,sid,"write");
       this.writePaths(module,target,state); this.initializePath(state,this.projectionKey(module,target));
-      if (this.kindOf(module,target) == NodeKind.IdentifierExpression && sid >= 0) state.slots[sid] = 1;
+      if (this.kindOf(module,target) == NodeKind.IdentifierExpression && sid >= 0) this.putSlot(state,sid,1);
       return;
     }
     if (n.kind == NodeKind.BinaryExpression && (n.get(AttributeKind.Operator) == "&&" || n.get(AttributeKind.Operator) == "||")) {
@@ -1150,7 +1168,7 @@ export class SafetyAnalyzer {
       for (const edge of n.edges) if (edge.role == EdgeRole.Args) this.expression(module,edge.node,state,active);
       if (this.helper(module,id) == "move") {
         const arg: number = bindingChild(n,EdgeRole.Args); const sid: number = this.root(module,arg); this.access(module,id,sid,"move");
-        if (this.kindOf(module,arg) == NodeKind.IdentifierExpression) { if (sid >= 0) { state.slots[sid] = 2; this.moveLines[sid] = this.node(module,id).start.line; } }
+        if (this.kindOf(module,arg) == NodeKind.IdentifierExpression) { if (sid >= 0) { this.putSlot(state,sid,2); this.moveLines[sid] = this.node(module,id).start.line; } }
         else { const projectionKey: string = this.projectionKey(module,arg); if (projectionKey == "") this.report(module,arg,"E4104: move requiere una procedencia de campo demostrada"); else setSafetyPath(state,projectionKey,2); }
       } else if (this.helper(module,id) != "ref" && this.helper(module,id) != "constRef") {
         this.callBorrows(module,id);
@@ -1160,7 +1178,7 @@ export class SafetyAnalyzer {
           while (true) {
             let iteration: SafetyState = head; this.awaitTasks(module,id,bindingChild(n,EdgeRole.Args),iteration,active);
             const merged: SafetyState = this.join(head,iteration); let same: boolean = this.samePaths(head,merged);
-            for (let sid: number = 0; sid < head.slots.length; sid = sid+1) if (head.slots[sid] != merged.slots[sid]) same = false;
+            if (!this.sameSlots(head,merged)) same = false;
             head = merged; if (same) break;
           } state = head;
         }
@@ -1186,7 +1204,7 @@ export class SafetyAnalyzer {
       let body: SafetyState = head; this.expression(module,condition,body,active);
       if (known != "true") exits = this.join(exits,body);
       if (known == "false") break;
-      if (iteration) { const sid: number = this.binding.files[module].declarations[bindingChild(n,EdgeRole.Binding)]; if (sid >= 0) { body.slots[sid] = 1; this.initializePath(body,"s"+numberToString(sid)); } }
+      if (iteration) { const sid: number = this.binding.files[module].declarations[bindingChild(n,EdgeRole.Binding)]; if (sid >= 0) { this.putSlot(body,sid,1); this.initializePath(body,"s"+numberToString(sid)); } }
       if (n.kind == NodeKind.ForOfStatement && n.get(AttributeKind.Await) == "true") this.awaitTasks(module,id,bindingChild(n,EdgeRole.Iterable),body,active);
       this.walk(module,bindingChild(n,EdgeRole.Body),body,active);
       for (let at: number = breakStart; at < this.breaks.length; at = at + 1) { const incoming = this.breaks[at]; exits = this.join(exits,incoming); }
@@ -1195,7 +1213,7 @@ export class SafetyAnalyzer {
       if (body.exit != "") break;
       this.expression(module,bindingChild(n,EdgeRole.Increment),body,active);
       const next: SafetyState = this.join(entry,body); let same: boolean = true;
-      for (let sid: number = 0; sid < head.slots.length; sid = sid + 1) if (head.slots[sid] != next.slots[sid]) same = false;
+      if (!this.sameSlots(head,next)) same = false;
       if (!this.samePaths(head,next)) same = false; head = next; if (same) break;
     }
     state = exits; if (state.exit == "unreachable") state.exit = "return";
@@ -1214,9 +1232,9 @@ export class SafetyAnalyzer {
       for (const edge of n.edges) if (edge.role == EdgeRole.ArrayBindings || edge.role == EdgeRole.ObjectBindings) {
         const fallback: number = this.childOf(module,edge.node,EdgeRole.DefaultValue);
         if (fallback >= 0) { let choice: SafetyState = state; this.expression(module,fallback,choice,active); state = this.join(state,choice); }
-        const target: number = this.binding.files[module].declarations[edge.node]; if (target >= 0) state.slots[target] = 1;
+        const target: number = this.binding.files[module].declarations[edge.node]; if (target >= 0) this.putSlot(state,target,1);
       }
-      const sid: number = this.binding.files[module].declarations[id]; if (sid >= 0) state.slots[sid] = 1; return;
+      const sid: number = this.binding.files[module].declarations[id]; if (sid >= 0) this.putSlot(state,sid,1); return;
     }
     if (n.kind == NodeKind.DeleteStatement) {
       const target: AstNode = this.node(module,bindingChild(n,EdgeRole.Target)); const object: number = bindingChild(target,EdgeRole.Object);
@@ -1262,7 +1280,7 @@ export class SafetyAnalyzer {
     this.readonlyReceivers = new Map<string,boolean>(); this.memoReceivers = true; // capturas y efectos ya son definitivos
     const globalProfile=profileBegin();
     let globals: SafetyState = new SafetyState(this.binding.symbols.length);
-    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) if (localBinding(this.binding.symbols[sid].kind)) globals.slots[sid] = 0;
+    globals.localsZero = true; // todas las variables locales empiezan sin inicializar
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) { if (this.trace) progressDetail("frontend: global flow "+numberToString(m)); this.walk(m,this.graph.modules[m].cached.result.ast.root,globals,[]); }
     profileEnd("flow-globals",globalProfile);
     let modules:number[]=[];let nodes:number[]=[];
@@ -1277,10 +1295,10 @@ export class SafetyAnalyzer {
       const owner: number = this.vertex(m,id); let state: SafetyState = new SafetyState(this.binding.symbols.length);
       this.initializeFields(m,id,state);
       this.index(); const ownedEnd: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner + 1] : 0;
-      for (let at: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner] : 0; at < ownedEnd; at = at + 1) { const sid: number = this.ownedSymbols[at]; if (localBinding(this.binding.symbols[sid].kind) || this.binding.symbols[sid].kind == "Parameter") state.slots[sid] = 0; }
+      for (let at: number = owner >= 0 && owner < this.nodes ? this.ownedStart[owner] : 0; at < ownedEnd; at = at + 1) { const sid: number = this.ownedSymbols[at]; if (localBinding(this.binding.symbols[sid].kind) || this.binding.symbols[sid].kind == "Parameter") this.putSlot(state,sid,0); }
       for (const edge of n.edges) if (edge.role == EdgeRole.Params) {
         this.expression(m,this.childOf(m,edge.node,EdgeRole.DefaultValue),state,[owner]);
-        const sid: number = this.binding.files[m].declarations[edge.node]; if (sid >= 0) { state.slots[sid] = 1; if (this.parameterProperty(m,edge.node) && this.transferType(this.result.symbolTypes[sid])) state.slots[sid] = 2; }
+        const sid: number = this.binding.files[m].declarations[edge.node]; if (sid >= 0) { this.putSlot(state,sid,1); if (this.parameterProperty(m,edge.node) && this.transferType(this.result.symbolTypes[sid])) this.putSlot(state,sid,2); }
       }
       const body: number = bindingChild(n,EdgeRole.Body); if (body < 0) return;
       this.breaks = []; this.continues = []; this.returns = []; this.sites = []; this.arguments = [];
