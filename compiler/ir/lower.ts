@@ -45,12 +45,16 @@ export class IrLowering {
   jsonText: string; jsonAt: number; jsonEscapes: boolean;
   cleanupScopes: IrCleanupScope[]; breakDepths: number[]; continueDepths: number[];
   receiverOverride: number; preparedArguments: number[]; preparedCall: number;
+  // Destino de la última referencia de valor de cada nodo (offset del módulo +
+  // nodo), para no recorrer todas las referencias en cada consulta.
+  valueOffsets: number[]; lastValueTargets: number[];
   argumentSymbols: number[]; argumentValues: number[];
   functionModules: number[]; functionNodes: number[]; globalSymbols: number[]; orderState: number[];
   constructor(graph: ModuleGraph, binding: BindingResult, checked: CheckResult) {
     this.interfaceFrom = []; this.interfaceTo = []; this.dispatchInterfaces = []; this.dispatchNames = []; this.dispatchSignatures = [];
     this.contextFrom = []; this.contextTo = [];
     this.graph = graph; this.binding = binding; this.checked = checked; this.result = new IrProject(); this.jsonText = ""; this.jsonAt = 0; this.jsonEscapes = false;
+    this.valueOffsets = []; this.lastValueTargets = [];
     this.module = 0; this.currentFunction = -1; this.block = 0; this.symbols = []; this.breakTargets = []; this.continueTargets = [];
     this.overrideNodes = []; this.overridePlaces = []; this.optionalActive = []; this.mutatedPlace = -1;
     this.cleanupScopes = []; this.breakDepths = []; this.continueDepths = [];
@@ -309,7 +313,14 @@ export class IrLowering {
   }
   reference(id: number): number {
     let target: number = this.binding.files[this.module].valueTargets[id];
-    if (target < 0) for (const r of this.binding.references) if (r.module == this.module && r.node == id && r.space == "value") target = r.target;
+    if (target < 0 && id >= 0) {
+      if (this.valueOffsets.length == 0) {
+        let total: number = 0; for (const m of this.graph.modules) { this.valueOffsets.push(total); total = total + m.cached.result.ast.nodes.length; }
+        for (let v: number = 0; v < total; v = v + 1) this.lastValueTargets.push(-1);
+        for (const r of this.binding.references) if (r.space == "value" && r.module >= 0 && r.module < this.valueOffsets.length && r.node >= 0 && this.valueOffsets[r.module] + r.node < total) this.lastValueTargets[this.valueOffsets[r.module] + r.node] = r.target;
+      }
+      if (this.module >= 0 && this.module < this.valueOffsets.length && this.valueOffsets[this.module] + id < this.lastValueTargets.length) target = this.lastValueTargets[this.valueOffsets[this.module] + id];
+    }
     return target;
   }
   place(symbol: number, id: number): number {

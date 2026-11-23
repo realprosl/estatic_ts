@@ -71,6 +71,8 @@ export class SafetyAnalyzer {
   // símbolos de cada función (por vértice, en orden de sid) y nodos que son
   // ClassField. Se construyen en el primer uso.
   indexed: boolean; ownedStart: number[]; ownedSymbols: number[]; classFieldNodes: boolean[];
+  // Campos de instancia por ámbito de clase, en orden de sid.
+  fieldStart: number[]; fieldSymbols: number[];
   // Visibilidad: símbolos exportados y referencias de tipo por nodo (vértice).
   visibilityIndexed: boolean; publicSymbols: boolean[]; typeRefStart: number[]; typeRefs: number[];
   constructor(graph: ModuleGraph, binding: BindingResult, result: CheckResult) {
@@ -81,7 +83,7 @@ export class SafetyAnalyzer {
     this.owners = []; for (const scope of binding.scopes) this.owners.push(-2); this.trace = false; this.resourceTypes = new Map<string,boolean>(); this.valueTypes = new Map<string,boolean>(); this.carrierTypes = new Map<string,boolean>(); this.plainTypes = new Map<string,boolean>();
     this.defaultReads = new Map<number,boolean>(); this.valueDefaults = new Map<number,boolean>();
     this.visits = 0; this.collectFlow=false;this.findings=[];
-    this.indexed = false; this.ownedStart = []; this.ownedSymbols = []; this.classFieldNodes = [];
+    this.indexed = false; this.ownedStart = []; this.ownedSymbols = []; this.classFieldNodes = []; this.fieldStart = []; this.fieldSymbols = [];
     this.visibilityIndexed = false; this.publicSymbols = []; this.typeRefStart = []; this.typeRefs = [];
   }
   index(): void {
@@ -98,6 +100,17 @@ export class SafetyAnalyzer {
     let cursor: number[] = []; for (let v: number = 0; v < this.nodes; v = v + 1) cursor.push(this.ownedStart[v]);
     for (let sid: number = 0; sid < owned.length; sid = sid + 1) this.ownedSymbols.push(-1);
     for (let sid: number = 0; sid < owned.length; sid = sid + 1) if (owned[sid] >= 0 && owned[sid] < this.nodes) { this.ownedSymbols[cursor[owned[sid]]] = sid; cursor[owned[sid]] = cursor[owned[sid]] + 1; }
+    const scopes: number = this.binding.scopes.length; let fieldScope: number[] = [];
+    for (let at: number = 0; at <= scopes; at = at + 1) this.fieldStart.push(0);
+    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
+      const s = this.binding.symbols[sid]; let scope: number = -1;
+      if (s.kind == "ClassField" && s.scope >= 0 && s.scope < scopes && this.node(s.module,s.node).get(AttributeKind.IsStatic) != "true") { scope = s.scope; this.fieldStart[scope + 1] = this.fieldStart[scope + 1] + 1; }
+      fieldScope.push(scope);
+    }
+    for (let at: number = 0; at < scopes; at = at + 1) this.fieldStart[at + 1] = this.fieldStart[at + 1] + this.fieldStart[at];
+    let next: number[] = []; for (let at: number = 0; at < scopes; at = at + 1) next.push(this.fieldStart[at]);
+    for (let sid: number = 0; sid < fieldScope.length; sid = sid + 1) this.fieldSymbols.push(-1);
+    for (let sid: number = 0; sid < fieldScope.length; sid = sid + 1) if (fieldScope[sid] >= 0) { this.fieldSymbols[next[fieldScope[sid]]] = sid; next[fieldScope[sid]] = next[fieldScope[sid]] + 1; }
   }
   node(module: number, id: number): AstNode { return this.graph.modules[module].cached.result.ast.nodes[id]; }
   report(module: number, id: number, message: string): void {
@@ -653,10 +666,9 @@ export class SafetyAnalyzer {
   constructorFields(module: number, id: number): number[] {
     const scope: number = this.constructorClass(module,id); let fields: number[] = [];
     if (scope < 0) return fields;
-    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid + 1) {
-      const s = this.binding.symbols[sid];
-      if (s.scope == scope && s.kind == "ClassField" && this.node(s.module,s.node).get(AttributeKind.IsStatic) != "true") fields.push(sid);
-    } return fields;
+    this.index(); if (scope >= this.binding.scopes.length) return fields;
+    for (let at: number = this.fieldStart[scope]; at < this.fieldStart[scope + 1]; at = at + 1) fields.push(this.fieldSymbols[at]);
+    return fields;
   }
   initializeFields(module: number, id: number, state: ref<SafetyState>): void {
     for (const sid of this.constructorFields(module,id)) {
