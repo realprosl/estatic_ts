@@ -24,7 +24,7 @@ const help=`Uso: etsc init [directorio]
   --build              Compilar y enlazar el C++ con el runtime existente
   --run                Compilar y ejecutar; propagar su código de salida
   --binary archivo     Ruta del ejecutable
-  --jobs N             Procesos de análisis (1..32; por defecto 1)
+  --jobs N             Procesos de análisis (1..32; por defecto, uno por núcleo hasta 8)
   --profile-analysis   Tiempos, CPU y RSS por fase
   --verbose            Mostrar fases, rutas, opciones y tiempos en stderr
   --no-progress        Desactivar animaciones

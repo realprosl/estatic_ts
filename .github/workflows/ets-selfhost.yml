@@ -92,7 +92,6 @@ jobs:
     name: selfhost-${{ matrix.optimization }}
     env:
       ESTATIC_ETS_OPTIMIZATION: -${{ matrix.optimization }}
-      ESTATIC_ANALYSIS_JOBS: '2'
       ESTATIC_PROFILE_ANALYSIS: '1'
     runs-on: ubuntu-24.04
     # Builds two generations and analyses compiler/ once more with generation 2.

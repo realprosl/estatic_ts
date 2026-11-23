@@ -54,6 +54,7 @@ inline std::string environment(std::string name){auto p=std::getenv(name.c_str()
 inline bool environmentDefined(std::string name){return std::getenv(name.c_str())!=nullptr;}
 inline bool setEnvironment(std::string name,std::string value){error.clear();if(setenv(name.c_str(),value.c_str(),1)==0)return true;error=std::strerror(errno);return false;}
 inline double forkWorker(){error.clear();auto pid=fork();if(pid<0)error=std::strerror(errno);return static_cast<double>(pid);}
+inline double processorCount(){auto n=std::thread::hardware_concurrency();return n==0?1.0:static_cast<double>(n);}
 inline void finishWorker(double code){_exit(static_cast<int>(code));}
 inline double waitWorker(double process){int status=0;pid_t result;do{result=waitpid(static_cast<pid_t>(process),&status,0);}while(result<0&&errno==EINTR);if(result<0)return 125;return WIFEXITED(status)?WEXITSTATUS(status):128+WTERMSIG(status);}
 inline std::string temporaryDirectory(){error.clear();auto base=std::getenv("TMPDIR");auto pattern=std::string(base&&*base?base:"/tmp")+"/ets-analysis-XXXXXX";std::vector<char> path(pattern.begin(),pattern.end());path.push_back(0);if(mkdtemp(path.data()))return path.data();error=std::strerror(errno);return "";}

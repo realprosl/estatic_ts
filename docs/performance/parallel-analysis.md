@@ -1,7 +1,7 @@
 # Análisis nativo en paralelo
 
 El frontend ETS acepta `--jobs N` (1–32), o `ESTATIC_ANALYSIS_JOBS=N`.
-El valor predeterminado es 1. La opción explícita tiene prioridad sobre la
+El valor predeterminado es un proceso por núcleo, hasta 8. La opción explícita tiene prioridad sobre la
 variable de entorno. Funciona en el compilador ETS completo y en el frontend
 generado desde estas fuentes; los snapshots de instalación anteriores necesitan
 regenerarse para incorporar las opciones nuevas.

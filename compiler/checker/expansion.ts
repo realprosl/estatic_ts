@@ -1,4 +1,5 @@
 import { progressDetail, contentHash } from "../platform/index";
+import { profileBegin, profileEnd } from "../analysis/index";
 import { AttributeKind, EdgeRole, NodeKind, AstNode, AstEdge, AstAttribute } from "../parser/index";
 import { ModuleGraph, LoadedFile, GeneratedSource, CachedSource, FileRecord } from "../modules/index";
 import { diagnosticAt, parseSource, SourceDiagnostic } from "../diag/index";
@@ -188,8 +189,9 @@ export class NativeExpansion {
 }
 export function analyzeProject(graph: ModuleGraph, trace: boolean = false): FrontendProject {
   if (trace) progressDetail("frontend: expansion and binding");
-  let expansion = new NativeExpansion(graph); const generated: ModuleGraph = expansion.run();
+  const expansionProfile = profileBegin(); let expansion = new NativeExpansion(graph); const generated: ModuleGraph = expansion.run(); profileEnd("expansion",expansionProfile);
   // Partial/Pick/Omit/Required y { a, ...resto }: sus campos, antes de enlazar.
-  const expanded: ModuleGraph = expandDerivedTypes(generated); const binding: BindingResult = bindProject(expanded);
+  const derivedProfile = profileBegin(); const expanded: ModuleGraph = expandDerivedTypes(generated); profileEnd("derived-types",derivedProfile);
+  const bindingProfile = profileBegin(); const binding: BindingResult = bindProject(expanded); profileEnd("binding",bindingProfile);
   return new FrontendProject(expanded,binding,checkProject(expanded,binding,trace));
 }
