@@ -728,7 +728,10 @@ export class SafetyAnalyzer {
       }
       const root: number = this.root(module,arg); const mode: string = borrowedType(expected) ? memoryMode(expected) : this.helper(module,arg) == "move" ? "move" : (display || comparison) && this.transferType(actual) ? "constRef" : "read";
       if (!display && !comparison && this.transferType(expected) && (borrowedType(actual) || (this.transferType(actual) && !this.freshTransfer(module,arg)))) this.report(module,arg,"E4101: argumento owner requiere move(identifier)");
-      if (borrowedType(expected) && root < 0) this.report(module,arg,"E4208: un argumento prestado necesita un lvalue con origen conocido");
+      // #320: un temporal sí puede pasarse como constRef<T> (en C++ un const T&
+      // vive hasta el final de la expresión y un préstamo no se guarda ni se
+      // retorna, E4203). ref<T> sigue necesitando un lvalue.
+      if (borrowedType(expected) && root < 0 && memoryMode(expected) != "constRef") this.report(module,arg,"E4208: un argumento prestado necesita un lvalue con origen conocido");
       if (borrowedType(expected) && root >= 0) this.access(module,arg,root,mode == "ref" ? "write" : "read");
       if (mode == "ref" && root >= 0) {
         const s: BindingSymbol = this.binding.symbols[root];
