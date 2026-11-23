@@ -56,18 +56,37 @@ export class IrCppGenerator {
   // Paso 3b: carpetas de librerías y, para separarlas, qué cabeceras usó cada
   // tipo emitido (layoutIds/layoutHeaders, paralelos a layoutOutput) y cada función.
   libraryRoots:string[];layoutIds:number[];layoutHeaders:string[][];functionHeaders:string[][];
-  constructor(project: IrProject) { this.project=project;this.headers=new HeaderSet();this.backends=new RuntimeBackends();this.processIo=false;this.consuming=[];this.cppGenerators=[];this.layoutDone=[];this.layoutActive=[];this.layoutOutput=[];this.functionNames=[];this.typeNames=[];this.globalNames=[];this.usedNames = new Map<string,number>();this.libraryRoots=[];this.layoutIds=[];this.layoutHeaders=[];this.functionHeaders=[];this.assignNames(); }
+  constructor(project: IrProject) { this.project=project;this.headers=new HeaderSet();this.backends=new RuntimeBackends();this.processIo=false;this.consuming=[];this.cppGenerators=[];this.layoutDone=[];this.layoutActive=[];this.layoutOutput=[];this.functionNames=[];this.typeNames=[];this.globalNames=[];this.usedNames = new Map<string,number>(); this.stableIds = new Map<string,string>();this.libraryRoots=[];this.layoutIds=[];this.layoutHeaders=[];this.functionHeaders=[];this.assignNames(); }
+  // Los tipos del IR nombran las clases por su sid ("#123"), que cambia en
+  // cuanto se añade una declaración en cualquier módulo. Para que los nombres
+  // C++ (y con ellos las unidades y la caché de objetos) no cambien por un
+  // cambio en otro módulo, las identidades usan el symbolId estable del tipo.
+  stableIds:Map<string,string>;
+  canonicalType(text:string):string{
+    if(text.indexOf("#",0)<0)return text;let out:string[]=[];let at:number=0;
+    while(at<text.length){
+      const c:number=text.charCodeAt(at);
+      if(c==35){let end:number=at+1;while(end<text.length&&text.charCodeAt(end)>=48&&text.charCodeAt(end)<=57)end=end+1;
+        if(end>at+1){const token:string=text.slice(at,end);const stable:Optional<string>=this.stableIds.get(token);out.push(stable.isPresent()?"#"+stable.value():token);at=end;continue;}}
+      out.push(text.slice(at,at+1));at=at+1;
+    }
+    return out.join("");
+  }
+  // Etiqueta legible de un tipo con nombre: sin los sids ("#123" → "").
+  readableType(text:string):string{let out:string="";let at:number=0;while(at<text.length){const c:number=text.charCodeAt(at);if(c==35){at=at+1;while(at<text.length&&text.charCodeAt(at)>=48&&text.charCodeAt(at)<=57)at=at+1;continue;}out=out+text.slice(at,at+1);at=at+1;}return out;}
   assignNames():void{
+    this.stableIds=new Map<string,string>();
+    for(let k:number=0;k<this.project.types.length&&k<this.project.typeDefinitions.length;k=k+1){const text:string=this.project.types[k];if(text.startsWith("#")&&text.length>1&&this.project.typeDefinitions[k].symbolId!=""){let digits:boolean=true;for(let at:number=1;at<text.length;at=at+1){const c:number=text.charCodeAt(at);if(c<48||c>57)digits=false;}if(digits)this.stableIds.set(text,this.project.typeDefinitions[k].symbolId);}}
     // Acceso directo a los campos: copiar un IrFunction entero copiaría su cuerpo.
     for(let k:number=0;k<this.project.functions.length;k=k+1){
       const symbol:string=this.project.functions[k].symbolId;const name:string=this.project.functions[k].name;
       const location:string=symbol==""?this.project.functions[k].source.moduleId+"@"+numberToString(this.project.functions[k].source.start):"";
-      const key:string=symbol+"|"+name+"|"+this.project.functions[k].signature+"|"+this.project.functions[k].substitutionFrom.join(",")+"|"+this.project.functions[k].substitutionTo.join(",")+"|"+location;
+      const key:string=symbol+"|"+name+"|"+this.canonicalType(this.project.functions[k].signature)+"|"+this.canonicalType(this.project.functions[k].substitutionFrom.join(","))+"|"+this.canonicalType(this.project.functions[k].substitutionTo.join(","))+"|"+location;
       const named:string=this.stableName("ir_f",name,key);this.functionNames.push(named);
     }
     for(let k:number=0;k<this.project.typeDefinitions.length;k=k+1){
       const symbol:string=this.project.typeDefinitions[k].symbolId;const text:string=k<this.project.types.length?this.project.types[k]:"";
-      const named:string=this.stableName("ir_t",symbol==""?"":text,this.project.typeDefinitions[k].kind+"|"+symbol+"|"+text);this.typeNames.push(named);
+      const named:string=this.stableName("ir_t",symbol==""?"":this.readableType(text),this.project.typeDefinitions[k].kind+"|"+symbol+"|"+this.canonicalType(text));this.typeNames.push(named);
     }
     for(let k:number=0;k<this.project.globals.length;k=k+1){
       const symbol:string=this.project.globals[k].symbolId;const name:string=this.project.globals[k].name;

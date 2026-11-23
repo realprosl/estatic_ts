@@ -71,18 +71,34 @@ compiler_fingerprint() {
   (cd "$root" && find compiler -type f \( -name '*.ts' -o -name '*.hpp' -o -name '*.cpp' \) \
       -not -name '*.test.ts' | LC_ALL=C sort | while IFS= read -r f; do sha256sum "$f"; done) | sha256sum | cut -d' ' -f1
 }
-flags=(--cxx-flag "$opt" --cxx-flag "-I$root" --cxx-flag "-DESTATIC_FRONTEND_ID=\"$(compiler_fingerprint)\"")
+flags=(--cxx-flag "$opt" --cxx-flag "-I$root")
 if ((static)); then
   if [[ $os == linux ]]; then flags+=(--cxx-flag -static)
   else export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-13.3}"; fi
 fi
 export ESTC_ROOT="${ESTC_ROOT:-$root}"
+# Caché persistente entre builds (#179/#180): sintaxis de cada módulo y
+# objetos de cada unidad C++. Los nombres C++ son estables, así que un cambio
+# en un módulo solo recompila su unidad. ESTATIC_COMPILER_CACHE=off la desactiva.
+cache_dir="${ESTATIC_COMPILER_CACHE:-$root/build/.estatic/compiler-cache}"
+cache=()
+if [[ $cache_dir != off ]]; then mkdir -p "$cache_dir/objects" && cache=(--cache "$cache_dir"); fi
+# La huella del compilador va en un objeto aparte, no en -D: así las opciones
+# de las unidades no cambian con cada cambio de compiler/ y sus objetos se
+# reutilizan. El C++ generado se escribe siempre en el mismo sitio (la ruta
+# forma parte de la clave de cada objeto).
+build_dir="$work"; [[ $cache_dir != off ]] && build_dir="$cache_dir/build"
+mkdir -p "$build_dir"
+case "$os" in darwin) id_cxx="${CXX:-clang++}" ;; *) id_cxx="${CXX:-g++}" ;; esac
+printf 'extern "C" const char ets_frontend_id[] = "%s";\n' "$(compiler_fingerprint)" > "$build_dir/frontend-id.cpp"
+"$id_cxx" -c "$build_dir/frontend-id.cpp" -o "$build_dir/frontend-id.o"
+flags+=(--cxx-flag -DESTATIC_FRONTEND_ID_EXTERN --link-flag "$build_dir/frontend-id.o")
 # Análisis y compilación C++ en pasos separados: así no están los dos en memoria
 # a la vez (el análisis de compiler/ ocupa varios GB).
 etsc_spin "Semilla · analizar compiler/" "$seed/etsc" "$root/compiler/driver/main.ts" \
-  --check --emit-ir "$work/driver.ir.json" --no-progress
+  --check --emit-ir "$work/driver.ir.json" ${cache[@]+"${cache[@]}"} --no-progress
 etsc_spin "Semilla · construir el compilador" "$seed/etsc" \
-  --from-ir "$work/driver.ir.json" --build -o "$work/etsc.cpp" --binary "$work/etsc" \
+  --from-ir "$work/driver.ir.json" --build -o "$build_dir/etsc.cpp" --binary "$work/etsc" ${cache[@]+"${cache[@]}"} \
   "${flags[@]}" --no-progress
 [[ -x $work/etsc ]] || { echo "La generación 2 no produjo un ejecutable." >&2; exit 1; }
 cp "$work/etsc" "$out"; chmod +x "$out"

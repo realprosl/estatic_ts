@@ -87,9 +87,19 @@ inline bool atomicWrite(const std::string& file,const std::string& contents) {
     std::filesystem::rename(temp,file,ec);
     if(ec) {std::filesystem::remove(temp,ec);return false;}return true;
 }
+#if !defined(ESTATIC_FRONTEND_ID) && defined(ESTATIC_FRONTEND_ID_EXTERN)
+}
+// La huella va en un objeto aparte (native-cpp/build-compiler.sh): como -D
+// cambiaría las opciones de todas las unidades y no se reutilizaría ningún
+// objeto de la caché entre builds.
+extern "C" const char ets_frontend_id[];
+namespace ets_bootstrap {
+#endif
 inline std::string syntaxIdentity() {
 #ifdef ESTATIC_FRONTEND_ID
     return ESTATIC_FRONTEND_ID;
+#elif defined(ESTATIC_FRONTEND_ID_EXTERN)
+    return ets_frontend_id;
 #else
     // Unfingerprinted ad-hoc builds must not reuse entries across processes.
     static const auto nonce = std::chrono::high_resolution_clock::now().time_since_epoch().count();
