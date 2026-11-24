@@ -1316,7 +1316,7 @@ export class SafetyAnalyzer {
     if (this.graph.analysisCache == "" || syntaxIdentity() == "" || this.result.diagnostics.length > 0) return cache;
     // Las claves de módulo se calculan como si el proyecto fuera válido: los flujos
     // solo añaden diagnósticos, que forman parte de lo que se guarda.
-    this.result.success = true; const records = attachModuleRecords(this.graph,this.binding,this.result).moduleRecords; this.result.success = false;
+    let probe: CheckResult = this.result; probe.success = true; attachModuleRecords(this.graph,this.binding,probe); const records = probe.moduleRecords;
     if (records.length != count) return cache;
     let byId: Map<string,number> = new Map<string,number>();
     for (let m: number = 0; m < count; m = m+1) {
