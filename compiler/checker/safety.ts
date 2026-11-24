@@ -12,11 +12,6 @@ import { CheckResult, NativeCapture, BorrowLease, argumentParameter, readonlyMet
 import { memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticElement, semanticTuple, splitTypes, functionClose, functionParams, functionReturn, argumentType, fixedArraySize, fixedArrayElement, localBinding, genericBase, genericArguments, replaceType, canonicalSymbol } from "./types";
 
 // "#12" o "#12<...>" → 12; cualquier otro tipo → -1.
-function classOfType(text: string): number {
-  if (!text.startsWith("#")) return -1; let value: number = 0; let at: number = 1;
-  while (at < text.length) { const c: number = text.charCodeAt(at); if (c < 48 || c > 57) break; value = value * 10 + (c - 48); at = at + 1; }
-  if (at == 1 || (at < text.length && text.charCodeAt(at) != 60)) return -1; return value;
-}
 export class FlowFinding {
  module:number;node:number;message:string;
  constructor(module:number,node:number,message:string){this.module=module;this.node=node;this.message=message;}
@@ -1165,7 +1160,7 @@ export class SafetyAnalyzer {
       if (conditional && present == "false") return;
       const skipped: SafetyState = state;
       // El tipo de un new es "#sid" o "#sid<...>": la clase se lee del propio tipo.
-      if (n.kind == NodeKind.NewExpression) { const sid: number = classOfType(this.result.files[module].types[id]); if (sid >= 0 && sid < this.binding.symbols.length) {
+      if (n.kind == NodeKind.NewExpression) { const sid: number = canonicalSymbol(this.result.files[module].types[id]); if (sid >= 0 && sid < this.binding.symbols.length) {
         const s: BindingSymbol = this.binding.symbols[sid];
         if (s.kind == "ClassDeclaration") for (const edge of this.node(s.module,s.node).edges) if (edge.role == EdgeRole.Fields && this.attributeOf(s.module,edge.node,AttributeKind.IsStatic) != "true") this.expression(s.module,this.childOf(s.module,edge.node,EdgeRole.DefaultValue),state,active);
       } }
