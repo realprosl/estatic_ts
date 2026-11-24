@@ -2760,4 +2760,4 @@ function undefinedDisplay(text: string): string {
   }
   return result;
 }
-export function checkProject(graph: ModuleGraph, binding: BindingResult, trace: boolean = false): CheckResult { let checker: NativeChecker = new NativeChecker(graph,binding); checker.trace = trace; const checked: CheckResult = checker.check(); if (trace) progressDetail("frontend: module records"); return attachModuleRecords(graph,binding,checked); }
+export function checkProject(graph: ModuleGraph, binding: BindingResult, trace: boolean = false): CheckResult { let checker: NativeChecker = new NativeChecker(graph,binding); checker.trace = trace; let checked: CheckResult = checker.check(); if (trace) progressDetail("frontend: module records"); attachModuleRecords(graph,binding,checked); return checked; }
