@@ -50,9 +50,9 @@ export class GeneratedSource {
   }
 }
 export class ModuleGraph {
-  generatedSources: GeneratedSource[]; entry: string; modules: LoadedFile[]; diagnostics: SourceDiagnostic[]; hits: number; misses: number; writes: number; success: boolean; prelude: string[];
+  generatedSources: GeneratedSource[]; entry: string; modules: LoadedFile[]; diagnostics: SourceDiagnostic[]; hits: number; misses: number; writes: number; success: boolean; prelude: string[]; analysisCache: string; analysisKey: string;
   constructor(entry: string) {
-    this.generatedSources = []; this.entry = entry; this.modules = []; this.diagnostics = []; this.hits = 0; this.misses = 0; this.writes = 0; this.success = true; this.prelude = [];
+    this.analysisCache = ""; this.analysisKey = ""; this.generatedSources = []; this.entry = entry; this.modules = []; this.diagnostics = []; this.hits = 0; this.misses = 0; this.writes = 0; this.success = true; this.prelude = [];
   }
 }
 export function originToken(): ParserToken { return new ParserToken("", "", 0, 1, 1, 0, 1, 1); }
@@ -120,7 +120,7 @@ export class ModuleLoader {
   options: LoaderOptions; cache: SyntaxCache;
   constructor(options: LoaderOptions) { this.options = options; this.cache = new SyntaxCache(options.cacheDirectory, options.syntaxKey); }
   load(entry: string): ModuleGraph {
-    let cache: SyntaxCache = this.cache; cache.resetStats(); const canonical: string = resolveSourceFile(normalizePath(entry)); let graph: ModuleGraph = new ModuleGraph(canonical);
+    let cache: SyntaxCache = this.cache; cache.resetStats(); const canonical: string = resolveSourceFile(normalizePath(entry)); let graph: ModuleGraph = new ModuleGraph(canonical); graph.analysisCache = this.options.cacheDirectory; graph.analysisKey = this.options.syntaxKey;
     if (canonical == "") {
       graph.diagnostics.push(new SourceDiagnostic("loader", "No se puede resolver el módulo '" + entry + "' (se probaron .ts y .ets)", normalizePath(entry), originToken()));
       graph.success = false; this.cache = cache; return graph;
