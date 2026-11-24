@@ -185,16 +185,16 @@ export class IrVerifier {
     }
     if (parameter != f.parameterTypes.length) this.error(f.source,"Faltan places de parámetros");
     for (let b: number = 0; b < f.blocks.length; b = b+1) {
-      this.facts.push(new IrFacts(f.blocks.length,f.places.length)); const block = f.blocks[b];
-      for (let at: number = 0; at < block.instructions.length; at = at+1) {
-        const i = block.instructions[at]; if (i.result >= 0 && this.value(f,i.result)) {
-          if (this.definitions[i.result] >= 0) this.error(i.source,"Resultado definido más de una vez");
-          this.definitions[i.result] = b; this.positions[i.result] = at;
+      this.facts.push(new IrFacts(f.blocks.length,f.places.length));
+      for (let at: number = 0; at < f.blocks[b].instructions.length; at = at+1) {
+        if (f.blocks[b].instructions[at].result >= 0 && this.value(f,f.blocks[b].instructions[at].result)) {
+          if (this.definitions[f.blocks[b].instructions[at].result] >= 0) this.error(f.blocks[b].instructions[at].source,"Resultado definido más de una vez");
+          this.definitions[f.blocks[b].instructions[at].result] = b; this.positions[f.blocks[b].instructions[at].result] = at;
         }
       }
-      const count: number = block.terminator == "jump" ? 1 : block.terminator == "branch" || block.terminator == "suspend" ? 2 : 0;
-      if (!["jump","branch","return","unreachable","suspend","cancel","trap"].includes(block.terminator) || block.targets.length != count) this.error(block.source,"Terminador inválido");
-      for (const target of block.targets) if (target < 0 || target >= f.blocks.length) this.error(block.source,"Destino de bloque inexistente");
+      const count: number = f.blocks[b].terminator == "jump" ? 1 : f.blocks[b].terminator == "branch" || f.blocks[b].terminator == "suspend" ? 2 : 0;
+      if (!["jump","branch","return","unreachable","suspend","cancel","trap"].includes(f.blocks[b].terminator) || f.blocks[b].targets.length != count) this.error(f.blocks[b].source,"Terminador inválido");
+      for (const target of f.blocks[b].targets) if (target < 0 || target >= f.blocks.length) this.error(f.blocks[b].source,"Destino de bloque inexistente");
     }
     // CFG edges and projection identities do not change during the fixed point.
     let predecessors: IrPredecessors[] = [];
@@ -216,40 +216,40 @@ export class IrVerifier {
           for (let p: number = 0; p < init.length; p = p+1) init[p] = init[p] && this.facts[predecessor].initialized[p];
         }
         dom[b] = true;
-        for (const i of f.blocks[b].instructions) if (i.op == "store" || i.op == "move" || i.op == "dropRemaining") init = this.updateInitialization(f,i,init);
+        for (let at: number = 0; at < f.blocks[b].instructions.length; at = at+1) if (f.blocks[b].instructions[at].op == "store" || f.blocks[b].instructions[at].op == "move" || f.blocks[b].instructions[at].op == "dropRemaining") init = this.updateInitialization(f,f.blocks[b].instructions[at],init);
         for (let d: number = 0; d < dom.length; d = d+1) if (dom[d] != this.facts[b].dominators[d]) { this.facts[b].dominators[d] = dom[d]; changed = true; }
         for (let p: number = 0; p < init.length; p = p+1) if (init[p] != this.facts[b].initialized[p]) { this.facts[b].initialized[p] = init[p]; changed = true; }
       }
     }
     for (let b: number = 0; b < f.blocks.length; b = b+1) {
-      const block = f.blocks[b]; let initialized: boolean[] = [];
+      let initialized: boolean[] = [];
       for (let p: number = 0; p < f.places.length; p = p+1) initialized.push(b == 0 ? irInitialPlace(f,p) : true);
       if (b != 0) for (const predecessor of predecessors[b].blocks) if (this.facts[predecessor].reachable) for (let p: number = 0; p < initialized.length; p = p+1) initialized[p] = initialized[p] && this.facts[predecessor].initialized[p];
-      for (let at: number = 0; at < block.instructions.length; at = at+1) {
-        const i = block.instructions[at]; this.instruction(f,i); for (const value of i.operands) this.use(f,value,b,at,i.source);
-        if (i.place >= 0 && (i.place) < initialized.length) {
-          let root: number = i.place; let steps: number = 0;
-          while (f.places[root].base >= 0 && (f.places[root].base) < root && steps < f.places.length) { if (f.places[root].index >= 0) this.use(f,f.places[root].index,b,at,i.source); root = f.places[root].base; steps = steps+1; }
-          if (i.op != "dropRemaining" && i.op != "store" && this.facts[b].reachable && !initialized[i.place]) this.error(i.source,"Load de place sin inicializar en todas las rutas");
-          if (i.op == "store" || i.op == "move" || i.op == "dropRemaining") initialized = this.updateInitialization(f,i,initialized);
+      for (let at: number = 0; at < f.blocks[b].instructions.length; at = at+1) {
+        this.instruction(f,f.blocks[b].instructions[at]); for (const value of f.blocks[b].instructions[at].operands) this.use(f,value,b,at,f.blocks[b].instructions[at].source);
+        if (f.blocks[b].instructions[at].place >= 0 && (f.blocks[b].instructions[at].place) < initialized.length) {
+          let root: number = f.blocks[b].instructions[at].place; let steps: number = 0;
+          while (f.places[root].base >= 0 && (f.places[root].base) < root && steps < f.places.length) { if (f.places[root].index >= 0) this.use(f,f.places[root].index,b,at,f.blocks[b].instructions[at].source); root = f.places[root].base; steps = steps+1; }
+          if (f.blocks[b].instructions[at].op != "dropRemaining" && f.blocks[b].instructions[at].op != "store" && this.facts[b].reachable && !initialized[f.blocks[b].instructions[at].place]) this.error(f.blocks[b].instructions[at].source,"Load de place sin inicializar en todas las rutas");
+          if (f.blocks[b].instructions[at].op == "store" || f.blocks[b].instructions[at].op == "move" || f.blocks[b].instructions[at].op == "dropRemaining") initialized = this.updateInitialization(f,f.blocks[b].instructions[at],initialized);
         }
       }
-      if (block.terminator == "suspend") {
-        this.use(f,block.value,b,block.instructions.length,block.source);
-        if (!f.asynchronous || !this.value(f,block.value) || this.project.typeDefinitions[f.values[block.value]].kind != "Promise" || block.targets.length != 2 || f.blocks[block.targets[1]].terminator != "cancel") this.error(block.source,"Suspensión sin tarea/continuaciones");
-      } else if (block.terminator == "branch") {
-        this.use(f,block.value,b,block.instructions.length,block.source);
-        if (this.operandType(f,block.value) != "boolean") this.error(block.source,"Branch requiere boolean");
-      } else if (block.terminator == "return") {
-        if (this.project.types[f.bodyReturns] == "void") { if (block.value != -1) this.error(block.source,"Return void con valor"); }
-        else { this.use(f,block.value,b,block.instructions.length,block.source); if (!this.value(f,block.value) || f.values[block.value] != f.bodyReturns) this.error(block.source,"Tipo de retorno incompatible"); }
-      } else if (block.value != -1) this.error(block.source,"Valor inesperado en terminador");
+      if (f.blocks[b].terminator == "suspend") {
+        this.use(f,f.blocks[b].value,b,f.blocks[b].instructions.length,f.blocks[b].source);
+        if (!f.asynchronous || !this.value(f,f.blocks[b].value) || this.project.typeDefinitions[f.values[f.blocks[b].value]].kind != "Promise" || f.blocks[b].targets.length != 2 || f.blocks[f.blocks[b].targets[1]].terminator != "cancel") this.error(f.blocks[b].source,"Suspensión sin tarea/continuaciones");
+      } else if (f.blocks[b].terminator == "branch") {
+        this.use(f,f.blocks[b].value,b,f.blocks[b].instructions.length,f.blocks[b].source);
+        if (this.operandType(f,f.blocks[b].value) != "boolean") this.error(f.blocks[b].source,"Branch requiere boolean");
+      } else if (f.blocks[b].terminator == "return") {
+        if (this.project.types[f.bodyReturns] == "void") { if (f.blocks[b].value != -1) this.error(f.blocks[b].source,"Return void con valor"); }
+        else { this.use(f,f.blocks[b].value,b,f.blocks[b].instructions.length,f.blocks[b].source); if (!this.value(f,f.blocks[b].value) || f.values[f.blocks[b].value] != f.bodyReturns) this.error(f.blocks[b].source,"Tipo de retorno incompatible"); }
+      } else if (f.blocks[b].value != -1) this.error(f.blocks[b].source,"Valor inesperado en terminador");
     }
     for (const definition of this.definitions) if (definition < 0) this.error(f.source,"Temporal sin definición");
   }
   run(): IrIssue[] {
     this.issues = verifyIrTables(this.project); if (this.issues.length > 0) return this.issues;
-    for (const f of this.project.functions) for (const issue of verifyFunctionContracts(this.project,f)) this.issues.push(issue);
+    for (let at: number = 0; at < this.project.functions.length; at = at+1) for (const issue of verifyFunctionContracts(this.project,this.project.functions[at])) this.issues.push(issue);
     for (const issue of verifyModuleContracts(this.project)) this.issues.push(issue);
     if (this.issues.length > 0) return this.issues;
     if (this.project.typeDefinitions.length != this.project.types.length) { this.error(new IrSource("","","",-1,0,0),"Tabla de tipos incompleta"); return this.issues; }
@@ -281,8 +281,8 @@ export class IrVerifier {
       for (const target of contract.callees) if (target < 0 || target >= this.project.effectContracts.length) this.error(contract.source,"Arista de efectos inexistente");
       for (const lease of contract.borrows) if (lease.callback == "" || lease.root == "" || !["ref","constRef"].includes(lease.mode)) this.error(lease.source,"Obligación callback incompatible");
     }
-    for (const f of this.project.functions) { for (const contract of f.effectContracts) if (contract < 0 || contract >= this.project.effectContracts.length || this.project.effectContracts[contract].source.moduleId != f.source.moduleId || this.project.effectContracts[contract].source.node != f.source.node) this.error(f.source,"Contrato de función inexistente"); if (!this.nativeBinding(f)) this.functionBody(f); }
-    if (this.issues.length == 0) for (const f of this.project.functions) { if (this.nativeBinding(f)) continue; for (const issue of verifyBorrowRoutes(this.project,f)) this.issues.push(issue); for (const issue of verifyOwnershipRoutes(this.project,f)) this.issues.push(issue); }
+    for (let at: number = 0; at < this.project.functions.length; at = at+1) { const fn: number = at; for (const contract of this.project.functions[fn].effectContracts) if (contract < 0 || contract >= this.project.effectContracts.length || this.project.effectContracts[contract].source.moduleId != this.project.functions[fn].source.moduleId || this.project.effectContracts[contract].source.node != this.project.functions[fn].source.node) this.error(this.project.functions[fn].source,"Contrato de función inexistente"); if (!this.nativeBinding(this.project.functions[fn])) { const f: IrFunction = this.project.functions[fn]; this.functionBody(f); } } // copia: #346
+    if (this.issues.length == 0) for (let at: number = 0; at < this.project.functions.length; at = at+1) { if (this.nativeBinding(this.project.functions[at])) continue; for (const issue of verifyBorrowRoutes(this.project,this.project.functions[at])) this.issues.push(issue); for (const issue of verifyOwnershipRoutes(this.project,this.project.functions[at])) this.issues.push(issue); }
     const source = new IrSource("","","",-1,0,0);
     let initializers: number[] = [];
     for (const module of this.project.modules) {

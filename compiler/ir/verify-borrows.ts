@@ -1,7 +1,7 @@
 import { IrProject, IrFunction, IrIssue } from "./model";
 import { IrBorrowAnalysis, IrLeaseSet, irLeaseUnion, irLeaseRemove, irLeaseEqual } from "./borrows";
 import { irPlacePath } from "./verify-memory";
-export function verifyBorrowRoutes(project: constRef<IrProject>, f: IrFunction): IrIssue[] {
+export function verifyBorrowRoutes(project: constRef<IrProject>, f: constRef<IrFunction>): IrIssue[] {
   let issues: IrIssue[] = []; let analysis = new IrBorrowAnalysis(f,project.types); analysis.propagate();
   let availableOut: IrLeaseSet[] = []; let activeOut: IrLeaseSet[] = []; let reachable: boolean[] = []; for (const block of f.blocks) { activeOut.push(new IrLeaseSet()); let available = new IrLeaseSet(); for (let lease: number = 0; lease < f.leases.length; lease = lease+1) available.values.push(lease); availableOut.push(available); reachable.push(false); }
   if (f.blocks.length == 0) return issues; reachable[0] = true;
