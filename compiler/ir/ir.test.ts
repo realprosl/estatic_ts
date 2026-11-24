@@ -91,6 +91,14 @@ function run(source: string, files: Record<string,string> = {}, mode = "", statu
   const ir = JSON.parse(p.stdout); assert.equal(ir.success, status === 0); return ir;
 }
 function instructions(ir: any) { return ir.functions.flatMap((f:any) => f.blocks.flatMap((b:any) => b.instructions)); }
+test("native IR: the last read of a local moves it instead of copying (#351)", () => {
+  const ir = run('class Bag{items:number[]=[1];} function take(b:Bag):number{return b.items.length;} function run():void{let b=new Bag();print(take(b));let e=new Bag();print(take(e));print(take(e));let c=new Bag();for(let i=0;i<2;i=i+1){print(take(c));}let d=new Bag();const r=constRef(d);print(take(d));print(r.items.length);} run();');
+  const f = ir.functions.find((x:any) => x.name === "run");
+  const named = f.blocks.flatMap((b:any) => b.instructions).filter((i:any) => ["load","move"].includes(i.op) && i.place >= 0 && f.places[i.place].base < 0 && ["b","e","c","d"].includes(f.places[i.place].name)).map((i:any) => i.op + " " + f.places[i.place].name);
+  // b y la segunda lectura de e se mueven; c se lee en un bucle y d está prestada.
+  assert.deepEqual(named, ["move b", "load e", "move e", "load c", "load d"]);
+  assert.deepEqual(execute(ir), ["1", "1", "1", "1", "1", "1", "1"]);
+});
 test("native IR: update expressions preserve values and evaluate destinations once", () => {
   const ir = run('let i=0;print(i++);print(++i);print(i--);print(--i);for(let j=0;j<3;j++){print(j);}let xs=[4];let calls=0;function index():number{calls+=1;return 0;}print(xs[index()]++);print(++xs[index()]);print(calls);print(xs[0]);');
   assert.deepEqual(execute(ir), ["0", "2", "2", "0", "0", "1", "2", "4", "6", "2", "6"]);
