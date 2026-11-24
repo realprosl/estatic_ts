@@ -2119,10 +2119,21 @@ test('parallel analysis profiles to stderr and removes worker files',()=>{
  const f=fixture('function a():number{return 1;}function b():number{return a()+1;}print(b());');const temp=join(directory,'workers');mkdirSync(temp);
  const p=spawnSync(binary,[f.entry,'--jobs','2','--profile-analysis'],{encoding:'utf8',env:{...process.env,TMPDIR:temp}});assert.equal(p.status,0,p.stderr);assert.equal(JSON.parse(p.stdout).success,true);assert.match(p.stderr,/profile flow-definitions wall_ms=.*cpu_ms=.*self_peak_rss_kib=.*worker_peak_rss_kib=.*functions=2 jobs=2/);assert.deepEqual(readdirSync(temp),[]);
 });
+test('flow cache replays module diagnostics and follows changed bodies (#344)',()=>{
+ const main='import {apply} from "./lib";function main():void{let a:number[]=[1];const r=constRef(a);apply(():void=>{a.push(2);});print(r);}main();';
+ const f=fixture(main,{'lib.ets':'export function apply(cb:()=>void):void{cb();}'});const args=[f.entry,'--cache',f.cache,'--profile-analysis'];
+ const diagnostics=(p:any)=>JSON.stringify(JSON.parse(p.stdout).diagnostics);
+ const cold=spawnSync(binary,args,{encoding:'utf8'});const warm=spawnSync(binary,args,{encoding:'utf8'});
+ assert.equal(warm.status,cold.status,warm.stderr);assert.equal(diagnostics(warm),diagnostics(cold));assert.match(warm.stderr,/cached_modules=[1-9]/);
+ writeFileSync(join(dirname(f.entry),'lib.ets'),'export function apply(cb:()=>void):void{const unused:number=0;}');
+ const changed=spawnSync(binary,args,{encoding:'utf8'});const fresh=spawnSync(binary,[f.entry,'--cache',f.cache+'-fresh'],{encoding:'utf8'});
+ assert.equal(changed.status,fresh.status,changed.stderr);assert.equal(diagnostics(changed),diagnostics(fresh));
+});
 test('parallel analysis fails closed when a worker directory cannot be created',()=>{
  const f=fixture('function a():number{return 1;}function b():number{return a();}print(b());');const args=[f.entry,'--cache',f.cache];const env={...process.env,TMPDIR:join(directory,'missing','directory')};
  const sequential=spawnSync(binary,[...args,'--jobs','1'],{encoding:'utf8',env});assert.equal(sequential.status,0,sequential.stderr);
- const parallel=spawnSync(binary,[...args,'--jobs','2'],{encoding:'utf8',env});assert.equal(parallel.status,1,parallel.stderr);assert.equal(JSON.parse(parallel.stdout).success,false);assert.ok(JSON.parse(parallel.stdout).diagnostics.some((d:any)=>d.code==='ANALYSIS_WORKER_FAILED'));
+ // Caché aparte: con la del paso secuencial, los flujos se reutilizarían sin lanzar workers (#344).
+ const parallel=spawnSync(binary,[f.entry,'--cache',f.cache+'-parallel','--jobs','2'],{encoding:'utf8',env});assert.equal(parallel.status,1,parallel.stderr);assert.equal(JSON.parse(parallel.stdout).success,false);assert.ok(JSON.parse(parallel.stdout).diagnostics.some((d:any)=>d.code==='ANALYSIS_WORKER_FAILED'));
 });
 test('readonly receiver permits a getter delegated through another getter',()=>{
  check('class C{value:number=7;get():number{return this.value;}delegated():number{return this.get();}}function read(c:constRef<C>):number{return c.delegated();}const c=new C();print(read(c));');
