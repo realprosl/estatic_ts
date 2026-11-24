@@ -9,6 +9,7 @@ import { finishBorrows } from "./borrows";
 import { preserveContracts } from "./contracts";
 import { verifyIr } from "./verify";
 import { inferIntegers } from "./integers";
+import { moveLastUses } from "./last-use";
 import { progressDetail } from "../platform/index";
 import { decodeEscapes } from "../lexer/index";
 
@@ -1426,6 +1427,7 @@ export class IrLowering {
     // #285: variables locales enteras como i64 en vez de double.
     if (this.result.diagnostics.length == 0) this.result = inferIntegers(this.result);
     if (this.result.diagnostics.length == 0) this.result = finishBorrows(this.result);
+    if (this.result.diagnostics.length == 0) moveLastUses(this.result);
     profileEnd("ir-borrows",borrowsProfile);
     const verifyProfile=profileBegin();
     if (trace) progressDetail("frontend: IR: verificando IR ("+(Date.now()-started)+" ms)");
