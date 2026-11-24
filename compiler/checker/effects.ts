@@ -34,6 +34,9 @@ export class EffectCall {
 }
 // Finite, monotone value-flow and effect summaries. IDs belong to this binding.
 // No AST annotation and no recursion-depth cutoff in summary construction.
+function newClasses(classes: constRef<Map<number,number[]>>, declared: number): number[] {
+  const found: Optional<number[]> = classes.get(declared); return found.isPresent() ? found.value() : [];
+}
 export class EffectAnalyzer {
   graph: ModuleGraph; binding: BindingResult; checked: CheckResult;
   offsets: number[]; nodes: number; points: EffectPoint[]; summaries: EffectSummary[]; functionIndices: number[][];
@@ -540,45 +543,52 @@ export class EffectAnalyzer {
     const summariesProfile=profileBegin();
     if (this.trace) progressDetail("frontend: effects summaries");
     for (let m: number = 0; m < this.checked.files.length; m = m+1) for (let id: number = 0; id < this.checked.files[m].types.length; id = id+1) this.checked.files[m].taskSources[id] = this.taskSources(m,id);
+    // Clases por símbolo declarado: antes cada `new` recorría todos los símbolos (#344).
+    let classes: Map<number,number[]> = new Map<number,number[]>();
+    for (let sid: number = 0; sid < this.binding.symbols.length; sid = sid+1) if (this.binding.symbols[sid].kind == "ClassDeclaration") {
+      const declared: number = this.binding.files[this.binding.symbols[sid].module].declarations[this.binding.symbols[sid].node];
+      const found: Optional<number[]> = classes.get(declared); let list: number[] = found.isPresent() ? found.value() : []; list.push(sid); classes.set(declared,list);
+    }
     for (let m: number = 0; m < this.graph.modules.length; m = m + 1) for (let id: number = 0; id < this.checked.files[m].types.length; id = id + 1) {
       const scope: number = this.binding.files[m].nodeScopes[id]; if (scope < 0) continue; const owner: number = this.executionOwner(m,id); if (owner < 0) continue;
-      const n: AstNode = this.node(m,id);
+      // Sin copiar el nodo: solo se lee su clase, atributos e hijos (#344).
+      const kind: NodeKind = this.kindOf(m,id);
       const helper: string = this.helper(m,id);
       if (nativeBuiltinSignatures(helper).length > 0 && !["numberToString","charAt","substring","indexOf","startsWith","trim","lineCount","lineAt","length"].includes(helper)) this.summaries[owner].external = true;
       if (["print","printError","write","writeError","readFile","writeFile","appendFile","copyFile","moveFile","removeFile","fileExists","spawn"].includes(helper)) this.summaries[owner].external = true;
-      if (n.kind == NodeKind.MemberCallExpression) {
+      if (kind == NodeKind.MemberCallExpression) {
         const receiver: string = this.receiver(m,id);
         if (["!fs","!http","!process","Server","Response","Request","FileReader","Timer","FsWatcher","FsEvent","HttpClientResponse"].includes(receiver)) this.summaries[owner].external = true;
-        if (receiver == "Console" || receiver == "!Date" || (receiver == "!Math" && n.get(AttributeKind.Method) == "random")) this.summaries[owner].external = true;
+        if (receiver == "Console" || receiver == "!Date" || (receiver == "!Math" && this.attributeOf(m,id,AttributeKind.Method) == "random")) this.summaries[owner].external = true;
       }
-      if (n.kind == NodeKind.NewExpression) for (const symbol of this.binding.symbols) if (symbol.kind == "ClassDeclaration" && (this.checked.files[m].types[id] == "#" + numberToString(this.binding.files[symbol.module].declarations[symbol.node]) || this.checked.files[m].types[id].startsWith("#" + numberToString(this.binding.files[symbol.module].declarations[symbol.node]) + "<"))) for (const e of this.node(symbol.module,symbol.node).edges) if (e.role == EdgeRole.Fields) {
-        const value: number = this.childOf(symbol.module,e.node,EdgeRole.DefaultValue); if (value >= 0 && this.kindOf(symbol.module,value) != NodeKind.LiteralExpression) this.summaries[owner].unknown = true;
+      if (kind == NodeKind.NewExpression) for (const sid of newClasses(classes,canonicalSymbol(this.checked.files[m].types[id]))) for (const e of this.node(this.binding.symbols[sid].module,this.binding.symbols[sid].node).edges) if (e.role == EdgeRole.Fields) {
+        const value: number = this.childOf(this.binding.symbols[sid].module,e.node,EdgeRole.DefaultValue); if (value >= 0 && this.kindOf(this.binding.symbols[sid].module,value) != NodeKind.LiteralExpression) this.summaries[owner].unknown = true;
       }
-      if (n.kind == NodeKind.IdentifierExpression || n.kind == NodeKind.CallExpression) {
+      if (kind == NodeKind.IdentifierExpression || kind == NodeKind.CallExpression) {
         const parent: number = this.binding.files[m].parents[id]; let writeOnly: boolean = false;
-        if (parent >= 0) { const p: AstNode = this.node(m,parent); writeOnly = p.kind == NodeKind.AssignmentExpression && bindingChild(p,EdgeRole.Target) == id; }
+        if (parent >= 0) writeOnly = this.kindOf(m,parent) == NodeKind.AssignmentExpression && this.childOf(m,parent,EdgeRole.Target) == id;
         if (!writeOnly) this.addEffect(owner,this.reference(m,id),"read");
       }
-      if ([NodeKind.CallExpression,NodeKind.MemberCallExpression].includes(n.kind)) {
+      if ([NodeKind.CallExpression,NodeKind.MemberCallExpression].includes(kind)) {
         const params: string[] = functionParams(this.checked.files[m].signatures[id]); let at: number = 0;
-        for (const edge of n.edges) if (edge.role == EdgeRole.Args) { const p: number = argumentParameter(this.checked.files[m],edge.node,at); if (p < params.length && memoryMode(params[p]) == "ref") this.addEffect(owner,this.root(m,edge.node),"write"); at = at+1; }
+        for (const edge of this.graph.modules[m].cached.result.ast.nodes[id].edges) if (edge.role == EdgeRole.Args) { const p: number = argumentParameter(this.checked.files[m],edge.node,at); if (p < params.length && memoryMode(params[p]) == "ref") this.addEffect(owner,this.root(m,edge.node),"write"); at = at+1; }
       }
-      if (n.kind == NodeKind.AssignmentExpression || n.kind == NodeKind.CompoundAssignmentExpression || n.kind == NodeKind.UpdateExpression || n.kind == NodeKind.DeleteStatement) this.addEffect(owner,this.root(m,bindingChild(n,EdgeRole.Target)),"write");
+      if (kind == NodeKind.AssignmentExpression || kind == NodeKind.CompoundAssignmentExpression || kind == NodeKind.UpdateExpression || kind == NodeKind.DeleteStatement) this.addEffect(owner,this.root(m,this.childOf(m,id,EdgeRole.Target)),"write");
       if (this.suspensionNode(m,id)) {
         this.addEffect(owner,this.root(m,this.taskOperand(m,id)),"move");
         for (const source of this.taskSources(m,this.taskOperand(m,id))) if (source >= 0) { const sourceModule: number = this.sourceModule(source); if (this.helper(sourceModule,source-this.offsets[sourceModule]) == "sleep") this.summaries[owner].external = true; }
       }
-      if (this.helper(m,id) == "move") this.addEffect(owner,this.root(m,bindingChild(n,EdgeRole.Args)),"move");
-      if (n.kind == NodeKind.MemberCallExpression && ["push","pop","sort","shift","unshift","reverse","fill","splice","set","add","delete","clear"].includes(n.get(AttributeKind.Method))) this.addEffect(owner,this.root(m,bindingChild(n,EdgeRole.Object)),"write");
-      if (n.kind == NodeKind.ReturnStatement) { const value: number = bindingChild(n,EdgeRole.Value); if (value >= 0) for (const origin of this.points[this.vertex(m,value)].origins) if (!this.summaries[owner].returned.includes(origin)) this.summaries[owner].returned.push(origin); }
-      if (n.kind == NodeKind.VariableDeclaration || n.kind == NodeKind.UsingDeclaration) {
-        const sid: number = this.binding.files[m].declarations[id]; const init: number = bindingChild(n,EdgeRole.Initializer);
+      if (this.helper(m,id) == "move") this.addEffect(owner,this.root(m,this.childOf(m,id,EdgeRole.Args)),"move");
+      if (kind == NodeKind.MemberCallExpression && ["push","pop","sort","shift","unshift","reverse","fill","splice","set","add","delete","clear"].includes(this.attributeOf(m,id,AttributeKind.Method))) this.addEffect(owner,this.root(m,this.childOf(m,id,EdgeRole.Object)),"write");
+      if (kind == NodeKind.ReturnStatement) { const value: number = this.childOf(m,id,EdgeRole.Value); if (value >= 0) for (const origin of this.points[this.vertex(m,value)].origins) if (!this.summaries[owner].returned.includes(origin)) this.summaries[owner].returned.push(origin); }
+      if (kind == NodeKind.VariableDeclaration || kind == NodeKind.UsingDeclaration) {
+        const sid: number = this.binding.files[m].declarations[id]; const init: number = this.childOf(m,id,EdgeRole.Initializer);
         if (sid >= 0 && this.owner(this.binding.symbols[sid].scope) != owner && init >= 0) this.retain(owner,this.vertex(m,init));
       }
-      if (n.kind == NodeKind.AssignmentExpression || (n.kind == NodeKind.MemberCallExpression && ["push","set","add"].includes(n.get(AttributeKind.Method)))) {
-        const root: number = this.root(m,bindingChild(n,n.kind == NodeKind.AssignmentExpression ? EdgeRole.Target : EdgeRole.Object));
+      if (kind == NodeKind.AssignmentExpression || (kind == NodeKind.MemberCallExpression && ["push","set","add"].includes(this.attributeOf(m,id,AttributeKind.Method)))) {
+        const root: number = this.root(m,this.childOf(m,id,kind == NodeKind.AssignmentExpression ? EdgeRole.Target : EdgeRole.Object));
         // Un primitivo se copia: escribirlo a través de un ref<T> no retiene nada.
-        if (root >= 0 && (this.owner(this.binding.symbols[root].scope) != owner || borrowedType(this.checked.symbolTypes[root]))) for (const e of n.edges) if ((e.role == EdgeRole.Value || e.role == EdgeRole.Args) && !primitiveType(memoryValue(this.checked.files[m].types[e.node]))) this.retain(owner,this.vertex(m,e.node));
+        if (root >= 0 && (this.owner(this.binding.symbols[root].scope) != owner || borrowedType(this.checked.symbolTypes[root]))) for (const e of this.graph.modules[m].cached.result.ast.nodes[id].edges) if ((e.role == EdgeRole.Value || e.role == EdgeRole.Args) && !primitiveType(memoryValue(this.checked.files[m].types[e.node]))) this.retain(owner,this.vertex(m,e.node));
       }
     }
     for (const call of this.calls) if (call.owner >= 0 && !this.builtin(call.module,call.node)) {
