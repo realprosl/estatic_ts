@@ -141,23 +141,22 @@ export class ModuleLoader {
     // An explicit DFS stack handles deep graphs without recursive native calls.
     // Discovery/dedup is separate from grey-node cycle detection.
     while (stack.length > 0) {
-      const index: number = stack[stack.length - 1]; let module: LoadedFile = discovered[index];
-      if (module.cursor >= module.requests.length) {
-        module.state = 2; discovered[index] = module; module.cached.record.dependencies = module.dependencies;
-        cache.save(module.cached.record); graph.modules.push(module); stack.pop();
+      // Por índice: copiar el módulo (con su AST) en cada import costaba segundos (#344).
+      const index: number = stack[stack.length - 1];
+      if (discovered[index].cursor >= discovered[index].requests.length) {
+        discovered[index].state = 2; discovered[index].cached.record.dependencies = discovered[index].dependencies;
+        cache.save(discovered[index].cached.record); graph.modules.push(discovered[index]); stack.pop();
       } else {
-        let request: ModuleRequest = module.requests[module.cursor]; module.cursor = module.cursor + 1;
+        let request: ModuleRequest = discovered[index].requests[discovered[index].cursor]; discovered[index].cursor = discovered[index].cursor + 1;
         // Deliberately re-probe paths each load: new higher-priority candidates,
         // removals, aliases, roots and symlinks invalidate routes, never syntax.
-        const dependency: string = resolveRequest(module.file, request.specifier, this.options);
-        const token: ParserToken = module.cached.result.ast.nodes[request.node].start;
-        discovered[index] = module;
+        const dependency: string = resolveRequest(discovered[index].file, request.specifier, this.options);
+        const token: ParserToken = discovered[index].cached.result.ast.nodes[request.node].start;
         if (dependency == "") {
-          graph.diagnostics.push(new SourceDiagnostic("resolver", "E2101: No se encuentra el módulo '" + request.specifier + "'" + (request.specifier.startsWith(".") ? "\nayuda: la ruta es relativa a este fichero; comprueba el nombre (si no lleva extensión, se prueban .ts y .ets)" : "\nayuda: los imports sin './' se buscan en las raíces y alias de estatic.config.json" + catalogVariant("raiz")) + catalogArg("modulo", request.specifier), module.file, token));
+          graph.diagnostics.push(new SourceDiagnostic("resolver", "E2101: No se encuentra el módulo '" + request.specifier + "'" + (request.specifier.startsWith(".") ? "\nayuda: la ruta es relativa a este fichero; comprueba el nombre (si no lleva extensión, se prueban .ts y .ets)" : "\nayuda: los imports sin './' se buscan en las raíces y alias de estatic.config.json" + catalogVariant("raiz")) + catalogArg("modulo", request.specifier), discovered[index].file, token));
         } else {
-          request.dependency = dependency; module.requests[module.cursor - 1] = request;
-          if (!module.dependencies.includes(dependency)) module.dependencies.push(dependency);
-          discovered[index] = module;
+          request.dependency = dependency; discovered[index].requests[discovered[index].cursor - 1] = request;
+          if (!discovered[index].dependencies.includes(dependency)) discovered[index].dependencies.push(dependency);
           let existing: number = -1;
           for (let i: number = 0; i < discovered.length; i = i + 1) { if (discovered[i].file == dependency) { existing = i; break; } }
           if (existing < 0) { if (this.options.verbose) progressDetail("frontend: reading/parsing "+dependency); discovered.push(readModule(dependency, graph, cache)); stack.push(discovered.length - 1); }
@@ -168,7 +167,7 @@ export class ModuleLoader {
               if (started) cycle.push(discovered[active].file);
             }
             cycle.push(dependency);
-            graph.diagnostics.push(new SourceDiagnostic("resolver", "Ciclo de imports: " + cycle.join(" -> "), module.file, token));
+            graph.diagnostics.push(new SourceDiagnostic("resolver", "Ciclo de imports: " + cycle.join(" -> "), discovered[index].file, token));
           }
         }
       }
