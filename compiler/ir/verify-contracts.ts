@@ -81,34 +81,46 @@ export function verifyFunctionContracts(project: constRef<IrProject>, f: constRe
     for (let at: number = 0; at < f.values.length; at = at+1) if (!values.includes(at)) issues.push(new IrIssue("IR_INVALID","Valor ausente del frame lógico",f.source));
     for (let at: number = 0; at < f.places.length; at = at+1) if ((f.places[at].base) < 0 && (f.places[at].global) < 0 && !places.includes(at)) issues.push(new IrIssue("IR_INVALID","Place ausente del frame lógico",f.source));
   }
-  for (let lease: number = 0; lease < f.leases.length; lease = lease+1) {
-    const item = f.leases[lease]; let definitions: number = 0;
-    if ((item.place) < 0 || item.place >= f.places.length || (item.value) < 0 || item.value >= f.values.length || !["ref","constRef"].includes(item.mode)) issues.push(new IrIssue("IR_INVALID","Tabla de préstamos inválida",f.source));
-    for (const block of f.blocks) for (const i of block.instructions) if (["borrow","address"].includes(i.op) && i.lease == lease) {
-      definitions = definitions+1;
-      if (i.result != item.value || i.place != item.place || item.mode != (i.op == "address" ? "ref" : project.typeDefinitions[i.typeId].kind)) issues.push(new IrIssue("IR_INVALID","Modo/identidad de préstamo incompatible",i.source));
+  // Una sola pasada con índices: recorrer los bloques por cada préstamo o
+  // reanudación copiaba los bloques y era cuadrático (#344).
+  let leaseDefinitions: number[] = []; for (let lease: number = 0; lease < f.leases.length; lease = lease+1) leaseDefinitions.push(0);
+  let incoming: number[] = []; for (let b: number = 0; b < f.blocks.length; b = b+1) incoming.push(0);
+  let resumes: Map<number,number> = new Map<number,number>();
+  for (let b: number = 0; b < f.blocks.length; b = b+1) {
+    for (let t: number = 0; t < f.blocks[b].targets.length; t = t+1) { const target: number = f.blocks[b].targets[t]; if (target >= 0 && target < incoming.length) incoming[target] = incoming[target]+1; }
+    for (let at: number = 0; at < f.blocks[b].instructions.length; at = at+1) {
+      const op: string = f.blocks[b].instructions[at].op;
+      if (op == "resume") { const continuation: number = f.blocks[b].instructions[at].continuation; const found: Optional<number> = resumes.get(continuation); resumes.set(continuation,(found.isPresent() ? found.value() : 0)+1); }
+      if (op != "borrow" && op != "address") continue;
+      const lease: number = f.blocks[b].instructions[at].lease; if (lease < 0 || lease >= f.leases.length) continue;
+      leaseDefinitions[lease] = leaseDefinitions[lease]+1;
+      const typeId: number = f.blocks[b].instructions[at].typeId;
+      const mode: string = op == "address" ? "ref" : (typeId >= 0 && typeId < project.typeDefinitions.length ? project.typeDefinitions[typeId].kind : "");
+      if (f.blocks[b].instructions[at].result != f.leases[lease].value || f.blocks[b].instructions[at].place != f.leases[lease].place || f.leases[lease].mode != mode) issues.push(new IrIssue("IR_INVALID","Modo/identidad de préstamo incompatible",f.blocks[b].instructions[at].source));
     }
-    if (definitions != 1) issues.push(new IrIssue("IR_INVALID","Préstamo sin definición única",f.source));
+  }
+  for (let lease: number = 0; lease < f.leases.length; lease = lease+1) {
+    const place: number = f.leases[lease].place; const value: number = f.leases[lease].value; const mode: string = f.leases[lease].mode;
+    if (place < 0 || place >= f.places.length || value < 0 || value >= f.values.length || !["ref","constRef"].includes(mode)) issues.push(new IrIssue("IR_INVALID","Tabla de préstamos inválida",f.source));
+    if (leaseDefinitions[lease] != 1) issues.push(new IrIssue("IR_INVALID","Préstamo sin definición única",f.source));
   }
   for (let b: number = 0; b < f.blocks.length; b = b+1) {
-    const block = f.blocks[b];
-    if (block.terminator == "suspend" && block.targets.length == 2) {
-      let normal: number = block.targets[0]; let predecessor: number = b; let steps: number = 0;
+    if (f.blocks[b].terminator == "suspend" && f.blocks[b].targets.length == 2) {
+      let normal: number = f.blocks[b].targets[0]; let predecessor: number = b; let steps: number = 0;
       // finishBorrows may split a continuation edge with lease cleanup.
       while (steps < f.blocks.length) {
-        let incoming: number = 0; for (const previous of f.blocks) for (const target of previous.targets) if (target == normal) incoming = incoming+1;
-        if (incoming != 1 || !f.blocks[predecessor].targets.includes(normal)) issues.push(new IrIssue("IR_INVALID","Continuación con entrada ajena a su suspensión",block.source));
-        let resumes: number = 0; let cleanup: boolean = true;
-        for (const i of f.blocks[normal].instructions) { if (i.op == "resume" && i.continuation == b) resumes = resumes+1; if (i.op != "endBorrow") cleanup = false; }
-        if (resumes == 1) break;
-        if (!cleanup || f.blocks[normal].terminator != "jump" || f.blocks[normal].targets.length != 1) { issues.push(new IrIssue("IR_INVALID","Suspensión sin reanudación única",block.source)); break; }
+        if (incoming[normal] != 1 || !f.blocks[predecessor].targets.includes(normal)) issues.push(new IrIssue("IR_INVALID","Continuación con entrada ajena a su suspensión",f.blocks[b].source));
+        let resumed: number = 0; let cleanup: boolean = true;
+        for (let at: number = 0; at < f.blocks[normal].instructions.length; at = at+1) { const op: string = f.blocks[normal].instructions[at].op; if (op == "resume" && f.blocks[normal].instructions[at].continuation == b) resumed = resumed+1; if (op != "endBorrow") cleanup = false; }
+        if (resumed == 1) break;
+        if (!cleanup || f.blocks[normal].terminator != "jump" || f.blocks[normal].targets.length != 1) { issues.push(new IrIssue("IR_INVALID","Suspensión sin reanudación única",f.blocks[b].source)); break; }
         predecessor = normal; normal = f.blocks[normal].targets[0]; steps = steps+1;
       }
-      if (steps == f.blocks.length) issues.push(new IrIssue("IR_INVALID","Ciclo en continuación de suspensión",block.source));
+      if (steps == f.blocks.length) issues.push(new IrIssue("IR_INVALID","Ciclo en continuación de suspensión",f.blocks[b].source));
     }
-    for (const i of block.instructions) if (i.op == "resume") {
-      let definitions: number = 0; for (const candidate of f.blocks) for (const other of candidate.instructions) if (other.op == "resume" && other.continuation == i.continuation) definitions = definitions+1;
-      if (definitions != 1) issues.push(new IrIssue("IR_INVALID","Reanudación duplicada",i.source));
+    for (let at: number = 0; at < f.blocks[b].instructions.length; at = at+1) if (f.blocks[b].instructions[at].op == "resume") {
+      const found: Optional<number> = resumes.get(f.blocks[b].instructions[at].continuation);
+      if (!found.isPresent() || found.value() != 1) issues.push(new IrIssue("IR_INVALID","Reanudación duplicada",f.blocks[b].instructions[at].source));
     }
   }
   return issues;
