@@ -22,6 +22,8 @@ function execute(command:string[],output:string="",errors:string=""):number{prog
 function help():string{return "Uso: etsc build|run [entrada.ts] [opciones]\n  --check                  Verificar sin generar\n  --emit-interface         Imprimir la interfaz pública del módulo y su interfaceHash (JSON)\n  --unity                  Compilar el programa como un único .cpp (sin unidades por módulo)\n  -o archivo.cpp           Ruta C++\n  --binary archivo         Ruta ejecutable (con build)\n  --from-ir archivo        Generar desde ets-ir-2 verificado\n  --emit-ir archivo        Guardar IR\n  --config archivo         JSON u objeto declarativo\n  --root ruta | --alias nombre ruta | --cache ruta\n  --cxx compilador | --cxx-flag flag | --link-flag flag\n  --jobs N                 Procesos de análisis (1..32; por defecto 1)\n  --profile-analysis       Tiempos, CPU y RSS por fase en stderr\n  --verbose | --no-progress\n  init [directorio] [--no-src] | update-types [directorio]\n  init lib [directorio]    Crear una librería (módulos importables, sin punto de entrada)\n  update [versión] [--list | --dry-run]  Actualizar etsc (sin versión: la última)\n  install <url-git> [versión] [-g]  Instalar una librería (alias + dependencia); sin argumentos, descarga las que falten\n  --no-src                 (init) no crear src/: para una carpeta que ya tiene código\n  --explain CÓDIGO     Explicar un código de error (ej. E3003). ESTC_LANG=en: mensajes en inglés\n  --help | --version\n";}
 // Ficheros fuente del último análisis: alimentan la huella de entradas (fase 3).
 let analyzedFiles:string[]=[];
+// Texto del IR ya formateado (caché de IR, #344): evita volver a formatearlo al emitirlo.
+let formattedIr:string="";
 // --emit-interface (#177): analiza el módulo como entrada e imprime su interfaz
 // pública (firmas, efectos inferidos y si hace falta el cuerpo) con interfaceHash.
 function emitModuleInterface(entry:string,options:LoaderOptions):void{
@@ -42,15 +44,18 @@ function irCacheKey(graph:ModuleGraph,options:LoaderOptions):string{
  return contentHash(text);
 }
 function irCachePath(options:LoaderOptions,entry:string):string{return options.cacheDirectory+"/ir/"+contentHash(entry)+".ir";}
-function sourceIr(entry:string,options:LoaderOptions,verbose:boolean):IrProject{
+function sourceIr(entry:string,options:LoaderOptions,verbose:boolean,needIr:boolean):IrProject{
  const loadProfile=profileBegin();let loader=new ModuleLoader(options);const graph=loader.load(entry);profileEnd("load",loadProfile);for(const file of graph.modules)analyzedFiles.push(file.file);
  const irKey=irCacheKey(graph,options);
  if(irKey!=""){const snapshot=readSnapshot(irCachePath(options,entry));const newline=snapshot.length>=2&&snapshot[1]==""?snapshot[0].indexOf("\n"):-1;
-  if(newline>0&&snapshot[0].slice(0,newline)==irKey){const cachedProfile=profileBegin();progressDetail("Sin cambios en las fuentes: se reutiliza el IR verificado");const cached=parseIrProject(snapshot[0].slice(newline+1,snapshot[0].length));profileEnd("ir-cache",cachedProfile);if(cached.success&&cached.diagnostics.length==0)return cached;}}const project=analyzeProject(graph,verbose||progressInteractive());
+  if(newline>0&&snapshot[0].slice(0,newline)==irKey){const cachedProfile=profileBegin();progressDetail("Sin cambios en las fuentes: se reutiliza el IR verificado");const text=snapshot[0].slice(newline+1,snapshot[0].length);
+   // Solo comprobar (--check): no hace falta reconstruir el IR, basta su texto.
+   if(!needIr){formattedIr=text;let empty=new IrProject();empty.success=true;profileEnd("ir-cache",cachedProfile);return empty;}
+   const cached=parseIrProject(text);profileEnd("ir-cache",cachedProfile);if(cached.success&&cached.diagnostics.length==0){formattedIr=text;return cached;}}}const project=analyzeProject(graph,verbose||progressInteractive());
  let diagnostics=project.graph.diagnostics;for(const d of project.binding.diagnostics)diagnostics.push(d);for(const d of project.checked.diagnostics)diagnostics.push(d);
  let ir=new IrProject();if(diagnostics.length==0){progressDetail("Generando IR verificado");ir=lowerProject(project.graph,project.binding,project.checked,verbose||progressInteractive());}
  let seen:string[]=[];for(const d of diagnostics){const key=d.file+":"+numberToString(d.token.offset)+":"+d.code+":"+d.message;if(!seen.includes(key)){seen.push(key);ir.diagnostics.push(new IrIssue(d.code,d.message,new IrSource("","",d.file,-1,d.token.offset,d.endToken.endOffset)));}}
- if(irKey!=""&&ir.success&&ir.diagnostics.length==0)publishRecord(irCachePath(options,entry),irKey+"\n"+formatIr(ir));
+ if(irKey!=""&&ir.success&&ir.diagnostics.length==0){formattedIr=formatIr(ir);publishRecord(irCachePath(options,entry),irKey+"\n"+formattedIr);}
  if(!ir.success||ir.diagnostics.length>0){progressFinish(false);for(const d of ir.diagnostics){printError(renderDiagnostic(d.code,d.message,d.source.file,d.source.start,d.source.end));printError("");}driverError(renderSummary(ir.diagnostics.length));}return ir;
 }
 // Escribe un fichero de tipos del editor, guardando el anterior como `.bak`.
@@ -355,7 +360,7 @@ function main():void{
   }
  }
  if(fingerprintPath!=""&&exists(fingerprintPath))remove(fingerprintPath);
- options.verbose=verbose||progressInteractive();progressStart(fromIr==""?"Analizando fuentes y verificando IR":"Leyendo IR");const ir:IrProject=fromIr==""?sourceIr(entry,options,verbose):parseIrProject(checkedRead(fromIr));if(emitIr!="")checkedWrite(emitIr,formatIr(ir)+"\n");if(check){progressSummary();return;}
+ options.verbose=verbose||progressInteractive();progressStart(fromIr==""?"Analizando fuentes y verificando IR":"Leyendo IR");const ir:IrProject=fromIr==""?sourceIr(entry,options,verbose,!check):parseIrProject(checkedRead(fromIr));if(emitIr!="")checkedWrite(emitIr,(formattedIr!=""?formattedIr:formatIr(ir))+"\n");if(check){progressSummary();return;}
  progressStart("Generando C++ desde IR verificado");const generated=generateCppWithLibraries(ir,libraryRoots);const outConfig=jsonObjectGet(config,"output");const compiler=jsonObjectGet(config,"compiler");if(output==""){const configured=jsonAsString(jsonObjectGet(outConfig,"cpp"));output=(configured!=""?pathAt(base,configured):"build/"+stem(fromIr==""?entry:fromIr)+".cpp");}progressStart("Guardando resultados");checkedWrite(output,generated.cpp);
  if(build||jsonAsBool(jsonObjectGet(compiler,"enabled"))){if(binary==""){const configured=jsonAsString(jsonObjectGet(outConfig,"binary"));binary=(configured!=""?pathAt(base,configured):output+".bin");}if(cxx=="")cxx=jsonAsString(jsonObjectGet(compiler,"command"));if(cxx=="")cxx=environment("CXX");if(cxx=="")cxx="g++";let compileFlags=configStrings(jsonObjectGet(compiler,"flags"));for(const flag of flags)compileFlags.push(flag);let linkFlags=configStrings(jsonObjectGet(compiler,"linkFlags"));for(const flag of links)linkFlags.push(flag);for(const library of configStrings(jsonObjectGet(config,"linkLibraries")))linkFlags.push("-l"+library);compileCpp(generated,output,binary,root,cxx,compileFlags,linkFlags,incrementalEnabled,options.cacheDirectory,unity);if(fingerprintPath!=""){let inputs:string[]=[];for(const file of analyzedFiles)inputs.push(file);if(configPath!="")inputs.push(configPath);for(let k:number=0;k+1<flags.length;k=k+1)if(flags[k]=="-include"&&exists(flags[k+1]))inputs.push(flags[k+1]);checkedWrite(fingerprintPath,fingerprintText(fingerprintKey,inputs,[output,binary]));}}
  progressSummary(output,(build||jsonAsBool(jsonObjectGet(compiler,"enabled")))?binary:"");if(run){let command:string[]=[normalizePath(binary)];for(const arg of programArgs)command.push(arg);exitProcess(execute(command));}
