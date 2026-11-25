@@ -221,9 +221,10 @@ test('module Result storage: deferred success and failure compile and run',async
  });
 });
 
-test('module Task storage: deferred initialization keeps the coroutine lazy',async()=>{
+// #365: como en Node, el cuerpo async empieza al llamar (antes era perezoso).
+test('module Task storage: deferred initialization starts the coroutine like Node',async()=>{
  await project({'main.ets':'async function value():Promise<number>{print("started");return 7;}const task:Promise<number> = value();print("before await");print(await task);'},async(entry,dir)=>{
-  assert.equal(native(await compileFile(entry),dir,[resolve('runtime/runtime_ets_libuv.cpp'),resolve('runtime/runtime_ets_net_libuv.cpp'),'-luv']),'before await\nstarted\n7\n');
+  assert.equal(native(await compileFile(entry),dir,[resolve('runtime/runtime_ets_libuv.cpp'),resolve('runtime/runtime_ets_net_libuv.cpp'),'-luv']),'started\nbefore await\n7\n');
  });
 });
 test('module file helpers: global readFile and writeFile use the runtime namespace',async()=>{
