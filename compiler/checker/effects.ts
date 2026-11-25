@@ -33,8 +33,8 @@ export class EffectCall {
   // fixed: el destino es la función seleccionada estáticamente y ya está enlazado;
   // tasks: la llamada puede crear tareas (sleep o Promise). Se calculan en la
   // primera ronda para no recorrer todas las llamadas en cada ronda (#344).
-  fixed: boolean; tasks: number;
-  constructor(module: number, node: number, owner: number) { this.module = module; this.node = node; this.owner = owner; this.linked = new Map<number,boolean>(); this.fixed = false; this.tasks = -1; }
+  fixed: boolean; tasks: number; version: number;
+  constructor(module: number, node: number, owner: number) { this.module = module; this.node = node; this.owner = owner; this.linked = new Map<number,boolean>(); this.fixed = false; this.tasks = -1; this.version = -1; }
 }
 // Finite, monotone value-flow and effect summaries. IDs belong to this binding.
 // No AST annotation and no recursion-depth cutoff in summary construction.
@@ -500,6 +500,16 @@ export class EffectAnalyzer {
     profileEnd("effect-graph",graphProfile,"vertices="+numberToString(this.points.length)+" edges="+numberToString(this.edges.length)+" edge_visits="+numberToString(this.edgeVisits)+" rounds="+numberToString(graphPass)+" dense_visits="+numberToString(denseVisits));
     if (this.trace) progressDetail("frontend: effect graph complete, "+numberToString(this.edgeVisits)+" edge visits, "+numberToString(this.edges.length)+" edges, "+numberToString(graphPass)+" rounds, "+numberToString(denseVisits)+" dense baseline visits, "+numberToString(Date.now()-graphStarted)+" ms");
   }
+  // Tamaño de los resúmenes de los destinos de una llamada: todos sus campos
+  // solo crecen, así que no cambia si y solo si ningún resumen ha cambiado.
+  targetsVersion(module: number, id: number): number {
+    let total: number = 0;
+    for (const target of this.executionTargets(module,id)) {
+      total = total+1+this.summaries[target].reads.length+this.summaries[target].writes.length+this.summaries[target].moves.length+this.summaries[target].retains.length+this.summaries[target].invokes.length+this.summaries[target].borrows.length+this.summaries[target].callees.length;
+      if (this.summaries[target].unknown) total = total+1; if (this.summaries[target].external) total = total+1;
+    }
+    return total;
+  }
   addEffect(summaryId: number, sid: number, mode: string): void {
     if (summaryId < 0 || sid < 0 || (this.binding.symbols[sid].module) < 0) return;
     if (!["VariableDeclaration","Parameter","receiver"].includes(this.binding.symbols[sid].kind)) return;
@@ -623,7 +633,14 @@ export class EffectAnalyzer {
     this.changed = true;
     while (this.changed) {
       this.changed = false;
-      for (const call of this.calls) if (call.owner >= 0) {
+      for (let callIndex: number = 0; callIndex < this.calls.length; callIndex = callIndex+1) if (this.calls[callIndex].owner >= 0) {
+        // Todo lo que hace una llamada depende solo de los resúmenes de sus
+        // destinos, que solo crecen: si ninguno ha cambiado desde la última vez,
+        // volver a procesarla no añade nada (#344).
+        const version: number = this.targetsVersion(this.calls[callIndex].module,this.calls[callIndex].node);
+        if (version == this.calls[callIndex].version) continue;
+        this.calls[callIndex].version = version;
+        const call: EffectCall = this.calls[callIndex];
         for (const target of this.executionTargets(call.module,call.node)) {
           const callee = this.summaries[target];
           for (const b of callee.borrows) {
