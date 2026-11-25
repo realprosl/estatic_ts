@@ -97,16 +97,13 @@ test("init-project: estatic.d.ts declara los built-ins del dialecto", async () =
   }
   // Globales de runtime (RUNTIME_GLOBAL_NAMES en type-checker).
   assert.match(dts, /\bnamespace\s+console\b/);
-  assert.match(dts, /\bnamespace\s+fs\b/);
   // path y process ya no son globales: se importan de estatic:path y
   // estatic:process (#292, #310).
   assert.doesNotMatch(dts, /\bnamespace\s+path\b/);
   assert.doesNotMatch(dts, /\bnamespace\s+process\b/);
   assert.match(dts, /\bnamespace\s+JSON\b/);
-  // fs.*Sync (versiones síncronas que devuelve Result<...> o boolean).
-  assert.match(dts, /\breadFileSync\b/);
-  assert.match(dts, /\bwriteFileSync\b/);
-  assert.match(dts, /\bexistsSync\b/);
+  // fs ya no es global: se importa de estatic:fs (#292).
+  assert.doesNotMatch(dts, /\bnamespace\s+fs\b/);
   // Helpers del runtime que usan los ejemplos.
   assert.match(dts, /\bfunction\s+print\b/);
   assert.match(dts, /\bfunction\s+numberToString\b/);
@@ -147,8 +144,7 @@ test("init-project: tipos recientes están disponibles para el editor", async ()
   }
   for (const fn of [
     "comptime", "setTimeout", "setInterval", "cancelTimer", "watchFs",
-    "unwatchFs", "stopLoop", "resolveDns", "readFileAsync",
-    "listenTcp", "createCancellation", "asyncIoUringRead",
+    "unwatchFs", "stopLoop", "createCancellation", "asyncIoUringRead",
   ]) {
     assert.match(dts, new RegExp(`\\bfunction\\s+${fn}\\b`), `falta la función ${fn}`);
   }
@@ -159,7 +155,11 @@ test("init-project: tipos recientes están disponibles para el editor", async ()
   assert.doesNotMatch(dts, /\bnamespace\s+http\b/);
 });
 
-const retiredBuiltins = new Set(["argument", "argumentCount", "exitProcess", "jsonEscape", "normalizePath", "pathDirectory"]);
+const retiredBuiltins = new Set([
+  "argument", "argumentCount", "exitProcess", "jsonEscape", "normalizePath", "pathDirectory",
+  // Ficheros, TCP/TLS, DNS y errores out-param: estatic:fs, net, tls y dns (#292, #203).
+  "acceptTcp", "acceptTcpUntil", "acceptTls", "appendFile", "appendFileAsync", "appendFileUntil", "clearError", "closeTcp", "closeTls", "copyFile", "copyFileAsync", "copyFileUntil", "createTlsServer", "ensureParentDirectory", "fail", "fileAppend", "fileCopy", "fileExists", "fileExistsAsync", "fileMove", "fileRead", "fileRemove", "fileWrite", "hasError", "listenTcp", "moveFile", "moveFileAsync", "moveFileUntil", "readFile", "readFileAsync", "readFileUntil", "readTcp", "readTcpUntil", "readTls", "removeFile", "removeFileAsync", "removeFileUntil", "resolveDns", "tcpAccept", "tcpClose", "tcpConnect", "tcpListen", "tcpRead", "tcpWrite", "writeFile", "writeFileAsync", "writeFileUntil", "writeTcp", "writeTcpUntil", "writeTls",
+]);
 
 test("init-project: todo builtin registrado tiene declaración para el editor", () => {
   const registry = readFileSync(join(compilerRoot, "src", "semantic", "builtin-registry.ts"), "utf8");
@@ -171,8 +171,8 @@ test("init-project: todo builtin registrado tiene declaración para el editor", 
     [...registry.matchAll(/global\.define\("([^"]+)"/g)].map(match => match[1]),
   );
   assert.deepEqual(
-    // Retirados de los globales (#310): stage 0 los conserva, etsc los importa
-    // de estatic:process, estatic:path y estatic:json.
+    // Retirados de los globales (#310, #292): stage 0 los conserva, etsc los
+    // importa de las librerías estatic:*.
     [...registeredFunctions].filter(name => !declaredFunctions.has(name) && !retiredBuiltins.has(name)),
     [],
     "hay funciones builtin sin declarar en types/estatic.d.ts",
