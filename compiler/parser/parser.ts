@@ -175,6 +175,14 @@ export class Parser {
       const rest: string = token.kind.slice(1, token.kind.length);
       const close: ParserToken = new ParserToken(">", ">", token.offset, token.line, token.column, token.offset + 1, token.line, token.column + 1);
       this.tokens[this.current] = new ParserToken(rest, rest, token.offset + 1, token.line, token.column + 1, token.endOffset, token.endLine, token.endColumn);
+      // #369: `Promise<void>=>` llega como `>=` `>`: el `=` que queda y el `>`
+      // contiguo forman la flecha `=>`.
+      const next: ParserToken = this.peek(1);
+      if (rest == "=" && next.kind == ">" && next.offset == token.endOffset) {
+        this.tokens[this.current] = new ParserToken("=>", "=>", token.offset + 1, token.line, token.column + 1, next.endOffset, next.endLine, next.endColumn);
+        for (let at: number = this.current + 1; at + 1 < this.tokens.length; at = at + 1) this.tokens[at] = this.tokens[at + 1];
+        this.tokens.pop();
+      }
       return close;
     }
     return this.expect(">");
@@ -1356,7 +1364,10 @@ export class Parser {
     if (this.peek(cursor).kind == "=>") return true;
     if (this.peek(cursor).kind != ":") return false;
     while (this.peek(cursor).kind != "eof" && this.peek(cursor).kind != ";" && this.peek(cursor).kind != "{" && this.peek(cursor).kind != "newline") {
-      if (this.peek(cursor).kind == "=>") return true; cursor = cursor + 1;
+      if (this.peek(cursor).kind == "=>") return true;
+      // #369: `Promise<void>=>` llega como `>=` `>` contiguos.
+      if ((this.peek(cursor).kind == ">=" || this.peek(cursor).kind == ">>=") && this.peek(cursor+1).kind == ">" && this.peek(cursor+1).offset == this.peek(cursor).endOffset) return true;
+      cursor = cursor + 1;
     }
     return false;
   }

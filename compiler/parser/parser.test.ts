@@ -110,6 +110,17 @@ function parity(source: string): NativeResult {
   assert.deepEqual(result.diagnostics, [], JSON.stringify(result.diagnostics));
   assert.deepEqual(nativeShape(result), hostShape(expected)); return result;
 }
+// #369: `>=>` cierra el tipo genérico y deja la flecha (stage 0 no lo admite: sin paridad).
+test("bootstrap parser: generic return type closes before an arrow without space (#369)", () => {
+  const pairs: [string,string][] = [
+    ['const f=async ():Promise<void>=>{print("x");};', 'const f=async ():Promise<void> =>{print("x");};'],
+    ['const g=():Array<Array<number>>=>[[1]];', 'const g=():Array<Array<number>> =>[[1]];'],
+  ];
+  for (const [tight, spaced] of pairs) {
+    const result = native(tight); assert.deepEqual(result.diagnostics, [], tight);
+    assert.deepEqual(nativeShape(result), nativeShape(native(spaced)), tight);
+  }
+});
 for (const source of ['for(let i=0;i<3;1++){}', '++(1+2);', 'f()--;']) test(`bootstrap parser: invalid update points at operator: ${source}`, () => {
   const result = native(source);
   assert.equal(result.diagnostics.length, 1);
