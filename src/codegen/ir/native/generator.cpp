@@ -359,12 +359,19 @@ S Generator::runtimeCall(const Function& f,const Instruction& i){const auto& c=p
  }
  return fail("Capacidad runtime no implementada: "+c.capability,i.source);
 }
+// @link("m") -> -lm; "-framework Cocoa" -> flags separados. Ruta o espacios sin "-" -> inválido ("").
+static V<S> linkArguments(const S& value){
+ if(value.starts_with("-")){V<S> parts;S part;for(char c:value){if(c==' '){if(!part.empty())parts.push_back(part);part.clear();}else part+=c;}if(!part.empty())parts.push_back(part);return parts;}
+ if(value.empty()||value.find_first_of(" /\\")!=S::npos)return {""};
+ return {"-l"+value};
+}
 // Native @cppgen deliberately supports only the literal identity generator used
 // by bootstrap. General comptime evaluation belongs to the frontend, not C++.
 void Generator::annotations(){
  for(const auto& a:p.annotationRecords){
   S name=str(get(a,"name"));Source source(get(a,"source"));const auto& args=get(a,"arguments");
-  if(in(name,{"cpp_name","cpp_type","link","cpp_header","cpp_include","cpp_link"}))throw Error("ABI externo no implementado: @"+name,source);
+  if(in(name,{"cpp_name","cpp_type","cpp_header","cpp_include","cpp_link"}))throw Error("ABI externo no implementado: @"+name,source);
+  if(name=="link"){if(!args.isArray()||array(args).size()!=1||!array(args)[0].isString())throw Error("@link requiere un único argumento",source);for(const S& arg:linkArguments(str(array(args)[0]))){if(arg.empty())throw Error("@link: librería inválida",source);if(std::find(result.links.begin(),result.links.end(),arg)==result.links.end())result.links.push_back(arg);}continue;}
   if(name!="include"&&name!="cppgen")continue;
   if(!args.isArray())throw Error("@"+name+": argumentos inválidos",source);
   if(name=="include"){

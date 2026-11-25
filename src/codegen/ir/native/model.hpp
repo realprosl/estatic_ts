@@ -35,8 +35,8 @@ struct Dispatch {int interfaceType,concreteType,signature,callee;S name;Dispatch
 struct Project {V<S> types,annotations;V<J> annotationRecords;V<Type> shapes;V<Function> functions;V<Place> globals;V<Contract> contracts;V<Dispatch> dispatches;V<int> initialization,finalization;
  explicit Project(const J& j){if(str(get(j,"format"))!="ets-ir-2"||!boolean(get(j,"success"))||!get(j,"diagnostics").isArray()||!array(get(j,"diagnostics")).empty())throw Error("Se requiere ets-ir-2 verificado con success:true");types=strings(get(j,"types"));for(auto& x:array(get(j,"typeDefinitions")))shapes.emplace_back(x);for(auto& x:array(get(j,"functions")))functions.emplace_back(x);for(auto& x:array(get(j,"globals")))globals.emplace_back(x);for(auto& x:array(get(j,"runtimeContracts")))contracts.emplace_back(x);for(auto& x:array(get(j,"dispatches")))dispatches.emplace_back(x);for(auto& x:array(get(j,"annotations"))){annotations.push_back(str(get(x,"name")));annotationRecords.push_back(x);}initialization=numbers(get(j,"initializationOrder"));finalization=numbers(get(j,"finalizationOrder"));}
 };
-struct Result {S cpp;std::set<S> headers;bool libuv=false,curl=false,tls=false,ioUring=false;V<S> capabilities;
- J wire()const{J::Array hs,cs;for(auto& h:headers)hs.emplace_back(h);for(auto& c:capabilities)cs.emplace_back(c);return J::Object{{"cpp",J(cpp)},{"headers",J(hs)},{"runtimeBackends",J(J::Object{{"libuv",J(libuv)},{"curl",J(curl)},{"tls",J(tls)},{"ioUring",J(ioUring)}})},{"capabilities",J(cs)}};}
+struct Result {S cpp;std::set<S> headers;V<S> links;bool libuv=false,curl=false,tls=false,ioUring=false;V<S> capabilities;
+ J wire()const{J::Array hs,cs,ls;for(auto& h:headers)hs.emplace_back(h);for(auto& l:links)ls.emplace_back(l);for(auto& c:capabilities)cs.emplace_back(c);return J::Object{{"cpp",J(cpp)},{"headers",J(hs)},{"runtimeBackends",J(J::Object{{"libuv",J(libuv)},{"curl",J(curl)},{"tls",J(tls)},{"ioUring",J(ioUring)}})},{"capabilities",J(cs)},{"links",J(ls)}};}
 };
 Result generateNativeCpp(const J& project);
 }

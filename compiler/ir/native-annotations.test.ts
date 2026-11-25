@@ -86,10 +86,12 @@ test('native @link: argumentos de enlazado solo de los módulos del programa (#2
  for(const value of ['','a b','../m','a/b']){const q=structuredClone(p);q.annotations!.find(a=>a.name==='link')!.arguments=[value];rejected(q,/@link/);}
 });
 test('native @link enlaza la librería al construir con etsc (#215)',()=>{
+ // El driver C++ heredado necesita el frontend; etsc (stage 2) lo lleva dentro.
+ const driver=process.env.ESTATIC_NATIVE_COMPILER?[]:['--frontend',frontend];
  const lib=join(directory,'cbrt.ets');writeFileSync(lib,'@link("m")\n@cpp_native("std::cbrt") export function cbrt(x:number):number;\n');
  const entry=join(directory,'main.ets');const cpp=join(directory,'linked.cpp'),bin=join(directory,'linked');
  writeFileSync(entry,'import {cbrt} from "./cbrt";print(cbrt(8));');
- let r=spawnSync(compiler,[entry,'-o',cpp,'--binary',bin,'--run'],{encoding:'utf8',env:{...process.env,ESTC_ROOT:root}});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout,'2\n');
+ let r=spawnSync(compiler,[...driver,entry,'-o',cpp,'--binary',bin,'--run'],{encoding:'utf8',env:{...process.env,ESTC_ROOT:root}});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout,'2\n');
  writeFileSync(lib,'@link("estatic_no_existe")\n@cpp_native("std::cbrt") export function cbrt(x:number):number;\n');
- r=spawnSync(compiler,[entry,'-o',cpp,'--binary',bin,'--build'],{encoding:'utf8',env:{...process.env,ESTC_ROOT:root}});assert.notEqual(r.status,0);assert.match(r.stdout+r.stderr,/estatic_no_existe/);
+ r=spawnSync(compiler,[...driver,entry,'-o',cpp,'--binary',bin,'--build'],{encoding:'utf8',env:{...process.env,ESTC_ROOT:root}});assert.notEqual(r.status,0);assert.match(r.stdout+r.stderr,/estatic_no_existe/);
 });
