@@ -133,6 +133,7 @@ public:
     struct promise_type {
         std::optional<T> value;
         std::coroutine_handle<> continuation = std::noop_coroutine();
+        bool started = false;
         Task get_return_object() noexcept { return Task{handle_type::from_promise(*this)}; }
         std::suspend_always initial_suspend() const noexcept { return {}; }
         FinalAwaiter final_suspend() const noexcept { return {}; }
@@ -144,12 +145,28 @@ public:
     Task(const Task&) = delete;
     Task& operator=(const Task&) = delete;
     Task(Task&& other) noexcept : handle_(std::exchange(other.handle_, {})) {}
-    ~Task() { if (handle_) handle_.destroy(); }
+    // #318: una tarea que nadie espera no se cancela (en JS una promesa sin
+    // await sigue ejecutándose). Si aún no había empezado, empieza ahora; en
+    // cualquier caso el EventLoop se queda con el frame y lo termina antes de
+    // salir (drainDetached).
+    ~Task() {
+        if (!handle_) return;
+        if (handle_.done()) { handle_.destroy(); return; }
+        auto handle = std::exchange(handle_, {}); const bool fresh = !handle.promise().started;
+        handle.promise().started = true; defaultEventLoop.detach(handle);
+        if (fresh) handle.resume();
+    }
     bool await_ready() const noexcept { return !handle_ || handle_.done(); }
-    std::coroutine_handle<> await_suspend(std::coroutine_handle<> continuation) const noexcept { handle_.promise().continuation = continuation; return handle_; }
+    // Una tarea ya empezada (suspendida en un await) no se reanuda aquí: solo se
+    // apunta quién la espera; la reanudará su propio evento.
+    std::coroutine_handle<> await_suspend(std::coroutine_handle<> continuation) const noexcept {
+        handle_.promise().continuation = continuation;
+        if (handle_.promise().started) return std::noop_coroutine();
+        handle_.promise().started = true; return handle_;
+    }
     T await_resume() const noexcept { return std::move(*handle_.promise().value); }
     bool done() const noexcept { return !handle_ || handle_.done(); }
-    void start() const { if (handle_ && !handle_.done()) handle_.resume(); }
+    void start() const { if (handle_ && !handle_.done() && !handle_.promise().started) { handle_.promise().started = true; handle_.resume(); } }
     std::coroutine_handle<> release() noexcept { return std::exchange(handle_, {}); }
 private:
     handle_type handle_{};
@@ -160,6 +177,7 @@ class [[nodiscard]] Task<void> {
 public:
     struct promise_type {
         std::coroutine_handle<> continuation = std::noop_coroutine();
+        bool started = false;
         Task get_return_object() noexcept { return Task{handle_type::from_promise(*this)}; }
         std::suspend_always initial_suspend() const noexcept { return {}; }
         FinalAwaiter final_suspend() const noexcept { return {}; }
@@ -171,12 +189,28 @@ public:
     Task(const Task&) = delete;
     Task& operator=(const Task&) = delete;
     Task(Task&& other) noexcept : handle_(std::exchange(other.handle_, {})) {}
-    ~Task() { if (handle_) handle_.destroy(); }
+    // #318: una tarea que nadie espera no se cancela (en JS una promesa sin
+    // await sigue ejecutándose). Si aún no había empezado, empieza ahora; en
+    // cualquier caso el EventLoop se queda con el frame y lo termina antes de
+    // salir (drainDetached).
+    ~Task() {
+        if (!handle_) return;
+        if (handle_.done()) { handle_.destroy(); return; }
+        auto handle = std::exchange(handle_, {}); const bool fresh = !handle.promise().started;
+        handle.promise().started = true; defaultEventLoop.detach(handle);
+        if (fresh) handle.resume();
+    }
     bool await_ready() const noexcept { return !handle_ || handle_.done(); }
-    std::coroutine_handle<> await_suspend(std::coroutine_handle<> continuation) const noexcept { handle_.promise().continuation = continuation; return handle_; }
+    // Una tarea ya empezada (suspendida en un await) no se reanuda aquí: solo se
+    // apunta quién la espera; la reanudará su propio evento.
+    std::coroutine_handle<> await_suspend(std::coroutine_handle<> continuation) const noexcept {
+        handle_.promise().continuation = continuation;
+        if (handle_.promise().started) return std::noop_coroutine();
+        handle_.promise().started = true; return handle_;
+    }
     void await_resume() const noexcept {}
     bool done() const noexcept { return !handle_ || handle_.done(); }
-    void start() const { if (handle_ && !handle_.done()) handle_.resume(); }
+    void start() const { if (handle_ && !handle_.done() && !handle_.promise().started) { handle_.promise().started = true; handle_.resume(); } }
     std::coroutine_handle<> release() noexcept { return std::exchange(handle_, {}); }
 private:
     handle_type handle_{};
