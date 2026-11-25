@@ -143,8 +143,8 @@ test("init-project: tipos recientes están disponibles para el editor", async ()
     assert.match(dts, new RegExp(`\\b(?:interface|class|type)\\s+${type}\\b`), `falta el tipo ${type}`);
   }
   for (const fn of [
-    "comptime", "setTimeout", "setInterval", "cancelTimer", "watchFs",
-    "unwatchFs", "stopLoop", "createCancellation", "asyncIoUringRead",
+    "comptime", "setTimeout", "setInterval", "cancelTimer",
+    "stopLoop", "createCancellation",
   ]) {
     assert.match(dts, new RegExp(`\\bfunction\\s+${fn}\\b`), `falta la función ${fn}`);
   }
@@ -159,6 +159,8 @@ const retiredBuiltins = new Set([
   "argument", "argumentCount", "exitProcess", "jsonEscape", "normalizePath", "pathDirectory",
   // Ficheros, TCP/TLS, DNS y errores out-param: estatic:fs, net, tls y dns (#292, #203).
   "acceptTcp", "acceptTcpUntil", "acceptTls", "appendFile", "appendFileAsync", "appendFileUntil", "clearError", "closeTcp", "closeTls", "copyFile", "copyFileAsync", "copyFileUntil", "createTlsServer", "ensureParentDirectory", "fail", "fileAppend", "fileCopy", "fileExists", "fileExistsAsync", "fileMove", "fileRead", "fileRemove", "fileWrite", "hasError", "listenTcp", "moveFile", "moveFileAsync", "moveFileUntil", "readFile", "readFileAsync", "readFileUntil", "readTcp", "readTcpUntil", "readTls", "removeFile", "removeFileAsync", "removeFileUntil", "resolveDns", "tcpAccept", "tcpClose", "tcpConnect", "tcpListen", "tcpRead", "tcpWrite", "writeFile", "writeFileAsync", "writeFileUntil", "writeTcp", "writeTcpUntil", "writeTls",
+  // Helpers de string, io_uring, openFileReader y watchFs (#166, #292).
+  "length", "charAt", "substring", "indexOf", "startsWith", "trim", "lineCount", "lineAt", "ioUringRead", "ioUringWrite", "ioUringAvailable", "asyncIoUringRead", "asyncIoUringWrite", "openFileReader", "watchFs", "unwatchFs",
 ]);
 
 test("init-project: todo builtin registrado tiene declaración para el editor", () => {
