@@ -7,36 +7,56 @@ import { memoryMode, memoryInner, ownedType, borrowedType, splitTypes, genericBa
 // A structural property of canonical types, independent of expression syntax.
 // Borrowed views do not own their referents. Callable signatures describe calls,
 // not their environments; closure capture ownership is checked separately.
-export function resourceType(graph: constRef<ModuleGraph>, binding: constRef<BindingResult>, checked: constRef<CheckResult>, text: string, history: string[]): boolean {
+// Campos de instancia por declaración ("módulo:nodo"), en orden de símbolo.
+// resourceType recorría todos los símbolos en cada tipo nominal (#344).
+export class ResourceFields {
+  owners: Map<string,number[]>; built: boolean;
+  constructor() { this.owners = new Map<string,number[]>(); this.built = false; }
+}
+export function resourceFields(graph: constRef<ModuleGraph>, binding: constRef<BindingResult>): ResourceFields {
+  let fields: ResourceFields = new ResourceFields(); fields.built = true;
+  for (let member: number = 0; member < binding.symbols.length; member = member + 1) {
+    const kind: string = binding.symbols[member].kind; if (!["ClassField","InterfaceField","UnionVariant"].includes(kind)) continue;
+    const module: number = binding.symbols[member].module; const scope: number = binding.symbols[member].scope; const node: number = binding.symbols[member].node;
+    if (module < 0 || scope < 0) continue;
+    if (graph.modules[module].cached.result.ast.nodes[node].get(AttributeKind.IsStatic) == "true") continue;
+    const owner: number = kind == "UnionVariant" ? binding.files[module].parents[node] : binding.scopes[scope].node;
+    const key: string = numberToString(module) + ":" + numberToString(owner);
+    const found: Optional<number[]> = fields.owners.get(key); let list: number[] = found.isPresent() ? found.value() : []; list.push(member); fields.owners.set(key,list);
+  }
+  return fields;
+}
+function fieldsOf(fields: constRef<ResourceFields>, module: number, node: number): number[] {
+  const found: Optional<number[]> = fields.owners.get(numberToString(module) + ":" + numberToString(node)); return found.isPresent() ? found.value() : [];
+}
+export function resourceType(graph: constRef<ModuleGraph>, binding: constRef<BindingResult>, checked: constRef<CheckResult>, fields: constRef<ResourceFields>, text: string, history: string[]): boolean {
   if (ownedType(text) || text == "Server") return true;
   if (borrowedType(text) || functionClose(text) >= 0) return false;
-  if (memoryMode(text) != "") return resourceType(graph,binding,checked,memoryInner(text),history);
+  if (memoryMode(text) != "") return resourceType(graph,binding,checked,fields,memoryInner(text),history);
   if (genericBase(text) == "Promise") return true;
   if (history.includes(text)) return false;
   if (history.length > 128) return true;
   let next: string[] = history; next.push(text);
-  if (fixedArraySize(text) >= 0) return resourceType(graph,binding,checked,fixedArrayElement(text),next);
-  if (text.endsWith("[]")) return resourceType(graph,binding,checked,semanticElement(text),next);
-  if (semanticTuple(text)) { for (const item of splitTypes(text.slice(1,text.length-1),",")) if (resourceType(graph,binding,checked,item,next)) return true; return false; }
+  if (fixedArraySize(text) >= 0) return resourceType(graph,binding,checked,fields,fixedArrayElement(text),next);
+  if (text.endsWith("[]")) return resourceType(graph,binding,checked,fields,semanticElement(text),next);
+  if (semanticTuple(text)) { for (const item of splitTypes(text.slice(1,text.length-1),",")) if (resourceType(graph,binding,checked,fields,item,next)) return true; return false; }
   for (const separator of ["|","&"]) {
     const parts: string[] = splitTypes(text,separator);
-    if (parts.length > 1) { for (const part of parts) if (resourceType(graph,binding,checked,part,next)) return true; return false; }
+    if (parts.length > 1) { for (const part of parts) if (resourceType(graph,binding,checked,fields,part,next)) return true; return false; }
   }
-  if (genericBase(text) == "variant") return resourceType(graph,binding,checked,genericArguments(text)[0],next);
+  if (genericBase(text) == "variant") return resourceType(graph,binding,checked,fields,genericArguments(text)[0],next);
   const arguments: string[] = genericArguments(text);
-  if (["Optional","Result","Map","Set","pack"].includes(genericBase(text))) { for (const item of arguments) if (resourceType(graph,binding,checked,item,next)) return true; return false; }
+  if (["Optional","Result","Map","Set","pack"].includes(genericBase(text))) { for (const item of arguments) if (resourceType(graph,binding,checked,fields,item,next)) return true; return false; }
   const sid: number = canonicalSymbol(text);
   if (sid >= 0 && sid < binding.symbols.length) {
     const owner = binding.symbols[sid]; const declaration = graph.modules[owner.module].cached.result.ast.nodes[owner.node]; let tokens: string[] = [];
     for (const edge of declaration.edges) if (edge.role == EdgeRole.TypeParameters) tokens.push("@" + numberToString(binding.files[owner.module].declarations[edge.node]));
-    for (let member: number = 0; member < binding.symbols.length; member = member + 1) {
-      const field = binding.symbols[member]; if (field.module != owner.module || (field.scope) < 0 || (field.kind == "UnionVariant" ? binding.files[field.module].parents[field.node] != owner.node : binding.scopes[field.scope].node != owner.node)) continue;
-      if (!["ClassField","InterfaceField","UnionVariant"].includes(field.kind)) continue;
-      const node = graph.modules[field.module].cached.result.ast.nodes[field.node]; if (node.get(AttributeKind.IsStatic) == "true") continue;
+    for (const member of fieldsOf(fields,owner.module,owner.node)) {
+      const field = binding.symbols[member];
       let value: string = checked.symbolTypes[member];
       for (let at: number = 0; at < tokens.length && at < arguments.length; at = at + 1) value = replaceType(value,tokens[at],arguments[at]);
-      if (field.kind == "UnionVariant") { for (const payload of functionParams(value)) if (resourceType(graph,binding,checked,payload,next)) return true; }
-      else if (resourceType(graph,binding,checked,value,next)) return true;
+      if (field.kind == "UnionVariant") { for (const payload of functionParams(value)) if (resourceType(graph,binding,checked,fields,payload,next)) return true; }
+      else if (resourceType(graph,binding,checked,fields,value,next)) return true;
     }
   }
   return false;

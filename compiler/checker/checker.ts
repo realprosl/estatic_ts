@@ -11,7 +11,7 @@ export { TypedFile, CheckResult } from "./model";
 import { attachModuleRecords } from "./module-records";
 import { evaluateNativeComptime } from "./comptime";
 import { validateSafety } from "./safety";
-import { resourceType, resourceSubstitution } from "./ownership";
+import { resourceType, resourceSubstitution, resourceFields, ResourceFields } from "./ownership";
 import { nativeNumericLiteral, nativeUnaryPromotion, nativeBinaryPromotion, nativeIntegerText, nativeInteger64 } from "./numeric";
 
 export class NativeChecker {
@@ -32,13 +32,13 @@ export class NativeChecker {
   // miembros por ámbito ("módulo:nodo" → símbolos en orden de sid), referencias
   // por nodo (vértice = offset del módulo + nodo) y campos aún sin tipo.
   indexed: boolean; memberGroups: Map<string,number>; memberStart: number[]; memberList: number[];
-  offsets: number[]; referenceStart: number[]; referenceList: number[]; pendingFields: number[]; transferMemo: Map<string,boolean>;
+  offsets: number[]; referenceStart: number[]; referenceList: number[]; pendingFields: number[]; transferMemo: Map<string,boolean>; resourceIndex: ResourceFields;
   constructor(graph: ModuleGraph, binding: BindingResult) {
     this.graph = graph; this.binding = binding; this.result = new CheckResult(); this.symbolStates = []; this.depth = 0; this.switches = 0; this.compatibilityDepth = 0;
     this.narrowedSymbols = []; this.narrowedTypes = []; this.trace = false; this.narrowedPaths = [];
     this.mutationCache = new Map<string,number>(); this.literalShapeKeys = []; this.literalShapeTypes = []; this.jsonText = ""; this.jsonAt = 0;
     this.indexed = false; this.memberGroups = new Map<string,number>(); this.memberStart = []; this.memberList = [];
-    this.offsets = []; this.referenceStart = []; this.referenceList = []; this.pendingFields = []; this.transferMemo = new Map<string,boolean>();
+    this.offsets = []; this.referenceStart = []; this.referenceList = []; this.pendingFields = []; this.transferMemo = new Map<string,boolean>(); this.resourceIndex = new ResourceFields();
   }
   index(): void {
     if (this.indexed) return; this.indexed = true;
@@ -853,9 +853,10 @@ export class NativeChecker {
     this.pendingFields = rest;
     // Con todos los campos ya tipados el resultado no cambia: se memoriza. Cada
     // consulta de una clase recorría todos los símbolos buscando sus campos (#344).
-    if (rest.length > 0) return resourceType(this.graph,this.binding,this.result,text,[]);
+    if (!this.resourceIndex.built) this.resourceIndex = resourceFields(this.graph,this.binding);
+    if (rest.length > 0) return resourceType(this.graph,this.binding,this.result,this.resourceIndex,text,[]);
     const found: Optional<boolean> = this.transferMemo.get(text); if (found.isPresent()) return found.value();
-    const result: boolean = resourceType(this.graph,this.binding,this.result,text,[]); this.transferMemo.set(text,result); return result;
+    const result: boolean = resourceType(this.graph,this.binding,this.result,this.resourceIndex,text,[]); this.transferMemo.set(text,result); return result;
   }
   packToken(text: string): boolean {
     const sid: number = parameterToken(text,this.binding.symbols.length); if (sid < 0) return false;
