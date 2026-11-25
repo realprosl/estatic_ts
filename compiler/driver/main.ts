@@ -2,7 +2,7 @@ import {configureAnalysisJobs,configureAnalysisProfile,profileBegin,profileEnd} 
 import { jsonObjectGet, jsonAsString, jsonAsNumber, jsonAsBool, jsonIsObject, jsonIsNumber, jsonIsBool } from "estatic:json";
 import { argument, argumentCount, exitProcess } from "estatic:process/args";
 import { normalizePath } from "estatic:path";
-import {ModuleLoader,LoaderOptions,PathAlias} from "../modules/index";
+import {ModuleLoader,LoaderOptions,PathAlias,ModuleGraph} from "../modules/index";
 import {analyzeProject,formatModuleInterface} from "../checker/index";
 import { lowerProject, IrProject, IrIssue, IrSource, formatIr } from "../ir/index";
 import { generateCppFromIr, generateCppWithLibraries, IrCppResult, parseIrProject, formatCppResult } from "../backend/cpp/index";
@@ -10,7 +10,7 @@ import {parseConfig,configStrings} from "./config";
 import {updateCommand} from "./update";
 import {initializeLibrary} from "./library";
 import {installCommand,dependencyAliases,dependencyLinkFlags,dependencyRoots,syncTsconfig} from "./packages";
-import { canonicalFile, processors, environment, exists, readText, stdinText, writeText, hostError, launch, poll, pause, files, compilerHome, objectKeys, directories, remove, rename, now, executable, contentHash, fileMetadata, configureProgress, progressInteractive, progressStart, progressDetail, progressTick, progressFinish, progressSummary } from "../platform/index";
+import { syntaxIdentity, readSnapshot, publishRecord, canonicalFile, processors, environment, exists, readText, stdinText, writeText, hostError, launch, poll, pause, files, compilerHome, objectKeys, directories, remove, rename, now, executable, contentHash, fileMetadata, configureProgress, progressInteractive, progressStart, progressDetail, progressTick, progressFinish, progressSummary } from "../platform/index";
 import {renderDiagnostic,renderSummary,setDiagnosticCatalog,explainCode} from "./diagnostics";
 function driverError(message:string,status:number=1):void{progressFinish(false);printError(message);exitProcess(status);}
 function checkedWrite(path:string,text:string):void{if(!writeText(path,text))driverError(hostError());}
@@ -31,11 +31,26 @@ function emitModuleInterface(entry:string,options:LoaderOptions):void{
  const file=canonicalFile(entry);for(const record of project.checked.moduleRecords)if(record.file==file||canonicalFile(record.file)==file){print(formatModuleInterface(record));return;}
  driverError("No se encontró la interfaz de "+entry);
 }
+// IR completo por punto de entrada (#344): si ningún módulo cargado ha cambiado
+// (mismo contenido, mismas opciones y mismo compilador), el análisis entero es
+// determinista y se reutiliza el IR verificado de la vez anterior.
+function irCacheKey(graph:ModuleGraph,options:LoaderOptions):string{
+ // ESTATIC_NO_ANALYSIS_CACHE=1 (en el loader) desactiva esta caché y la de flujos.
+ if(graph.analysisCache==""||syntaxIdentity()==""||!graph.success||graph.diagnostics.length>0)return "";
+ let text="ets-ir-1|"+syntaxIdentity()+"|"+graph.analysisKey+"\n";
+ for(const module of graph.modules){if(module.cached.record.hash=="")return "";text=text+module.file+"|"+module.cached.record.hash+"\n";}
+ return contentHash(text);
+}
+function irCachePath(options:LoaderOptions,entry:string):string{return options.cacheDirectory+"/ir/"+contentHash(entry)+".ir";}
 function sourceIr(entry:string,options:LoaderOptions,verbose:boolean):IrProject{
- const loadProfile=profileBegin();let loader=new ModuleLoader(options);const graph=loader.load(entry);profileEnd("load",loadProfile);for(const file of graph.modules)analyzedFiles.push(file.file);const project=analyzeProject(graph,verbose||progressInteractive());
+ const loadProfile=profileBegin();let loader=new ModuleLoader(options);const graph=loader.load(entry);profileEnd("load",loadProfile);for(const file of graph.modules)analyzedFiles.push(file.file);
+ const irKey=irCacheKey(graph,options);
+ if(irKey!=""){const snapshot=readSnapshot(irCachePath(options,entry));const newline=snapshot.length>=2&&snapshot[1]==""?snapshot[0].indexOf("\n"):-1;
+  if(newline>0&&snapshot[0].slice(0,newline)==irKey){const cachedProfile=profileBegin();progressDetail("Sin cambios en las fuentes: se reutiliza el IR verificado");const cached=parseIrProject(snapshot[0].slice(newline+1,snapshot[0].length));profileEnd("ir-cache",cachedProfile);if(cached.success&&cached.diagnostics.length==0)return cached;}}const project=analyzeProject(graph,verbose||progressInteractive());
  let diagnostics=project.graph.diagnostics;for(const d of project.binding.diagnostics)diagnostics.push(d);for(const d of project.checked.diagnostics)diagnostics.push(d);
  let ir=new IrProject();if(diagnostics.length==0){progressDetail("Generando IR verificado");ir=lowerProject(project.graph,project.binding,project.checked,verbose||progressInteractive());}
  let seen:string[]=[];for(const d of diagnostics){const key=d.file+":"+numberToString(d.token.offset)+":"+d.code+":"+d.message;if(!seen.includes(key)){seen.push(key);ir.diagnostics.push(new IrIssue(d.code,d.message,new IrSource("","",d.file,-1,d.token.offset,d.endToken.endOffset)));}}
+ if(irKey!=""&&ir.success&&ir.diagnostics.length==0)publishRecord(irCachePath(options,entry),irKey+"\n"+formatIr(ir));
  if(!ir.success||ir.diagnostics.length>0){progressFinish(false);for(const d of ir.diagnostics){printError(renderDiagnostic(d.code,d.message,d.source.file,d.source.start,d.source.end));printError("");}driverError(renderSummary(ir.diagnostics.length));}return ir;
 }
 // Escribe un fichero de tipos del editor, guardando el anterior como `.bak`.

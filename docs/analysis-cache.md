@@ -38,3 +38,15 @@ La caché no se usa si el proyecto ya tiene errores antes de los flujos.
   constructores, parámetros prestados y defaults con efectos.
   `ESTATIC_FLOW_CONTRACTS=1` resume las llamadas entre módulos y `=2` resume
   todas. Son modos experimentales para medir qué falta en el contrato.
+
+## IR completo sin cambios
+
+Si ningún módulo cargado ha cambiado (mismo contenido, opciones y compilador),
+`etsc` no analiza: reutiliza el IR verificado de la ejecución anterior para ese
+punto de entrada (`DIR/ir/`). El análisis es determinista, así que el IR es
+idéntico byte a byte. Solo se guarda un IR por entrada y solo si no hubo
+diagnósticos.
+
+`ESTATIC_NO_ANALYSIS_CACHE=1` desactiva la caché de flujos y la de IR (la de
+sintaxis sigue activa). La usa `scripts/benchmark-analysis.py` para medir el
+análisis semántico completo.

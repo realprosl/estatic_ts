@@ -141,6 +141,10 @@ assert(!diagnosed.stderr.includes("\x1b["),"Sin terminal no hay colores");
   p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");
   const irFile=join(project,"checked.ir.json");
   p=runMoved(["--check","--emit-ir",irFile]);assert.equal(p.status,0,p.stderr);assert(existsSync(irFile));
+  // #344: sin cambios en las fuentes el IR es idéntico (reutilizado una vez la
+  // semilla instalada incluya la caché de IR).
+  const irAgain=join(project,"checked-again.ir.json");p=runMoved(["--check","--emit-ir",irAgain]);assert.equal(p.status,0,p.stderr);
+  assert.equal(readFileSync(irAgain,"utf8"),readFileSync(irFile,"utf8"));
   p=runMoved(["--from-ir",irFile,"-o",join(project,"from-ir.cpp"),"--binary",join(project,"from-ir"),"--run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");
   const configPath=join(project,"estatic.config.json"),config=JSON.parse(readFileSync(configPath,"utf8"));renameSync(configPath,configPath+".saved");
   const tsConfig=join(project,"estatic.config.ts");writeFileSync(tsConfig,"export default "+JSON.stringify(config)+";");
@@ -148,6 +152,9 @@ assert(!diagnosed.stderr.includes("\x1b["),"Sin terminal no hay colores");
   writeFileSync(tsConfig,'export default (()=>({entry:"src/main.ts"}))();');p=runMoved(["--check"]);assert.equal(p.status,2);rmSync(tsConfig);renameSync(configPath+".saved",configPath);
   mkdirSync(join(project,"deps"));writeFileSync(join(project,"deps/dep.ets"),'export const answer=42;');config.aliases={app:"deps"};writeFileSync(configPath,JSON.stringify(config));writeFileSync(join(project,"src/main.ts"),'import {answer} from "app/dep";print(answer);');
   p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");
+  // #344: un cambio en una dependencia invalida el IR reutilizado.
+  writeFileSync(join(project,"deps/dep.ets"),'export const answer=43;');p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"43\n");
+  writeFileSync(join(project,"deps/dep.ets"),'export const answer=42;');p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");
   // #143: un objeto de la caché dañado se recompila.
   for(const file of programObjects())writeFileSync(join(project,".build/cache/objects",file),"corrupt");rmSync(join(project,".build/cache/build-fingerprint"),{force:true});
   p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"42\n");for(const file of programObjects())assert.notEqual(readFileSync(join(project,".build/cache/objects",file),"utf8"),"corrupt");

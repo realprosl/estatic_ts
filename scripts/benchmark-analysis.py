@@ -44,7 +44,8 @@ def main():
     entry = args.entry.resolve(strict=True) if args.entry else output / "workload.ets"
     if not args.entry:
         entry.write_text(workload())
-    env = {**os.environ, "ESTC_ROOT": str(root)}
+    # Mide el análisis semántico: sin las cachés de flujos ni de IR (#344).
+    env = {**os.environ, "ESTC_ROOT": str(root), "ESTATIC_NO_ANALYSIS_CACHE": "1"}
     cache = output / "syntax-cache"
     metadata = {
         "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),

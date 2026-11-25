@@ -1,6 +1,6 @@
 import { catalogArg, catalogVariant, SourceDiagnostic, SourceResult, quoteSource, formatSource, formatDiagnostic } from "../diag/index";
 import { normalizePath, pathDirectory } from "estatic:path";
-import { progressDetail, canonicalFile, readSnapshot } from "../platform/index";
+import { progressDetail, canonicalFile, readSnapshot, environment } from "../platform/index";
 import { AttributeKind, NodeKind, nodeKindName, ParserToken, AstNode, ParseResult } from "../parser/index";
 import { SyntaxCache, CachedSource, FileRecord } from "./syntax-cache";
 
@@ -120,7 +120,7 @@ export class ModuleLoader {
   options: LoaderOptions; cache: SyntaxCache;
   constructor(options: LoaderOptions) { this.options = options; this.cache = new SyntaxCache(options.cacheDirectory, options.syntaxKey); }
   load(entry: string): ModuleGraph {
-    let cache: SyntaxCache = this.cache; cache.resetStats(); const canonical: string = resolveSourceFile(normalizePath(entry)); let graph: ModuleGraph = new ModuleGraph(canonical); graph.analysisCache = this.options.cacheDirectory; graph.analysisKey = this.options.syntaxKey;
+    let cache: SyntaxCache = this.cache; cache.resetStats(); const canonical: string = resolveSourceFile(normalizePath(entry)); let graph: ModuleGraph = new ModuleGraph(canonical); graph.analysisCache = environment("ESTATIC_NO_ANALYSIS_CACHE") == "1" ? "" : this.options.cacheDirectory; graph.analysisKey = this.options.syntaxKey;
     if (canonical == "") {
       graph.diagnostics.push(new SourceDiagnostic("loader", "No se puede resolver el módulo '" + entry + "' (se probaron .ts y .ets)", normalizePath(entry), originToken()));
       graph.success = false; this.cache = cache; return graph;
