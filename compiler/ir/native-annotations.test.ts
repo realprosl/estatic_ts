@@ -118,4 +118,11 @@ test('librería con código nativo: sources a .a cacheado, includeDirs, linkLibr
  // Una fuente que no compila da un error claro.
  writeFileSync(join(lib,'native/cubo.c'),'esto no es C\n');
  r=spawnSync(compiler,['run','--config',config],{cwd:project,encoding:'utf8',env:{...process.env,ESTC_ROOT:root}});assert.notEqual(r.status,0);assert.match(r.stdout+r.stderr,/No se pudo compilar .*cubo\.c/);
+// #361: -O0 por defecto (compila antes); --release añade compiler.releaseFlags (o -O2).
+test('etsc --release optimiza y sin él compila con -O0 (#361)',{skip:!process.env.ESTATIC_NATIVE_COMPILER},()=>{
+ const entry=join(directory,'release.ets');writeFileSync(entry,'print(6*7);\n');
+ const build=(extra:string[])=>{const r=spawnSync(compiler,[entry,'-o',join(directory,'release.cpp'),'--binary',join(directory,'release'),'--build','--verbose','--unity',...extra],{encoding:'utf8',env:{...process.env,ESTC_ROOT:root,ESTC_OBJECT_CACHE:join(directory,'objects-release')}});assert.equal(r.status,0,r.stderr);return r.stdout+r.stderr;};
+ assert.doesNotMatch(build([]),/ -O2\b/);
+ assert.match(build(['--release']),/ -O2\b/);
+ assert.equal(spawnSync(join(directory,'release'),[],{encoding:'utf8'}).stdout,'42\n');
 });
