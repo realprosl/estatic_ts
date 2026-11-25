@@ -820,23 +820,39 @@ export class SafetyAnalyzer {
       if (root >= 0) { const position: number = this.summaryPosition(summaryId,sid,module,id); this.read(module,position,root,state); this.access(module,position,root,"move"); if (this.slot(state,root) != 2) this.putSlot(state,root,3); }
     }
   }
+  // Una llamada se reanaliza con precisión si la función llamada declara un
+  // default con lectura en tiempo de ejecución. Más abajo en la cadena de
+  // llamadas solo importa si ese default (aunque se omita) toca variables
+  // globales, porque el resumen incluye sus lecturas y daría falsos E4001 o
+  // conflictos; el resto ya lo cubre el resumen. Antes era siempre transitivo y
+  // `main()` reanalizaba el programa entero (#344).
   defaultsNeedFlow(summaryId: number): boolean {
     if (this.defaultReads.has(summaryId)) return true; if (this.valueDefaults.has(summaryId)) return false;
+    if (this.ownDefaults(summaryId)) { this.defaultReads.set(summaryId,true); return true; }
     let declarations: number[] = [summaryId];
     for (let at: number = 0; at < declarations.length; at = at+1) {
-      const target: number = declarations[at]; if (this.defaultReads.has(target)) { this.defaultReads.set(summaryId,true); return true; }
-      if (this.valueDefaults.has(target)) continue;
-      const declaration = this.effects.summaries[target];
-      for (const edge of this.node(declaration.module,declaration.node).edges) if (edge.role == EdgeRole.Params) {
-        const value: number = this.childOf(declaration.module,edge.node,EdgeRole.DefaultValue);
-        if (value >= 0) { const expression: AstNode = this.node(declaration.module,value);
-          const unary: number = expression.kind == NodeKind.UnaryExpression ? bindingChild(expression,EdgeRole.Operand) : -1;
-          if (expression.kind != NodeKind.LiteralExpression && !(expression.kind == NodeKind.ArrayLiteralExpression && expression.edges.length == 0) && !(unary >= 0 && this.kindOf(declaration.module,unary) == NodeKind.LiteralExpression)) { this.defaultReads.set(summaryId,true); return true; }
-        }
-      }
-      for (const callee of declaration.callees) if (!declarations.includes(callee)) declarations.push(callee);
+      const target: number = declarations[at];
+      if (at > 0 && this.valueDefaults.has(target)) continue;
+      if (at > 0 && this.ownDefaults(target) && this.touchesGlobals(target)) { this.defaultReads.set(summaryId,true); return true; }
+      for (const callee of this.effects.summaries[target].callees) if (!declarations.includes(callee)) declarations.push(callee);
     }
     this.valueDefaults.set(summaryId,true); return false;
+  }
+  ownDefaults(target: number): boolean {
+    const declaration = this.effects.summaries[target];
+    for (const edge of this.node(declaration.module,declaration.node).edges) if (edge.role == EdgeRole.Params) {
+      const value: number = this.childOf(declaration.module,edge.node,EdgeRole.DefaultValue);
+      if (value >= 0) { const expression: AstNode = this.node(declaration.module,value);
+        const unary: number = expression.kind == NodeKind.UnaryExpression ? bindingChild(expression,EdgeRole.Operand) : -1;
+        if (expression.kind != NodeKind.LiteralExpression && !(expression.kind == NodeKind.ArrayLiteralExpression && expression.edges.length == 0) && !(unary >= 0 && this.kindOf(declaration.module,unary) == NodeKind.LiteralExpression)) return true;
+      }
+    }
+    return false;
+  }
+  touchesGlobals(target: number): boolean {
+    for (const group of [this.effects.summaries[target].reads,this.effects.summaries[target].writes]) for (const symbol of group)
+      if (symbol >= 0 && symbol < this.binding.symbols.length && localBinding(this.binding.symbols[symbol].kind) && this.owner(this.binding.symbols[symbol].scope) < 0) return true;
+    return false;
   }
   summaryReason(summaryId: number, reason: string): boolean {
     if (this.trace && (this.visits) < 40) { const summary = this.effects.summaries[summaryId]; progressDetail("frontend: precise "+this.graph.modules[summary.module].file+":"+this.attributeOf(summary.module,summary.node,AttributeKind.Name)+" "+reason); }
