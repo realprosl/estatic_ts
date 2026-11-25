@@ -2,7 +2,6 @@
 export function nativeBuiltinSignatures(key: string): string[] {
   const size: number = key.length;
   if (size == 4) {
-    if (key == "fail") return ["(string,ref<string>)=>boolean"];
     if (key == "trim") return ["(string)=>string"];
     return [];
   }
@@ -22,27 +21,11 @@ export function nativeBuiltinSignatures(key: string): string[] {
   }
   if (size == 7) {
     if (key == "indexOf") return ["(string,string,number)=>number"];
-    if (key == "readTcp") return ["(TcpConnection,number)=>Promise<Result<string,string>>"];
-    if (key == "readTls") return ["(TlsConnection,number,number,CancellationToken)=>Promise<Result<string,string>>"];
-    if (key == "tcpRead") return ["(number,number)=>string"];
     if (key == "watchFs") return ["(string,(FsEvent)=>void,boolean)=>FsWatcher"];
     return [];
   }
   if (size == 8) {
-    if (key == "closeTcp") return ["(TcpListener)=>void","(TcpConnection)=>void"];
-    if (key == "closeTls") return ["(TlsConnection)=>void"];
-    if (key == "copyFile") return ["(string,string,ref<string>)=>boolean","(string,string)=>Result<boolean,string>"];
-    if (key == "fileCopy") return ["(string,string)=>boolean"];
-    if (key == "fileMove") return ["(string,string)=>boolean"];
-    if (key == "fileRead") return ["(string)=>string"];
-    if (key == "hasError") return ["(string)=>boolean"];
-    if (key == "moveFile") return ["(string,string,ref<string>)=>boolean","(string,string)=>Result<boolean,string>"];
-    if (key == "readFile") return ["(string,ref<string>,ref<string>)=>boolean","(string)=>Result<string,string>"];
     if (key == "stopLoop") return ["()=>void"];
-    if (key == "tcpClose") return ["(number)=>void"];
-    if (key == "tcpWrite") return ["(number,string)=>boolean"];
-    if (key == "writeTcp") return ["(TcpConnection,string)=>Promise<Result<number,string>>"];
-    if (key == "writeTls") return ["(TlsConnection,string,number,CancellationToken)=>Promise<Result<number,string>>"];
     return [];
   }
   if (size == 9) {
@@ -52,37 +35,20 @@ export function nativeBuiltinSignatures(key: string): string[] {
     if (key == "!Math.max") return ["(number,number)=>number"];
     if (key == "!Math.min") return ["(number,number)=>number"];
     if (key == "!Math.pow") return ["(number,number)=>number"];
-    if (key == "acceptTcp") return ["(TcpListener)=>Promise<Result<TcpConnection,string>>"];
-    if (key == "acceptTls") return ["(TcpListener,TlsContext,number,CancellationToken)=>Promise<Result<TlsConnection,string>>"];
-    if (key == "fileWrite") return ["(string,string)=>boolean"];
     if (key == "lineCount") return ["(string)=>number"];
-    if (key == "listenTcp") return ["(string,number)=>Result<TcpListener,string>"];
     if (key == "substring") return ["(string,number,number)=>string"];
-    if (key == "tcpAccept") return ["(number)=>number"];
-    if (key == "tcpListen") return ["(string,number)=>number"];
     if (key == "unwatchFs") return ["(FsWatcher)=>void"];
-    if (key == "writeFile") return ["(string,string,ref<string>)=>boolean","(string,string)=>Result<boolean,string>"];
     return [];
   }
   if (size == 10) {
-    if (key == "!fs.rename") return ["(string,string)=>Promise<Result<boolean,string>>"];
-    if (key == "!fs.unlink") return ["(string)=>Promise<Result<boolean,string>>"];
     if (key == "!Math.ceil") return ["(number)=>number"];
     if (key == "!Math.sqrt") return ["(number)=>number"];
-    if (key == "appendFile") return ["(string,string,ref<string>)=>boolean","(string,string)=>Result<boolean,string>"];
-    if (key == "clearError") return ["(ref<string>)=>void"];
     if (key == "compileCpp") return ["(string,string,string,string,string,ref<string>)=>boolean"];
-    if (key == "fileAppend") return ["(string,string)=>boolean"];
-    if (key == "fileExists") return ["(string)=>boolean"];
-    if (key == "fileRemove") return ["(string)=>boolean"];
     if (key == "printError") return ["()=>void"];
-    if (key == "removeFile") return ["(string,ref<string>)=>boolean","(string)=>Result<boolean,string>"];
-    if (key == "resolveDns") return ["(string)=>Promise<string>"];
     if (key == "Server.get") return ["(string,(Request,Response)=>void)=>void"];
     if (key == "Server.put") return ["(string,(Request,Response)=>void)=>void"];
     if (key == "setTimeout") return ["(()=>void,number)=>Timer"];
     if (key == "startsWith") return ["(string,string)=>boolean"];
-    if (key == "tcpConnect") return ["(string,number)=>number"];
     if (key == "writeError") return ["()=>void"];
     return [];
   }
@@ -100,14 +66,11 @@ export function nativeBuiltinSignatures(key: string): string[] {
     return [];
   }
   if (size == 12) {
-    if (key == "!fs.copyFile") return ["(string,string)=>Promise<Result<boolean,string>>"];
-    if (key == "!fs.readFile") return ["(string)=>Promise<Result<string,string>>"];
     if (key == "!Math.random") return ["()=>number"];
     if (key == "compilerRoot") return ["()=>string"];
     if (key == "Console.rows") return ["()=>number"];
     if (key == "FsEvent.path") return ["()=>string"];
     if (key == "ioUringWrite") return ["(string,string)=>Result<boolean,string>"];
-    if (key == "readTcpUntil") return ["(TcpConnection,number,number,CancellationToken)=>Promise<Result<string,string>>"];
     if (key == "Request.body") return ["()=>string"];
     if (key == "Request.path") return ["()=>string"];
     if (key == "Server.patch") return ["(string,(Request,Response)=>void)=>void"];
@@ -116,7 +79,6 @@ export function nativeBuiltinSignatures(key: string): string[] {
     return [];
   }
   if (size == 13) {
-    if (key == "!fs.writeFile") return ["(string,string)=>Promise<Result<boolean,string>>"];
     if (key == "Console.clear") return ["()=>boolean"];
     if (key == "Console.color") return ["(string)=>boolean"];
     if (key == "Console.flush") return ["()=>boolean"];
@@ -124,13 +86,7 @@ export function nativeBuiltinSignatures(key: string): string[] {
     if (key == "Console.reset") return ["()=>boolean"];
     if (key == "Console.style") return ["(string)=>boolean"];
     if (key == "Console.write") return ["(string)=>boolean"];
-    if (key == "copyFileAsync") return ["(string,string)=>Promise<Result<boolean,string>>"];
-    if (key == "copyFileUntil") return ["(string,string,number,CancellationToken)=>Promise<Result<boolean,string>>"];
     if (key == "FsEvent.flags") return ["()=>number"];
-    if (key == "moveFileAsync") return ["(string,string)=>Promise<Result<boolean,string>>"];
-    if (key == "moveFileUntil") return ["(string,string,number,CancellationToken)=>Promise<Result<boolean,string>>"];
-    if (key == "readFileAsync") return ["(string)=>Promise<Result<string,string>>"];
-    if (key == "readFileUntil") return ["(string,number,CancellationToken)=>Promise<Result<string,string>>"];
     if (key == "Response.json") return ["(string)=>Response"];
     if (key == "Response.send") return ["(string)=>Response"];
     if (key == "Server.delete") return ["(string,(Request,Response)=>void)=>void"];
@@ -139,15 +95,9 @@ export function nativeBuiltinSignatures(key: string): string[] {
     if (key == "string.padEnd") return ["(number,string)=>string"];
     if (key == "string.repeat") return ["(number)=>string"];
     if (key == "string.substr") return ["(number,number)=>string"];
-    if (key == "writeTcpUntil") return ["(TcpConnection,string,number,CancellationToken)=>Promise<Result<number,string>>"];
     return [];
   }
   if (size == 14) {
-    if (key == "!fs.appendFile") return ["(string,string)=>Promise<Result<boolean,string>>"];
-    if (key == "!fs.existsSync") return ["(string)=>boolean"];
-    if (key == "!fs.renameSync") return ["(string,string)=>Result<boolean,string>"];
-    if (key == "!fs.unlinkSync") return ["(string)=>Result<boolean,string>"];
-    if (key == "acceptTcpUntil") return ["(TcpListener,number,CancellationToken)=>Promise<Result<TcpConnection,string>>"];
     if (key == "Console.moveBy") return ["(number,number)=>boolean"];
     if (key == "Console.moveTo") return ["(number,number)=>boolean"];
     if (key == "etsNetSyncEcho") return ["(string,number,string,number)=>string"];
@@ -160,24 +110,16 @@ export function nativeBuiltinSignatures(key: string): string[] {
     if (key == "string.trimEnd") return ["()=>string"];
     if (key == "syntaxTreeJson") return ["(string,ref<string>,ref<string>)=>boolean"];
     if (key == "validateSyntax") return ["(string,ref<string>)=>boolean"];
-    if (key == "writeFileAsync") return ["(string,string)=>Promise<Result<boolean,string>>"];
-    if (key == "writeFileUntil") return ["(string,string,number,CancellationToken)=>Promise<Result<boolean,string>>"];
     return [];
   }
   if (size == 15) {
     if (key == "!JSON.stringify") return ["(string)=>string"];
-    if (key == "appendFileAsync") return ["(string,string)=>Promise<Result<boolean,string>>"];
-    if (key == "appendFileUntil") return ["(string,string,number,CancellationToken)=>Promise<Result<boolean,string>>"];
     if (key == "ChildProcess.on") return ["(string,(number)=>void)=>ChildProcess","(string,(string)=>void)=>ChildProcess"];
     if (key == "Console.columns") return ["()=>number"];
-    if (key == "createTlsServer") return ["(string,string)=>Result<TlsContext,string>"];
     if (key == "etsNetSyncLarge") return ["(string,number,number)=>string"];
-    if (key == "fileExistsAsync") return ["(string)=>Promise<Result<boolean,string>>"];
     if (key == "FileReader.peek") return ["(number)=>string"];
     if (key == "FileReader.read") return ["(number)=>string"];
     if (key == "FsWatcher.valid") return ["()=>boolean"];
-    if (key == "removeFileAsync") return ["(string)=>Promise<Result<boolean,string>>"];
-    if (key == "removeFileUntil") return ["(string,number,CancellationToken)=>Promise<Result<boolean,string>>"];
     if (key == "Response.header") return ["(string,string)=>Response"];
     if (key == "Response.status") return ["(number)=>Response"];
     if (key == "string.endsWith") return ["(string)=>boolean"];
@@ -187,8 +129,6 @@ export function nativeBuiltinSignatures(key: string): string[] {
     return [];
   }
   if (size == 16) {
-    if (key == "!fs.copyFileSync") return ["(string,string)=>Result<boolean,string>"];
-    if (key == "!fs.readFileSync") return ["(string)=>Result<string,string>"];
     if (key == "!JSON.parseValue") return ["(string)=>JsonValue"];
     if (key == "asyncIoUringRead") return ["(string)=>Promise<Result<string,string>>"];
     if (key == "FileReader.close") return ["()=>void"];
@@ -199,7 +139,6 @@ export function nativeBuiltinSignatures(key: string): string[] {
     return [];
   }
   if (size == 17) {
-    if (key == "!fs.writeFileSync") return ["(string,string)=>Result<boolean,string>"];
     if (key == "asyncIoUringWrite") return ["(string,string)=>Promise<Result<boolean,string>>"];
     if (key == "cancellationToken") return ["(CancellationSource)=>CancellationToken"];
     if (key == "Console.clearLine") return ["()=>boolean"];
@@ -213,7 +152,6 @@ export function nativeBuiltinSignatures(key: string): string[] {
     return [];
   }
   if (size == 18) {
-    if (key == "!fs.appendFileSync") return ["(string,string)=>Result<boolean,string>"];
     if (key == "Console.background") return ["(string)=>boolean"];
     if (key == "Console.hideCursor") return ["()=>boolean"];
     if (key == "Console.showCursor") return ["()=>boolean"];
@@ -242,7 +180,6 @@ export function nativeBuiltinSignatures(key: string): string[] {
   }
   if (size == 21) {
     if (key == "!JSON.stringifyNumber") return ["(number)=>string"];
-    if (key == "ensureParentDirectory") return ["(string,ref<string>)=>boolean"];
     if (key == "ProcessWritable.write") return ["(string)=>boolean"];
     return [];
   }
@@ -262,7 +199,7 @@ export function nativeBuiltinSignatures(key: string): string[] {
   return [];
 }
 export function nativeBuiltinNames(): string[] {
-  return ["acceptTcp","acceptTcpUntil","acceptTls","appendFile","appendFileAsync","appendFileUntil","asyncIoUringRead","asyncIoUringWrite","cancel","cancelTimer","cancellationToken","charAt","clearError","closeTcp","closeTls","compileCpp","compilerRoot","comptime","copyFile","copyFileAsync","copyFileUntil","createCancellation","createTlsServer","ensureParentDirectory","err","estaticAstRecords","estaticTypedAstJson","estaticTypedAstRecords","etsNetSyncEcho","etsNetSyncLarge","fail","fileAppend","fileCopy","fileExists","fileExistsAsync","fileMove","fileRead","fileRemove","fileWrite","hasError","indexOf","ioUringAvailable","ioUringRead","ioUringWrite","isCancelled","length","lineAt","lineCount","listenTcp","moveFile","moveFileAsync","moveFileUntil","numberToString","ok","openFileReader","optionalAndThen","optionalMap","print","printError","promiseAll","promiseRace","readFile","readFileAsync","readFileUntil","readTcp","readTcpUntil","readTls","removeFile","removeFileAsync","removeFileUntil","resolveDns","resolveImportPath","resolveProjectPath","retry","setInterval","setTimeout","sleep","spawn","startsWith","stopLoop","substring","syntaxTreeJson","syntaxTreeRecords","tcpAccept","tcpClose","tcpConnect","tcpListen","tcpRead","tcpWrite","timeout","trim","unwatchFs","validateSyntax","watchFs","write","writeError","writeFile","writeFileAsync","writeFileUntil","writeTcp","writeTcpUntil","writeTls"];
+  return ["asyncIoUringRead","asyncIoUringWrite","cancel","cancelTimer","cancellationToken","charAt","compileCpp","compilerRoot","comptime","createCancellation","err","estaticAstRecords","estaticTypedAstJson","estaticTypedAstRecords","etsNetSyncEcho","etsNetSyncLarge","indexOf","ioUringAvailable","ioUringRead","ioUringWrite","isCancelled","length","lineAt","lineCount","numberToString","ok","openFileReader","optionalAndThen","optionalMap","print","printError","promiseAll","promiseRace","resolveImportPath","resolveProjectPath","retry","setInterval","setTimeout","sleep","spawn","startsWith","stopLoop","substring","syntaxTreeJson","syntaxTreeRecords","timeout","trim","unwatchFs","validateSyntax","watchFs","write","writeError"];
 }
 export function nativeBuiltinTypes(): string[] {
   return ["ChildProcess","FsEvent","FsWatcher","HttpClientResponse","ProcessReadable","ProcessWritable","Promise","Request","Response","Server","Timer"];

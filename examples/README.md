@@ -54,7 +54,7 @@ npm start -- --config estatic.config.ts
 | `enum-demo.ts` | `enum` con subyacente `number`/`string`. |
 | `console-demo.ts` | Facade `console.{log,info,debug,trace,warn,error}`. |
 | `fs-demo.ts` | Facade `fs.*` (sync + async). |
-| `result-files.ts` | API clásica `readFile(..., out contents, out error)`. |
+| `result-files.ts` | Ficheros con `estatic:fs` y `Result<T, Error>`. |
 | `async-await.ts` | `async`/`await` mínimo, top-level await. |
 | `async-files.ts` | `readFileAsync` y compañía. |
 | `cancellation.ts` | `CancellationSource`/`CancellationToken` con `*Until`. |

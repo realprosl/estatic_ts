@@ -876,51 +876,29 @@ El inicializador del `for` tiene su propio scope. El analizador rechaza `break` 
 Las operaciones que pueden fallar devuelven `Result<T>`:
 
 ```typescript
-const contents: Result<string> = readFile("input.ets");
+import fs from "estatic:fs";
+const contents = fs.readFileSync("input.ets");
 if (contents.isOk()) {
   print(contents.value());
 } else {
-  printError(contents.error());
+  printError(contents.error().message);
 }
 ```
 
 ## Archivos, consola y errores nativos
 
-Las funciones de archivo tienen sobrecargas que devuelven `Result<T>`. `isOk()` indica éxito, `value()` entrega el valor y `error()` contiene el diagnóstico. No lanzan excepciones. Las firmas anteriores con `out error` se conservan para compatibilidad y para el frontend autoalojado.
-
-| Función | Resultado |
-| --- | --- |
-| `fileExists(path)` | Indica si existe un archivo regular. |
-| `readFile(path)` | Lee en binario y retorna `Result<string>`. |
-| `writeFile(path, contents)` | Crea o reemplaza y retorna `Result<boolean>`. |
-| `appendFile(path, contents)` | Crea o añade y retorna `Result<boolean>`. |
-| `copyFile(source, destination)` | Copia y retorna `Result<boolean>`. |
-| `moveFile(source, destination)` | Mueve o renombra y retorna `Result<boolean>`. |
-| `removeFile(path)` | Elimina y retorna `Result<boolean>`. |
-
-Todas las operaciones disponen además de una variante que se ejecuta en el pool de trabajo del runtime y devuelve una corutina:
-
-| API asíncrona | Tipo de retorno |
-| --- | --- |
-| `readFileAsync(path)` | `Promise<Result<string>>` |
-| `writeFileAsync(path, contents)` | `Promise<Result<boolean>>` |
-| `appendFileAsync(path, contents)` | `Promise<Result<boolean>>` |
-| `fileExistsAsync(path)` | `Promise<Result<boolean>>` |
-| `copyFileAsync(source, destination)` | `Promise<Result<boolean>>` |
-| `moveFileAsync(source, destination)` | `Promise<Result<boolean>>` |
-| `removeFileAsync(source, destination)` | `Promise<Result<boolean>>` |
+Los archivos se manejan con la librería `estatic:fs`, con la forma de `fs` de Node. Las funciones no lanzan excepciones: devuelven `Result<T, Error>`. Las versiones `Sync` son síncronas; las demás devuelven `Promise<Result<T, Error>>` y no bloquean el event loop.
 
 ```typescript
-async function load(path: string): Promise<Result<string>> {
-  return readFileAsync(path);
-}
+import fs from "estatic:fs";
 
-const contents: Result<string> = await load("input.txt");
+const written = fs.writeFileSync("input.txt", "hola");
+const contents = await fs.readFile("input.txt");
+if (contents.isOk()) print(contents.value());
+else printError(contents.error().message);
 ```
 
-Estas variantes no ejecutan una llamada de disco bloqueante en el hilo del event loop. El trabajo se envía a un pool acotado de 2 a 4 workers y su finalización despierta el `poll` mediante una tubería interna.
-
-Las variantes compatibles añaden sus salidas al final, pasadas por referencia: `readFile(path, contents, error)` (con `contents` y `error` variables `string`) y, para las demás, `operación(..., error)`. Retornan `boolean` y limpian `error` cuando tienen éxito.
+Las antiguas funciones globales (`readFile`, `writeFile`, `fileExists`, `readFileAsync`…, sus variantes con `out error` y `fail`/`hasError`/`clearError`) se han retirado (#292). Lo mismo ocurre con TCP, TLS y DNS: se usan `estatic:net`, `estatic:tls` y `estatic:dns`.
 
 `Result<T>` también puede utilizarse en cualquier función síncrona propia. `ok(value)` infiere `T` desde el valor; `err(message)` lo infiere desde el retorno o la variable destino. Sin contexto debe indicarse el tipo: `err<number>("mensaje")`.
 
@@ -952,7 +930,6 @@ child.on("close", (code: number): void => print(code));
 
 El subconjunto inicial entrega chunks como `string` UTF-8 (no `Buffer`) y aún no expone opciones de `spawn`, señales ni backpressure avanzado. Los listeners retenidos no pueden escapar capturando variables locales mutables por referencia; el checker los rechaza para evitar referencias colgantes. Los callbacks se procesan en el event loop de libuv.
 
-Las utilidades `fail(message, error)`, `hasError(error)` y `clearError(error)` (con `error` por referencia) permiten construir errores explícitos en funciones propias.
 
 ### API estilo Node (`console.*`)
 
@@ -978,25 +955,7 @@ console.error("Error grave:", "fallo X");
 
 ### API estilo Node (`fs.*`)
 
-El identificador global `fs` agrupa las operaciones de archivo bajo la misma forma que en Node. Las versiones sin sufijo son asíncronas y devuelven `Promise<Result<T>>`; las versiones `Sync` son síncronas y devuelven `Result<T>` (o `boolean` para `existsSync`). Por debajo delegan en las funciones libres de `runtime/ets_file.hpp`.
-
-| API | Firma | Equivalente interno |
-| --- | --- | --- |
-| `fs.readFile(path)` | `Promise<Result<string>>` | `readFileAsync(path)` |
-| `fs.writeFile(path, contents)` | `Promise<Result<boolean>>` | `writeFileAsync(path, contents)` |
-| `fs.appendFile(path, contents)` | `Promise<Result<boolean>>` | `appendFileAsync(path, contents)` |
-| `fs.copyFile(source, destination)` | `Promise<Result<boolean>>` | `copyFileAsync(source, destination)` |
-| `fs.rename(oldPath, newPath)` | `Promise<Result<boolean>>` | `moveFileAsync(oldPath, newPath)` |
-| `fs.unlink(path)` | `Promise<Result<boolean>>` | `removeFileAsync(path)` |
-| `fs.readFileSync(path)` | `Result<string>` | `readFile(path)` (overload `Result`) |
-| `fs.writeFileSync(path, contents)` | `Result<boolean>` | `writeFile(path, contents)` (overload `Result`) |
-| `fs.appendFileSync(path, contents)` | `Result<boolean>` | `appendFile(path, contents)` (overload `Result`) |
-| `fs.copyFileSync(source, destination)` | `Result<boolean>` | `copyFile(source, destination)` (overload `Result`) |
-| `fs.renameSync(oldPath, newPath)` | `Result<boolean>` | `moveFile(oldPath, newPath)` (overload `Result`) |
-| `fs.unlinkSync(path)` | `Result<boolean>` | `removeFile(path)` (overload `Result`) |
-| `fs.existsSync(path)` | `boolean` | `fileExists(path)` |
-
-El analizador rechaza cualquier otro método con un diagnóstico que lista las APIs válidas. Ver [examples/fs-demo.ts](examples/fs-demo.ts).
+`fs` ya no es un identificador global: se importa de `estatic:fs` (`import fs from "estatic:fs"`). Ofrece `readFile`, `writeFile`, `appendFile`, `copyFile`, `rename` y `unlink` (async), sus versiones `Sync`, y `existsSync`, `mkdirSync`, `rmSync`, `readdirSync` y `statSync`. Ver [examples/fs-demo.ts](examples/fs-demo.ts).
 
 ```typescript
 if (fs.existsSync("/tmp/cache.txt")) {

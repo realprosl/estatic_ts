@@ -1,27 +1,27 @@
 import { argument } from "estatic:process";
+import { existsSync, readFile, writeFile, appendFile, copyFile, unlink } from "estatic:fs";
 async function processFile(path: string): Promise<void> {
   const copy: string = path + ".copy";
 
-  const written: Result<boolean> = await writeFileAsync(path, "hello");
-  if (written.isOk() == false) { printError(written.error()); }
+  const written = await writeFile(path, "hello");
+  if (written.isOk() == false) { printError(written.error().message); }
 
-  const appended: Result<boolean> = await appendFileAsync(path, " async files");
-  if (appended.isOk() == false) { printError(appended.error()); }
+  const appended = await appendFile(path, " async files");
+  if (appended.isOk() == false) { printError(appended.error().message); }
 
-  const contents: Result<string> = await readFileAsync(path);
+  const contents = await readFile(path);
   if (contents.isOk()) { print(contents.value()); }
-  else { printError(contents.error()); }
+  else { printError(contents.error().message); }
 
-  const copied: Result<boolean> = await copyFileAsync(path, copy);
-  if (copied.isOk() == false) { printError(copied.error()); }
+  const copied = await copyFile(path, copy);
+  if (copied.isOk() == false) { printError(copied.error().message); }
 
-  const exists: Result<boolean> = await fileExistsAsync(copy);
-  if (exists.isOk()) { print("copy exists=", exists.value()); }
+  print("copy exists=", existsSync(copy));
 
-  const removedPath: Result<boolean> = await removeFileAsync(path);
-  const removedCopy: Result<boolean> = await removeFileAsync(copy);
-  if (removedPath.isOk() == false) { printError(removedPath.error()); }
-  if (removedCopy.isOk() == false) { printError(removedCopy.error()); }
+  const removedPath = await unlink(path);
+  const removedCopy = await unlink(copy);
+  if (removedPath.isOk() == false) { printError(removedPath.error().message); }
+  if (removedCopy.isOk() == false) { printError(removedCopy.error().message); }
   return;
 }
 
