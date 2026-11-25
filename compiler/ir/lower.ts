@@ -2,7 +2,7 @@ import {profileBegin,profileEnd} from "../analysis/index";
 import { IrDispatch, IrCleanupScope, IrRuntimeContract, IrType, IrSource, IrPlace, IrInstruction, IrBlock, IrFunction, IrModule, IrIssue, IrProject, IrAnnotation } from "./model";
 import { ModuleGraph } from "../modules/index";
 import { BindingResult, bindingChild } from "../binder/index";
-import { CheckResult, readonlyMethodReceiver, functionParams, functionReturn, primitiveType, functionClose, numericType, semanticElement, semanticTuple, splitTypes, joinTypes, fixedArraySize, fixedArrayElement, canonicalSymbol, genericBase, genericArguments, replaceType, literalType, literalKind, literalValue, nativeNumericLiteral, nativeBinaryPromotion, nativeUnaryPromotion, NativeComptime, constantIntegerText, resourceType, resourceSubstitution } from "../checker/index";
+import { CheckResult, resourceFields, ResourceFields, readonlyMethodReceiver, functionParams, functionReturn, primitiveType, functionClose, numericType, semanticElement, semanticTuple, splitTypes, joinTypes, fixedArraySize, fixedArrayElement, canonicalSymbol, genericBase, genericArguments, replaceType, literalType, literalKind, literalValue, nativeNumericLiteral, nativeBinaryPromotion, nativeUnaryPromotion, NativeComptime, constantIntegerText, resourceType, resourceSubstitution } from "../checker/index";
 import { AstNode, NodeKind, EdgeRole, AttributeKind, nodeKindName } from "../parser/index";
 import { irNumericWidth, irNumericKind, irNumericSigned } from "./type-traits";
 import { finishBorrows } from "./borrows";
@@ -37,7 +37,7 @@ export class IrLowering {
   interfaceFrom: number[]; interfaceTo: number[];
   dispatchInterfaces: number[]; dispatchNames: string[]; dispatchSignatures: number[];
   contextFrom: string[]; contextTo: string[];
-  graph: ModuleGraph; binding: BindingResult; checked: CheckResult; result: IrProject;
+  graph: ModuleGraph; binding: BindingResult; checked: CheckResult; result: IrProject; resourceIndex: ResourceFields; typeIndex: Map<string,number>;
   module: number; currentFunction: number; block: number; symbols: number[]; breakTargets: number[]; continueTargets: number[];
   overrideNodes: number[]; overridePlaces: number[]; optionalActive: number[];
   // #254: place del receptor de la última llamada que lo modifica (m.set, s.add, xs.push).
@@ -54,7 +54,7 @@ export class IrLowering {
   constructor(graph: ModuleGraph, binding: BindingResult, checked: CheckResult) {
     this.interfaceFrom = []; this.interfaceTo = []; this.dispatchInterfaces = []; this.dispatchNames = []; this.dispatchSignatures = [];
     this.contextFrom = []; this.contextTo = [];
-    this.graph = graph; this.binding = binding; this.checked = checked; this.result = new IrProject(); this.jsonText = ""; this.jsonAt = 0; this.jsonEscapes = false;
+    this.graph = graph; this.binding = binding; this.checked = checked; this.result = new IrProject(); this.resourceIndex = new ResourceFields(); this.typeIndex = new Map<string,number>(); this.jsonText = ""; this.jsonAt = 0; this.jsonEscapes = false;
     this.valueOffsets = []; this.lastValueTargets = []; this.readonlyReceivers = new Map<string,boolean>();
     this.module = 0; this.currentFunction = -1; this.block = 0; this.symbols = []; this.breakTargets = []; this.continueTargets = [];
     this.overrideNodes = []; this.overridePlaces = []; this.optionalActive = []; this.mutatedPlace = -1;
@@ -84,11 +84,16 @@ export class IrLowering {
     if (this.currentFunction >= 0) for (let at: number = 0; at < this.result.functions[this.currentFunction].substitutionFrom.length; at = at+1) text = replaceType(text,this.result.functions[this.currentFunction].substitutionFrom[at],this.result.functions[this.currentFunction].substitutionTo[at]);
     return text;
   }
+  resourceKind(text: string): boolean {
+    if (!this.resourceIndex.built) this.resourceIndex = resourceFields(this.graph,this.binding);
+    return resourceType(this.graph,this.binding,this.checked,this.resourceIndex,text,[]);
+  }
   typeId(input: string, id: number): number {
     let text: string = this.resolved(input);
     while (genericBase(text) == "pack" && genericArguments(text).length == 1 && genericBase(genericArguments(text)[0]) == "pack") text = genericArguments(text)[0];
-    for (let i: number = 0; i < this.result.types.length; i = i+1) if (this.result.types[i] == text) return i;
-    const index: number = this.result.types.length; this.result.types.push(text); this.result.typeDefinitions.push(new IrType("pending"));
+    // Índice de tipos: antes una búsqueda lineal por cada consulta (#344).
+    const known: Optional<number> = this.typeIndex.get(text); if (known.isPresent()) return known.value();
+    const index: number = this.result.types.length; this.result.types.push(text); this.typeIndex.set(text,index); this.result.typeDefinitions.push(new IrType("pending"));
     if (text == "" || text == "!error" || text.startsWith("!")) { this.fail(id,"Tipo incompleto: "+text); this.result.typeDefinitions[index].kind = "invalid"; return index; }
     let kind: string = ""; let arguments: string[] = [];
     const mode: string = memoryMode(text); const nominal: number = canonicalSymbol(text);
@@ -149,7 +154,7 @@ export class IrLowering {
       for (let at: number = 0; at < shape.names.length; at = at+1) if (!this.result.typeDefinitions[index].names.includes(shape.names[at])) { this.result.typeDefinitions[index].names.push(shape.names[at]); this.result.typeDefinitions[index].fields.push(shape.fields[at]); }
       for (let at: number = 0; at < shape.methods.length; at = at+1) { this.result.typeDefinitions[index].methods.push(shape.methods[at]); this.result.typeDefinitions[index].methodTypes.push(shape.methodTypes[at]); }
     }
-    this.result.typeDefinitions[index].resource = !["ref","constRef","readonly"].includes(kind) && resourceType(this.graph,this.binding,this.checked,text,[]);
+    this.result.typeDefinitions[index].resource = !["ref","constRef","readonly"].includes(kind) && this.resourceKind(text);
     return index;
   }
   valueType(value: number): number { return value >= 0 ? this.result.functions[this.currentFunction].values[value] : -1; }

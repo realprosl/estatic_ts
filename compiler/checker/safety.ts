@@ -5,7 +5,7 @@ import { forkWorker, finishWorker, waitWorker, temporaryDirectory, poll, pause, 
 import { attachModuleRecords } from "./module-records";
 import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind, AstNode, nodeBegin, nodeEnd } from "../parser/index";
 import { EffectAnalyzer } from "./effects";
-import { resourceType, resourceSubstitution } from "./ownership";
+import { resourceType, resourceSubstitution, resourceFields, ResourceFields } from "./ownership";
 import { nativeNumericLiteral } from "./numeric";
 import { ModuleGraph } from "../modules/index";
 import { BindingResult, BindingSymbol, bindingChild, callableBinding } from "../binder/index";
@@ -72,7 +72,7 @@ function setSafetyPath(state: ref<SafetyState>, projectionKey: string, value: nu
 
 export class SafetyAnalyzer {
   graph: ModuleGraph; binding: BindingResult; result: CheckResult; effects: EffectAnalyzer; arguments: SafetyArgument[];
-  offsets: number[]; nodes: number; edges: SafetyEdge[]; seeds: number[]; escapes: EscapeSite[]; owners: number[]; trace: boolean; resourceTypes: Map<string,boolean>; valueTypes: Map<string,boolean>; carrierTypes: Map<string,boolean>; plainTypes: Map<string,boolean>; defaultReads: Map<number,boolean>; valueDefaults: Map<number,boolean>;
+  offsets: number[]; nodes: number; edges: SafetyEdge[]; seeds: number[]; escapes: EscapeSite[]; owners: number[]; trace: boolean; resourceTypes: Map<string,boolean>; resourceIndex: ResourceFields; valueTypes: Map<string,boolean>; carrierTypes: Map<string,boolean>; plainTypes: Map<string,boolean>; defaultReads: Map<number,boolean>; valueDefaults: Map<number,boolean>;
   substitutions: string[]; substitutionTypes: string[]; memoryPath: string[]; borrowSources: number[]; leases: BorrowLease[]; breaks: SafetyState[]; continues: SafetyState[]; returns: SafetyState[]; sites: SafetyCallSite[];
   visits: number; crossContracts: number; rootModule: number; deferFlow: boolean; flowFailed: boolean; bodyDeps: Map<number,boolean>; collectFlow:boolean; findings:FlowFinding[]; moveLines: number[];
   // Índices para no recorrer todos los símbolos en cada llamada analizada:
@@ -89,7 +89,7 @@ export class SafetyAnalyzer {
     this.substitutions = []; this.substitutionTypes = []; this.edges = []; this.seeds = []; this.escapes = []; this.memoryPath = []; this.borrowSources = []; this.leases = []; this.breaks = []; this.continues = []; this.returns = []; this.sites = []; this.arguments = []; this.moveLines = []; for (let k: number = 0; k < binding.symbols.length; k = k + 1) this.moveLines.push(-1);
     for (const m of graph.modules) { this.offsets.push(this.nodes); this.nodes = this.nodes + m.cached.result.ast.nodes.length; }
     for (const s of binding.symbols) this.borrowSources.push(-1);
-    this.owners = []; for (const scope of binding.scopes) this.owners.push(-2); this.trace = false; this.resourceTypes = new Map<string,boolean>(); this.valueTypes = new Map<string,boolean>(); this.carrierTypes = new Map<string,boolean>(); this.plainTypes = new Map<string,boolean>();
+    this.owners = []; for (const scope of binding.scopes) this.owners.push(-2); this.trace = false; this.resourceTypes = new Map<string,boolean>(); this.resourceIndex = new ResourceFields(); this.valueTypes = new Map<string,boolean>(); this.carrierTypes = new Map<string,boolean>(); this.plainTypes = new Map<string,boolean>();
     this.defaultReads = new Map<number,boolean>(); this.valueDefaults = new Map<number,boolean>();
     this.visits = 0; this.rootModule = -1; this.deferFlow = false; this.flowFailed = false; this.bodyDeps = new Map<number,boolean>(); this.crossContracts = environment("ESTATIC_FLOW_CONTRACTS") == "2" ? 2 : environment("ESTATIC_FLOW_CONTRACTS") == "1" ? 1 : 0; this.collectFlow=false;this.findings=[];
     this.indexed = false; this.ownedStart = []; this.ownedSymbols = []; this.classFieldNodes = []; this.fieldStart = []; this.fieldSymbols = [];
@@ -295,7 +295,8 @@ export class SafetyAnalyzer {
   transferType(text: string): boolean {
     const value: string = this.resolved(text);
     if (this.resourceTypes.has(value)) return true; if (this.valueTypes.has(value)) return false;
-    const result: boolean = resourceType(this.graph,this.binding,this.result,value,[]);
+    if (!this.resourceIndex.built) this.resourceIndex = resourceFields(this.graph,this.binding);
+    const result: boolean = resourceType(this.graph,this.binding,this.result,this.resourceIndex,value,[]);
     if (result) this.resourceTypes.set(value,true); else this.valueTypes.set(value,true); return result;
   }
   transferValue(module: number, id: number): void {
