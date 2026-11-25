@@ -1,4 +1,7 @@
 import { verifyIrTables, verifyFunctionContracts, verifyModuleContracts } from "./verify-contracts";
+import { analysisJobs, profileBegin, profileEnd } from "../analysis/index";
+import { parseInt } from "estatic:number";
+import { forkWorker, finishWorker, waitWorker, temporaryDirectory, poll, pause, terminate, readText, writeText } from "../platform/index";
 import { IrSource, IrIssue, IrProject, IrFunction, IrInstruction } from "./model";
 import { numericType, primitiveType, nativeNumericLiteral, nativeInteger64, nativeUnaryPromotion, nativeBinaryPromotion } from "../checker/index";
 import { irNumericWidth, irNumericKind, irNumericSigned, irNumericConstant } from "./type-traits";
@@ -247,6 +250,42 @@ export class IrVerifier {
     }
     for (const definition of this.definitions) if (definition < 0) this.error(f.source,"Temporal sin definición");
   }
+  bodies(start: number, end: number, routes: ref<IrIssue[]>): void {
+    for (let at: number = start; at < end; at = at+1) { const fn: number = at; for (const contract of this.project.functions[fn].effectContracts) if (contract < 0 || contract >= this.project.effectContracts.length || this.project.effectContracts[contract].source.moduleId != this.project.functions[fn].source.moduleId || this.project.effectContracts[contract].source.node != this.project.functions[fn].source.node) this.error(this.project.functions[fn].source,"Contrato de función inexistente"); if (!this.nativeBinding(this.project.functions[fn])) { const f: IrFunction = this.project.functions[fn]; this.functionBody(f); } } // copia: #346
+    for (let at: number = start; at < end; at = at+1) { if (this.nativeBinding(this.project.functions[at])) continue; for (const issue of verifyBorrowRoutes(this.project,this.project.functions[at])) routes.push(issue); for (const issue of verifyOwnershipRoutes(this.project,this.project.functions[at])) routes.push(issue); }
+  }
+  parallelBodies(routes: ref<IrIssue[]>): boolean {
+    const functions: number = this.project.functions.length; const jobs: number = Math.min(analysisJobs(),functions);
+    if (jobs < 2 || functions < 64) return false;
+    const size: number = Math.max(1,Math.ceil(functions/(jobs*4))); const count: number = Math.ceil(functions/size);
+    const directory = temporaryDirectory(); if (directory == "") return false;
+    const workers = profileBegin(); let pids: number[] = []; let next: number = 0; let complete: number = 0; let failed: boolean = false;
+    while (complete < count && !failed) {
+      while (next < count && pids.length < jobs) {
+        const task: number = next; const pid: number = forkWorker();
+        if (pid < 0) { failed = true; break; }
+        if (pid == 0) {
+          this.issues = []; let own: IrIssue[] = []; this.bodies(task*size,Math.min(functions,(task+1)*size),own);
+          let lines: string[] = []; for (const issue of this.issues) lines.push(issueLine("B",issue)); for (const issue of own) lines.push(issueLine("R",issue));
+          finishWorker(writeText(directory+"/"+numberToString(task)+".txt",lines.join("\n")) ? 0 : 125); return false;
+        }
+        pids.push(pid); next = next+1;
+      }
+      let advanced: boolean = false;
+      for (let at: number = pids.length-1; at >= 0; at = at-1) { const status: number = poll(pids[at]); if (status < 0) continue; advanced = true; if (status != 0) failed = true; pids[at] = pids[pids.length-1]; pids.pop(); complete = complete+1; }
+      if (!advanced && !failed) pause(2);
+    }
+    if (failed) { for (const pid of pids) terminate(pid); for (const pid of pids) waitWorker(pid); return false; }
+    profileEnd("verify-workers",workers,"batches="+numberToString(count)+" jobs="+numberToString(jobs));
+    // En orden de lote, no de llegada: el orden de los errores es el secuencial.
+    let bodies: IrIssue[] = []; let collected: IrIssue[] = [];
+    for (let task: number = 0; task < count; task = task+1) {
+      const text: string = readText(directory+"/"+numberToString(task)+".txt"); if (text == "") continue;
+      for (const line of text.split("\n")) { const issue: IrIssue = parseIssueLine(line); if (line.startsWith("B")) bodies.push(issue); else collected.push(issue); }
+    }
+    for (const issue of bodies) this.issues.push(issue); for (const issue of collected) routes.push(issue);
+    return true;
+  }
   run(): IrIssue[] {
     this.issues = verifyIrTables(this.project); if (this.issues.length > 0) return this.issues;
     for (let at: number = 0; at < this.project.functions.length; at = at+1) for (const issue of verifyFunctionContracts(this.project,this.project.functions[at])) this.issues.push(issue);
@@ -281,8 +320,12 @@ export class IrVerifier {
       for (const target of contract.callees) if (target < 0 || target >= this.project.effectContracts.length) this.error(contract.source,"Arista de efectos inexistente");
       for (const lease of contract.borrows) if (lease.callback == "" || lease.root == "" || !["ref","constRef"].includes(lease.mode)) this.error(lease.source,"Obligación callback incompatible");
     }
-    for (let at: number = 0; at < this.project.functions.length; at = at+1) { const fn: number = at; for (const contract of this.project.functions[fn].effectContracts) if (contract < 0 || contract >= this.project.effectContracts.length || this.project.effectContracts[contract].source.moduleId != this.project.functions[fn].source.moduleId || this.project.effectContracts[contract].source.node != this.project.functions[fn].source.node) this.error(this.project.functions[fn].source,"Contrato de función inexistente"); if (!this.nativeBinding(this.project.functions[fn])) { const f: IrFunction = this.project.functions[fn]; this.functionBody(f); } } // copia: #346
-    if (this.issues.length == 0) for (let at: number = 0; at < this.project.functions.length; at = at+1) { if (this.nativeBinding(this.project.functions[at])) continue; for (const issue of verifyBorrowRoutes(this.project,this.project.functions[at])) this.issues.push(issue); for (const issue of verifyOwnershipRoutes(this.project,this.project.functions[at])) this.issues.push(issue); }
+    // Cuerpos y rutas por función: independientes entre funciones, así que se
+    // reparten entre procesos como los flujos (#344). Las rutas solo cuentan si
+    // ningún cuerpo dio errores, igual que en la versión secuencial.
+    let routes: IrIssue[] = [];
+    if (!this.parallelBodies(routes)) { routes = []; this.bodies(0,this.project.functions.length,routes); }
+    if (this.issues.length == 0) for (const issue of routes) this.issues.push(issue);
     const source = new IrSource("","","",-1,0,0);
     let initializers: number[] = [];
     for (const module of this.project.modules) {
@@ -300,3 +343,22 @@ export class IrVerifier {
   }
 }
 export function verifyIr(project: IrProject): IrIssue[] { let verifier = new IrVerifier(project); return verifier.run(); }
+
+// Una incidencia por línea, con los campos separados por tabuladores.
+function escapeField(text: string): string { return text.split("\\").join("\\\\").split("\t").join("\\t").split("\n").join("\\n"); }
+function unescapeField(text: string): string {
+  let out: string[] = []; let at: number = 0;
+  while (at < text.length) { const c: string = text.slice(at,at+1); if (c == "\\" && at+1 < text.length) { const n: string = text.slice(at+1,at+2); out.push(n == "t" ? "\t" : n == "n" ? "\n" : n); at = at+2; } else { out.push(c); at = at+1; } }
+  return out.join("");
+}
+function issueLine(kind: string, issue: constRef<IrIssue>): string {
+  const s = issue.source;
+  return [kind,escapeField(issue.code),escapeField(issue.message),escapeField(s.moduleId),escapeField(s.sourceHash),escapeField(s.file),numberToString(s.node),numberToString(s.start),numberToString(s.end),escapeField(s.generatedId),numberToString(s.generatedStart),numberToString(s.generatedEnd)].join("\t");
+}
+function parseIssueLine(line: string): IrIssue {
+  const f: string[] = line.split("\t");
+  if (f.length != 12) return new IrIssue("IR_INVALID","Incidencia de verificación ilegible",new IrSource("","","",-1,0,0));
+  let source: IrSource = new IrSource(unescapeField(f[3]),unescapeField(f[4]),unescapeField(f[5]),parseInt(f[6]),parseInt(f[7]),parseInt(f[8]));
+  source.generatedId = unescapeField(f[9]); source.generatedStart = parseInt(f[10]); source.generatedEnd = parseInt(f[11]);
+  return new IrIssue(unescapeField(f[1]),unescapeField(f[2]),source);
+}
