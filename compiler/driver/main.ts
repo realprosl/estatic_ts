@@ -261,7 +261,13 @@ function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:s
    else if(userCache!=""&&directories(userCache+"/../pch/"+key)){
     const header=userCache+"/../pch/"+key+"/pch.hpp";if(!exists(header))checkedWrite(header,includes.join("\n")+"\n");
     if(exists(pchArtifact(header,compiler)))plan.pchHeader=header;
-    else{pchFinal=pchArtifact(header,compiler);pchPartial=pchFinal+"."+numberToString(now())+".tmp";let command:string[]=[];for(const flag of plan.flags)command.push(flag);for(const flag of plan.programFlags)command.push(flag);command.push("-x");command.push("c++-header");command.push(header);command.push("-o");command.push(pchPartial);pchPid=launch(command,"/dev/null","/dev/null");}
+    else{pchFinal=pchArtifact(header,compiler);pchPartial=pchFinal+"."+numberToString(now())+".tmp";let command:string[]=[];for(const flag of plan.flags)command.push(flag);for(const flag of plan.programFlags)command.push(flag);command.push("-x");command.push("c++-header");command.push(header);command.push("-o");command.push(pchPartial);
+     // #361: con dos o más unidades del programa por compilar, sale más barato
+     // crear la PCH primero (las cabeceras se analizan una vez) y compilarlas con
+     // ella. Con una sola, se compila sin ella y la PCH se crea en paralelo.
+     let pending:number=0;for(let k:number=0;k<plan.programUnits;k=k+1)if(build[k])pending=pending+1;
+     if(pending>=2){progressStart("Precompilando cabeceras del runtime");const pchStatus=executeAll([command]);if(pchStatus==0&&exists(pchPartial)&&rename(pchPartial,pchFinal)){plan.pchHeader=header;prunePch(userCache+"/../pch",5);}else remove(pchPartial);pchPartial="";}
+     else pchPid=launch(command,"/dev/null","/dev/null");}
    }
   }
  }
