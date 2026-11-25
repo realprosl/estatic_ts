@@ -1323,7 +1323,7 @@ export class IrLowering {
           if (ast.nodes[id].edges[at].role != EdgeRole.Decorators) continue;
           const decoratorId: number = ast.nodes[id].edges[at].node;
           const name: string = ast.nodes[decoratorId].get(AttributeKind.Name);
-          if (name != "cpp_native" && name != "include" && name != "cpp_include") continue;
+          if (name != "cpp_native" && name != "include" && name != "cpp_include" && name != "link") continue;
           let args: string[] = []; let valid: boolean = true;
           for (let argAt: number = 0; argAt < ast.nodes[decoratorId].edges.length; argAt = argAt+1) {
             if (ast.nodes[decoratorId].edges[argAt].role != EdgeRole.Args) continue;

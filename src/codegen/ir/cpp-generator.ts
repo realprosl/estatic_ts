@@ -3,7 +3,7 @@ import { IrCodegenError, type IrProject, type IrType, type IrFunction, type IrIn
 import { emitRuntimeCall } from "./runtime-calls.ts";
 import type { RuntimeBackends } from "../../modules/runtime-backends.ts";
 
-export interface IrCppResult { cpp: string; headers: string[]; runtimeBackends: RuntimeBackends; capabilities: string[] }
+export interface IrCppResult { cpp: string; headers: string[]; runtimeBackends: RuntimeBackends; capabilities: string[]; links?: string[] }
 const recordKinds = new Set(["record","interface","intersection","variant"]);
 const sumKinds = new Set(["sum","union"]);
 const ops = new Set(["constant","load","store","address","move","borrow","dropRemaining","aggregate","record","property","extractIndex","emptyRecord","collection","isPresent","unwrap","typeTag","typeTest","iterator","iterHasNext","iterNext","some","result","variant","convert","unary","binary","dropFrame","resume","endBorrow","own","dropValue","none","closure","callIndirect","call","taskCreate","runtimeCall","interfaceCall","intrinsic"]);
@@ -458,7 +458,7 @@ export class IrCppGenerator {
   }
   generate():IrCppResult {
     this.validateBoundary();
-    for(const annotation of this.project.annotations??[])if(["cpp_name","cpp_type","link","cpp_header","cpp_link"].includes(annotation.name))this.fail(`ABI externo no implementado: @${annotation.name}`,annotation.source);
+    for(const annotation of this.project.annotations??[])if(["cpp_name","cpp_type","cpp_header","cpp_link"].includes(annotation.name))this.fail(`ABI externo no implementado: @${annotation.name}`,annotation.source);
     if(this.project.format!=="ets-ir-2"||!this.project.success||this.project.diagnostics.length)this.fail("Se requiere ets-ir-2 verificado con success:true");
     if(this.project.types.length!==this.project.typeDefinitions.length)this.fail("Tablas de tipos incompletas");
     for(const f of this.project.functions)for(const t of [...f.values,...f.parameterTypes,...f.places.map(p=>p.typeId)])if(this.shape(t).kind==="parameter")this.fail("Parámetro genérico sin especializar en código ejecutable",f.source);

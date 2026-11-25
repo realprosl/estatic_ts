@@ -563,8 +563,8 @@ parcial. La entrada `--from-ir` presupone IR verificado de un productor de
 confianza y no es un deserializador para entradas hostiles.
 
 El backend C++ rechaza explícitamente `backendEscape` (`@cppgen`), los
-decoradores de ABI externo (`@cpp_name`, `@cpp_type`, `@include`, `@link`,
-`@cpp_header`, `@cpp_include`, `@cpp_link`), las capacidades de runtime sin
+decoradores de ABI externo (`@cpp_name`, `@cpp_type`, `@cpp_header`,
+`@cpp_include`, `@cpp_link`), las capacidades de runtime sin
 binding explícito como `io_uring`, y `Timer` no copiable hasta que se cierre su
 contrato de ownership. El CLI histórico de `src/` y su caché incremental no se
 sustituyen.
