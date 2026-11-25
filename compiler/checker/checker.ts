@@ -32,13 +32,13 @@ export class NativeChecker {
   // miembros por ámbito ("módulo:nodo" → símbolos en orden de sid), referencias
   // por nodo (vértice = offset del módulo + nodo) y campos aún sin tipo.
   indexed: boolean; memberGroups: Map<string,number>; memberStart: number[]; memberList: number[];
-  offsets: number[]; referenceStart: number[]; referenceList: number[]; pendingFields: number[];
+  offsets: number[]; referenceStart: number[]; referenceList: number[]; pendingFields: number[]; transferMemo: Map<string,boolean>;
   constructor(graph: ModuleGraph, binding: BindingResult) {
     this.graph = graph; this.binding = binding; this.result = new CheckResult(); this.symbolStates = []; this.depth = 0; this.switches = 0; this.compatibilityDepth = 0;
     this.narrowedSymbols = []; this.narrowedTypes = []; this.trace = false; this.narrowedPaths = [];
     this.mutationCache = new Map<string,number>(); this.literalShapeKeys = []; this.literalShapeTypes = []; this.jsonText = ""; this.jsonAt = 0;
     this.indexed = false; this.memberGroups = new Map<string,number>(); this.memberStart = []; this.memberList = [];
-    this.offsets = []; this.referenceStart = []; this.referenceList = []; this.pendingFields = [];
+    this.offsets = []; this.referenceStart = []; this.referenceList = []; this.pendingFields = []; this.transferMemo = new Map<string,boolean>();
   }
   index(): void {
     if (this.indexed) return; this.indexed = true;
@@ -851,7 +851,11 @@ export class NativeChecker {
       if (this.result.symbolTypes[sid] == "") rest.push(sid);
     }
     this.pendingFields = rest;
-    return resourceType(this.graph,this.binding,this.result,text,[]);
+    // Con todos los campos ya tipados el resultado no cambia: se memoriza. Cada
+    // consulta de una clase recorría todos los símbolos buscando sus campos (#344).
+    if (rest.length > 0) return resourceType(this.graph,this.binding,this.result,text,[]);
+    const found: Optional<boolean> = this.transferMemo.get(text); if (found.isPresent()) return found.value();
+    const result: boolean = resourceType(this.graph,this.binding,this.result,text,[]); this.transferMemo.set(text,result); return result;
   }
   packToken(text: string): boolean {
     const sid: number = parameterToken(text,this.binding.symbols.length); if (sid < 0) return false;
