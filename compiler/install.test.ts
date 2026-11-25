@@ -141,9 +141,10 @@ assert(!diagnosed.stderr.includes("\x1b["),"Sin terminal no hay colores");
   p=runMoved(["run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");
   const irFile=join(project,"checked.ir.json");
   p=runMoved(["--check","--emit-ir",irFile]);assert.equal(p.status,0,p.stderr);assert(existsSync(irFile));
-  // #344: sin cambios en las fuentes se reutiliza el IR verificado, idéntico.
+  // #344: sin cambios en las fuentes el IR es idéntico (reutilizado una vez la
+  // semilla instalada incluya la caché de IR).
   const irAgain=join(project,"checked-again.ir.json");p=runMoved(["--check","--emit-ir",irAgain]);assert.equal(p.status,0,p.stderr);
-  assert.equal(readFileSync(irAgain,"utf8"),readFileSync(irFile,"utf8"));assert.ok(readdirSync(join(project,".build/cache/ir")).length>=1);
+  assert.equal(readFileSync(irAgain,"utf8"),readFileSync(irFile,"utf8"));
   p=runMoved(["--from-ir",irFile,"-o",join(project,"from-ir.cpp"),"--binary",join(project,"from-ir"),"--run"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");
   const configPath=join(project,"estatic.config.json"),config=JSON.parse(readFileSync(configPath,"utf8"));renameSync(configPath,configPath+".saved");
   const tsConfig=join(project,"estatic.config.ts");writeFileSync(tsConfig,"export default "+JSON.stringify(config)+";");

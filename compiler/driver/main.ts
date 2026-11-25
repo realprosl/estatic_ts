@@ -35,7 +35,8 @@ function emitModuleInterface(entry:string,options:LoaderOptions):void{
 // (mismo contenido, mismas opciones y mismo compilador), el análisis entero es
 // determinista y se reutiliza el IR verificado de la vez anterior.
 function irCacheKey(graph:ModuleGraph,options:LoaderOptions):string{
- if(options.cacheDirectory==""||syntaxIdentity()==""||!graph.success||graph.diagnostics.length>0)return "";
+ // ESTATIC_NO_ANALYSIS_CACHE=1 (en el loader) desactiva esta caché y la de flujos.
+ if(graph.analysisCache==""||syntaxIdentity()==""||!graph.success||graph.diagnostics.length>0)return "";
  let text="ets-ir-1|"+syntaxIdentity()+"|"+graph.analysisKey+"\n";
  for(const module of graph.modules){if(module.cached.record.hash=="")return "";text=text+module.file+"|"+module.cached.record.hash+"\n";}
  return contentHash(text);

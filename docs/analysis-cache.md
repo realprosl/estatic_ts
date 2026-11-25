@@ -46,3 +46,7 @@ Si ningún módulo cargado ha cambiado (mismo contenido, opciones y compilador),
 punto de entrada (`DIR/ir/`). El análisis es determinista, así que el IR es
 idéntico byte a byte. Solo se guarda un IR por entrada y solo si no hubo
 diagnósticos.
+
+`ESTATIC_NO_ANALYSIS_CACHE=1` desactiva la caché de flujos y la de IR (la de
+sintaxis sigue activa). La usa `scripts/benchmark-analysis.py` para medir el
+análisis semántico completo.
