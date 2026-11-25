@@ -13,13 +13,13 @@ const b: number[] = [4, 5, 6];
 
 // Concatenar dos arrays.
 const combined: number[] = [...a, ...b];
-print(length(combined));  // 6
+print(combined.length);  // 6
 print(combined[0]);       // 1
 print(combined[5]);       // 6
 
 // Spread al principio y en el medio.
 const prefix: number[] = [0, ...a, 99];
-print(length(prefix));    // 5
+print(prefix.length);    // 5
 print(prefix[0]);         // 0
 print(prefix[1]);         // 1
 print(prefix[3]);         // 3
@@ -27,7 +27,7 @@ print(prefix[4]);         // 99
 
 // Mezcla con valores literales.
 const mixed: number[] = [10, ...a, 20, ...b, 30];
-print(length(mixed));     // 9
+print(mixed.length);     // 9
 print(mixed[0]);          // 10
 print(mixed[1]);          // 1
 print(mixed[4]);          // 20

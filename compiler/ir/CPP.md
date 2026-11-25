@@ -157,7 +157,7 @@ C++ entregado por el backend ni demuestra ausencia de fugas.
 | Lowering/verificador nativo, incluidos dispatches corruptos | **133/133** |
 | Checker nativo, seguridad y efectos | **1376/1376** |
 | Tipos C++, backend histórico, selección de runtime y docs | **181/181** |
-| Corpus: generación, compilación y enlace, sin ejecutar ejemplos | **126/131 fuentes válidos**; el ejemplo negativo esperado se rechaza |
+| Corpus: generación, compilación y enlace, sin ejecutar ejemplos | **126/130 fuentes válidos**; el ejemplo negativo esperado se rechaza |
 | Servidores HTTP | Rutas, path/query/header, POST, DELETE, status y JSON con **httplib y Drogon reales** |
 | Cliente HTTP | GET/POST reales con **libcurl**, corutinas y Result |
 | CLI | Fuente → IR → C++ → binario; JSON → C++; config, aliases, raíces, caché, argumentos, errores y exit code |
@@ -169,8 +169,8 @@ Las bibliotecas se instalaron bajo `build/libs/`, sin cambiar paquetes del siste
 La suite se ejecutó con `TMPDIR` dentro del workspace y
 `ESTATIC_TEST_DISABLE_LSAN=1`. Las dependencias locales no forman parte del commit.
 
-Los cinco fuentes válidos todavía rechazados pertenecen a capacidades ajenas a
-interfaces y HTTP: `comptime-overloads/main` (`@cppgen`), `io-uring-async-demo`,
+Los cuatro fuentes válidos todavía rechazados pertenecen a capacidades ajenas a
+interfaces y HTTP: `comptime-overloads/main` (`@cppgen`),
 `memory-safe-timer`, `libc.lib` y `libraries-demo` (ABI externa). El audit sale
 con código 1 mientras queden estas capacidades pendientes. Compilar los 126
 fuentes no certifica su ejecución: los resultados de ejecución se verifican en

@@ -750,8 +750,8 @@ test('native optional parameter keeps explicit Optional unwrapped once',()=>chec
 test('native optional generic parameter infers payload',()=>check('function f<T>(x?:T):Optional<T>{return x;}const x=f(1);'));
 
 for(const [name,source] of Object.entries({
- globals:'print(length("s"));print(charAt("abc",1));print(lineCount("x"));',
- arrayLength:'const a=[1,2];print(length(a));',
+ globals:'print("s".length);print("abc".charAt(1));',
+ arrayLength:'const a=[1,2];print(a.length);',
  math:'print(Math.sqrt(4));print(Math.max(1,2));print(Math.PI);',
  json:'import JSON, { jsonIsObject } from "estatic:json"; const r=JSON.parse<JsonValue>("{}");if(r.isOk())print(jsonIsObject(r.value()));',
  console:'console.log("x",1,true);console.warn("warning");',
@@ -762,7 +762,7 @@ for(const [name,source] of Object.entries({
    processStdin:'import process from "estatic:process"; process.stdin.on("data",(chunk:string):void=>print(chunk));process.stdin.on("end",():void=>{});',
 }))test(`native builtin contracts accept ${name}`,()=>check(source));
 for(const [name,source] of Object.entries({
- wrongLength:'print(length(1));',
+ retiredLength:'print(length("x"));',
  wrongMath:'print(Math.sqrt("s"));',
  wrongMathArity:'print(Math.min(1));',
  unknownMath:'Math.notAMethod();',

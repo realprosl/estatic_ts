@@ -550,7 +550,7 @@ export class EffectAnalyzer {
   canRetain(module: number, id: number, position: number): boolean {
     if (this.synchronousCallbacks(module,id).length > 0) return false;
     const helper: string = this.helper(module,id);
-    if ((["setTimeout","setInterval"].includes(helper) && position == 0) || (helper == "watchFs" && position == 1)) return true;
+    if ((["setTimeout","setInterval"].includes(helper) && position == 0)) return true;
     if (this.kindOf(module,id) == NodeKind.MemberCallExpression && this.receiver(module,id) == "Server" && ["get","post","put","patch","delete"].includes(this.attributeOf(module,id,AttributeKind.Method)) && position == 1) return true;
     if (this.kindOf(module,id) == NodeKind.MemberCallExpression && this.attributeOf(module,id,AttributeKind.Method) == "on" && ["ProcessReadable","ChildProcess"].includes(this.receiver(module,id)) && position == 1) return true;
     if (this.helper(module,id) == "spawn") return true;
@@ -580,7 +580,7 @@ export class EffectAnalyzer {
       // Sin copiar el nodo: solo se lee su clase, atributos e hijos (#344).
       const kind: NodeKind = this.kindOf(m,id);
       const helper: string = this.helper(m,id);
-      if (nativeBuiltinSignatures(helper).length > 0 && !["numberToString","charAt","substring","indexOf","startsWith","trim","lineCount","lineAt","length"].includes(helper)) this.summaries[owner].external = true;
+      if (nativeBuiltinSignatures(helper).length > 0 && !["numberToString"].includes(helper)) this.summaries[owner].external = true;
       if (["print","printError","write","writeError","spawn"].includes(helper)) this.summaries[owner].external = true;
       if (kind == NodeKind.MemberCallExpression) {
         const receiver: string = this.receiver(m,id);

@@ -100,8 +100,8 @@ a == b = false
 a != b = true
 ```
 
-Los strings se concatenan con `+`. `length()`, `charAt()` y la clase
-`String` están en el runtime; ver [`docs/build-system.md`](./build-system.md)
+Los strings se concatenan con `+` y tienen los métodos de TypeScript
+(`s.length`, `s.charAt(i)`, `s.trim()`…); ver [`docs/build-system.md`](./build-system.md)
 para el detalle del flujo de build.
 
 ---

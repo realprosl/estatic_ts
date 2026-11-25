@@ -161,22 +161,6 @@ declare global {
     value(): T;
     error(): E;
   }
-  // Lector de archivos por descriptor (streaming, sin copiar el archivo
-  // entero en memoria). Vive en runtime/ets_file.hpp. La API permite
-  // recorrer un archivo caracter a caracter o linea a linea, manteniendo
-  // el fd del OS abierto durante toda la lectura.
-  //
-  // Patron de uso:
-  //   let r: FileReader = openFileReader("/var/log/app.log")
-  //   while (!r.eof()) {
-  //     let line: string | null = r.readLine()
-  //     if (line != null) process(line)
-  //   }
-  //   r.close()
-  //
-  // Si el archivo no existe, la funcion aborta con un mensaje de error.
-  // Para error handling explicito, comprobar antes con existsSync() de "estatic:fs".
-  function openFileReader(path: string): FileReader;
   class FileReader extends Sealed {
     private readonly _brand: symbol;
     // Lee un byte y avanza el cursor. Devuelve -1 en EOF.
@@ -278,14 +262,6 @@ declare global {
   function comptime<T>(callback: () => T): T;
   /** Convierte un numero a su representacion en string. */
   function numberToString(n: number): string;
-  function length(value: string): number;
-  function charAt(value: string, index: number): string;
-  function substring(value: string, start: number, end: number): string;
-  function indexOf(value: string, search: string, start: number): number;
-  function startsWith(value: string, prefix: string): boolean;
-  function trim(value: string): string;
-  function lineCount(value: string): number;
-  function lineAt(value: string, index: number): string;
   function compilerRoot(): string;
   function resolveImportPath(from: string, specifier: string): string;
   function resolveProjectPath(root: string, path: string): string;
@@ -386,8 +362,6 @@ declare global {
   function setTimeout(callback: () => void, ms: number): Timer;
   function setInterval(callback: () => void, ms: number): Timer;
   function cancelTimer(timer: Timer): void;
-  function watchFs(path: string, callback: (event: FsEvent) => void, recursive?: boolean): FsWatcher;
-  function unwatchFs(watcher: FsWatcher): void;
   function stopLoop(): void;
 
   // ─── Helpers de OptionalT ─────────────────────────────────────────
@@ -429,11 +403,6 @@ declare global {
 
 
 
-  function ioUringAvailable(): boolean;
-  function ioUringRead(path: string): Result<string>;
-  function ioUringWrite(path: string, contents: string): Result<boolean>;
-  function asyncIoUringRead(path: string): Promise<Result<string>>;
-  function asyncIoUringWrite(path: string, contents: string): Promise<Result<boolean>>;
 
   // ─── Helpers de networking (runtime/ets_net_sync.hpp) ──────────────
 

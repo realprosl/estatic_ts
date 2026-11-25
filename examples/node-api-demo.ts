@@ -15,9 +15,9 @@ console.log("resolve('.','build','app') =", path.resolve(".", "build", "app"));
 console.log("--- process ---");
 console.log("argc =", process.argc);
 const args: string[] = process.argv;
-console.log("argv length =", length(args));
-if (length(args) > 0) console.log("argv[0] =", args[0]);
-console.log("argumentos del usuario =", length(args) - 2);
+console.log("argv length =", args.length);
+if (args.length > 0) console.log("argv[0] =", args[0]);
+console.log("argumentos del usuario =", args.length - 2);
 console.log("cwd =", process.cwd());
 
 console.log("--- JSON ---");

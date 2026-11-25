@@ -19,15 +19,15 @@
 // Filtrar los números pares de un array.
 let numbers: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 let evens: number[] = numbers.filter((x: number): boolean => x % 2 == 0);
-print("evens count: ", numberToString(length(evens)));
+print("evens count: ", numberToString(evens.length));
 print("first even: ", numberToString(evens[0]));
-print("last even: ", numberToString(evens[length(evens) - 1]));
+print("last even: ", numberToString(evens[evens.length - 1]));
 
 // --- Caso 2: map solo --------------------------------------------------
 // Convertir números a strings.
 let strings: string[] = numbers.map<string>((x: number): string => numberToString(x));
 print("first string: ", strings[0]);
-print("last string: ", strings[length(strings) - 1]);
+print("last string: ", strings[strings.length - 1]);
 
 // --- Caso 3: reduce solo -----------------------------------------------
 // Sumar todos los elementos.
@@ -45,7 +45,7 @@ print("empty total: ", numberToString(emptyTotal));
 let sumLengths: number = numbers
   .filter((x: number): boolean => x % 2 == 0)
   .map<string>((x: number): string => numberToString(x))
-  .reduce<number>((acc: number, s: string): number => acc + length(s), 0);
+  .reduce<number>((acc: number, s: string): number => acc + s.length, 0);
 print("sum of lengths: ", numberToString(sumLengths));
 
 // --- Caso 5: side effects en orden -------------------------------------

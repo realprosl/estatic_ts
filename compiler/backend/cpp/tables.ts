@@ -42,10 +42,9 @@ if(name=="cancel")return "ets::cancel";
 if(name=="cancellationToken")return "ets::cancellationToken";
 if(name=="createCancellation")return "ets::createCancellation";
 if(name=="isCancelled")return "ets::isCancelled";
-if(name=="ioUringAvailable")return "ets::ioUringAvailable";
 return "";
 }
-export function globalCalls(name:string):boolean{return ["compilerRoot","resolveImportPath","resolveProjectPath","length","numberToString"].includes(name);}
+export function globalCalls(name:string):boolean{return ["compilerRoot","resolveImportPath","resolveProjectPath","numberToString"].includes(name);}
 export function asyncCalls(name:string):boolean{return ["sleep","delay","spawn","cancel","cancellationToken","createCancellation","isCancelled","taskResolve","promiseAll","promiseRace","all","race","timeout","retry"].includes(name);}
 export function stringMethods(name:string):boolean{return ["charAt","charCodeAt","indexOf","lastIndexOf","includes","startsWith","endsWith","slice","substring","substr","split","trim","trimStart","trimEnd","toUpperCase","toLowerCase","repeat","padStart","padEnd","replace","replaceAll","match","matchAll","search","localeCompare","toString","at","codePointAt","concat","trimLeft","trimRight"].includes(name);}
 export function terminalMethods(name:string):boolean{return ["write","writeLine","flush","isTTY","supportsAnsi","columns","rows","color","background","style","reset","clear","clearLine","moveTo","moveBy","hideCursor","showCursor"].includes(name);}

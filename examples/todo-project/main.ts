@@ -36,11 +36,11 @@ const deleted: OperationResult = deleteTodo(first.id);
 check("deletes an existing todo", deleted.ok);
 
 const todos: Array<Todo> = allTodos();
-check("repository contains two records", length(todos) == 2);
+check("repository contains two records", todos.length == 2);
 check("completed state survives modules", todos[0].done);
 
 let index: number = 0;
-while (index < length(todos)) {
+while (index < todos.length) {
   print(formatTodo(todos[index]));
   index = index + 1;
 }

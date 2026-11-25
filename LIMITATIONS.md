@@ -579,10 +579,10 @@ Validación del **2026-10-25** con g++ C++20:
 | Lowering y verificador nativo, incluidos dispatches corruptos | 133/133 |
 | Checker nativo, seguridad y efectos | 1376/1376 |
 | Tipos C++, backend histórico, selección de runtime y docs | 181/181 |
-| Corpus: generación, compilación y enlace, sin ejecutar ejemplos | 126/131 fuentes válidas |
+| Corpus: generación, compilación y enlace, sin ejecutar ejemplos | 126/130 fuentes válidas |
 
-Las cinco fuentes válidas aún rechazadas son `comptime-overloads/main`
-(`@cppgen`), `io-uring-async-demo`, `memory-safe-timer`, `libc.lib` y
+Las cuatro fuentes válidas aún rechazadas son `comptime-overloads/main`
+(`@cppgen`), `memory-safe-timer`, `libc.lib` y
 `libraries-demo` (ABI externa). Compilar las 126 no certifica su ejecución: los
 resultados de ejecución se verifican en las pruebas del backend, incluidos los
 servidores y el cliente HTTP locales.

@@ -427,8 +427,6 @@ export class NativeComptime {
     if (helper == "comptime") return this.invoke(args[0],[],[],module,id,"strict","");
     if (numericType(helper)) return this.put(constantCast(this.values[args[0]],helper),module,id);
     if (helper == "numberToString") return this.put(constantString(this.text(args[0],module,id)),module,id);
-    if (helper == "length") { const v = this.values[args[0]]; return this.put(constantNumber(v.kind == "string" ? v.text.length : v.entries.length),module,id); }
-    if (["charAt","substring","indexOf","startsWith","trim"].includes(helper)) { let rest: number[] = []; for (let p: number = 1; p < args.length; p = p+1) rest.push(args[p]); return this.stringMethod(module,id,args[0],helper,rest); }
     if (["optionalSome","optionalNone","optionalIsPresent","optionalValueOr","optionalOrElse","ok","err","resultOk","resultErr","resultIsOk","resultValueOr"].includes(helper)) {
       if (helper == "optionalSome" || helper == "optionalNone" || ["ok","err","resultOk","resultErr"].includes(helper)) {
         let v = new ConstantValue(helper.startsWith("optional") ? "optional" : "result",this.checked.files[module].types[id]); v.text = (helper == "err" || helper == "resultErr" ? "error" : "ok");

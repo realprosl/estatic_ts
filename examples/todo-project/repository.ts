@@ -13,7 +13,7 @@ export function allTodos(): Array<Todo> {
 export function nextTodoId(): number {
   let highest: number = 0;
   let index: number = 0;
-  while (index < length(records)) {
+  while (index < records.length) {
     if (records[index].id > highest) { highest = records[index].id; }
     index = index + 1;
   }
@@ -26,7 +26,7 @@ export function insertTodo(todo: Todo): void {
 
 export function findTodoIndex(id: number): number {
   let index: number = 0;
-  while (index < length(records)) {
+  while (index < records.length) {
     if (records[index].id == id) { return index; }
     index = index + 1;
   }
@@ -40,7 +40,7 @@ export function markTodoDone(index: number): void {
 export function removeTodoAt(removeIndex: number): void {
   let remaining: Array<Todo> = [];
   let index: number = 0;
-  while (index < length(records)) {
+  while (index < records.length) {
     if (index != removeIndex) { remaining.push(records[index]); }
     index = index + 1;
   }
@@ -50,9 +50,9 @@ export function removeTodoAt(removeIndex: number): void {
 export function repositoryStats(): TodoStats {
   let completed: number = 0;
   let index: number = 0;
-  while (index < length(records)) {
+  while (index < records.length) {
     if (records[index].done) { completed = completed + 1; }
     index = index + 1;
   }
-  return new TodoStats(length(records), length(records) - completed, completed);
+  return new TodoStats(records.length, records.length - completed, completed);
 }
