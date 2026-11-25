@@ -144,7 +144,7 @@ export function syncTsconfig(base: string, config: JsonValue): boolean {
 
 // --- Uso desde build/run/check ---------------------------------------------
 
-function dependencyTarget(config: JsonValue, base: string, name: string): string {
+export function dependencyTarget(config: JsonValue, base: string, name: string): string {
   const alias: string = jsonAsString(jsonObjectGet(jsonObjectGet(config, "aliases"), name));
   return alias == "" ? "" : joinPath(base, alias);
 }

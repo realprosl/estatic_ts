@@ -1,6 +1,6 @@
 import {test,before,after} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,readdirSync,rmSync,existsSync,statSync} from 'node:fs';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {buildNativeCompiler} from '../build/native-compiler.ts';
@@ -94,4 +94,28 @@ test('native @link enlaza la librería al construir con etsc (#215)',()=>{
  let r=spawnSync(compiler,[...driver,entry,'-o',cpp,'--binary',bin,'--run'],{encoding:'utf8',env:{...process.env,ESTC_ROOT:root}});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout,'2\n');
  writeFileSync(lib,'@link("estatic_no_existe")\n@cpp_native("std::cbrt") export function cbrt(x:number):number;\n');
  r=spawnSync(compiler,[...driver,entry,'-o',cpp,'--binary',bin,'--build'],{encoding:'utf8',env:{...process.env,ESTC_ROOT:root}});assert.notEqual(r.status,0);assert.match(r.stdout+r.stderr,/estatic_no_existe/);
+});
+// #215 tandas 2 y 3: sección "native" de una librería. Solo etsc (stage 2) lee
+// las dependencias del estatic.config.json; el driver C++ heredado no.
+test('librería con código nativo: sources a .a cacheado, includeDirs, linkLibraries y build (#215)',{skip:!process.env.ESTATIC_NATIVE_COMPILER},()=>{
+ const project=mkdtempSync(join(directory,'native-dep-'));const lib=join(project,'lib');
+ for(const dir of ['native/include','app'])mkdirSync(join(lib,dir),{recursive:true});
+ writeFileSync(join(lib,'native/include/cubo.h'),'#pragma once\n#ifdef __cplusplus\nextern "C" {\n#endif\ndouble cubo(double x);\ndouble extra(double x);\n#ifdef __cplusplus\n}\n#endif\n');
+ writeFileSync(join(lib,'native/cubo.c'),'#include <math.h>\n#include "cubo.h"\ndouble cubo(double x){return pow(x,3.0);}\n');
+ writeFileSync(join(lib,'native/extra.c'),'#include "cubo.h"\ndouble extra(double x){return x+1;}\n');
+ writeFileSync(join(lib,'estatic.config.json'),JSON.stringify({name:'cubo',native:{sources:['native/*.c'],includeDirs:['native/include'],cflags:['-O2'],linkLibraries:['m'],build:{command:'cc -Inative/include -c native/extra.c -o extra.o && ar rcs libextra.a extra.o',outputs:['libextra.a']}}}));
+ // extra.c también entra en el .a por el patrón; el build aparte prueba "build".
+ writeFileSync(join(lib,'index.ts'),'@include("cubo.h")\n@cpp_native("cubo") export function cubo(x:number):number;\n');
+ writeFileSync(join(project,'main.ts'),'import {cubo} from "cubo/index";\nprint(cubo(2));\n');
+ writeFileSync(join(project,'estatic.config.json'),JSON.stringify({entry:'main.ts',aliases:{cubo:'lib'},dependencies:{cubo:{url:'file:///no/existe',version:'1.0.0'}},output:{cpp:'build/app.cpp',binary:'build/app'}}));
+ const config=join(project,'estatic.config.json');
+ let r=spawnSync(compiler,['run','--config',config],{cwd:project,encoding:'utf8',env:{...process.env,ESTC_ROOT:root}});assert.equal(r.status,0,r.stdout+r.stderr);assert.equal(r.stdout.trim().split('\n').pop(),'8');
+ const archives=()=>readdirSync(join(lib,'.estatic-build'),{recursive:true}).map(String).filter(f=>f.endsWith('libcubo.a'));
+ assert.equal(archives().length,1);assert(existsSync(join(lib,'libextra.a')));const before=statSync(join(lib,'.estatic-build',archives()[0])).mtimeMs;
+ writeFileSync(join(project,'main.ts'),'import {cubo} from "cubo/index";\nprint(cubo(3));\n');
+ r=spawnSync(compiler,['run','--config',config],{cwd:project,encoding:'utf8',env:{...process.env,ESTC_ROOT:root}});assert.equal(r.status,0,r.stdout+r.stderr);assert.equal(r.stdout.trim().split('\n').pop(),'27');
+ assert.equal(archives().length,1);assert.equal(statSync(join(lib,'.estatic-build',archives()[0])).mtimeMs,before,'el .a se reutiliza');
+ // Una fuente que no compila da un error claro.
+ writeFileSync(join(lib,'native/cubo.c'),'esto no es C\n');
+ r=spawnSync(compiler,['run','--config',config],{cwd:project,encoding:'utf8',env:{...process.env,ESTC_ROOT:root}});assert.notEqual(r.status,0);assert.match(r.stdout+r.stderr,/No se pudo compilar .*cubo\.c/);
 });

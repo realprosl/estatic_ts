@@ -10,6 +10,7 @@ import {parseConfig,configStrings} from "./config";
 import {updateCommand} from "./update";
 import {initializeLibrary} from "./library";
 import {installCommand,dependencyAliases,dependencyLinkFlags,dependencyRoots,syncTsconfig} from "./packages";
+import {nativeDependencies} from "./native";
 import { syntaxIdentity, readSnapshot, publishRecord, canonicalFile, processors, environment, exists, readText, stdinText, writeText, hostError, launch, poll, pause, files, compilerHome, objectKeys, directories, remove, rename, now, executable, contentHash, fileMetadata, configureProgress, progressInteractive, progressStart, progressDetail, progressTick, progressFinish, progressSummary } from "../platform/index";
 import {renderDiagnostic,renderSummary,setDiagnosticCatalog,explainCode} from "./diagnostics";
 function driverError(message:string,status:number=1):void{progressFinish(false);printError(message);exitProcess(status);}
@@ -97,8 +98,9 @@ function fingerprintCurrent(path:string,key:string):boolean{
 // necesita cada fuente del runtime. Así un objeto del runtime no depende de qué
 // otras APIs use el programa y se comparte entre proyectos.
 class CppPlan{flags:string[];programFlags:string[];sources:string[];sourceFlags:string[][];libraries:string[];pchHeader:string;programUnits:number;constructor(){this.flags=[];this.programFlags=[];this.sources=[];this.sourceFlags=[];this.libraries=[];this.pchHeader="";this.programUnits=1;}}
-function cppPlan(result:constRef<IrCppResult>,root:string,cxx:string,flags:string[]):CppPlan{
- let plan=new CppPlan();const base:string[]=[cxx,"-std=c++20","-O0","-pthread","-fno-exceptions","-I"+root];for(const flag of base)plan.flags.push(flag);for(const flag of flags)plan.flags.push(flag);
+// archives (#215): los .a de las librerías, justo después de los objetos del programa.
+function cppPlan(result:constRef<IrCppResult>,root:string,cxx:string,flags:string[],archives:string[]):CppPlan{
+ let plan=new CppPlan();for(const archive of archives)plan.libraries.push(archive);const base:string[]=[cxx,"-std=c++20","-O0","-pthread","-fno-exceptions","-I"+root];for(const flag of base)plan.flags.push(flag);for(const flag of flags)plan.flags.push(flag);
  if(result.runtimeBackends.libuv){const uv=root+"/build/libs/libuv";const none:string[]=[];if(exists(uv+"/include/uv.h"))plan.flags.push("-I"+uv+"/include");plan.sources.push(root+"/runtime/runtime_ets_libuv.cpp");plan.sourceFlags.push(none);plan.sources.push(root+"/runtime/runtime_ets_net_libuv.cpp");plan.sourceFlags.push(none);plan.libraries.push(exists(uv+"/lib/libuv.a")?uv+"/lib/libuv.a":"-luv");plan.libraries.push("-ldl");plan.libraries.push("-lrt");}
  if(result.headers.includes("runtime/ets_http_httplib.hpp")){plan.programFlags.push("-DCPPHTTPLIB_NO_EXCEPTIONS");plan.sources.push(root+"/runtime/external/httplib/httplib.cc");plan.sourceFlags.push(["-DCPPHTTPLIB_NO_EXCEPTIONS"]);}
  if(result.headers.includes("runtime/ets_regex.hpp")){plan.sources.push(root+"/runtime/ets_regex_compile.cpp");plan.sourceFlags.push(["-fexceptions"]);plan.programFlags.push("-fexceptions");}
@@ -193,8 +195,8 @@ function includedHeaders(flags:string[]):string{
   if(header!="")text=text+header+"\n"+(exists(header)?contentHash(readText(header)):"missing")+"\n";}
  return text;
 }
-function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:string,cxx:string,flags:string[],links:string[],cacheObjects:boolean,projectCache:string,unity:boolean=false):void{
- if(!directories(parent(binary)))driverError(hostError());progressStart("Preparando runtime");let plan=cppPlan(result,root,cxx,flags);
+function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:string,cxx:string,flags:string[],links:string[],cacheObjects:boolean,projectCache:string,unity:boolean,archives:string[]):void{
+ if(!directories(parent(binary)))driverError(hostError());progressStart("Preparando runtime");let plan=cppPlan(result,root,cxx,flags,archives);
  // Modo por módulo (#178): cabecera común + una unidad por módulo en <cpp>.units/;
  // cada unidad es un objeto con su propia clave. --unity compila solo `cpp`.
  let units:string[]=[cpp];let includeSource:string=cpp;
@@ -363,7 +365,7 @@ function main():void{
  if(fingerprintPath!=""&&exists(fingerprintPath))remove(fingerprintPath);
  options.verbose=verbose||progressInteractive();progressStart(fromIr==""?"Analizando fuentes y verificando IR":"Leyendo IR");const ir:IrProject=fromIr==""?sourceIr(entry,options,verbose,!check):parseIrProject(checkedRead(fromIr));if(emitIr!="")checkedWrite(emitIr,(formattedIr!=""?formattedIr:formatIr(ir))+"\n");if(check){progressSummary();return;}
  progressStart("Generando C++ desde IR verificado");const generated=generateCppWithLibraries(ir,libraryRoots);const outConfig=jsonObjectGet(config,"output");const compiler=jsonObjectGet(config,"compiler");if(output==""){const configured=jsonAsString(jsonObjectGet(outConfig,"cpp"));output=(configured!=""?pathAt(base,configured):"build/"+stem(fromIr==""?entry:fromIr)+".cpp");}progressStart("Guardando resultados");checkedWrite(output,generated.cpp);
- if(build||jsonAsBool(jsonObjectGet(compiler,"enabled"))){if(binary==""){const configured=jsonAsString(jsonObjectGet(outConfig,"binary"));binary=(configured!=""?pathAt(base,configured):output+".bin");}if(cxx=="")cxx=jsonAsString(jsonObjectGet(compiler,"command"));if(cxx=="")cxx=environment("CXX");if(cxx=="")cxx="g++";let compileFlags=configStrings(jsonObjectGet(compiler,"flags"));for(const flag of flags)compileFlags.push(flag);let linkFlags=configStrings(jsonObjectGet(compiler,"linkFlags"));for(const flag of links)linkFlags.push(flag);for(const library of configStrings(jsonObjectGet(config,"linkLibraries")))linkFlags.push("-l"+library);compileCpp(generated,output,binary,root,cxx,compileFlags,linkFlags,incrementalEnabled,options.cacheDirectory,unity);if(fingerprintPath!=""){let inputs:string[]=[];for(const file of analyzedFiles)inputs.push(file);if(configPath!="")inputs.push(configPath);for(let k:number=0;k+1<flags.length;k=k+1)if(flags[k]=="-include"&&exists(flags[k+1]))inputs.push(flags[k+1]);checkedWrite(fingerprintPath,fingerprintText(fingerprintKey,inputs,[output,binary]));}}
+ if(build||jsonAsBool(jsonObjectGet(compiler,"enabled"))){if(binary==""){const configured=jsonAsString(jsonObjectGet(outConfig,"binary"));binary=(configured!=""?pathAt(base,configured):output+".bin");}if(cxx=="")cxx=jsonAsString(jsonObjectGet(compiler,"command"));if(cxx=="")cxx=environment("CXX");if(cxx=="")cxx="g++";let compileFlags=configStrings(jsonObjectGet(compiler,"flags"));for(const flag of flags)compileFlags.push(flag);let linkFlags=configStrings(jsonObjectGet(compiler,"linkFlags"));for(const flag of links)linkFlags.push(flag);for(const library of configStrings(jsonObjectGet(config,"linkLibraries")))linkFlags.push("-l"+library);let archives:string[]=[];if(configPath!=""){progressStart("Preparando código nativo de las dependencias");const native=nativeDependencies(config,base,cxx);if(native.failed)driverError("No se pudo preparar el código nativo de las dependencias");for(const flag of native.includeFlags)compileFlags.push(flag);for(const flag of native.linkFlags)linkFlags.push(flag);for(const archive of native.archives)archives.push(archive);}compileCpp(generated,output,binary,root,cxx,compileFlags,linkFlags,incrementalEnabled,options.cacheDirectory,unity,archives);if(fingerprintPath!=""){let inputs:string[]=[];for(const file of analyzedFiles)inputs.push(file);if(configPath!="")inputs.push(configPath);for(let k:number=0;k+1<flags.length;k=k+1)if(flags[k]=="-include"&&exists(flags[k+1]))inputs.push(flags[k+1]);checkedWrite(fingerprintPath,fingerprintText(fingerprintKey,inputs,[output,binary]));}}
  progressSummary(output,(build||jsonAsBool(jsonObjectGet(compiler,"enabled")))?binary:"");if(run){let command:string[]=[normalizePath(binary)];for(const arg of programArgs)command.push(arg);exitProcess(execute(command));}
 }
 main();
