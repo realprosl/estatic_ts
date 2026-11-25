@@ -133,9 +133,9 @@ public:
     struct promise_type {
         std::optional<T> value;
         std::coroutine_handle<> continuation = std::noop_coroutine();
-        bool started = false;
         Task get_return_object() noexcept { return Task{handle_type::from_promise(*this)}; }
-        std::suspend_always initial_suspend() const noexcept { return {}; }
+        // #365: como en JS, el cuerpo empieza al llamar y corre hasta su primer await.
+        std::suspend_never initial_suspend() const noexcept { return {}; }
         FinalAwaiter final_suspend() const noexcept { return {}; }
         template <typename U> void return_value(U&& returned) noexcept { value.emplace(std::forward<U>(returned)); }
         [[noreturn]] void unhandled_exception() const noexcept { std::abort(); }
@@ -146,27 +146,22 @@ public:
     Task& operator=(const Task&) = delete;
     Task(Task&& other) noexcept : handle_(std::exchange(other.handle_, {})) {}
     // #318: una tarea que nadie espera no se cancela (en JS una promesa sin
-    // await sigue ejecutándose). Si aún no había empezado, empieza ahora; en
-    // cualquier caso el EventLoop se queda con el frame y lo termina antes de
-    // salir (drainDetached).
+    // await sigue ejecutándose): el EventLoop se queda con el frame y lo termina
+    // antes de salir (drainDetached).
     ~Task() {
         if (!handle_) return;
         if (handle_.done()) { handle_.destroy(); return; }
-        auto handle = std::exchange(handle_, {}); const bool fresh = !handle.promise().started;
-        handle.promise().started = true; defaultEventLoop.detach(handle);
-        if (fresh) handle.resume();
+        defaultEventLoop.detach(std::exchange(handle_, {}));
     }
     bool await_ready() const noexcept { return !handle_ || handle_.done(); }
-    // Una tarea ya empezada (suspendida en un await) no se reanuda aquí: solo se
-    // apunta quién la espera; la reanudará su propio evento.
+    // La tarea empezó al crearla (#365): esperar solo apunta quién la espera; la
+    // reanudará su propio evento y, al terminar, FinalAwaiter salta a la espera.
     std::coroutine_handle<> await_suspend(std::coroutine_handle<> continuation) const noexcept {
-        handle_.promise().continuation = continuation;
-        if (handle_.promise().started) return std::noop_coroutine();
-        handle_.promise().started = true; return handle_;
+        handle_.promise().continuation = continuation; return std::noop_coroutine();
     }
     T await_resume() const noexcept { return std::move(*handle_.promise().value); }
     bool done() const noexcept { return !handle_ || handle_.done(); }
-    void start() const { if (handle_ && !handle_.done() && !handle_.promise().started) { handle_.promise().started = true; handle_.resume(); } }
+    void start() const noexcept {} // ya empezó al crearla (#365)
     std::coroutine_handle<> release() noexcept { return std::exchange(handle_, {}); }
 private:
     handle_type handle_{};
@@ -177,9 +172,9 @@ class [[nodiscard]] Task<void> {
 public:
     struct promise_type {
         std::coroutine_handle<> continuation = std::noop_coroutine();
-        bool started = false;
         Task get_return_object() noexcept { return Task{handle_type::from_promise(*this)}; }
-        std::suspend_always initial_suspend() const noexcept { return {}; }
+        // #365: como en JS, el cuerpo empieza al llamar y corre hasta su primer await.
+        std::suspend_never initial_suspend() const noexcept { return {}; }
         FinalAwaiter final_suspend() const noexcept { return {}; }
         void return_void() const noexcept {}
         [[noreturn]] void unhandled_exception() const noexcept { std::abort(); }
@@ -190,27 +185,22 @@ public:
     Task& operator=(const Task&) = delete;
     Task(Task&& other) noexcept : handle_(std::exchange(other.handle_, {})) {}
     // #318: una tarea que nadie espera no se cancela (en JS una promesa sin
-    // await sigue ejecutándose). Si aún no había empezado, empieza ahora; en
-    // cualquier caso el EventLoop se queda con el frame y lo termina antes de
-    // salir (drainDetached).
+    // await sigue ejecutándose): el EventLoop se queda con el frame y lo termina
+    // antes de salir (drainDetached).
     ~Task() {
         if (!handle_) return;
         if (handle_.done()) { handle_.destroy(); return; }
-        auto handle = std::exchange(handle_, {}); const bool fresh = !handle.promise().started;
-        handle.promise().started = true; defaultEventLoop.detach(handle);
-        if (fresh) handle.resume();
+        defaultEventLoop.detach(std::exchange(handle_, {}));
     }
     bool await_ready() const noexcept { return !handle_ || handle_.done(); }
-    // Una tarea ya empezada (suspendida en un await) no se reanuda aquí: solo se
-    // apunta quién la espera; la reanudará su propio evento.
+    // La tarea empezó al crearla (#365): esperar solo apunta quién la espera; la
+    // reanudará su propio evento y, al terminar, FinalAwaiter salta a la espera.
     std::coroutine_handle<> await_suspend(std::coroutine_handle<> continuation) const noexcept {
-        handle_.promise().continuation = continuation;
-        if (handle_.promise().started) return std::noop_coroutine();
-        handle_.promise().started = true; return handle_;
+        handle_.promise().continuation = continuation; return std::noop_coroutine();
     }
     void await_resume() const noexcept {}
     bool done() const noexcept { return !handle_ || handle_.done(); }
-    void start() const { if (handle_ && !handle_.done() && !handle_.promise().started) { handle_.promise().started = true; handle_.resume(); } }
+    void start() const noexcept {} // ya empezó al crearla (#365)
     std::coroutine_handle<> release() noexcept { return std::exchange(handle_, {}); }
 private:
     handle_type handle_{};
@@ -227,10 +217,10 @@ inline void syncWait(Task<void>& task) { task.start(); while (!task.done()) defa
 inline void syncWait(const Task<void>& task) { task.start(); while (!task.done()) defaultEventLoop.runOne(); }
 
 inline void spawn(Task<void>&& task) {
+    // La tarea ya empezó al crearla (#365): solo se entrega al EventLoop.
     auto handle = task.release();
     if (!handle) return;
     defaultEventLoop.detach(handle);
-    handle.resume();
 }
 
 // `all(tasks...)`: espera a que todas las tareas terminen y devuelve un
