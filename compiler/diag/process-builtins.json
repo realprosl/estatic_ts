@@ -4,6 +4,8 @@
     ["!child_process.spawn", ["string", "string[]"], "ChildProcess"],
     ["ProcessReadable.on", ["string", "(string)=>void"], "ProcessReadable"],
     ["ProcessReadable.on", ["string", "()=>void"], "ProcessReadable"],
+    ["ProcessReadable.on", ["string", "(string)=>Promise<void>"], "ProcessReadable"],
+    ["ProcessReadable.on", ["string", "()=>Promise<void>"], "ProcessReadable"],
     ["ProcessWritable.write", ["string"], "boolean"],
     ["ProcessWritable.end", [], "void"],
     ["ChildProcess.on", ["string", "(number)=>void"], "ChildProcess"],
