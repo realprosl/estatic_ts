@@ -28,8 +28,16 @@ export class IrCppResult {
  // y una unidad por módulo fuente con los cuerpos de sus funciones; `cpp` sigue
  // siendo el programa entero en un único archivo (modo unity).
  header:string;units:IrCppUnit[];libraries:IrCppLibrary[];
+ // Argumentos de enlazado de los módulos del programa con @link (#215), en orden y sin repetir.
+ links:string[];
  constructor(cpp:string,headers:string[],backends:RuntimeBackends,capabilities:string[]){
- this.cpp=cpp;this.headers=headers;this.runtimeBackends=backends;this.capabilities=capabilities;this.header="";this.units=[];this.libraries=[];}
+ this.cpp=cpp;this.headers=headers;this.runtimeBackends=backends;this.capabilities=capabilities;this.header="";this.units=[];this.libraries=[];this.links=[];}
+}
+// "m" -> ["-lm"]; "-framework Cocoa" -> ["-framework","Cocoa"]. "" marca un nombre inválido.
+export function linkArguments(value:string):string[]{
+ if(value.startsWith("-")){let parts:string[]=[];for(const part of value.split(" "))if(part!="")parts.push(part);return parts.length==0?[""]:parts;}
+ if(value==""||value.includes(" ")||value.includes("/")||value.includes("\\"))return [""];
+ return ["-l"+value];
 }
 export class HeaderSet {
  // log: cada add(), repetido o no, para saber qué cabeceras usa cada tipo o función.
@@ -43,7 +51,7 @@ const ops:string[]=["constant","load","store","address","move","borrow","dropRem
 
 /** A pure consumer of verified ets-ir-2. It never consults or reconstructs ASTs. */
 export class IrCppGenerator {
-  headers:HeaderSet;
+  headers:HeaderSet;links:string[];
   backends:RuntimeBackends;
   processIo:boolean;
   project:IrProject;
@@ -56,7 +64,7 @@ export class IrCppGenerator {
   // Paso 3b: carpetas de librerías y, para separarlas, qué cabeceras usó cada
   // tipo emitido (layoutIds/layoutHeaders, paralelos a layoutOutput) y cada función.
   libraryRoots:string[];layoutIds:number[];layoutHeaders:string[][];functionHeaders:string[][];
-  constructor(project: IrProject) { this.project=project;this.headers=new HeaderSet();this.backends=new RuntimeBackends();this.processIo=false;this.consuming=[];this.cppGenerators=[];this.layoutDone=[];this.layoutActive=[];this.layoutOutput=[];this.functionNames=[];this.typeNames=[];this.globalNames=[];this.usedNames = new Map<string,number>(); this.stableIds = new Map<string,string>();this.libraryRoots=[];this.layoutIds=[];this.layoutHeaders=[];this.functionHeaders=[];this.assignNames(); }
+  constructor(project: IrProject) { this.project=project;this.headers=new HeaderSet();this.links=[];this.backends=new RuntimeBackends();this.processIo=false;this.consuming=[];this.cppGenerators=[];this.layoutDone=[];this.layoutActive=[];this.layoutOutput=[];this.functionNames=[];this.typeNames=[];this.globalNames=[];this.usedNames = new Map<string,number>(); this.stableIds = new Map<string,string>();this.libraryRoots=[];this.layoutIds=[];this.layoutHeaders=[];this.functionHeaders=[];this.assignNames(); }
   // Los tipos del IR nombran las clases por su sid ("#123"), que cambia en
   // cuanto se añade una declaración en cualquier módulo. Para que los nombres
   // C++ (y con ellos las unidades y la caché de objetos) no cambien por un
@@ -1251,7 +1259,10 @@ return `ets_concat_vec<${E}>({${_cppLoop38Result.join(",")}})`;}
  validateAnnotations():void {
   this.cppGenerators=[];
   for(const a of this.project.annotations){
-   if(["cpp_name","cpp_type","link","cpp_header","cpp_link","cpp_include"].includes(a.name))this.fail("ABI externo no implementado: @"+a.name,a.source);
+   if(["cpp_name","cpp_type","cpp_header","cpp_link","cpp_include"].includes(a.name))this.fail("ABI externo no implementado: @"+a.name,a.source);
+   // #215: @link("m") enlaza -lm; @link("-framework Cocoa") pasa el flag tal cual. Como @include,
+   // solo cuenta si el módulo entra en el programa (su anotación llega al IR).
+   if(a.name=="link"){if(a.arguments.length!=1)this.fail("@link requiere un único argumento",a.source);for(const arg of linkArguments(a.arguments[0])){if(arg=="")this.fail("@link: librería inválida",a.source);if(!this.links.includes(arg))this.links.push(arg);}}
    if(a.name=="include"){if(a.arguments.length!=1||!validHeader(a.arguments[0]))this.fail("@include: ruta inválida",a.source);this.headers.add(a.arguments[0]);}
    if(a.name!="cppgen")continue;
    if(a.arguments.length!=0)this.fail("@cppgen: anotación no admite argumentos",a.source);
@@ -1345,7 +1356,7 @@ if(i.op!="load"||i.result!=b.value||i.result<0||i.result>=f.values.length||f.val
     this.validateAnnotations();
     this.validateBoundary();
     for(const f of this.project.functions)for(const b of f.blocks)for(const i of b.instructions)if((i.op=="call"||i.op=="closure")&&this.cppGenerators.includes(i.callee))this.fail("@cppgen requiere llamada directa como sentencia",i.source);
-    for(const annotation of this.project.annotations)if(["cpp_name","cpp_type","link","cpp_header","cpp_link"].includes(annotation.name))this.fail(`ABI externo no implementado: @${annotation.name}`,annotation.source);
+    for(const annotation of this.project.annotations)if(["cpp_name","cpp_type","cpp_header","cpp_link"].includes(annotation.name))this.fail(`ABI externo no implementado: @${annotation.name}`,annotation.source);
     if(!this.project.success||this.project.diagnostics.length!=0)this.fail("Se requiere ets-ir-2 verificado con success:true");
     if(this.project.types.length!=this.project.typeDefinitions.length)this.fail("Tablas de tipos incompletas");
     for(const f of this.project.functions){
@@ -1465,7 +1476,7 @@ _cppLoop50Result.push(c.capability);continue;
 let capabilities:string[]=uniqueStrings(_cppLoop50Result);capabilities.sort();
     const lead:string[]=["// Generated from verified ets-ir-2. No source AST is used.","#include <array>\n#include <tuple>\n#include <functional>\n#include <iterator>\n#include <variant>"];
     const translationUnit:string[]=[...lead,...includes,...forwards,...printerPrototypes,declarations,...printers,...globals,...prototypes,...bodies,main,""];
-    let result=new IrCppResult(translationUnit.join("\n"),this.headers.values.sort(),this.backends,capabilities);
+    let result=new IrCppResult(translationUnit.join("\n"),this.headers.values.sort(),this.backends,capabilities);result.links=this.links;
     // Modo por módulo (#178): la cabecera común solo cambia si cambian tipos,
     // firmas o globales; un cambio de cuerpo solo cambia la unidad de su módulo.
     let externs:string[]=[];for(const g of globals)externs.push("extern "+g);

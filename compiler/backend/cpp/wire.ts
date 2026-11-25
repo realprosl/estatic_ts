@@ -7,5 +7,5 @@ function strings(values:string[]):string{
 function booleanText(value:boolean):string{return value?"true":"false";}
 export function formatCppResult(result:constRef<IrCppResult>):string{
  const flags=result.runtimeBackends;
- return '{"cpp":'+quote(result.cpp)+',"headers":'+strings(result.headers)+',"capabilities":'+strings(result.capabilities)+',"runtimeBackends":{"libuv":'+booleanText(flags.libuv)+',"curl":'+booleanText(flags.curl)+',"tls":'+booleanText(flags.tls)+',"ioUring":'+booleanText(flags.ioUring)+'}}';
+ return '{"cpp":'+quote(result.cpp)+',"headers":'+strings(result.headers)+',"capabilities":'+strings(result.capabilities)+',"runtimeBackends":{"libuv":'+booleanText(flags.libuv)+',"curl":'+booleanText(flags.curl)+',"tls":'+booleanText(flags.tls)+',"ioUring":'+booleanText(flags.ioUring)+'},"links":'+strings(result.links)+'}';
 }

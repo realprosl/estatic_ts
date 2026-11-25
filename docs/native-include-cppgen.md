@@ -60,3 +60,11 @@ controlados. `bootstrap-native-selfhost.yml` reconstruye frontend y backend
 exclusivamente desde el paquete C++ (frontend con `-O1` para que el análisis
 del compilador sea viable), compila los siete demos con esos binarios
 y ejecuta además las pruebas de contratos usando el frontend reconstruido.
+
+## `@link` (#215)
+
+En la cabecera de un módulo, `@link("sqlite3")` añade `-lsqlite3` al enlazado y
+`@link("-framework Cocoa")` pasa el flag tal cual (separado por espacios). Igual
+que `@include`, solo cuenta si el módulo entra en el programa. Los argumentos se
+enlazan en orden y sin repetir, después de las librerías del runtime. Un nombre
+vacío, con espacios o con `/` se rechaza.

@@ -78,3 +78,20 @@ test('native bootstrap mutates out and ref collection receivers',()=>{
 test('native bootstrap supports string padding contracts',()=>{
  assert.equal(execute('print("x".padStart(3,"0"));print("x".padEnd(4,"ab"));'),'00x\nxaba\n');
 });
+test('native @link: argumentos de enlazado solo de los módulos del programa (#215)',()=>{
+ const lib=join(directory,'cbrt.ets');writeFileSync(lib,'@link("m")\n@link("-framework Cocoa")\n@link("m")\n@cpp_native("std::cbrt") export function cbrt(x:number):number;\n');
+ assert.deepEqual(generated(ir('import {cbrt} from "./cbrt";print(cbrt(27));')).links,['-lm','-framework','Cocoa']);
+ assert.deepEqual(generated(ir('print(1);')).links,[]);
+ const p=ir('@link("m")\nprint(1);');
+ for(const value of ['','a b','../m','a/b']){const q=structuredClone(p);q.annotations!.find(a=>a.name==='link')!.arguments=[value];rejected(q,/@link/);}
+});
+test('native @link enlaza la librería al construir con etsc (#215)',()=>{
+ // El driver C++ heredado necesita el frontend; etsc (stage 2) lo lleva dentro.
+ const driver=process.env.ESTATIC_NATIVE_COMPILER?[]:['--frontend',frontend];
+ const lib=join(directory,'cbrt.ets');writeFileSync(lib,'@link("m")\n@cpp_native("std::cbrt") export function cbrt(x:number):number;\n');
+ const entry=join(directory,'main.ets');const cpp=join(directory,'linked.cpp'),bin=join(directory,'linked');
+ writeFileSync(entry,'import {cbrt} from "./cbrt";print(cbrt(8));');
+ let r=spawnSync(compiler,[...driver,entry,'-o',cpp,'--binary',bin,'--run'],{encoding:'utf8',env:{...process.env,ESTC_ROOT:root}});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout,'2\n');
+ writeFileSync(lib,'@link("estatic_no_existe")\n@cpp_native("std::cbrt") export function cbrt(x:number):number;\n');
+ r=spawnSync(compiler,[...driver,entry,'-o',cpp,'--binary',bin,'--build'],{encoding:'utf8',env:{...process.env,ESTC_ROOT:root}});assert.notEqual(r.status,0);assert.match(r.stdout+r.stderr,/estatic_no_existe/);
+});

@@ -104,6 +104,7 @@ function cppPlan(result:constRef<IrCppResult>,root:string,cxx:string,flags:strin
  if(result.headers.includes("runtime/ets_regex.hpp")){plan.sources.push(root+"/runtime/ets_regex_compile.cpp");plan.sourceFlags.push(["-fexceptions"]);plan.programFlags.push("-fexceptions");}
  if(result.headers.includes("runtime/ets_http_drogon.hpp")){plan.programFlags.push("-fexceptions");plan.flags.push("-I/usr/include/jsoncpp");const drogon=root+"/build/libs/drogon";if(exists(drogon+"/include/drogon/drogon.h"))plan.flags.push("-I"+drogon+"/include");if(exists(drogon+"/lib/libdrogon.a"))plan.libraries.push("-L"+drogon+"/lib");const dependencies:string[]=["-ldrogon","-ltrantor","-ljsoncpp","-luuid","-lz","-lssl","-lcrypto","-lresolv","-ldl"];for(const dependency of dependencies)plan.libraries.push(dependency);}
  if(result.runtimeBackends.tls){plan.libraries.push("-lssl");plan.libraries.push("-lcrypto");}if(result.runtimeBackends.curl)plan.libraries.push("-lcurl");
+ for(const link of result.links)if(!plan.libraries.includes(link))plan.libraries.push(link);
  return plan;
 }
 // Directorio de la caché de objetos del runtime: ESTC_OBJECT_CACHE, o
