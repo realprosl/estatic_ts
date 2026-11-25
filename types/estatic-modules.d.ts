@@ -359,12 +359,15 @@ declare module "estatic:net" {
   constructor(connection: TcpConnection);
   read(maxBytes?: number): Promise<Result<string, Error>>;
   write(data: string): Promise<Result<number, Error>>;
+  readUntil(maxBytes: number, timeout: number, token: CancellationToken): Promise<Result<string, Error>>;
+  writeUntil(data: string, timeout: number, token: CancellationToken): Promise<Result<number, Error>>;
   end(): void;
   }
   export class Server {
   listener: TcpListener;
   constructor(listener: TcpListener);
   accept(): Promise<Result<Socket, Error>>;
+  acceptUntil(timeout: number, token: CancellationToken): Promise<Result<Socket, Error>>;
   close(): void;
   }
   export function listen(port: number, host?: string): Result<Server, Error>;

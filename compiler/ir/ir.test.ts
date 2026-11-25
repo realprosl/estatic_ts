@@ -324,8 +324,8 @@ test("native IR records narrow integer promotions explicitly",()=>{
 });
 
 test("native IR preserves opaque runtime requirements explicitly",()=>{
-  const ir=run('const result=readFile("input.txt");print(result);');
-  const contract=ir.runtimeContracts.find((c:any)=>c.name==="builtin.readFile");assert.ok(contract);assert.ok(contract.effects.includes("opaque"));assert.equal(contract.capability,"runtime:builtin.readFile");
+  const ir=run('const root=compilerRoot();print(root);');
+  const contract=ir.runtimeContracts.find((c:any)=>c.name==="builtin.compilerRoot");assert.ok(contract);assert.ok(contract.effects.includes("opaque"));assert.equal(contract.capability,"runtime:builtin.compilerRoot");
 });
 test("native IR declares Node-style process streams and child-process contracts",()=>{
  // #310: spawn y process.stdin vienen de estatic:child_process y estatic:process

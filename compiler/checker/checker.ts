@@ -1006,7 +1006,6 @@ export class NativeChecker {
     if (name == "length") return "!length";
     if (["Math","JSON","Date","String","Array","Object","Promise"].includes(name)) return "!" + name;
     if (name == "console") return "Console";
-    if (["fs"].includes(name)) return "!"+name;
     if (nativeBuiltinSignatures(name).length > 0) return "!builtin:"+name;
     if (name == "charAt" || name == "lineAt") return "(string,number)=>string";
     if (name == "substring") return "(string,number,number)=>string";
@@ -1014,10 +1013,6 @@ export class NativeChecker {
     if (name == "startsWith") return "(string,string)=>boolean";
     if (name == "trim" || name == "jsonEscape") return "(string)=>string";
     if (name == "lineCount") return "(string)=>number";
-    if (name == "readFile") return "(string)=>Result<string,string>";
-    if (["writeFile","appendFile","copyFile","moveFile"].includes(name)) return "(string,string)=>Result<boolean,string>";
-    if (name == "removeFile") return "(string)=>Result<boolean,string>";
-    if (name == "fileExists") return "(string)=>boolean";
 
     if (name == "jsonAsNumber" || name == "jsonArrayLength") return "(JsonValue)=>number";
     if (["optionalSome","optionalNone","optionalIsPresent","optionalValueOr","optionalOrElse","resultOk","resultErr","resultIsOk","resultValueOr","ok","err"].includes(name)) return "!container:" + name;

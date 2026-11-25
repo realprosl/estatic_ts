@@ -1,6 +1,6 @@
 import {IrProject,IrType,IrFunction,IrInstruction,IrSource,IrDispatch,IrAnnotation,IrPlace,IrBlock,IrRuntimeContract} from "../../ir/model";
 import { exitProcess } from "estatic:process/args";
-import {cppType,fileCallee,regexCallee,netCallee,asyncCallee,networkCallee,globalCalls,asyncCalls,stringMethods,terminalMethods,objectMethod,backend_libuv,backend_curl,backend_tls,backend_ioUring} from "./tables";
+import {cppType,regexCallee,asyncCallee,globalCalls,asyncCalls,stringMethods,terminalMethods,objectMethod} from "./tables";
 import {contentHash} from "../../platform/index";
 import {quoteCpp,integerIndex,uniqueStrings,parseNumber,numericBase,validNumber,validCppSymbol,validHeader,binaryHelper,arrayIndex,inspectString} from "./support";
 export class RuntimeBackends {
@@ -1035,18 +1035,8 @@ _cppLoop66Result.push(this.runtimeArgument(f,i,k));continue;
 let  T=this.cppTypeId(i.typeId);
   if(c.name.startsWith("builtin.")) {
     const name=c.name.slice(8,c.name.length);
-    const tls=backend_tls(name);
-    if(backend_libuv(name))this.backends.libuv=true;
-    if(backend_curl(name))this.backends.curl=true;
-    if(tls)this.backends.tls=true;
-    if(backend_ioUring(name))this.backends.ioUring=true;
-    if(fileCallee(name)!=""||netCallee(name)!=""||networkCallee(name)!="") {
-      this.headers.add("runtime/ets_runtime_full.hpp");this.backends.libuv=true;
-      if(tls)this.headers.add("runtime/ets_tls.hpp");
-      return `${(fileCallee(name)!=""?fileCallee(name):netCallee(name)!=""?netCallee(name):networkCallee(name))}(${this.runtimeArguments(f,i)})`;
-    }
     if(regexCallee(name)!=""){this.headers.add("runtime/ets_regex.hpp");return `${regexCallee(name)}(${this.runtimeArguments(f,i)})`;}
-    if(asyncCallee(name)!=""){this.headers.add(name=="resolveDns"?"runtime/ets_dns.hpp":"runtime/ets_async.hpp");this.backends.libuv=true;return `${asyncCallee(name)}(${this.runtimeArguments(f,i)})`;}
+    if(asyncCallee(name)!=""){this.headers.add("runtime/ets_async.hpp");this.backends.libuv=true;return `${asyncCallee(name)}(${this.runtimeArguments(f,i)})`;}
     if(["setTimeout","setInterval","cancelTimer"].includes(name)){this.headers.add("runtime/ets_timer.hpp");this.backends.libuv=true;return `ets::${name}(${this.runtimeArguments(f,i)})`;}
     if(["optionalMap","optionalAndThen"].includes(name))return `${name}(${this.operand(f,i,0)},${this.callback(f,i,1)})`;
 
@@ -1064,7 +1054,6 @@ let  T=this.cppTypeId(i.typeId);
     if(name=="optionalOrElse")return `(${this.operand(f,i,0)}).orElse(${this.operand(f,i,1)})`;
     if(name=="resultIsOk")return `(${this.operand(f,i,0)}).isOk()`;
     if(globalCalls(name)) {
-      if(name.includes("File")||name=="fileExists"){this.headers.add("runtime/ets_file.hpp");this.backends.libuv=true;}
       return `${name}(${this.runtimeArguments(f,i)})`;
     }
     if(asyncCalls(name)) {
@@ -1158,7 +1147,7 @@ return `(${this.deref(this.operand(f,i,0,false),f.values[i.operands[0]])}).${met
     return i.operands.length>1?`ets_array_from<${R}>(${this.operand(f,i,0)},${this.callback(f,i,1)})`:`ets_array_from<${R}>(${this.operand(f,i,0)})`;
   }
   if(objectMethod(base,method)) {
-    if(["!fs","!path","!process"].includes(base)){this.headers.add("runtime/ets_runtime_full.hpp");this.backends.libuv=true;}
+    if(["!path","!process"].includes(base)){this.headers.add("runtime/ets_runtime_full.hpp");this.backends.libuv=true;}
     const object=base=="Console"?"console":base.slice(1,base.length);
     {
 let _cppLoop43Result:string[]=[];

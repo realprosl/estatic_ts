@@ -581,10 +581,10 @@ export class EffectAnalyzer {
       const kind: NodeKind = this.kindOf(m,id);
       const helper: string = this.helper(m,id);
       if (nativeBuiltinSignatures(helper).length > 0 && !["numberToString","charAt","substring","indexOf","startsWith","trim","lineCount","lineAt","length"].includes(helper)) this.summaries[owner].external = true;
-      if (["print","printError","write","writeError","readFile","writeFile","appendFile","copyFile","moveFile","removeFile","fileExists","spawn"].includes(helper)) this.summaries[owner].external = true;
+      if (["print","printError","write","writeError","spawn"].includes(helper)) this.summaries[owner].external = true;
       if (kind == NodeKind.MemberCallExpression) {
         const receiver: string = this.receiver(m,id);
-        if (["!fs","!http","!process","Server","Response","Request","FileReader","Timer","FsWatcher","FsEvent","HttpClientResponse"].includes(receiver)) this.summaries[owner].external = true;
+        if (["!http","!process","Server","Response","Request","FileReader","Timer","FsWatcher","FsEvent","HttpClientResponse"].includes(receiver)) this.summaries[owner].external = true;
         if (receiver == "Console" || receiver == "!Date" || (receiver == "!Math" && this.attributeOf(m,id,AttributeKind.Method) == "random")) this.summaries[owner].external = true;
       }
       if (kind == NodeKind.NewExpression) for (const sid of newClasses(classes,canonicalSymbol(this.checked.files[m].types[id]))) for (const e of this.node(this.binding.symbols[sid].module,this.binding.symbols[sid].node).edges) if (e.role == EdgeRole.Fields) {

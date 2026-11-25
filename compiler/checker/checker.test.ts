@@ -755,7 +755,7 @@ for(const [name,source] of Object.entries({
  math:'print(Math.sqrt(4));print(Math.max(1,2));print(Math.PI);',
  json:'import JSON, { jsonIsObject } from "estatic:json"; const r=JSON.parse<JsonValue>("{}");if(r.isOk())print(jsonIsObject(r.value()));',
  console:'console.log("x",1,true);console.warn("warning");',
- files:'const r:Result<string> = readFile("input.txt");',
+ files:'import fs from "estatic:fs"; const r=fs.readFileSync("input.txt");',
  date:'const n=Date.now();print(n);',
  processStdio:'import process from "estatic:process"; process.stdout.write("out");process.stderr.write("err");process.stdin.on("data",(chunk:string):void=>print(chunk));process.stdin.on("end",():void=>{});',
      childProcess:'import child_process from "estatic:child_process"; const args:string[]=["hello"];const child=child_process.spawn("/bin/cat",args);child.stdout.on("data",(chunk:string):void=>write(chunk));child.stderr.on("data",(chunk:string):void=>writeError(chunk));child.stdin.write("payload");child.stdin.end();child.on("close",(code:number):void=>print(code));',
@@ -767,7 +767,7 @@ for(const [name,source] of Object.entries({
  wrongMathArity:'print(Math.min(1));',
  unknownMath:'Math.notAMethod();',
  wrongJson:'const j=JSON.parseValue(1);',
- wrongFile:'const r=readFile(1);',
+ wrongFile:'import fs from "estatic:fs"; const r=fs.readFileSync(1);',
  voidPrint:'function f():void{}print(f());',
   wrongChildProcess:'import child_process from "estatic:child_process"; child_process.spawn(1,[]);',
   wrongProcessStreamCallback:'import process from "estatic:process"; process.stdin.on("data",(chunk:number):void=>{});',
@@ -1169,7 +1169,7 @@ for(const [name,source] of Object.entries({
  localFrame:'async function use(cb:()=>number):Promise<number>{await sleep(1);return cb();}async function outer():Promise<number>{let n=0;const t=use(():number=>{n+=1;return n;});return await t;}',
  detached:'async function f():Promise<void>{await sleep(1);print(1);}spawn(f());',
  detachedBuiltinMethod:'import http from "estatic:http"; async function d():Promise<void>{const r=await http.get("x");}spawn(d());',
- detachedFs:'async function d():Promise<void>{const r=await fs.readFile("x");}spawn(d());',
+ detachedFs:'import fs from "estatic:fs"; async function d():Promise<void>{const r=await fs.readFile("x");}spawn(d());',
  notStarted:'class B{}async function f():Promise<void>{const q=move(p);}const t=f();let p:ptr<B> = new B();await t;',
  defaultAtCreation:'class B{}let p:ptr<B> = new B();async function f(x:ptr<B> = move(p)):Promise<void>{}const t=f();p=new B();const q=move(p);await t;',
 }))test(`native async accepts ${name}`,()=>check(source));
@@ -1815,11 +1815,11 @@ test('frontend closure opaque backend contract publishes unknown external effect
 });
 
 for(const [name,source] of Object.entries({
- asyncFiles:'async function f():Promise<void>{const a:Result<string> =await readFileAsync("x");const b:Result<boolean> =await writeFileAsync("x","y");}',
+ asyncFiles:'import fs from "estatic:fs"; async function f():Promise<void>{const a=await fs.readFile("x");const b=await fs.writeFile("x","y");}',
  cancellation:'const source=createCancellation();const token=cancellationToken(source);cancel(source);const done:boolean=isCancelled(token);',
- network:'async function f():Promise<void>{const listener:Result<TcpListener> =listenTcp("localhost",80);const r:Result<TcpConnection> =await acceptTcp(listener.value());}',
- fs:'import process from "estatic:process"; import path from "estatic:path"; const r:Result<string> =fs.readFileSync("x");const n:string=path.basename("x");const args:string[]=process.argv;',
- legacyOut:'let text="";let error="";const ok:boolean=readFile("x",text,error);const written:boolean=writeFile("x",text,error);',
+ network:'import net from "estatic:net"; async function f():Promise<void>{const server=net.listen(80,"localhost");if(server.isOk()){const r=await server.value().accept();}}',
+ fs:'import process from "estatic:process"; import path from "estatic:path"; import fs from "estatic:fs"; const r=fs.readFileSync("x");const n:string=path.basename("x");const args:string[]=process.argv;',
+ legacyOut:'let error="";const ok:boolean=compileCpp("a.cpp","a","g++","","",error);',
  timer:'const callback=():void=>{};const timer:Timer=setTimeout(callback,1);cancelTimer(timer);const alive:boolean=timer.valid();',
  http:'import http from "estatic:http"; const app=http.express();app.get("/",(req:Request,res:Response):void=>{res.status(200).send(req.path());});app.listen(8080);',
  terminal:'const a:boolean=console.writeLine("x");const columns:number=console.columns();console.moveTo(1,2);',
@@ -1827,13 +1827,13 @@ for(const [name,source] of Object.entries({
 }))test(`frontend closure runtime catalog accepts ${name}`,()=>check(source));
 for(const [name,source,pattern] of [
  ['arity','createCancellation(1);',/builtin compatible/],
- ['argument','listenTcp("x","y");',/builtin compatible/],
- ['outConst','const text="";let error="";readFile("x",text,error);',/inmutable|constante/],
- ['outAlias','let text="";readFile("x",text,text);',/E4206/],
+ ['argument','cancel(1);',/builtin compatible/],
+ ['outConst','const error="";compileCpp("a.cpp","a","g++","","",error);',/inmutable|constante/],
+ ['outAlias','let text="";syntaxTreeJson("x",text,text);',/E4206/],
  ['callback','setTimeout((n:number):void=>{},1);',/builtin compatible/],
  ['timerCapture','function f():void{let n=0;setTimeout(():void=>{n+=1;},1);}',/E4210/],
  ['routeCapture','import http from "estatic:http"; function f():void{let n=0;const app=http.express();app.get("/",(req:Request,res:Response):void=>{n+=1;});}',/E4210/],
- ['comptimeIO','const n=comptime(():boolean=>fileExists("x"));',/COMPTIME_FORBIDDEN_EFFECT/],
+ ['comptimeIO','const n=comptime(():string=>compilerRoot());',/COMPTIME_FORBIDDEN_EFFECT/],
 ] as const)test(`frontend closure runtime catalog rejects ${name}`,()=>error(source,pattern));
 test('frontend closure runtime catalog is synchronized with stage zero',()=>{const p=spawnSync(process.execPath,['--experimental-strip-types','scripts/generate-native-builtins.ts','--check'],{cwd:root,encoding:'utf8'});assert.equal(p.status,0,p.stderr+p.stdout);});
 for(const [name,source] of Object.entries({
@@ -1919,7 +1919,7 @@ for(const [name,body,expected] of [
 test('frontend closure statically disjoint instanceof operands remain well typed',()=>check('class A{x:number=1;}const a=new A();const left=1 instanceof A;const right=a instanceof number;'));
 test('frontend closure HTTP Request fields support readonly property syntax',()=>check('import http from "estatic:http"; const app=http.createServer();app.post("/",(req:Request,res:Response):void=>{const body:string=req.body;res.send(body);});'));
 test('frontend closure HTTP Request properties reject mutation',()=>error('function f(req:Request):void{req.body="changed";}',/E4300/));
-test('frontend closure known native IO task effects permit spawning a handler',()=>check('async function handle(c:TcpConnection):Promise<void>{const r:Result<string> =await readTcp(c,1024);if(r.isOk()){const written:Result<number> =await writeTcp(c,r.value());}closeTcp(c);}function start(c:TcpConnection):void{spawn(handle(c));}'));
+test('frontend closure known native IO task effects permit spawning a handler',()=>check('import { Socket } from "estatic:net"; async function handle(c:Socket):Promise<void>{const r=await c.read(1024);if(r.isOk()){const written=await c.write(r.value());}c.end();}function start(c:Socket):void{spawn(handle(c));}'));
 test('frontend closure external effects preserve borrows isolated in another frame',()=>check('@cpp_name("external") function external():number;class B{x:number=1;}function helper():number{return external();}function run():void{let b=new B();const r=constRef(b);print(helper());print(r.x);}run();'));
 test('frontend closure external effects reject access to a borrowed argument',()=>error('@cpp_name("external") function external(b:constRef<B>):number;class B{x:number=1;}function run():void{let b=new B();const r=ref(b);print(external(constRef(b)));print(r.x);}run();',/E4207|E4206|E4104/));
 test('frontend closure opaque lexical effects preserve borrows in a caller frame',()=>check('@cppgen function opaque():string{return "opaque";}class B{x:number=1;}function helper():void{opaque();}function run():void{let b=new B();const r=constRef(b);helper();print(r.x);}run();'));

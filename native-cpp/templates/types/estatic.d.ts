@@ -175,7 +175,7 @@ declare global {
   //   r.close()
   //
   // Si el archivo no existe, la funcion aborta con un mensaje de error.
-  // Para error handling explicito, hacer el check con fileExists() antes.
+  // Para error handling explicito, comprobar antes con existsSync() de "estatic:fs".
   function openFileReader(path: string): FileReader;
   class FileReader extends Sealed {
     private readonly _brand: symbol;
@@ -286,17 +286,9 @@ declare global {
   function trim(value: string): string;
   function lineCount(value: string): number;
   function lineAt(value: string, index: number): string;
-  /** Reporta un mensaje de error via out-param (estilo C). Usado por el runtime. */
-  function fail(message: string, error: string): boolean;
-  /** Limpia el buffer de error. */
-  function clearError(error: string): void;
-  /** true si hay un mensaje de error pendiente. */
-  function hasError(error: string): boolean;
   function compilerRoot(): string;
   function resolveImportPath(from: string, specifier: string): string;
   function resolveProjectPath(root: string, path: string): string;
-  /** Asegura que el directorio padre del path existe. Crea los directorios necesarios. */
-  function ensureParentDirectory(path: string, error: string): boolean;
   function compileCpp(source: string, output: string, compiler: string, flags: string, linkFlags: string, error: string): boolean;
   function validateSyntax(source: string, error: string): boolean;
   function syntaxTreeJson(source: string, output: string, error: string): boolean;
@@ -397,7 +389,6 @@ declare global {
   function watchFs(path: string, callback: (event: FsEvent) => void, recursive?: boolean): FsWatcher;
   function unwatchFs(watcher: FsWatcher): void;
   function stopLoop(): void;
-  function resolveDns(host: string): Promise<string>;
 
   // ─── Helpers de OptionalT ─────────────────────────────────────────
   function optionalSome<T>(value: T): Optional<T>;
@@ -413,27 +404,9 @@ declare global {
   function resultValueOr<T, E = string>(value: Result<T, E>, fallback: T): T;
 
   // ─── Helpers de filesystem (runtime/ets_file.hpp) ──────────────────
-  function fileRead(path: string): string;
-  function fileWrite(path: string, content: string): boolean;
-  function fileAppend(path: string, content: string): boolean;
-  function fileExists(path: string): boolean;
-  function fileCopy(src: string, dst: string): boolean;
-  function fileMove(src: string, dst: string): boolean;
-  function fileRemove(path: string): boolean;
 
   // API de filesystem actual. Las sobrecargas con parámetros de salida se
   // conservan para el dialecto; las formas Result son las recomendadas.
-  function readFile(path: string): Result<string>;
-  function readFile(path: string, contents: string, error: string): boolean;
-  function writeFile(path: string, contents: string): Result<boolean>;
-  function writeFile(path: string, contents: string, error: string): boolean;
-  function appendFile(path: string, contents: string): Result<boolean>;
-  function appendFile(path: string, contents: string, error: string): boolean;
-  function copyFile(source: string, destination: string): Result<boolean>;
-  function copyFile(source: string, destination: string, error: string): boolean;
-  function moveFile(source: string, destination: string): Result<boolean>;
-  function moveFile(source: string, destination: string, error: string): boolean;
-  function removeFile(path: string): Result<boolean>;
 
   // Streams compatibles con el subconjunto de Node implementado por el runtime.
   // Los chunks son UTF-8 `string` (no Buffer); las lecturas y callbacks se
@@ -453,22 +426,8 @@ declare global {
     on(event: string, listener: (code: number) => void): ChildProcess;
     on(event: string, listener: (message: string) => void): ChildProcess;
   }
-  function removeFile(path: string, error: string): boolean;
 
-  function readFileAsync(path: string): Promise<Result<string>>;
-  function writeFileAsync(path: string, contents: string): Promise<Result<boolean>>;
-  function appendFileAsync(path: string, contents: string): Promise<Result<boolean>>;
-  function fileExistsAsync(path: string): Promise<Result<boolean>>;
-  function copyFileAsync(source: string, destination: string): Promise<Result<boolean>>;
-  function moveFileAsync(source: string, destination: string): Promise<Result<boolean>>;
-  function removeFileAsync(path: string): Promise<Result<boolean>>;
 
-  function readFileUntil(path: string, timeoutMs: number, token: CancellationToken): Promise<Result<string>>;
-  function writeFileUntil(path: string, contents: string, timeoutMs: number, token: CancellationToken): Promise<Result<boolean>>;
-  function appendFileUntil(path: string, contents: string, timeoutMs: number, token: CancellationToken): Promise<Result<boolean>>;
-  function copyFileUntil(source: string, destination: string, timeoutMs: number, token: CancellationToken): Promise<Result<boolean>>;
-  function moveFileUntil(source: string, destination: string, timeoutMs: number, token: CancellationToken): Promise<Result<boolean>>;
-  function removeFileUntil(path: string, timeoutMs: number, token: CancellationToken): Promise<Result<boolean>>;
 
   function ioUringAvailable(): boolean;
   function ioUringRead(path: string): Result<string>;
@@ -477,32 +436,12 @@ declare global {
   function asyncIoUringWrite(path: string, contents: string): Promise<Result<boolean>>;
 
   // ─── Helpers de networking (runtime/ets_net_sync.hpp) ──────────────
-  function tcpListen(host: string, port: number): number;
-  function tcpAccept(listenerFd: number): number;
-  function tcpConnect(host: string, port: number): number;
-  function tcpRead(fd: number, maxBytes: number): string;
-  function tcpWrite(fd: number, data: string): boolean;
-  function tcpClose(fd: number): void;
 
   // API async de red, cancelación y TLS.
-  function listenTcp(host: string, port: number): Result<TcpListener>;
-  function acceptTcp(listener: TcpListener): Promise<Result<TcpConnection>>;
-  function readTcp(connection: TcpConnection, maxBytes: number): Promise<Result<string>>;
-  function writeTcp(connection: TcpConnection, data: string): Promise<Result<number>>;
-  function closeTcp(listener: TcpListener): void;
-  function closeTcp(connection: TcpConnection): void;
   function createCancellation(): CancellationSource;
   function cancellationToken(source: CancellationSource): CancellationToken;
   function cancel(source: CancellationSource): void;
   function isCancelled(token: CancellationToken): boolean;
-  function acceptTcpUntil(listener: TcpListener, timeoutMs: number, token: CancellationToken): Promise<Result<TcpConnection>>;
-  function readTcpUntil(connection: TcpConnection, maxBytes: number, timeoutMs: number, token: CancellationToken): Promise<Result<string>>;
-  function writeTcpUntil(connection: TcpConnection, data: string, timeoutMs: number, token: CancellationToken): Promise<Result<number>>;
-  function createTlsServer(certificate: string, privateKey: string): Result<TlsContext>;
-  function acceptTls(listener: TcpListener, context: TlsContext, timeoutMs: number, token: CancellationToken): Promise<Result<TlsConnection>>;
-  function readTls(connection: TlsConnection, maxBytes: number, timeoutMs: number, token: CancellationToken): Promise<Result<string>>;
-  function writeTls(connection: TlsConnection, data: string, timeoutMs: number, token: CancellationToken): Promise<Result<number>>;
-  function closeTls(connection: TlsConnection): void;
   function ok<T>(value: T): Result<T>;
   function err<T>(message: string): Result<T>;
 
@@ -691,17 +630,6 @@ declare global {
     function now(): number;
     /** ms UTC desde epoch para (year, month, day). month es 0-based. */
     function utc(year: number, month: number, day: number): number;
-  }
-  namespace fs {
-    // Versiones *Sync (devuelven Result<...> o boolean). Cobertura mínima:
-    // las versiones async (que devuelven Promise<...>) se omiten por scope.
-    function readFileSync(path: string): Result<string>;
-    function writeFileSync(path: string, data: string): Result<boolean>;
-    function appendFileSync(path: string, data: string): Result<boolean>;
-    function copyFileSync(src: string, dst: string): Result<boolean>;
-    function renameSync(oldPath: string, newPath: string): Result<boolean>;
-    function unlinkSync(path: string): Result<boolean>;
-    function existsSync(path: string): boolean;
   }
   namespace JSON {
     function stringify(value: string): string;

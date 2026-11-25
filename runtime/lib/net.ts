@@ -17,6 +17,9 @@ import { Error, BaseError } from "../prelude/error";
 @cpp_native("ets_net_lib::connect") function nativeConnect(port: number, host: string): Promise<Result<TcpConnection, string>>;
 @cpp_native("ets_net_lib::read") function nativeRead(connection: TcpConnection, bytes: number): Promise<Result<string, string>>;
 @cpp_native("ets_net_lib::write") function nativeWrite(connection: TcpConnection, data: string): Promise<Result<number, string>>;
+@cpp_native("ets::acceptTcpUntil") function nativeAcceptUntil(listener: TcpListener, timeout: number, token: CancellationToken): Promise<Result<TcpConnection, string>>;
+@cpp_native("ets::readTcpUntil") function nativeReadUntil(connection: TcpConnection, bytes: number, timeout: number, token: CancellationToken): Promise<Result<string, string>>;
+@cpp_native("ets::writeTcpUntil") function nativeWriteUntil(connection: TcpConnection, data: string, timeout: number, token: CancellationToken): Promise<Result<number, string>>;
 @cpp_native("ets_net_lib::closeListener") function nativeCloseListener(listener: TcpListener): void;
 @cpp_native("ets_net_lib::closeConnection") function nativeCloseConnection(connection: TcpConnection): void;
 
@@ -32,6 +35,23 @@ async function socketWrite(connection: TcpConnection, data: string): Promise<Res
   if (r.isOk()) return resultOk<number, Error>(r.value());
   return resultErr<number, Error>(new BaseError(r.error()));
 }
+// Variantes con plazo (ms) y cancelación (#203): sustituyen a acceptTcpUntil,
+// readTcpUntil y writeTcpUntil globales.
+async function socketReadUntil(connection: TcpConnection, maxBytes: number, timeout: number, token: CancellationToken): Promise<Result<string, Error>> {
+  const r: Result<string, string> = await nativeReadUntil(connection, maxBytes, timeout, token);
+  if (r.isOk()) return resultOk<string, Error>(r.value());
+  return resultErr<string, Error>(new BaseError(r.error()));
+}
+async function socketWriteUntil(connection: TcpConnection, data: string, timeout: number, token: CancellationToken): Promise<Result<number, Error>> {
+  const r: Result<number, string> = await nativeWriteUntil(connection, data, timeout, token);
+  if (r.isOk()) return resultOk<number, Error>(r.value());
+  return resultErr<number, Error>(new BaseError(r.error()));
+}
+async function serverAcceptUntil(listener: TcpListener, timeout: number, token: CancellationToken): Promise<Result<Socket, Error>> {
+  const r: Result<TcpConnection, string> = await nativeAcceptUntil(listener, timeout, token);
+  if (r.isOk()) return resultOk<Socket, Error>(new Socket(r.value()));
+  return resultErr<Socket, Error>(new BaseError(r.error()));
+}
 async function serverAccept(listener: TcpListener): Promise<Result<Socket, Error>> {
   const r: Result<TcpConnection, string> = await nativeAccept(listener);
   if (r.isOk()) return resultOk<Socket, Error>(new Socket(r.value()));
@@ -45,6 +65,8 @@ export class Socket {
   read(maxBytes: number = 65536): Promise<Result<string, Error>> { return socketRead(this.connection, maxBytes); }
   // Escribe todo el texto; devuelve los bytes escritos.
   write(data: string): Promise<Result<number, Error>> { return socketWrite(this.connection, data); }
+  readUntil(maxBytes: number, timeout: number, token: CancellationToken): Promise<Result<string, Error>> { return socketReadUntil(this.connection, maxBytes, timeout, token); }
+  writeUntil(data: string, timeout: number, token: CancellationToken): Promise<Result<number, Error>> { return socketWriteUntil(this.connection, data, timeout, token); }
   end(): void { nativeCloseConnection(this.connection); }
 }
 
@@ -52,6 +74,7 @@ export class Server {
   listener: TcpListener;
   constructor(listener: TcpListener) { this.listener = listener; }
   accept(): Promise<Result<Socket, Error>> { return serverAccept(this.listener); }
+  acceptUntil(timeout: number, token: CancellationToken): Promise<Result<Socket, Error>> { return serverAcceptUntil(this.listener, timeout, token); }
   close(): void { nativeCloseListener(this.listener); }
 }
 

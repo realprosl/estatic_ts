@@ -1,29 +1,29 @@
-// Demo del API estilo Node expuesta como built-in `fs` en Estatic.
+// Demo del API estilo Node de la librería `estatic:fs`.
 // (Sin `async function main` porque el `int main` de C++ no puede ser corutina;
 //  el codegen traduce `await` a top-level a `ets::syncWait`.)
 
 import { argument, argumentCount } from "estatic:process";
+import fs from "estatic:fs";
 const file:string=argumentCount()>1?argument(1):"fs-demo.txt";
 
 // --- Sync ---------------------------------------------------------------
 if (fs.existsSync(file)) {
-  const removed: Result<boolean> = fs.unlinkSync(file);
-  if (removed.isOk() == false) { console.error("unlink previo falló:", removed.error()); }
+  const removed = fs.unlinkSync(file);
+  if (removed.isOk() == false) { console.error("unlink previo falló:", removed.error().message); }
 }
-const written: Result<boolean> = fs.writeFileSync(file, "hola fs\n");
-if (written.isOk() == false) { console.error("write falló:", written.error()); }
+const written = fs.writeFileSync(file, "hola fs\n");
+if (written.isOk() == false) { console.error("write falló:", written.error().message); }
 console.log("escrito OK");
 
-const contents: Result<string> = fs.readFileSync(file);
-if (contents.isOk() == false) { console.error("read falló:", contents.error()); }
+const contents = fs.readFileSync(file);
+if (contents.isOk() == false) { console.error("read falló:", contents.error().message); }
 console.log("leído sync:", contents.value());
 
 // --- Async --------------------------------------------------------------
-const asyncRead: Promise<Result<string>> = fs.readFile(file);
-const asyncResult: Result<string> = await asyncRead;
-if (asyncResult.isOk() == false) { console.error("async read falló:", asyncResult.error()); }
+const asyncResult = await fs.readFile(file);
+if (asyncResult.isOk() == false) { console.error("async read falló:", asyncResult.error().message); }
 console.log("leído async:", asyncResult.value());
 
-const removed: Result<boolean> = fs.unlinkSync(file);
-if (removed.isOk() == false) { console.error("unlink falló:", removed.error()); }
+const removed = fs.unlinkSync(file);
+if (removed.isOk() == false) { console.error("unlink falló:", removed.error().message); }
 console.log("borrado OK");
