@@ -68,3 +68,35 @@ En la cabecera de un módulo, `@link("sqlite3")` añade `-lsqlite3` al enlazado 
 que `@include`, solo cuenta si el módulo entra en el programa. Los argumentos se
 enlazan en orden y sin repetir, después de las librerías del runtime. Un nombre
 vacío, con espacios o con `/` se rechaza.
+
+## Código nativo de una librería: sección `native` (#215)
+
+Una librería instalada con `etsc install` puede traer código C o C++ propio.
+Se declara en su `estatic.config.json`:
+
+```json
+"native": {
+  "sources": ["native/*.c", "native/*.cpp"],
+  "includeDirs": ["native/include"],
+  "cflags": ["-O2"],
+  "cxxflags": ["-std=c++20"],
+  "pkgConfig": ["sqlite3"],
+  "linkLibraries": ["m"],
+  "build": { "command": "make libfoo.a", "outputs": ["libfoo.a"] }
+}
+```
+
+- `sources`: se compilan (los `.c` con `$CC` o `cc`, el resto con el compilador
+  de C++) y se empaquetan en `lib<nombre>.a`.
+- `includeDirs`: se añaden como `-I` al compilar el programa y las fuentes.
+- `pkgConfig`: `pkg-config --cflags` se usa al compilar y `--libs` al enlazar.
+- `linkLibraries`: `-l<nombre>` al enlazar.
+- `build`: para código con su propio sistema de build. El comando se ejecuta en
+  la carpeta de la librería solo si falta alguno de sus `outputs`, que se enlazan.
+
+El `.a` se compila una sola vez: se guarda en
+`<librería>/.estatic-build/<hash>/`, con un hash de las fuentes, los flags y los
+compiladores. Una versión publicada no cambia, así que los builds siguientes lo
+reutilizan.
+
+Orden de enlazado: objetos del programa → `.a` de las librerías → `-l` del sistema.
