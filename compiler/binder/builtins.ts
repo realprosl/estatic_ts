@@ -218,7 +218,7 @@ export function nativeBuiltinSignatures(key: string): string[] {
     if (key == "Console.hideCursor") return ["()=>boolean"];
     if (key == "Console.showCursor") return ["()=>boolean"];
     if (key == "createCancellation") return ["()=>CancellationSource"];
-    if (key == "ProcessReadable.on") return ["(string,(string)=>void)=>ProcessReadable","(string,()=>void)=>ProcessReadable"];
+    if (key == "ProcessReadable.on") return ["(string,(string)=>void)=>ProcessReadable","(string,()=>void)=>ProcessReadable","(string,(string)=>Promise<void>)=>ProcessReadable","(string,()=>Promise<void>)=>ProcessReadable"];
     if (key == "resolveProjectPath") return ["(string,string)=>string"];
     if (key == "string.lastIndexOf") return ["(string)=>number"];
     if (key == "string.toLowerCase") return ["()=>string"];

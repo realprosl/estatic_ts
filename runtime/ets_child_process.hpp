@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <functional>
+#include <type_traits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -333,6 +334,20 @@ inline std::shared_ptr<WritableState> openProcessWritable(int fd) {
 }
 } // namespace child_process_detail
 
+namespace child_process_detail {
+template <typename Result> struct IsTask : std::false_type {};
+template <typename T> struct IsTask<ets::Task<T>> : std::true_type {};
+template <typename Callback> std::function<void(std::string)> dataCallback(Callback callback) {
+    if constexpr (IsTask<std::decay_t<std::invoke_result_t<Callback&, std::string>>>::value)
+        return [callback = std::move(callback)](std::string chunk) mutable { auto task = callback(std::move(chunk)); (void)task; };
+    else return std::function<void(std::string)>(std::move(callback));
+}
+template <typename Callback> std::function<void()> endCallback(Callback callback) {
+    if constexpr (IsTask<std::decay_t<std::invoke_result_t<Callback&>>>::value)
+        return [callback = std::move(callback)]() mutable { auto task = callback(); (void)task; };
+    else return std::function<void()>(std::move(callback));
+}
+}
 class ProcessReadableProperty;
 class ProcessWritableProperty;
 class ProcessReadable {
@@ -342,14 +357,18 @@ public:
     // Un stream del proceso que no se abre hasta el primer uso (estatic:process):
     // abrir stdin/stdout/stderr al arrancar rompe con algunas redirecciones.
     static ProcessReadable deferred(ProcessReadableProperty& owner) { ProcessReadable stream; stream.owner_ = &owner; return stream; }
-    ProcessReadable& on(const std::string& event, std::function<void(std::string)> callback) {
+    // Callbacks síncronos o async (#199): un callback que devuelve una tarea se
+    // lanza desacoplado en el event loop por cada evento, como en Node (los
+    // chunks pueden solaparse). Se elige por la firma, no por sobrecarga:
+    // std::function<void(...)> también aceptaría un callable que devuelve Task.
+    template <typename Callback>
+    ProcessReadable& on(const std::string& event, Callback callback) {
         resolve();
-        if (event == "data" && state_) { state_->dataCallbacks.push_back(std::move(callback)); state_->start(); }
-        return *this;
-    }
-    ProcessReadable& on(const std::string& event, std::function<void()> callback) {
-        resolve();
-        if (event == "end" && state_) { state_->endCallbacks.push_back(std::move(callback)); state_->start(); }
+        if constexpr (std::is_invocable_v<Callback&, std::string>) {
+            if (event == "data" && state_) { state_->dataCallbacks.push_back(child_process_detail::dataCallback(std::move(callback))); state_->start(); }
+        } else {
+            if (event == "end" && state_) { state_->endCallbacks.push_back(child_process_detail::endCallback(std::move(callback))); state_->start(); }
+        }
         return *this;
     }
 private:
@@ -378,8 +397,8 @@ private:
 class ProcessReadableProperty {
 public:
     explicit ProcessReadableProperty(int fd = 0) : fd_(fd) {}
-    ProcessReadableProperty& on(const std::string& event, std::function<void(std::string)> callback) { auto stream = ensure(); stream.on(event, std::move(callback)); return *this; }
-    ProcessReadableProperty& on(const std::string& event, std::function<void()> callback) { auto stream = ensure(); stream.on(event, std::move(callback)); return *this; }
+    template <typename Callback>
+    ProcessReadableProperty& on(const std::string& event, Callback callback) { auto stream = ensure(); stream.on(event, std::move(callback)); return *this; }
     ProcessReadable stream() { return ensure(); }
     void close() { if (state_) state_->close(); }
 private:

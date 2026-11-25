@@ -198,6 +198,9 @@ test("IR C++ executes readonly Node owner-array visit callbacks",()=>{
  });`;
  assert.equal(execute(source),"Documento\nSeccion\n");
 });
+// Solo el backend ETS (etsc stage 2) implementa ProcessReadable.on; ni el
+// generador de referencia ni el generador C++ heredado (native.test.ts) lo hacen.
+test("IR C++ executes process.stdin.on admite callbacks async (#199)",{skip:!process.env.ESTATIC_SELFHOST_COMPILER},()=>assert.equal(execute("import process from \"estatic:process\";\nprocess.stdin.on(\"data\", async (chunk: string): Promise<void> => { await sleep(5); print(\"dato \" + chunk.trim()); });\nprocess.stdin.on(\"end\", async (): Promise<void> => { await sleep(20); print(\"fin\"); });\nprint(\"listo\");\n"),"listo\nfin\n"));
 test("IR C++ native aggregate fast paths survive seed synchronization",{skip:!process.env.ESTATIC_NATIVE_CODEGEN},()=>{
  const project=ir('function count(xs:number[]):number{return xs.length;}function forward(xs:number[]):number{return count(xs);}let xs=[1,2];const n=forward(xs);print(n);print(xs.length);');
  const {cpp}=generateCppFromIr(project);

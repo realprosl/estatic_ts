@@ -2051,6 +2051,10 @@ test('frontend closure recursive summaries authorize a borrowed receiver',()=>ch
 test('frontend closure recursive summaries still reject hidden alias access',()=>error('let n=0;function inc(x:ref<number>,k:number):void{n+=1;if(k>0)inc(x,k-1);}inc(n,2);',/E4207/));
 
 test('frontend closure value summaries preserve deeply skipped defaults',()=>check('class C{x:number;constructor(x:number=later){this.x=x;}}function a():C{return new C(1);}function b():C{return a();}function c():C{return b();}const result=c();const later=2;print(result.x);'));
+test('process streams accept async callbacks with the same capture rules (#199)',()=>{
+ check('import process from "estatic:process";process.stdin.on("data",async (c:string):Promise<void> =>{await sleep(1);print(c);});process.stdin.on("end",async ():Promise<void> =>{print("fin");});');
+ error('import process from "estatic:process";function main():void{let n:number=0;process.stdin.on("data",async (c:string):Promise<void> =>{await sleep(1);n=n+1;});}main();',/E4210/);
+});
 test('a default evaluated two calls away still conflicts with a caller lease (#344)',()=>{
  error('let G:number[]=[1];function bump():number{G.push(1);return G.length;}function g(x:number=bump()):number{return x;}function f():number{return g();}function main():void{const r=constRef(G);print(f());print(r.length);}main();',/E4207/);
  error('class Box{items:number[]=[1];}function bump(b:ref<Box>):number{b.items.push(1);return 1;}function g(b:ref<Box>,x:number=bump(b)):number{return x;}function f(b:ref<Box>):number{return g(b);}function main():void{let b=new Box();const r=constRef(b.items);print(f(b));print(r.length);}main();',/E4207/);
