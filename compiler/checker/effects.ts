@@ -30,7 +30,11 @@ export class EffectAgenda {
 }
 export class EffectCall {
   module: number; node: number; owner: number; linked: Map<number,boolean>;
-  constructor(module: number, node: number, owner: number) { this.module = module; this.node = node; this.owner = owner; this.linked = new Map<number,boolean>(); }
+  // fixed: el destino es la función seleccionada estáticamente y ya está enlazado;
+  // tasks: la llamada puede crear tareas (sleep o Promise). Se calculan en la
+  // primera ronda para no recorrer todas las llamadas en cada ronda (#344).
+  fixed: boolean; tasks: number;
+  constructor(module: number, node: number, owner: number) { this.module = module; this.node = node; this.owner = owner; this.linked = new Map<number,boolean>(); this.fixed = false; this.tasks = -1; }
 }
 // Finite, monotone value-flow and effect summaries. IDs belong to this binding.
 // No AST annotation and no recursion-depth cutoff in summary construction.
@@ -283,6 +287,13 @@ export class EffectAnalyzer {
     }
     return -1;
   }
+  // Llamada directa a una función con cuerpo: callTargets devuelve siempre esa
+  // misma función, así que basta enlazarla en la primera ronda.
+  staticCall(module: number, id: number): boolean {
+    if (this.suspensionNode(module,id) || this.synchronousCallbacks(module,id).length > 0 || this.unionReceiver(module,id) >= 0) return false;
+    const selected: number = this.checked.files[module].selected[id]; const selectedModule: number = this.checked.files[module].selectedModules[id];
+    return selected >= 0 && this.childOf(selectedModule,selected,EdgeRole.Body) >= 0 && this.functionIndex(selectedModule,selected) >= 0;
+  }
   callTargets(module: number, id: number): number[] {
     let result: number[] = []; const n: AstNode = this.node(module,id);
     if (this.suspensionNode(module,id)) {
@@ -422,8 +433,10 @@ export class EffectAnalyzer {
       graphPass = graphPass+1; if (this.trace) progressDetail("frontend: effect graph pass "+numberToString(graphPass)+", "+numberToString(this.edges.length)+" edges");
       this.changed = false;
       for (let callIndex: number = 0; callIndex < this.calls.length; callIndex = callIndex+1) {
+      if (this.calls[callIndex].fixed) continue;
       const callModule: number = this.calls[callIndex].module;
       const callNode: number = this.calls[callIndex].node;
+      if (graphPass == 1 && this.staticCall(callModule,callNode)) this.calls[callIndex].fixed = true;
       for (const target of this.callTargets(callModule,callNode)) {
         if (this.calls[callIndex].linked.has(target)) continue; this.calls[callIndex].linked.set(target,true);
         const summary = this.summaries[target];
@@ -453,7 +466,10 @@ export class EffectAnalyzer {
         }
       }
       }
-      for (const call of this.calls) {
+      for (let callIndex: number = 0; callIndex < this.calls.length; callIndex = callIndex+1) {
+        if (this.calls[callIndex].tasks < 0) this.calls[callIndex].tasks = this.helper(this.calls[callIndex].module,this.calls[callIndex].node) == "sleep" || ([NodeKind.CallExpression,NodeKind.MemberCallExpression].includes(this.kindOf(this.calls[callIndex].module,this.calls[callIndex].node)) && genericBase(this.checked.files[this.calls[callIndex].module].types[this.calls[callIndex].node]) == "Promise") ? 1 : 0;
+        if (this.calls[callIndex].tasks == 0) continue;
+        const call: EffectCall = this.calls[callIndex];
         if (this.helper(call.module,call.node) == "sleep") this.addTask(this.vertex(call.module,call.node),this.vertex(call.module,call.node));
         else if ([NodeKind.CallExpression,NodeKind.MemberCallExpression].includes(this.kindOf(call.module,call.node)) && genericBase(this.checked.files[call.module].types[call.node]) == "Promise") {
           const targets: number[] = this.callTargets(call.module,call.node); let unknown: boolean = targets.length == 0 && !this.builtin(call.module,call.node);
