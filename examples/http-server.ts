@@ -1,4 +1,4 @@
-import net, { Socket } from "estatic:net";
+import { listen, Socket } from "estatic:net";
 async function handleClient(connection: Socket): Promise<void> {
   const request = await connection.read(16384);
   if (request.isOk()) {
@@ -14,7 +14,7 @@ async function handleClient(connection: Socket): Promise<void> {
 }
 
 async function serve(): Promise<void> {
-  const opened = net.listen(8080, "0.0.0.0");
+  const opened = listen(8080, "0.0.0.0");
   if (opened.isOk() == false) {
     printError(opened.error().message);
     return;

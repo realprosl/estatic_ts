@@ -1,4 +1,4 @@
-import net from "estatic:net";
+import { listen } from "estatic:net";
 async function cancelSoon(source: CancellationSource): Promise<void> {
   await sleep(20);
   cancel(source);
@@ -8,7 +8,7 @@ async function cancelSoon(source: CancellationSource): Promise<void> {
 async function cancellationDemo(port: number): Promise<void> {
   const source: CancellationSource = createCancellation();
   const token: CancellationToken = cancellationToken(source);
-  const opened = net.listen(port, "127.0.0.1");
+  const opened = listen(port, "127.0.0.1");
   if (opened.isOk() == false) { printError(opened.error().message); return; }
   const server = opened.value();
   spawn(cancelSoon(source));

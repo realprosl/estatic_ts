@@ -1,7 +1,7 @@
 import { argument } from "estatic:process";
-import tls from "estatic:tls";
+import { createServer } from "estatic:tls";
 async function secureServer(certificate: string, privateKey: string): Promise<void> {
-  const created = tls.createServer({ cert: certificate, key: privateKey });
+  const created = createServer({ cert: certificate, key: privateKey });
   if (created.isOk() == false) { printError(created.error().message); return; }
   const server = created.value();
   const opened = server.listen(34443, "127.0.0.1");
