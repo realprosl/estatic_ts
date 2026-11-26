@@ -108,7 +108,21 @@ template<class T> T remainder(T a, T b) {
         if (!b) std::abort();
         if constexpr(std::is_signed_v<T>) if(a==std::numeric_limits<T>::min() && b==T(-1)) return 0;
         return a%b;
-    } else return std::fmod(a,b);
+    } else {
+        // Atajo exacto (#285): con dos enteros de |x| <= 2^53 (lo habitual en
+        // `i % n`) el resto entero coincide con fmod y es ~10 veces más rápido.
+        // Como en JavaScript, un resto cero lleva el signo del dividendo (-14 % 7
+        // es -0). NaN, infinitos, fracciones y divisor 0 siguen por fmod.
+        constexpr T limit = T(9007199254740992.0);
+        if (a >= -limit && a <= limit && b >= -limit && b <= limit) {
+            const long long ia = static_cast<long long>(a), ib = static_cast<long long>(b);
+            if (ib != 0 && static_cast<T>(ia) == a && static_cast<T>(ib) == b) {
+                const long long r = ia % ib;
+                return r == 0 ? std::copysign(T(0), a) : static_cast<T>(r);
+            }
+        }
+        return std::fmod(a,b);
+    }
 }
 // a ** b como en JavaScript: NaN si el exponente es NaN, y (±1) ** ±Infinity es NaN
 // (std::pow da 1). En enteros, potencia exacta con desbordamiento modular; un
