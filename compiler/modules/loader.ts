@@ -152,7 +152,7 @@ export class ModuleLoader {
         discovered[index].state = 2;
         // Un registro que vino de la caché con las mismas dependencias no hay que
         // volver a escribirlo: guardarlo hashea todo su AST (#344).
-        if (!discovered[index].cached.reused || !sameStrings(discovered[index].cached.record.dependencies, discovered[index].dependencies)) {
+        if (!discovered[index].cached.reused || discovered[index].cached.metadataChanged || !sameStrings(discovered[index].cached.record.dependencies, discovered[index].dependencies)) {
           discovered[index].cached.record.dependencies = discovered[index].dependencies; cache.save(discovered[index].cached.record);
         }
         graph.modules.push(discovered[index]); stack.pop();
