@@ -5,7 +5,11 @@ Compila el proyecto desde este directorio:
 ```bash
 etsc build
 etsc run
+etsc build --release   # optimizado (compiler.releaseFlags, por defecto -O2)
 ```
+
+Sin `--release` el C++ se compila con `-O0`, que tarda bastante menos: úsalo
+mientras desarrollas.
 
 El driver instalado utiliza el frontend y el runtime preparados por install.sh.
 

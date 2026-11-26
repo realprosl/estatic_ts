@@ -13,11 +13,13 @@
     "command": "g++",
     "flags": [
       "-std=c++20",
-      "-O2",
       "-pthread",
       "-fno-exceptions",
       "-ffunction-sections",
       "-fdata-sections"
+    ],
+    "releaseFlags": [
+      "-O2"
     ],
     "linkFlags": [
       "-Wl,--gc-sections",
