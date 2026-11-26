@@ -134,7 +134,8 @@ assert(!diagnosed.stderr.includes("\x1b["),"Sin terminal no hay colores");
   writeFileSync(join(project,"src/main.ts"),readFileSync(join(project,"src/main.ts"),"utf8")+"\n// comentario\n");
   p=run(["run"],project);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,"native installed\n");assert.deepEqual(programObjects(),programObject);
   // La cabecera precompilada de esta combinacion queda en la cache del usuario.
-  if(process.platform==="linux")assert(readdirSync(join(cache,"estc/pch"),{recursive:true}).some(file=>String(file).endsWith(".gch")));
+  // Se crea en segundo plano sin que etsc la espere (#377): se le da un minuto.
+  if(process.platform==="linux"){const hasPch=()=>existsSync(join(cache,"estc/pch"))&&readdirSync(join(cache,"estc/pch"),{recursive:true}).some(file=>String(file).endsWith(".gch"));const until=Date.now()+60000;while(!hasPch()&&Date.now()<until)spawnSync("sleep",["1"]);assert(hasPch(),"la PCH se publica al terminar en segundo plano");}
   const upgrade=install(prefix,["--seed",seed]);assert.equal(upgrade.status,0,upgrade.stderr);assert.notEqual(realpathSync(join(prefix,"lib/estc/current")),home);
   const moved=join(dir,"relocated prefix");renameSync(prefix,moved);const movedBin=join(moved,"bin/etsc");
   const runMoved=(args:string[])=>spawnSync(movedBin,args,{cwd:project,encoding:"utf8",timeout:120000,env:nativeEnv});
@@ -237,7 +238,9 @@ test("install builds compiler/ with the seed and publishes that executable",asyn
    let p=run(["run","main.ts","--unity","-o","build/unity.cpp","--binary","build/unity"]);assert.equal(p.status,0,p.stderr);const expected=p.stdout;
    p=run(["run","main.ts","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);
    const units=readdirSync(join(project,"build/app.cpp.units")).sort();assert.ok(units.includes("program.hpp")&&units.includes("__main.cpp")&&units.some(u=>u.endsWith("math.cpp")),units.join(","));
-   const objects=()=>readdirSync(join(project,".cache/objects")).filter(f=>f.startsWith("program-")).sort();const before=objects();assert.equal(before.length,units.length-1);
+   const objects=()=>readdirSync(join(project,".cache/objects")).filter(f=>f.startsWith("program-")).sort();const before=objects();
+   // Solo las unidades del programa van a la caché del proyecto: las de estatic: y del preludio (#377) tienen su cabecera y su objeto compartido.
+   const programUnits=units.filter(u=>u.endsWith(".cpp")&&readFileSync(join(project,"build/app.cpp.units",u),"utf8").includes('#include "program.hpp"'));assert.equal(before.length,programUnits.length,units.join(","));
    writeFileSync(join(project,"math.ts"),readFileSync(join(project,"math.ts"),"utf8").replace("total = total + index;","total = total + index * 1;"));
    p=run(["run","main.ts","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);
    const after=objects();assert.equal(after.length,before.length);assert.equal(after.filter(o=>!before.includes(o)).length,1,"solo se recompila la unidad de math");

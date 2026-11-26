@@ -256,6 +256,13 @@ function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:s
    // de la ruta ni del resto del proyecto) y el objeto se guarda junto a la
    // librería, así se reutiliza entre compilaciones y proyectos.
    let libraryIndex:number=-1;if(k<unitHeaders.length)for(let m:number=0;m<libraryNames.length;m=m+1)if(libraryNames[m]==unitHeaders[k])libraryIndex=m;
+   // Módulos de estatic: y del preludio (#377): el objeto va a los de la
+   // instalación (los precompila install.sh) o a la caché del usuario.
+   if(cacheObjects&&libraryIndex>=0&&libraryRoots[libraryIndex].startsWith(root+"/runtime/")){
+    const name="lib-"+contentHash(identity+"\n"+plan.programFlags.join("\n")+"\n"+libraryTexts[libraryIndex]+"\n"+readText(sources[k]))+".o";
+    if(exists(shipped+"/"+name)){targets.push(shipped+"/"+name);build.push(false);publish.push("");drop.push(false);continue;}
+    if(userCache!=""){targets.push(userCache+"/"+name);build.push(!exists(userCache+"/"+name));publish.push(userCache+"/"+name);drop.push(false);continue;}
+   }
    if(cacheObjects&&libraryIndex>=0&&directories(libraryRoots[libraryIndex]+"/.estatic-cache/objects")){
     const object=libraryRoots[libraryIndex]+"/.estatic-cache/objects/lib-"+contentHash(identity+"\n"+plan.programFlags.join("\n")+"\n"+libraryTexts[libraryIndex]+"\n"+readText(sources[k]))+".o";
     targets.push(object);build.push(!exists(object));publish.push(object);drop.push(false);continue;
@@ -281,21 +288,25 @@ function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:s
     const header=userCache+"/../pch/"+key+"/pch.hpp";if(!exists(header))checkedWrite(header,includes.join("\n")+"\n");
     if(exists(pchArtifact(header,compiler)))plan.pchHeader=header;
     else{pchFinal=pchArtifact(header,compiler);pchPartial=pchFinal+"."+numberToString(now())+".tmp";let command:string[]=[];for(const flag of plan.flags)command.push(flag);for(const flag of plan.programFlags)command.push(flag);command.push("-x");command.push("c++-header");command.push(header);command.push("-o");command.push(pchPartial);
-     // #361: con dos o más unidades del programa por compilar, sale más barato
-     // crear la PCH primero (las cabeceras se analizan una vez) y compilarlas con
-     // ella. Con una sola, se compila sin ella y la PCH se crea en paralelo.
+     // #361: crear la PCH primero compensa cuando hay muchas unidades por
+     // compilar: cuesta ~2 veces analizar la cabecera, y en paralelo cada núcleo
+     // la analizaría una vez por unidad. Con pocas (p. ej., las librerías ya
+     // vienen precompiladas, #377), se compila sin ella y la PCH se crea en
+     // paralelo para el siguiente build.
      let pending:number=0;for(let k:number=0;k<plan.programUnits;k=k+1)if(build[k])pending=pending+1;
-     if(pending>=2){progressStart("Precompilando cabeceras del runtime");const pchStatus=executeAll([command]);if(pchStatus==0&&exists(pchPartial)&&rename(pchPartial,pchFinal)){plan.pchHeader=header;prunePch(userCache+"/../pch",5);}else remove(pchPartial);pchPartial="";}
-     else pchPid=launch(command,"/dev/null","/dev/null");}
+     if(pending>2*compileJobs()){progressStart("Precompilando cabeceras del runtime");const pchStatus=executeAll([command]);if(pchStatus==0&&exists(pchPartial)&&rename(pchPartial,pchFinal)){plan.pchHeader=header;prunePch(userCache+"/../pch",5);}else remove(pchPartial);pchPartial="";}
+     else{
+      // La PCH nueva es para el siguiente build: se crea en segundo plano y se
+      // publica sola (mv atómico) al terminar; etsc no la espera (#377).
+      let quoted:string[]=[];for(const part of command)quoted.push(shellQuote(part));
+      pchPid=launch(["sh","-c",quoted.join(" ")+" && mv -f "+shellQuote(pchPartial)+" "+shellQuote(pchFinal)+" || rm -f "+shellQuote(pchPartial)],"/dev/null","/dev/null");
+      prunePch(userCache+"/../pch",5);
+     }}
    }
   }
  }
  let status=compileObjects(plan,sources,targets,build,publish);
- if(pchPid>=0){
-  // La PCH nueva es para el siguiente build: se espera a que acabe y se publica.
-  let pchStatus=poll(pchPid);while(pchStatus<0){progressTick();pause(40);pchStatus=poll(pchPid);}
-  if(pchStatus==0&&exists(pchPartial)){rename(pchPartial,pchFinal);prunePch(userCache+"/../pch",5);}else remove(pchPartial);
- }
+
  if(status!=0)driverError(cxx+" terminó con "+numberToString(status),status);
  progressStart("Enlazando");status=executeAll([linkCommand(plan,linkedObjects(plan,targets,userCache,binary),links,binary)]);
  if(status!=0){
@@ -312,6 +323,7 @@ function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:s
  // La caché del proyecto solo guarda el objeto del programa vigente.
  if(programCache!=""){let current:string[]=[];for(let k:number=0;k<plan.programUnits;k=k+1)current.push(targets[k]);for(const file of files(programCache))if(file.startsWith("program-")&&!current.includes(programCache+"/"+file))remove(programCache+"/"+file);}
 }
+function shellQuote(text:string):string{return "'"+text.split("'").join("'\\''")+"'";}
 function withoutFlag(flags:constRef<string[]>,removed:string):string[]{let result:string[]=[];for(const flag of flags)if(flag!=removed)result.push(flag);return result;}
 // Objetos a enlazar: los del runtime dividido (#377) van juntos en un .a, del
 // que el enlazador saca solo los que el programa usa. El .a se guarda en la
@@ -405,7 +417,10 @@ function main():void{
  }
  if(fingerprintPath!=""&&exists(fingerprintPath))remove(fingerprintPath);
  options.verbose=verbose||progressInteractive();progressStart(fromIr==""?"Analizando fuentes y verificando IR":"Leyendo IR");const ir:IrProject=fromIr==""?sourceIr(entry,options,verbose,!check):parseIrProject(checkedRead(fromIr));if(emitIr!="")checkedWrite(emitIr,(formattedIr!=""?formattedIr:formatIr(ir))+"\n");if(check){progressSummary();return;}
- progressStart("Generando C++ desde IR verificado");const generated=generateCppWithLibraries(ir,libraryRoots);const outConfig=jsonObjectGet(config,"output");const compiler=jsonObjectGet(config,"compiler");if(output==""){const configured=jsonAsString(jsonObjectGet(outConfig,"cpp"));output=(configured!=""?pathAt(base,configured):"build/"+stem(fromIr==""?entry:fromIr)+".cpp");}progressStart("Guardando resultados");checkedWrite(output,generated.cpp);
+ progressStart("Generando C++ desde IR verificado");// #377: cada módulo de estatic: y del preludio es una librería más: su unidad
+ // incluye solo su cabecera y el objeto se reutiliza entre proyectos.
+ for(const fn of ir.functions){const file:string=fn.source.file;if((file.startsWith(root+"/runtime/lib/")||file.startsWith(root+"/runtime/prelude/"))&&!libraryRoots.includes(file))libraryRoots.push(file);}
+ const generated=generateCppWithLibraries(ir,libraryRoots);const outConfig=jsonObjectGet(config,"output");const compiler=jsonObjectGet(config,"compiler");if(output==""){const configured=jsonAsString(jsonObjectGet(outConfig,"cpp"));output=(configured!=""?pathAt(base,configured):"build/"+stem(fromIr==""?entry:fromIr)+".cpp");}progressStart("Guardando resultados");checkedWrite(output,generated.cpp);
  if(build||jsonAsBool(jsonObjectGet(compiler,"enabled"))){if(binary==""){const configured=jsonAsString(jsonObjectGet(outConfig,"binary"));binary=(configured!=""?pathAt(base,configured):output+".bin");}if(cxx=="")cxx=jsonAsString(jsonObjectGet(compiler,"command"));if(cxx=="")cxx=environment("CXX");if(cxx=="")cxx="g++";let compileFlags=configStrings(jsonObjectGet(compiler,"flags"));for(const flag of flags)compileFlags.push(flag);if(release){let releaseFlags=configStrings(jsonObjectGet(compiler,"releaseFlags"));if(releaseFlags.length==0)releaseFlags.push("-O2");for(const flag of releaseFlags)compileFlags.push(flag);}let linkFlags=configStrings(jsonObjectGet(compiler,"linkFlags"));for(const flag of links)linkFlags.push(flag);for(const library of configStrings(jsonObjectGet(config,"linkLibraries")))linkFlags.push("-l"+library);let archives:string[]=[];if(configPath!=""){progressStart("Preparando código nativo de las dependencias");const native=nativeDependencies(config,base,cxx);if(native.failed)driverError("No se pudo preparar el código nativo de las dependencias");for(const flag of native.includeFlags)compileFlags.push(flag);for(const flag of native.linkFlags)linkFlags.push(flag);for(const archive of native.archives)archives.push(archive);}compileCpp(generated,output,binary,root,cxx,compileFlags,linkFlags,incrementalEnabled,options.cacheDirectory,unity,archives,!release);if(fingerprintPath!=""){let inputs:string[]=[];for(const file of analyzedFiles)inputs.push(file);if(configPath!="")inputs.push(configPath);for(let k:number=0;k+1<flags.length;k=k+1)if(flags[k]=="-include"&&exists(flags[k+1]))inputs.push(flags[k+1]);checkedWrite(fingerprintPath,fingerprintText(fingerprintKey,inputs,[output,binary]));}}
  progressSummary(output,(build||jsonAsBool(jsonObjectGet(compiler,"enabled")))?binary:"");if(run){let command:string[]=[normalizePath(binary)];for(const arg of programArgs)command.push(arg);exitProcess(execute(command));}
 }

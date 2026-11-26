@@ -345,10 +345,39 @@ await main();
 EOF
 fi
 if [ -f "$probe/estatic.config.json" ] && (cd "$probe" && ESTC_ROOT="$current" ESTC_OBJECT_CACHE="$release/build/objects" "$destination" build --no-progress) >>"$work/warm.log" 2>&1; then
+  # Librerias estatic: precompiladas (#377): cada modulo es una unidad propia
+  # (su cabecera solo depende de el), asi que su objeto sirve a cualquier
+  # proyecto con los flags por defecto. Un programa minimo por libreria: si
+  # una no compila (p. ej., falta OpenSSL o curl), las demas quedan listas.
+  libraries_ok=0
+  while IFS='|' read -r library source; do
+    [ -n "$library" ] || continue
+    printf '%s\n' "$source" > "$probe/src/main.ts"
+    if (cd "$probe" && ESTC_ROOT="$current" ESTC_OBJECT_CACHE="$release/build/objects" "$destination" build --no-progress) >>"$work/warm.log" 2>&1; then
+      libraries_ok=$((libraries_ok + 1))
+    else
+      echo "    aviso: estatic:$library no se precompilo (se compilara al primer uso)" >&2
+    fi
+  done <<'LIBRARIES'
+fs|import { existsSync } from "estatic:fs"; print(existsSync("/"));
+net|import { listen } from "estatic:net"; print(listen(0, "127.0.0.1").isOk());
+tls|import { createServer } from "estatic:tls"; print(createServer({ cert: "", key: "" }).isOk());
+dns|import { lookup } from "estatic:dns"; async function main(): Promise<void> { const r = await lookup("localhost"); print(r.isOk()); } await main();
+child_process|import { spawnSync } from "estatic:child_process"; print(spawnSync("true", []).status);
+fetch|import fetch from "estatic:fetch"; async function main(): Promise<void> { const r = await fetch("http://127.0.0.1:1/"); print(r.isOk()); } await main();
+date|import { now } from "estatic:date"; print(now() > 0);
+json|import { parse } from "estatic:json"; print(parse("1").isOk());
+path|import { normalize } from "estatic:path"; print(normalize("/a/../b"));
+process|import { argumentCount } from "estatic:process"; print(argumentCount());
+regexp|import RegExp from "estatic:regexp"; print(new RegExp("a").test("a"));
+terminal|import { isTTY } from "estatic:terminal"; print(isTTY());
+number|import { toFixed } from "estatic:number"; print(toFixed(1.5, 1));
+math|import { PI } from "estatic:math"; print(PI);
+LIBRARIES
   # La PCH del programa de prueba solo serviria a esa combinacion de APIs y
   # ocupa mas de 100 MB: cada usuario compone las suyas en su cache.
   rm -rf "$release/build/pch"
-  echo "    runtime compilado: $(find "$release/build/objects" -name '*.o' | wc -l | tr -d ' ') objetos en $release/build/objects"
+  echo "    runtime compilado: $(find "$release/build/objects" -name '*.o' | wc -l | tr -d ' ') objetos en $release/build/objects ($libraries_ok librerias estatic: precompiladas)"
 else
   echo "    aviso: no se pudo precompilar el runtime; el compilador lo hara al primer uso." >&2
   sed 's/^/    /' "$work/warm.log" >&2 || true

@@ -1308,7 +1308,7 @@ if(i.op!="load"||i.result!=b.value||i.result<0||i.result>=f.values.length||f.val
   libraryHeader(libraryRoot:string,lead:string[],forwards:string[],printable:number[],printerPrototypes:string[],printers:string[],declarations:string):string{
     let seen:Set<number> = new Set<number>();let callees:number[]=[];let own:number[]=[];let globalsUsed:number[]=[];let used:string[]=[];
     for(let k:number=0;k<this.project.functions.length;k=k+1){
-      if(!this.project.functions[k].source.file.startsWith(libraryRoot+"/"))continue;
+      if(!inLibrary(this.project.functions[k].source.file,libraryRoot))continue;
       own.push(k);this.signatureTypes(k,seen);
       for(const t of this.project.functions[k].values)this.reachType(t,seen);
       for(const place of this.project.functions[k].places){this.reachType(place.typeId,seen);if(place.global>=0&&!globalsUsed.includes(place.global))globalsUsed.push(place.global);}
@@ -1329,15 +1329,20 @@ if(i.op!="load"||i.result!=b.value||i.result<0||i.result>=f.values.length||f.val
     for(const k of callees)if(!own.includes(k)){const fn:IrFunction=this.project.functions[k];const text:string=this.signature(fn,k);prototypes.push(text+";");}
     let externs:string[]=[];for(const g of globalsUsed)externs.push(`extern ets::ir::Slot<${this.cppTypeId(this.project.globals[g].typeId)}> ${this.globalName(g)};`);
     for(let k:number=mark;k<this.headers.log.length;k=k+1)if(!used.includes(this.headers.log[k]))used.push(this.headers.log[k]);
-    let types:string[]=[];
-    for(let k:number=0;k<this.layoutIds.length;k=k+1)if(seen.has(this.layoutIds[k])){for(const h of this.layoutHeaders[k])if(!used.includes(h))used.push(h);types.push(typeGuard(this.typeName(this.layoutIds[k]),this.layoutOutput[k]));}
-    for(const a of this.project.annotations)if(["include","cpp_include"].includes(a.name)&&a.source.file.startsWith(libraryRoot+"/")&&a.arguments.length==1&&!used.includes(a.arguments[0]))used.push(a.arguments[0]);
+    let typeNames:string[]=[];let typeTexts:string[]=[];
+    for(let k:number=0;k<this.layoutIds.length;k=k+1)if(seen.has(this.layoutIds[k])){for(const h of this.layoutHeaders[k])if(!used.includes(h))used.push(h);typeNames.push(this.typeName(this.layoutIds[k]));typeTexts.push(this.layoutOutput[k]);}
+    let types:string[]=[];for(const k of canonicalTypeOrder(typeNames,typeTexts))types.push(typeGuard(typeNames[k],typeTexts[k]));
+    for(const a of this.project.annotations)if(["include","cpp_include"].includes(a.name)&&inLibrary(a.source.file,libraryRoot)&&a.arguments.length==1&&!used.includes(a.arguments[0]))used.push(a.arguments[0]);
     let includes:string[]=["#include \"runtime/ets_runtime.hpp\"","#include \"runtime/ets_ir.hpp\""];let rest:string[]=[];
     for(const h of used)if(h!="runtime/ets_runtime.hpp"&&h!="runtime/ets_ir.hpp"&&!rest.includes(h))rest.push(h);rest.sort();
     for(const h of rest)includes.push(`#include ${quoteCpp(h)}`);
     let forward:string[]=[];let printerDecls:string[]=[];let printerDefs:string[]=[];
     for(let k:number=0;k<this.project.typeDefinitions.length;k=k+1)if(seen.has(k)&&(this.record(k)||sumKinds.includes(this.shape(k).kind)))forward.push(`struct ${this.typeName(k)};`);
     for(let k:number=0;k<printable.length;k=k+1)if(seen.has(printable[k])){printerDecls.push(printerPrototypes[k]);printerDefs.push(printers[k]);}
+    // Orden canónico (#377): la cabecera de una librería no debe depender del
+    // orden global de tipos y funciones del programa que la importa, para que
+    // su objeto (precompilado al instalar) sirva a cualquier proyecto.
+    forward.sort();printerDecls.sort();printerDefs.sort();externs.sort();prototypes.sort();
     return ["#pragma once",...lead,...includes,...forward,...printerDecls,...types,...printerDefs,...externs,...prototypes,""].join("\n");
   }
   generate():IrCppResult {
@@ -1479,7 +1484,7 @@ let capabilities:string[]=uniqueStrings(_cppLoop50Result);capabilities.sort();
     let libraryHeaders:string[]=[];
     for(let r:number=0;r<this.libraryRoots.length;r=r+1){
       const libraryRoot:string=this.libraryRoots[r];let inside:boolean=false;
-      for(const file of modules)if(file.startsWith(libraryRoot+"/"))inside=true;
+      for(const file of modules)if(inLibrary(file,libraryRoot))inside=true;
       if(!inside){libraryHeaders.push("");continue;}
       const headerName:string=libraryHeaderName(libraryRoot);libraryHeaders.push(headerName);
       const text:string=this.libraryHeader(libraryRoot,lead,forwards,printable,printerPrototypes,printers,declarations);
@@ -1488,13 +1493,45 @@ let capabilities:string[]=uniqueStrings(_cppLoop50Result);capabilities.sort();
     let names:string[]=["__main"];
     for(let m:number=0;m<modules.length;m=m+1){
       let name:string=unitName(modules[m]);if(names.includes(name)){let n:number=2;while(names.includes(name+"-"+numberToString(n)))n=n+1;name=name+"-"+numberToString(n);}names.push(name);
-      let header:string="program.hpp";for(let r:number=0;r<this.libraryRoots.length;r=r+1)if(libraryHeaders[r]!=""&&modules[m].startsWith(this.libraryRoots[r]+"/"))header=libraryHeaders[r];
+      let header:string="program.hpp";for(let r:number=0;r<this.libraryRoots.length;r=r+1)if(libraryHeaders[r]!=""&&inLibrary(modules[m],this.libraryRoots[r]))header=libraryHeaders[r];
       result.units.push(new IrCppUnit(name+".cpp",modules[m],["// Generated from verified ets-ir-2 (unidad por módulo).","#include \""+header+"\"",...grouped[m],""].join("\n"),header));
     }
     result.units.push(new IrCppUnit("__main.cpp","",["// Generated from verified ets-ir-2 (globales y main).","#include \"program.hpp\"",...globals,main,""].join("\n")));
     return result;
   }
 }
+// Una "librería" (#192) es una carpeta o, para las de estatic: (#377), un
+// único módulo: así cada una tiene su propia cabecera y su objeto no depende
+// de qué otras librerías importe el programa.
+// Orden topológico canónico de las definiciones de tipos: un tipo va después
+// de los que nombra su texto y, entre los disponibles, primero el de menor
+// nombre. Si queda un ciclo, el resto sigue el orden recibido.
+function canonicalTypeOrder(names:string[],texts:string[]):number[]{
+  let order:number[]=[];let placed:boolean[]=[];for(const n of names)placed.push(false);
+  while(order.length<names.length){
+    let best:number=-1;
+    for(let k:number=0;k<names.length;k=k+1){
+      if(placed[k])continue;let ready:boolean=true;
+      for(let d:number=0;d<names.length;d=d+1)if(d!=k&&!placed[d]&&mentions(texts[k],names[d])){ready=false;break;}
+      if(ready&&(best<0||names[k]<names[best]))best=k;
+    }
+    if(best<0){for(let k:number=0;k<names.length;k=k+1)if(!placed[k]){placed[k]=true;order.push(k);}break;}
+    placed[best]=true;order.push(best);
+  }
+  return order;
+}
+// ¿Nombra `text` el tipo `name` como identificador completo?
+function mentions(text:string,name:string):boolean{
+  let from:number=0;
+  while(true){
+    const at:number=text.indexOf(name,from);if(at<0)return false;
+    const end:number=at+name.length;
+    const before:boolean=at==0||!identifierChar(text.charCodeAt(at-1));const after:boolean=end>=text.length||!identifierChar(text.charCodeAt(end));
+    if(before&&after)return true;from=at+1;
+  }
+}
+function identifierChar(c:number):boolean{return (c>=48&&c<=57)||(c>=65&&c<=90)||(c>=97&&c<=122)||c==95;}
+function inLibrary(file:string,root:string):boolean{return file==root||file.startsWith(root+"/");}
 function typeGuard(name:string,text:string):string{return "#ifndef ETS_TYPE_"+name+"\n#define ETS_TYPE_"+name+"\n"+text+"\n#endif";}
 // lib_<carpeta>_<hash8 de la ruta>.hpp
 function libraryHeaderName(libraryRoot:string):string{
