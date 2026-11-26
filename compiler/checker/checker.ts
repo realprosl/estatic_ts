@@ -1003,16 +1003,9 @@ export class NativeChecker {
     if (["all","race","promiseAll","promiseRace"].includes(name)) return "!tasks:" + name;
     if (name == "spawn") return "(Promise<void>)=>void";
     if (name == "move" || name == "ref" || name == "constRef") return "!" + name;
-    if (name == "length") return "!length";
     if (["Math","JSON","Date","String","Array","Object","Promise"].includes(name)) return "!" + name;
     if (name == "console") return "Console";
     if (nativeBuiltinSignatures(name).length > 0) return "!builtin:"+name;
-    if (name == "charAt" || name == "lineAt") return "(string,number)=>string";
-    if (name == "substring") return "(string,number,number)=>string";
-    if (name == "indexOf") return "(string,string,number)=>number";
-    if (name == "startsWith") return "(string,string)=>boolean";
-    if (name == "trim" || name == "jsonEscape") return "(string)=>string";
-    if (name == "lineCount") return "(string)=>number";
 
     if (name == "jsonAsNumber" || name == "jsonArrayLength") return "(JsonValue)=>number";
     if (["optionalSome","optionalNone","optionalIsPresent","optionalValueOr","optionalOrElse","resultOk","resultErr","resultIsOk","resultValueOr","ok","err"].includes(name)) return "!container:" + name;
@@ -1872,11 +1865,6 @@ export class NativeChecker {
       if (arg.kind != NodeKind.IdentifierExpression && arg.kind != NodeKind.MemberExpression && arg.kind != NodeKind.IndexExpression) this.report(module,id,"E4208: un préstamo necesita un lvalue");
       if (callable == "!ref") this.writable(module,args[0]);
       return callable.slice(1,callable.length) + "<" + memoryValue(actual[0]) + ">";
-    }
-    if (callable == "!length") {
-      if (args.length != 1) this.report(module,id,"length requiere un argumento");
-      else if (actual[0] != "string" && !actual[0].endsWith("[]") && fixedArraySize(actual[0]) < 0) this.report(module,id,"length requiere string o array");
-      this.result.files[module].signatures[id] = "(" + actual.join(",") + ")=>number"; return "number";
     }
     if (callable == "!print" || callable == "!consoleLog") {
 

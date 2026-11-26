@@ -22,7 +22,7 @@ server.get("/todos", (req: Request, res: Response): void => {
   const todos: Array<Todo> = allTodos();
   let body: string = "";
   let index: number = 0;
-  while (index < length(todos)) {
+  while (index < todos.length) {
     body = body + formatTodo(todos[index]) + "\n";
     index = index + 1;
   }

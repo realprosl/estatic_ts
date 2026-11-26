@@ -10,6 +10,6 @@ type Person<T extends Named = Named> = T;
 let ns: NumberArray = [1, 2, 3];
 let m: Maybe = "hello";
 let p: Pair<string, number> = ["a", 1];
-print(numberToString(length(ns)));
+print(numberToString(ns.length));
 print(m);
 print(p[0]);

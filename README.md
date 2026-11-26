@@ -1023,7 +1023,7 @@ values[1] = 25;
 
 const metadata: [string, boolean] = ["active", true];
 
-print(length(values));
+print(values.length);
 print(values[1]);
 print(metadata[0]);
 ```
@@ -1157,7 +1157,7 @@ Las corutinas se integran con un event loop, temporizadores, red TCP no bloquean
 - `readFile` consulta el tamaño del archivo, dimensiona directamente el `string` final y lee sobre su buffer. Conserva un camino por bloques de 64 KiB para pipes y archivos cuyo tamaño cambia durante la lectura.
 - `writeFile` y `appendFile` manejan escrituras parciales e interrupciones; append utiliza `O_APPEND`.
 - Las APIs síncronas siguen siendo apropiadas para herramientas secuenciales. En servidores debe preferirse la variante `Async` para no detener sockets, timers ni otras corutinas.
-- En Linux, lectura, escritura y append asíncronos intentan usar `io_uring` mediante syscalls directas y anillos reutilizados por worker. `ioUringAvailable()` permite consultar la capacidad; si el kernel o sandbox la bloquea, el runtime usa automáticamente las operaciones POSIX del pool.
+- En Linux, lectura, escritura y append asíncronos (`fs.readFile`, `fs.writeFile`, `fs.appendFile`) intentan usar `io_uring` mediante syscalls directas y anillos reutilizados por worker; si el kernel o sandbox la bloquea, el runtime usa automáticamente las operaciones POSIX del pool.
 
 ## Servidores y red asíncrona
 

@@ -1043,7 +1043,6 @@ let  T=this.cppTypeId(i.typeId);
     if(name=="stopLoop"){this.headers.add("runtime/ets_async.hpp");this.backends.libuv=true;return "ets::defaultEventLoop.stop()";}
     if(["process.stdin","process.stdout","process.stderr"].includes(name)){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;return `ets::processStdio.${name.slice(8,name.length)}.stream()`;}
     if(name=="!child_process.spawn"){this.headers.add("runtime/ets_child_process.hpp");this.backends.libuv=true;this.processIo=true;return `ets::child_process.spawn(${this.runtimeArguments(f,i)})`;}
-    if(name=="length")return `ets::length(${this.operand(f,i,0)})`;
     if(name=="optionalSome")return `${T}::some(${this.operand(f,i,0)})`;
     if(name=="optionalNone")return `${T}::none()`;
     if(["ok","resultOk","err","resultErr"].includes(name))return `${T}::${["err","resultErr"].includes(name)?"failure":"success"}(${this.operand(f,i,0)})`;
@@ -1391,7 +1390,7 @@ let _cppLoop20Result:boolean=false;
 const _cppLoop20Input:IrRuntimeContract[]=this.project.runtimeContracts;
 for(let _cppLoop20Index:number=0;_cppLoop20Index<_cppLoop20Input.length;_cppLoop20Index=_cppLoop20Index+1){
 const c:IrRuntimeContract=_cppLoop20Input[_cppLoop20Index];
-if(["builtin.watchFs","builtin.setInterval"].includes(c.name)){_cppLoop20Result=true;break;}continue;
+if(c.name=="builtin.setInterval"){_cppLoop20Result=true;break;}continue;
 }
 
 let _cppLoop71Result:string[]=[];

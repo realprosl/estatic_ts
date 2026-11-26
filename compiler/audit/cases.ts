@@ -97,7 +97,7 @@ export const cases: AuditCase[] = [
   yes('async-await', 'async', 'async function f():Promise<number>{await sleep(1);return 1;}'),
   yes('for-await-of', 'async', 'async function f(xs:Promise<number>[]):Promise<void>{for await(const x of xs){print(x);}}'),
   no('async-borrow', 'async', box+'async function f(x:ref<Box>):Promise<number>{await sleep(1);return x.value;}'),
-  yes('builtin-string-global', 'builtins', 'print(length("x"));print(charAt("x",0));'),
+  yes('builtin-string-method', 'builtins', 'print("x".length);print("x".charAt(0));'),
   yes('builtin-math', 'builtins', 'print(Math.sqrt(4));'),
   yes('builtin-console', 'builtins', 'console.log("hello");'),
   yes('builtin-json', 'builtins', 'const j=JSON.parse("{}");'),

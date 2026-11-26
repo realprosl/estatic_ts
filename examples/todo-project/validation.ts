@@ -1,7 +1,7 @@
 import { Priority } from "./model.ts";
 
 export function validTitle(title: string): boolean {
-  return length(title) >= 3 && length(title) <= 80;
+  return title.length >= 3 && title.length <= 80;
 }
 
 export function validId(id: number): boolean {

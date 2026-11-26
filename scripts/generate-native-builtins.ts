@@ -29,7 +29,13 @@ for(const [name,params,result] of processBuiltinCatalog.contracts)add(name,param
 // Builtins retirados: ahora son librerías estatic:* (#292, #310).
 const retired=new Set(['argument','argumentCount','exitProcess','jsonEscape','normalizePath','pathDirectory','jsonIsNull','jsonIsString','jsonIsNumber','jsonIsBool','jsonIsArray','jsonIsObject','jsonArrayLength','jsonArrayGet','jsonObjectGet','jsonObjectKeys','jsonAsString','jsonAsNumber','jsonAsBool',
  // Ficheros, TCP/TLS, DNS y errores out-param: estatic:fs, estatic:net, estatic:tls, estatic:dns (#292, #203).
- 'acceptTcp','acceptTcpUntil','acceptTls','appendFile','appendFileAsync','appendFileUntil','clearError','closeTcp','closeTls','copyFile','copyFileAsync','copyFileUntil','createTlsServer','ensureParentDirectory','fail','fileAppend','fileCopy','fileExists','fileExistsAsync','fileMove','fileRead','fileRemove','fileWrite','hasError','listenTcp','moveFile','moveFileAsync','moveFileUntil','readFile','readFileAsync','readFileUntil','readTcp','readTcpUntil','readTls','removeFile','removeFileAsync','removeFileUntil','resolveDns','tcpAccept','tcpClose','tcpConnect','tcpListen','tcpRead','tcpWrite','writeFile','writeFileAsync','writeFileUntil','writeTcp','writeTcpUntil','writeTls']);
+ 'acceptTcp','acceptTcpUntil','acceptTls','appendFile','appendFileAsync','appendFileUntil','clearError','closeTcp','closeTls','copyFile','copyFileAsync','copyFileUntil','createTlsServer','ensureParentDirectory','fail','fileAppend','fileCopy','fileExists','fileExistsAsync','fileMove','fileRead','fileRemove','fileWrite','hasError','listenTcp','moveFile','moveFileAsync','moveFileUntil','readFile','readFileAsync','readFileUntil','readTcp','readTcpUntil','readTls','removeFile','removeFileAsync','removeFileUntil','resolveDns','tcpAccept','tcpClose','tcpConnect','tcpListen','tcpRead','tcpWrite','writeFile','writeFileAsync','writeFileUntil','writeTcp','writeTcpUntil','writeTls',
+ // Helpers de string: los métodos de string (s.length, s.charAt(i)...) (#166).
+ 'length','charAt','substring','indexOf','startsWith','trim','lineCount','lineAt',
+ // io_uring: estatic:fs ya lo usa por debajo en readFile/writeFile async (#292).
+ 'ioUringRead','ioUringWrite','ioUringAvailable','asyncIoUringRead','asyncIoUringWrite',
+ // Sin implementación en el backend ETS (Capacidad runtime no implementada).
+ 'openFileReader','watchFs','unwatchFs']);
 const retiredNamespaces=['!fs.','!path.','!process.','!http.','!child_process.'];
 for(const key of [...records.keys()])if(retired.has(key)||retiredNamespaces.some(prefix=>key.startsWith(prefix)))records.delete(key);
 const quote=JSON.stringify;

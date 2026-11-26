@@ -383,5 +383,5 @@ export function parseIrProject(text:string):IrProject{
   if(cursor.take(text,"}"))break;cursor.expect(text,",");
  }
  cursor.skip(text);
- if(cursor.at!=length(text)||format!="ets-ir-2"||!project.success||!sawDiagnostics||project.diagnostics.length!=0)cursor.fail();return project;
+ if(cursor.at!=text.length||format!="ets-ir-2"||!project.success||!sawDiagnostics||project.diagnostics.length!=0)cursor.fail();return project;
 }

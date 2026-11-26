@@ -27,7 +27,7 @@ function firstNonEmpty(arr: string[]): Optional<string> {
   let result: Optional<string> = optionalNone<string>();
   for (const s of arr) {
     if (optionalIsPresent(result)) break;
-    if (length(s) > 0) result = optionalSome(s);
+    if (s.length > 0) result = optionalSome(s);
   }
   return result;
 }
