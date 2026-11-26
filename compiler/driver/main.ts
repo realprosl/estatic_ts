@@ -97,13 +97,21 @@ function fingerprintCurrent(path:string,key:string):boolean{
 // necesita el programa por las cabeceras que incluye. sourceFlags[k]: los que
 // necesita cada fuente del runtime. Así un objeto del runtime no depende de qué
 // otras APIs use el programa y se comparte entre proyectos.
-class CppPlan{flags:string[];programFlags:string[];sources:string[];sourceFlags:string[][];libraries:string[];pchHeader:string;programUnits:number;constructor(){this.flags=[];this.programFlags=[];this.sources=[];this.sourceFlags=[];this.libraries=[];this.pchHeader="";this.programUnits=1;}}
+// archived[k] (#377): la fuente plan.sources[k] es parte del runtime dividido en
+// .hpp + .cpp y su objeto va a un .a, del que el enlazador solo saca lo usado.
+class CppPlan{flags:string[];programFlags:string[];sources:string[];sourceFlags:string[][];archived:boolean[];libraries:string[];pchHeader:string;programUnits:number;constructor(){this.flags=[];this.programFlags=[];this.sources=[];this.sourceFlags=[];this.archived=[];this.libraries=[];this.pchHeader="";this.programUnits=1;}}
+// Implementación del runtime dividido (#377, runtime/ets_api.hpp). Con
+// -DETS_RUNTIME_PRECOMPILED las cabeceras solo declaran y estas fuentes se
+// compilan una vez (caché de objetos del runtime) y se enlazan desde un .a.
+const precompiledRuntimeFlag:string="-DETS_RUNTIME_PRECOMPILED";
+function precompiledRuntimeSources():string[]{return ["ets_file_sync.cpp","ets_file_async.cpp"];}
 // archives (#215): los .a de las librerías, justo después de los objetos del programa.
 function cppPlan(result:constRef<IrCppResult>,root:string,cxx:string,flags:string[],archives:string[]):CppPlan{
- let plan=new CppPlan();for(const archive of archives)plan.libraries.push(archive);const base:string[]=[cxx,"-std=c++20","-O0","-pthread","-fno-exceptions","-I"+root];for(const flag of base)plan.flags.push(flag);for(const flag of flags)plan.flags.push(flag);
- if(result.runtimeBackends.libuv){const uv=root+"/build/libs/libuv";const none:string[]=[];if(exists(uv+"/include/uv.h"))plan.flags.push("-I"+uv+"/include");plan.sources.push(root+"/runtime/runtime_ets_libuv.cpp");plan.sourceFlags.push(none);plan.sources.push(root+"/runtime/runtime_ets_net_libuv.cpp");plan.sourceFlags.push(none);plan.libraries.push(exists(uv+"/lib/libuv.a")?uv+"/lib/libuv.a":"-luv");plan.libraries.push("-ldl");plan.libraries.push("-lrt");}
- if(result.headers.includes("runtime/ets_http_httplib.hpp")){plan.programFlags.push("-DCPPHTTPLIB_NO_EXCEPTIONS");plan.sources.push(root+"/runtime/external/httplib/httplib.cc");plan.sourceFlags.push(["-DCPPHTTPLIB_NO_EXCEPTIONS"]);}
- if(result.headers.includes("runtime/ets_regex.hpp")){plan.sources.push(root+"/runtime/ets_regex_compile.cpp");plan.sourceFlags.push(["-fexceptions"]);plan.programFlags.push("-fexceptions");}
+ let plan=new CppPlan();for(const archive of archives)plan.libraries.push(archive);const base:string[]=[cxx,"-std=c++20","-O0","-pthread","-fno-exceptions","-I"+root,precompiledRuntimeFlag];for(const flag of base)plan.flags.push(flag);for(const flag of flags)plan.flags.push(flag);
+ const noFlags:string[]=[];for(const source of precompiledRuntimeSources()){plan.sources.push(root+"/runtime/"+source);plan.sourceFlags.push(noFlags);plan.archived.push(true);}
+ if(result.runtimeBackends.libuv){const uv=root+"/build/libs/libuv";const none:string[]=[];if(exists(uv+"/include/uv.h"))plan.flags.push("-I"+uv+"/include");plan.sources.push(root+"/runtime/runtime_ets_libuv.cpp");plan.sourceFlags.push(none);plan.archived.push(false);plan.sources.push(root+"/runtime/runtime_ets_net_libuv.cpp");plan.sourceFlags.push(none);plan.archived.push(false);plan.libraries.push(exists(uv+"/lib/libuv.a")?uv+"/lib/libuv.a":"-luv");plan.libraries.push("-ldl");plan.libraries.push("-lrt");}
+ if(result.headers.includes("runtime/ets_http_httplib.hpp")){plan.programFlags.push("-DCPPHTTPLIB_NO_EXCEPTIONS");plan.sources.push(root+"/runtime/external/httplib/httplib.cc");plan.sourceFlags.push(["-DCPPHTTPLIB_NO_EXCEPTIONS"]);plan.archived.push(false);}
+ if(result.headers.includes("runtime/ets_regex.hpp")){plan.sources.push(root+"/runtime/ets_regex_compile.cpp");plan.sourceFlags.push(["-fexceptions"]);plan.archived.push(false);plan.programFlags.push("-fexceptions");}
  if(result.headers.includes("runtime/ets_http_drogon.hpp")){plan.programFlags.push("-fexceptions");plan.flags.push("-I/usr/include/jsoncpp");const drogon=root+"/build/libs/drogon";if(exists(drogon+"/include/drogon/drogon.h"))plan.flags.push("-I"+drogon+"/include");if(exists(drogon+"/lib/libdrogon.a"))plan.libraries.push("-L"+drogon+"/lib");const dependencies:string[]=["-ldrogon","-ltrantor","-ljsoncpp","-luuid","-lz","-lssl","-lcrypto","-lresolv","-ldl"];for(const dependency of dependencies)plan.libraries.push(dependency);}
  if(result.runtimeBackends.tls){plan.libraries.push("-lssl");plan.libraries.push("-lcrypto");}if(result.runtimeBackends.curl)plan.libraries.push("-lcurl");
  for(const link of result.links)if(!plan.libraries.includes(link))plan.libraries.push(link);
@@ -218,8 +226,10 @@ function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:s
  const userCache=cacheObjects?runtimeObjectCache():"";const shipped=root+"/build/objects";
  const programCache=cacheObjects&&projectCache!=""&&directories(projectCache+"/objects")?projectCache+"/objects":"";
  if(userCache==""&&programCache==""&&!(cacheObjects&&exists(shipped))){
-  // Sin caché: una sola llamada, como siempre.
-  let sources:string[]=[];for(const unit of units)sources.push(unit);for(const source of plan.sources)sources.push(source);
+  // Sin caché: una sola llamada, como siempre. El runtime vuelve a ser
+  // header-only (#377): sin caché no hay dónde guardar el .a.
+  plan.flags=withoutFlag(plan.flags,precompiledRuntimeFlag);
+  let sources:string[]=[];for(const unit of units)sources.push(unit);for(let k:number=0;k<plan.sources.length;k=k+1)if(!plan.archived[k])sources.push(plan.sources[k]);
   progressStart("Compilando y enlazando C++");const status=executeAll([linkCommand(plan,sources,links,binary)]);
   if(status!=0)driverError(cxx+" terminó con "+numberToString(status),status);if(!exists(binary))driverError("El compilador no creó "+binary);return;
  }
@@ -278,19 +288,35 @@ function compileCpp(result:constRef<IrCppResult>,cpp:string,binary:string,root:s
   if(pchStatus==0&&exists(pchPartial)){rename(pchPartial,pchFinal);prunePch(userCache+"/../pch",5);}else remove(pchPartial);
  }
  if(status!=0)driverError(cxx+" terminó con "+numberToString(status),status);
- progressStart("Enlazando");status=executeAll([linkCommand(plan,targets,links,binary)]);
+ progressStart("Enlazando");status=executeAll([linkCommand(plan,linkedObjects(plan,targets,userCache,binary),links,binary)]);
  if(status!=0){
   // Un objeto reutilizado puede estar dañado: se recompila todo lo reutilizado
   // (fuera de la instalación, que es de solo lectura) y se enlaza otra vez.
   let retry:boolean=false;for(let k:number=0;k<sources.length;k=k+1){if(build[k])continue;retry=true;build[k]=true;
    if(targets[k].startsWith(shipped+"/")){if(userCache!=""){targets[k]=userCache+"/"+targets[k].slice(shipped.length+1,targets[k].length);publish[k]=targets[k];}else{targets[k]=binary+".runtime"+numberToString(k)+".o";publish[k]="";drop[k]=true;}}
    else remove(targets[k]);}
-  if(retry){progressStart("Recompilando objetos de la caché");status=compileObjects(plan,sources,targets,build,publish);if(status==0)status=executeAll([linkCommand(plan,targets,links,binary)]);}
+  if(retry){progressStart("Recompilando objetos de la caché");status=compileObjects(plan,sources,targets,build,publish);if(status==0)status=executeAll([linkCommand(plan,linkedObjects(plan,targets,userCache,binary),links,binary)]);}
  }
  for(let k:number=0;k<targets.length;k=k+1)if(drop[k])remove(targets[k]);
+ if(userCache=="")remove(binary+".runtime.a");
  if(status!=0)driverError(cxx+" terminó con "+numberToString(status),status);if(!exists(binary))driverError("El compilador no creó "+binary);
  // La caché del proyecto solo guarda el objeto del programa vigente.
  if(programCache!=""){let current:string[]=[];for(let k:number=0;k<plan.programUnits;k=k+1)current.push(targets[k]);for(const file of files(programCache))if(file.startsWith("program-")&&!current.includes(programCache+"/"+file))remove(programCache+"/"+file);}
+}
+function withoutFlag(flags:constRef<string[]>,removed:string):string[]{let result:string[]=[];for(const flag of flags)if(flag!=removed)result.push(flag);return result;}
+// Objetos a enlazar: los del runtime dividido (#377) van juntos en un .a, del
+// que el enlazador saca solo los que el programa usa. El .a se guarda en la
+// caché por el hash de sus miembros (rutas con clave de contenido).
+function linkedObjects(plan:constRef<CppPlan>,targets:string[],userCache:string,binary:string):string[]{
+ let result:string[]=[];let members:string[]=[];
+ for(let k:number=0;k<targets.length;k=k+1){const source:number=k-plan.programUnits;if(source>=0&&plan.archived[source])members.push(targets[k]);else result.push(targets[k]);}
+ if(members.length==0)return result;
+ const archive:string=userCache!=""?userCache+"/runtime-"+contentHash(members.join("\n"))+".a":binary+".runtime.a";
+ if(!exists(archive)||userCache==""){
+  const partial:string=archive+"."+numberToString(now())+".tmp";let command:string[]=["ar","rcs",partial];for(const member of members)command.push(member);
+  if(executeAll([command])!=0||!rename(partial,archive)){remove(partial);driverError("No se pudo crear "+archive);}
+ }
+ result.push(archive);return result;
 }
 // Escribe solo si el contenido cambia (las fechas de las unidades intactas no se tocan).
 function writeIfChanged(path:string,text:string):void{if(exists(path)&&readText(path)==text)return;checkedWrite(path,text);}
