@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include <curl/curl.h>
+#include "runtime/ets_api.hpp"
+
 
 #include <cstring>
 #include <memory>
@@ -60,72 +61,9 @@ struct HttpClientResponse {
     std::vector<std::pair<std::string, std::string>> headers_;
 };
 
-// ----------------------------------------------------------------------------
-// libcurl global init/cleanup. Una vez por proceso. RAII via CurLGlobal_.
-// ----------------------------------------------------------------------------
-namespace detail {
-inline void ensureCurlGlobalInit() {
-    static std::once_flag once;
-    std::call_once(once, []() { curl_global_init(CURL_GLOBAL_DEFAULT); });
-}
-}  // namespace detail
+// Los detalles de libcurl (init global, callbacks, makeEasyHandle) están en
+// runtime/ets_http_curl_detail.hpp, que solo incluyen los .cpp (#377).
 
-// ----------------------------------------------------------------------------
-// httpClientGet / httpClientPost — envuelven curl_easy. Bloqueantes
-// (mismo modelo que el V28). Para async real usar curl_multi, que
-// sera un PR siguiente si hace falta.
-// ----------------------------------------------------------------------------
-namespace detail {
-
-// Buffer de escritura que crece con cada llamada al callback.
-struct WriteBuf {
-    std::string data;
-};
-inline size_t curlWriteCb(char* p, size_t s, size_t n, void* ud) {
-    auto* b = static_cast<WriteBuf*>(ud);
-    b->data.append(p, s * n);
-    return s * n;
-}
-
-// Header callback: cada header llega como una linea "Name: Value\r\n".
-// Guardamos todos en el response para que header(name) funcione.
-inline size_t curlHeaderCb(char* p, size_t s, size_t n, void* ud) {
-    auto* out = static_cast<HttpClientResponse*>(ud);
-    const std::size_t total = s * n;
-    std::string line(p, total);
-    // Quita \r\n al final si los tiene.
-    while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) {
-        line.pop_back();
-    }
-    // Ignora lineas de status (HTTP/1.1 200 OK) y lineas vacias.
-    if (line.empty()) return total;
-    if (line.compare(0, 5, "HTTP/") == 0) return total;
-    const auto colon = line.find(':');
-    if (colon == std::string::npos) return total;
-    std::string name = line.substr(0, colon);
-    std::string value = line.substr(colon + 1);
-    // Trim leading whitespace del value.
-    std::size_t vs = 0;
-    while (vs < value.size() && (value[vs] == ' ' || value[vs] == '\t')) ++vs;
-    value = value.substr(vs);
-    out->headers_.emplace_back(std::move(name), std::move(value));
-    return total;
-}
-
-inline CURL* makeEasyHandle(const std::string& url, long timeoutSec = 10) {
-    CURL* h = curl_easy_init();
-    if (!h) return nullptr;
-    curl_easy_setopt(h, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(h, CURLOPT_TIMEOUT, timeoutSec);
-    curl_easy_setopt(h, CURLOPT_CONNECTTIMEOUT, timeoutSec);
-    curl_easy_setopt(h, CURLOPT_NOSIGNAL, 1L);  // thread-safe
-    curl_easy_setopt(h, CURLOPT_FOLLOWLOCATION, 1L);  // redirects
-    curl_easy_setopt(h, CURLOPT_MAXREDIRS, 5L);
-    curl_easy_setopt(h, CURLOPT_ACCEPT_ENCODING, "");  // gzip/deflate
-    return h;
-}
-
-}  // namespace detail
 
 }  // namespace ets  // cierre del namespace ets abierto en linea 36
     // (HttpClientResponse y detail::*). Reabrimos namespace ets para
@@ -139,67 +77,14 @@ inline CURL* makeEasyHandle(const std::string& url, long timeoutSec = 10) {
 
 namespace ets {
 
-inline ets::Result<ets::HttpClientResponse> httpClientGet(const std::string& url) {
-    detail::ensureCurlGlobalInit();
-    CURL* h = detail::makeEasyHandle(url);
-    if (!h) return ets::Result<ets::HttpClientResponse>::failure("curl_easy_init failed");
-    detail::WriteBuf wb;
-    HttpClientResponse resp;
-    curl_easy_setopt(h, CURLOPT_HTTPGET, 1L);
-    curl_easy_setopt(h, CURLOPT_WRITEFUNCTION, detail::curlWriteCb);
-    curl_easy_setopt(h, CURLOPT_WRITEDATA, &wb);
-    curl_easy_setopt(h, CURLOPT_HEADERFUNCTION, detail::curlHeaderCb);
-    curl_easy_setopt(h, CURLOPT_HEADERDATA, &resp);
-    CURLcode rc = curl_easy_perform(h);
-    if (rc != CURLE_OK) {
-        std::string err = "GET " + url + " failed: ";
-        err += curl_easy_strerror(rc);
-        curl_easy_cleanup(h);
-        return ets::Result<ets::HttpClientResponse>::failure(std::move(err));
-    }
-    long status = 0;
-    curl_easy_getinfo(h, CURLINFO_RESPONSE_CODE, &status);
-    resp.status_ = static_cast<int>(status);
-    resp.body_ = std::move(wb.data);
-    curl_easy_cleanup(h);
-    return ets::Result<ets::HttpClientResponse>::success(std::move(resp));
-}
+ETS_API ets::Result<ets::HttpClientResponse> httpClientGet(const std::string& url);
 
-inline ets::Result<ets::HttpClientResponse> httpClientPost(const std::string& url,
+ETS_API ets::Result<ets::HttpClientResponse> httpClientPost(const std::string& url,
                                                 const std::string& body,
-                                                const std::string& contentType) {
-    detail::ensureCurlGlobalInit();
-    CURL* h = detail::makeEasyHandle(url);
-    if (!h) return ets::Result<ets::HttpClientResponse>::failure("curl_easy_init failed");
-    detail::WriteBuf wb;
-    HttpClientResponse resp;
-    curl_easy_setopt(h, CURLOPT_POST, 1L);
-    curl_easy_setopt(h, CURLOPT_POSTFIELDS, body.c_str());
-    curl_easy_setopt(h, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
-    struct curl_slist* headers = nullptr;
-    if (!contentType.empty()) {
-        const std::string h = "Content-Type: " + contentType;
-        headers = curl_slist_append(headers, h.c_str());
-    }
-    if (headers) curl_easy_setopt(h, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(h, CURLOPT_WRITEFUNCTION, detail::curlWriteCb);
-    curl_easy_setopt(h, CURLOPT_WRITEDATA, &wb);
-    curl_easy_setopt(h, CURLOPT_HEADERFUNCTION, detail::curlHeaderCb);
-    curl_easy_setopt(h, CURLOPT_HEADERDATA, &resp);
-    CURLcode rc = curl_easy_perform(h);
-    if (headers) curl_slist_free_all(headers);
-    if (rc != CURLE_OK) {
-        std::string err = "POST " + url + " failed: ";
-        err += curl_easy_strerror(rc);
-        curl_easy_cleanup(h);
-        return ets::Result<ets::HttpClientResponse>::failure(std::move(err));
-    }
-    long status = 0;
-    curl_easy_getinfo(h, CURLINFO_RESPONSE_CODE, &status);
-    resp.status_ = static_cast<int>(status);
-    resp.body_ = std::move(wb.data);
-    curl_easy_cleanup(h);
-    return ets::Result<ets::HttpClientResponse>::success(std::move(resp));
-}
+                                                const std::string& contentType);
 
 }  // namespace ets
+
+#if !defined(ETS_RUNTIME_PRECOMPILED)
+#include "runtime/ets_http_curl_client.cpp"
+#endif
