@@ -1,5 +1,7 @@
 #pragma once
 
+#include "runtime/ets_api.hpp"
+
 // V16: IO básico + console estilo JS + Math + Date. Se incluye siempre
 // porque casi todos los programas usan `print` o `console.log` para
 // depurar. Si el usuario realmente no quiere este coste, puede usar la
@@ -7,11 +9,9 @@
 
 #include <cctype>
 #include <charconv>
-#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <iostream>
-#include <random>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -100,12 +100,7 @@ struct ets_math {
     static double max(const double left, const double right) noexcept { return left > right ? left : right; }
     // V30.22.2: `random()` devuelve un double en [0, 1). Usa el Mersenne
     // Twister via <random> para mejor calidad que `std::rand()`.
-    static double random() noexcept {
-        // Seeding: solo una vez al primer call (thread-safe via static).
-        static std::mt19937 generator{std::random_device{}()};
-        std::uniform_real_distribution<double> dist(0.0, 1.0);
-        return dist(generator);
-    }
+    static double random() noexcept;  // en ets_io.cpp (<random> fuera de la cabecera, #377)
 };
 
 // V30.22.2: constantes matematicas como funciones (`PI()` y `E()` devuelven
@@ -125,18 +120,12 @@ inline ets_math Math{};
 
 // `Date` (Bloque E): API mínima estilo JavaScript para tiempo.
 struct ets_date {
-    static double now() noexcept {
-        return static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count());
-    }
-    static double utc(const double year, const double month, const double day) noexcept {
-        std::tm time{};
-        time.tm_year = static_cast<int>(year) - 1900;
-        time.tm_mon = static_cast<int>(month);
-        time.tm_mday = static_cast<int>(day);
-        time.tm_isdst = 0;
-        return static_cast<double>(static_cast<std::int64_t>(timegm(&time)) * 1000);
-    }
+    static double now() noexcept;  // en ets_io.cpp (<chrono> fuera de la cabecera, #377)
+    static double utc(const double year, const double month, const double day) noexcept;
 };
 
 inline ets_date Date{};
+
+#if !defined(ETS_RUNTIME_PRECOMPILED)
+#include "runtime/ets_io.cpp"
+#endif
