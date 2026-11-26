@@ -1,10 +1,10 @@
 #pragma once
+
+#include "runtime/ets_api.hpp"
 // Included only for semantic uses of the ETS `console` terminal methods.
-#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <mutex>
 #include <string>
 #include "runtime/ets_io.hpp"
@@ -73,12 +73,7 @@ struct State {
     }
 };
 inline State& state() {static State value;return value;}
-inline int colorCode(const std::string& name) {
-    const char* colors[]={"black","red","green","yellow","blue","magenta","cyan","white"};
-    if(name=="default") return 9;
-    for(int i=0;i<8;i++) if(name==colors[i]) return i;
-    return -1;
-}
+ETS_API int colorCode(const std::string& name);
 inline bool integer(double value,double minimum,double maximum) {
     return std::isfinite(value) && std::floor(value)==value && value>=minimum && value<=maximum;
 }
@@ -213,3 +208,7 @@ inline bool ets_console::moveTo(double arg0, double arg1) { return ::ets::termin
 inline bool ets_console::moveBy(double arg0, double arg1) { return ::ets::terminal_detail::Operations{}.moveBy(arg0, arg1); }
 inline bool ets_console::hideCursor() { return ::ets::terminal_detail::Operations{}.hideCursor(); }
 inline bool ets_console::showCursor() { return ::ets::terminal_detail::Operations{}.showCursor(); }
+
+#if !defined(ETS_RUNTIME_PRECOMPILED)
+#include "runtime/ets_terminal.cpp"
+#endif

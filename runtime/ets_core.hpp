@@ -1,5 +1,7 @@
 #pragma once
 
+#include "runtime/ets_api.hpp"
+
 // V16: runtime mínimo que SIEMPRE se incluye. Define:
 //   - Variables globales `ets_argc`/`ets_argv` (entry points)
 //   - Helpers de argumentos (argument, count)
@@ -13,8 +15,6 @@
 
 #include <cstddef>
 #include <cstdlib>
-#include <filesystem>
-#include <sstream>
 #include <string>
 #include <type_traits>
 #include <variant>
@@ -58,13 +58,7 @@ inline bool fail(const std::string& message, std::string& error) noexcept {
 inline void clearError(std::string& error) noexcept { error.clear(); }
 inline bool hasError(const std::string& error) noexcept { return !error.empty(); }
 
-inline bool ensureParentDirectory(const std::string& path, std::string& error) noexcept {
-    std::error_code status;
-    const auto parent = std::filesystem::path(path).parent_path();
-    if (!parent.empty()) std::filesystem::create_directories(parent, status);
-    if (status) { error = "No se puede crear el directorio de salida: " + status.message(); return false; }
-    return true;
-}
+ETS_API bool ensureParentDirectory(const std::string& path, std::string& error) noexcept;
 
 inline double argumentCount() { return static_cast<double>(ets_argc); }
 
@@ -73,18 +67,7 @@ inline double argumentCount() { return static_cast<double>(ets_argc); }
 // los argumentos del usuario empiezan en argv[2] y `process.argv.slice(2)`
 // funciona igual. `process.argc` es una extension: `process.argv.length`.
 namespace ets {
-inline std::vector<std::string> processArgv() {
-    std::vector<std::string> result;
-    if (ets_argc <= 0 || ets_argv == nullptr) return result;
-    std::error_code error;
-    auto program = std::filesystem::absolute(ets_argv[0], error);
-    const std::string path = error ? std::string(ets_argv[0]) : program.lexically_normal().string();
-    result.reserve(static_cast<std::size_t>(ets_argc) + 1);
-    result.push_back(path);
-    result.push_back(path);
-    for (int index = 1; index < ets_argc; ++index) result.emplace_back(ets_argv[index]);
-    return result;
-}
+ETS_API std::vector<std::string> processArgv();
 inline double processArgc() { return ets_argc > 0 ? static_cast<double>(ets_argc) + 1 : 0; }
 } // namespace ets
 
@@ -140,3 +123,7 @@ std::string concat(const Parts&... parts) {
     return out;
 }
 }  // namespace ets
+
+#if !defined(ETS_RUNTIME_PRECOMPILED)
+#include "runtime/ets_core.cpp"
+#endif
