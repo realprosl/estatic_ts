@@ -1,5 +1,6 @@
 #pragma once
 #include "runtime/ets_runtime.hpp"
+#include <filesystem>
 #include "runtime/ets_optional.hpp"
 #include "runtime/ets_async.hpp"
 #include "runtime/ets_file.hpp"

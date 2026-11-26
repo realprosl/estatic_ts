@@ -17,7 +17,6 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cctype>
-#include <filesystem>
 #include <map>
 #include <optional>
 #include <string>
@@ -393,9 +392,7 @@ ETS_API std::string compilerRoot();
 
 ETS_API std::string resolveImportPath(const std::string& importer, const std::string& specifier);
 
-inline std::string pathDirectory(const std::string& path) {
-    return std::filesystem::path(normalizePath(path)).parent_path().string();
-}
+ETS_API std::string pathDirectory(const std::string& path);
 
 ETS_API std::string resolveProjectPath(const std::string& configFile, const std::string& value);
 

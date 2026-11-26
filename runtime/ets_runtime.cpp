@@ -103,3 +103,7 @@ ETS_API std::string resolveProjectPath(const std::string& configFile, const std:
     const std::filesystem::path requested(value);
     return normalizePath((requested.is_absolute() ? requested : std::filesystem::path(configFile).parent_path() / requested).string());
 }
+
+ETS_API std::string pathDirectory(const std::string& path) {
+    return std::filesystem::path(normalizePath(path)).parent_path().string();
+}
