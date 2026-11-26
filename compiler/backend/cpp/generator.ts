@@ -1157,7 +1157,13 @@ _cppLoop43Result.push(this.output(this.operand(f,i,k,false),f.values[v]));contin
 }
 return `${object}.${method.startsWith("stringify")?"stringify":method}(${base=="Console"?_cppLoop43Result.join(","):this.runtimeArguments(f,i)})`;}
   }
-  if(base=="string"&&stringMethods(method))return `ets::string_${method}(${this.runtimeArguments(f,i)})`;
+  if(base=="string"&&stringMethods(method)){
+    // match/matchAll/search y las sobrecargas con RegExp de replace/replaceAll/
+    // split están en runtime/lib/regexp.hpp: se registra para la cabecera de
+    // esta función (#377; antes llegaba porque todo incluía program.hpp).
+    if(["match","matchAll","search","replace","replaceAll","split"].includes(method)&&this.usesRegexpLibrary())this.headers.add("runtime/lib/regexp.hpp");
+    return `ets::string_${method}(${this.runtimeArguments(f,i)})`;
+  }
   if(i.operands.length==0)this.fail(`Capacidad runtime no implementada: ${c.capability}`,i.source);
   const actual=f.values[i.operands[0]];const  input=this.inner(actual);const  shape=this.shape(input);const  receiver=this.deref(this.operand(f,i,0,false),actual);
   if(["Optional","Result"].includes(base)) {
@@ -1305,6 +1311,8 @@ if(i.op!="load"||i.result!=b.value||i.result<0||i.result>=f.values.length||f.val
   // Cabecera de una librería: lo que necesitan sus funciones y nada más del
   // proyecto (salvo tipos que sus funciones usan, p. ej. implementaciones de
   // una interfaz; entonces su texto cambia y la caché lo nota).
+  // ¿El programa carga estatic:regexp? (su @include trae las sobrecargas con RegExp).
+  usesRegexpLibrary():boolean{for(const a of this.project.annotations)if(a.name=="include"&&a.arguments.length==1&&a.arguments[0]=="runtime/lib/regexp.hpp")return true;return false;}
   libraryHeader(libraryRoot:string,lead:string[],forwards:string[],printable:number[],printerPrototypes:string[],printers:string[],declarations:string):string{
     let seen:Set<number> = new Set<number>();let callees:number[]=[];let own:number[]=[];let globalsUsed:number[]=[];let used:string[]=[];
     for(let k:number=0;k<this.project.functions.length;k=k+1){
