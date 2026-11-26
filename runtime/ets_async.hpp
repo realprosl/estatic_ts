@@ -2,7 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
-#include <chrono>
+#include "runtime/ets_clock.hpp"
 #include <condition_variable>
 #include <coroutine>
 #include <cstdlib>

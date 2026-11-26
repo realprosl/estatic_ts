@@ -2,7 +2,7 @@
 // y escrituras síncronas y async) y añade lo de directorios con std::filesystem.
 #pragma once
 #include <algorithm>
-#include <chrono>
+#include "runtime/ets_clock.hpp"
 #include <filesystem>
 #include <string>
 #include <system_error>

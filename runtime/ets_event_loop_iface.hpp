@@ -12,7 +12,7 @@
 
 #include <atomic>
 #include <coroutine>
-#include <chrono>
+#include "runtime/ets_clock.hpp"
 #include <memory>
 
 namespace ets {
