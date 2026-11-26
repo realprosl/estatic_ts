@@ -239,8 +239,9 @@ test("install builds compiler/ with the seed and publishes that executable",asyn
    p=run(["run","main.ts","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);
    const units=readdirSync(join(project,"build/app.cpp.units")).sort();assert.ok(units.includes("program.hpp")&&units.includes("__main.cpp")&&units.some(u=>u.endsWith("math.cpp")),units.join(","));
    const objects=()=>readdirSync(join(project,".cache/objects")).filter(f=>f.startsWith("program-")).sort();const before=objects();
-   // Solo las unidades del programa van a la caché del proyecto: las de estatic: y del preludio (#377) tienen su cabecera y su objeto compartido.
-   const programUnits=units.filter(u=>u.endsWith(".cpp")&&readFileSync(join(project,"build/app.cpp.units",u),"utf8").includes('#include "program.hpp"'));assert.equal(before.length,programUnits.length,units.join(","));
+   // Solo las unidades del proyecto (main, math y __main) van a su caché: las de
+   // estatic: y del preludio (#377) tienen objeto compartido en la del usuario.
+   const programUnits=units.filter(u=>u=="__main.cpp"||u=="main.cpp"||u.endsWith("math.cpp"));assert.equal(before.length,programUnits.length,units.join(","));
    writeFileSync(join(project,"math.ts"),readFileSync(join(project,"math.ts"),"utf8").replace("total = total + index;","total = total + index * 1;"));
    p=run(["run","main.ts","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);
    const after=objects();assert.equal(after.length,before.length);assert.equal(after.filter(o=>!before.includes(o)).length,1,"solo se recompila la unidad de math");
