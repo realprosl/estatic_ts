@@ -238,7 +238,9 @@ test("install builds compiler/ with the seed and publishes that executable",asyn
    let p=run(["run","main.ts","--unity","-o","build/unity.cpp","--binary","build/unity"]);assert.equal(p.status,0,p.stderr);const expected=p.stdout;
    p=run(["run","main.ts","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);
    const units=readdirSync(join(project,"build/app.cpp.units")).sort();assert.ok(units.includes("program.hpp")&&units.includes("__main.cpp")&&units.some(u=>u.endsWith("math.cpp")),units.join(","));
-   const objects=()=>readdirSync(join(project,".cache/objects")).filter(f=>f.startsWith("program-")).sort();const before=objects();assert.equal(before.length,units.length-1);
+   const objects=()=>readdirSync(join(project,".cache/objects")).filter(f=>f.startsWith("program-")).sort();const before=objects();
+   // Solo las unidades del programa van a la caché del proyecto: las de estatic: y del preludio (#377) tienen su cabecera y su objeto compartido.
+   const programUnits=units.filter(u=>u.endsWith(".cpp")&&readFileSync(join(project,"build/app.cpp.units",u),"utf8").includes('#include "program.hpp"'));assert.equal(before.length,programUnits.length,units.join(","));
    writeFileSync(join(project,"math.ts"),readFileSync(join(project,"math.ts"),"utf8").replace("total = total + index;","total = total + index * 1;"));
    p=run(["run","main.ts","-o","build/app.cpp","--binary","build/app","--cache",".cache"]);assert.equal(p.status,0,p.stderr);assert.equal(p.stdout,expected);
    const after=objects();assert.equal(after.length,before.length);assert.equal(after.filter(o=>!before.includes(o)).length,1,"solo se recompila la unidad de math");
