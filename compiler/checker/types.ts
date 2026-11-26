@@ -3,12 +3,15 @@
 export function splitTypes(text: string, separator: string): string[] {
   if ((separator == "|" || separator == "&") && functionClose(text) >= 0) { let callable: string[] = [text]; return callable; }
   let result: string[] = []; let round: number = 0; let square: number = 0; let angle: number = 0; let start: number = 0;
+  // Códigos en vez de charAt: sin un string por carácter (#344). El separador
+  // es siempre de un carácter ("|", "&", ",").
+  const separatorCode: number = separator.length == 1 ? separator.charCodeAt(0) : -1;
   for (let i: number = 0; i < text.length; i = i + 1) {
-    const c: string = text.charAt(i);
-    if (c == "(") round = round + 1; else if (c == ")") round = round - 1;
-    else if (c == "[") square = square + 1; else if (c == "]") square = square - 1;
-    else if (c == "<") angle = angle + 1; else if (c == ">" && text.charAt(i - 1) != "=") angle = angle - 1;
-    else if (c == separator && round == 0 && square == 0 && angle == 0) { result.push(separator == "|" || separator == "&" ? ungroupElement(text.slice(start, i).trim()) : text.slice(start, i).trim()); start = i + 1; }
+    const c: number = text.charCodeAt(i);
+    if (c == 40) round = round + 1; else if (c == 41) round = round - 1;
+    else if (c == 91) square = square + 1; else if (c == 93) square = square - 1;
+    else if (c == 60) angle = angle + 1; else if (c == 62 && (i == 0 || text.charCodeAt(i - 1) != 61)) angle = angle - 1;
+    else if (c == separatorCode && round == 0 && square == 0 && angle == 0) { result.push(separator == "|" || separator == "&" ? ungroupElement(text.slice(start, i).trim()) : text.slice(start, i).trim()); start = i + 1; }
   }
   if (start < text.length) result.push(separator == "|" || separator == "&" ? ungroupElement(text.slice(start, text.length).trim()) : text.slice(start, text.length).trim()); return result;
 }
@@ -21,8 +24,9 @@ export function joinTypes(parts: string[], separator: string): string {
 export function functionClose(text: string): number {
   if (!text.startsWith("(")) return -1; let depth: number = 0;
   for (let i: number = 0; i < text.length; i = i + 1) {
-    if (text.charAt(i) == "(") depth = depth + 1;
-    if (text.charAt(i) == ")") { depth = depth - 1; if (depth == 0 && text.slice(i + 1, i + 3) == "=>") return i; }
+    const c: number = text.charCodeAt(i);
+    if (c == 40) depth = depth + 1;
+    if (c == 41) { depth = depth - 1; if (depth == 0 && i + 2 < text.length && text.charCodeAt(i + 1) == 61 && text.charCodeAt(i + 2) == 62) return i; }
   } return -1;
 }
 export function functionParams(text: string): string[] { const close: number = functionClose(text); if (close < 0) { let empty: string[] = []; return empty; } return splitTypes(text.slice(1, close), ","); }

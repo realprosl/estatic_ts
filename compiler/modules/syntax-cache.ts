@@ -134,8 +134,10 @@ export class FileRecord {
   }
 }
 export class CachedSource {
-  result: SourceResult; record: FileRecord; reused: boolean;
-  constructor(result: SourceResult, record: FileRecord, reused: boolean) { this.result = result; this.record = record; this.reused = reused; }
+  // metadataChanged: el registro vino de la caché pero con otra fecha o tamaño
+  // del fichero; hay que volver a guardarlo aunque la sintaxis no cambie.
+  result: SourceResult; record: FileRecord; reused: boolean; metadataChanged: boolean;
+  constructor(result: SourceResult, record: FileRecord, reused: boolean) { this.result = result; this.record = record; this.reused = reused; this.metadataChanged = false; }
 }
 export class SyntaxCache {
   directory: string; identity: string; records: FileRecord[]; hits: number; misses: number; writes: number;
@@ -172,7 +174,8 @@ export class SyntaxCache {
     if (record.hash == hash) {
       const restored: SourceResult = decodeSyntax(record.syntax, file, sourceUnits(source));
       if (restored.parsed) {
-        this.hits = this.hits + 1; record.metadata = metadata; return new CachedSource(restored, record, true);
+        this.hits = this.hits + 1; const changed: boolean = record.metadata != metadata; record.metadata = metadata;
+        let hit = new CachedSource(restored, record, true); hit.metadataChanged = changed; return hit;
       }
     }
     const result: SourceResult = parseSource(source, file); this.misses = this.misses + 1;

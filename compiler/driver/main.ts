@@ -41,12 +41,13 @@ function irCacheKey(graph:ModuleGraph,options:LoaderOptions):string{
  // ESTATIC_NO_ANALYSIS_CACHE=1 (en el loader) desactiva esta caché y la de flujos.
  if(graph.analysisCache==""||syntaxIdentity()==""||!graph.success||graph.diagnostics.length>0)return "";
  let text="ets-ir-1|"+syntaxIdentity()+"|"+graph.analysisKey+"\n";
- for(const module of graph.modules){if(module.cached.record.hash=="")return "";text=text+module.file+"|"+module.cached.record.hash+"\n";}
+ // Por índice: `for (const module of ...)` copiaría cada módulo con su AST (#344).
+ for(let m:number=0;m<graph.modules.length;m=m+1){if(graph.modules[m].cached.record.hash=="")return "";text=text+graph.modules[m].file+"|"+graph.modules[m].cached.record.hash+"\n";}
  return contentHash(text);
 }
 function irCachePath(options:LoaderOptions,entry:string):string{return options.cacheDirectory+"/ir/"+contentHash(entry)+".ir";}
 function sourceIr(entry:string,options:LoaderOptions,verbose:boolean,needIr:boolean):IrProject{
- const loadProfile=profileBegin();let loader=new ModuleLoader(options);const graph=loader.load(entry);profileEnd("load",loadProfile);for(const file of graph.modules)analyzedFiles.push(file.file);
+ const loadProfile=profileBegin();let loader=new ModuleLoader(options);const graph=loader.load(entry);profileEnd("load",loadProfile);for(let m:number=0;m<graph.modules.length;m=m+1)analyzedFiles.push(graph.modules[m].file);
  const irKey=irCacheKey(graph,options);
  if(irKey!=""){const snapshot=readSnapshot(irCachePath(options,entry));const newline=snapshot.length>=2&&snapshot[1]==""?snapshot[0].indexOf("\n"):-1;
   if(newline>0&&snapshot[0].slice(0,newline)==irKey){const cachedProfile=profileBegin();progressDetail("Sin cambios en las fuentes: se reutiliza el IR verificado");const text=snapshot[0].slice(newline+1,snapshot[0].length);
