@@ -105,11 +105,12 @@ class CppPlan{flags:string[];programFlags:string[];sources:string[];sourceFlags:
 // compilan una vez (caché de objetos del runtime) y se enlazan desde un .a.
 const precompiledRuntimeFlag:string="-DETS_RUNTIME_PRECOMPILED";
 // Cada fuente se compila solo si el programa usa su backend: las de libuv
-// necesitan <uv.h> y las de TLS, OpenSSL.
+// necesitan <uv.h>; las de TLS, OpenSSL, y las de curl, libcurl.
 function precompiledRuntimeSources(result:constRef<IrCppResult>):string[]{
  let sources:string[]=["ets_core.cpp","ets_io.cpp","ets_runtime.cpp","ets_net_sync.cpp","ets_process.cpp","ets_terminal.cpp"];
  if(result.runtimeBackends.libuv){const uv:string[]=["ets_file_sync.cpp","ets_file_async.cpp","ets_net.cpp","ets_net_async.cpp","ets_timer.cpp"];for(const source of uv)sources.push(source);}
  if(result.runtimeBackends.tls){sources.push("ets_tls.cpp");sources.push("ets_tls_async.cpp");}
+ if(result.runtimeBackends.curl){sources.push("ets_http_curl_client.cpp");sources.push("ets_http_curl_async.cpp");sources.push("lib/fetch.cpp");}
  return sources;
 }
 // archives (#215): los .a de las librerías, justo después de los objetos del programa.
