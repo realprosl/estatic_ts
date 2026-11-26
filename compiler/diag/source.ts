@@ -53,6 +53,11 @@ export function parseSource(source: string, file: string = "<input>"): SourceRes
 
 // Observable demo output; callers can use parseSource without JSON serialization.
 export function quoteSource(text: string): string {
+  // Casi nunca hay nada que escapar (rutas, hashes, ids): entonces basta una
+  // concatenación. Carácter a carácter costaba segundos al escribir el IR (#344).
+  let plain: boolean = true;
+  for (let i: number = 0; i < text.length; i = i + 1) { const code: number = text.charCodeAt(i); if (code == 34 || code == 92 || code < 32) { plain = false; break; } }
+  if (plain) return "\"" + text + "\"";
   let result: string = "\""; const hex: string = "0123456789abcdef";
   for (let i: number = 0; i < text.length; i = i + 1) {
     const c: string = text.charAt(i); const code: number = text.charCodeAt(i);

@@ -116,6 +116,11 @@ export function readModule(file: string, graph: ref<ModuleGraph>, cache: ref<Syn
     return new LoadedFile(file, cached);
   }
 
+function sameStrings(a: constRef<string[]>, b: constRef<string[]>): boolean {
+  if (a.length != b.length) return false;
+  for (let k: number = 0; k < a.length; k = k + 1) if (a[k] != b[k]) return false;
+  return true;
+}
 export class ModuleLoader {
   options: LoaderOptions; cache: SyntaxCache;
   constructor(options: LoaderOptions) { this.options = options; this.cache = new SyntaxCache(options.cacheDirectory, options.syntaxKey); }
@@ -144,8 +149,13 @@ export class ModuleLoader {
       // Por índice: copiar el módulo (con su AST) en cada import costaba segundos (#344).
       const index: number = stack[stack.length - 1];
       if (discovered[index].cursor >= discovered[index].requests.length) {
-        discovered[index].state = 2; discovered[index].cached.record.dependencies = discovered[index].dependencies;
-        cache.save(discovered[index].cached.record); graph.modules.push(discovered[index]); stack.pop();
+        discovered[index].state = 2;
+        // Un registro que vino de la caché con las mismas dependencias no hay que
+        // volver a escribirlo: guardarlo hashea todo su AST (#344).
+        if (!discovered[index].cached.reused || !sameStrings(discovered[index].cached.record.dependencies, discovered[index].dependencies)) {
+          discovered[index].cached.record.dependencies = discovered[index].dependencies; cache.save(discovered[index].cached.record);
+        }
+        graph.modules.push(discovered[index]); stack.pop();
       } else {
         let request: ModuleRequest = discovered[index].requests[discovered[index].cursor]; discovered[index].cursor = discovered[index].cursor + 1;
         // Deliberately re-probe paths each load: new higher-priority candidates,
@@ -175,9 +185,9 @@ export class ModuleLoader {
     }
     if (graph.prelude.length > 0) for (let m: number = 0; m < graph.modules.length; m = m + 1) {
       if (graph.prelude.includes(graph.modules[m].file)) continue;
-      let module: LoadedFile = graph.modules[m];
-      for (const file of graph.prelude) if (!module.dependencies.includes(file)) module.dependencies.push(file);
-      graph.modules[m] = module;
+      // En su sitio: copiar el módulo (con su AST) y volver a escribirlo costaba dos copias (#344).
+      const prelude: string[] = graph.prelude;  // copia pequeña: el bucle no puede prestar graph mientras se escribe
+      for (const file of prelude) if (!graph.modules[m].dependencies.includes(file)) graph.modules[m].dependencies.push(file);
     }
     graph.hits = cache.hits; graph.misses = cache.misses; graph.writes = cache.writes;
     graph.success = graph.diagnostics.length == 0; this.cache = cache; return graph;
