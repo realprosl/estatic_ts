@@ -104,11 +104,17 @@ class CppPlan{flags:string[];programFlags:string[];sources:string[];sourceFlags:
 // -DETS_RUNTIME_PRECOMPILED las cabeceras solo declaran y estas fuentes se
 // compilan una vez (caché de objetos del runtime) y se enlazan desde un .a.
 const precompiledRuntimeFlag:string="-DETS_RUNTIME_PRECOMPILED";
-function precompiledRuntimeSources():string[]{return ["ets_file_sync.cpp","ets_file_async.cpp"];}
+// Cada fuente se compila solo si el programa usa su backend (las de libuv
+// necesitan <uv.h>).
+function precompiledRuntimeSources(result:constRef<IrCppResult>):string[]{
+ let sources:string[]=[];
+ if(result.runtimeBackends.libuv){sources.push("ets_file_sync.cpp");sources.push("ets_file_async.cpp");}
+ return sources;
+}
 // archives (#215): los .a de las librerías, justo después de los objetos del programa.
 function cppPlan(result:constRef<IrCppResult>,root:string,cxx:string,flags:string[],archives:string[]):CppPlan{
  let plan=new CppPlan();for(const archive of archives)plan.libraries.push(archive);const base:string[]=[cxx,"-std=c++20","-O0","-pthread","-fno-exceptions","-I"+root,precompiledRuntimeFlag];for(const flag of base)plan.flags.push(flag);for(const flag of flags)plan.flags.push(flag);
- const noFlags:string[]=[];for(const source of precompiledRuntimeSources()){plan.sources.push(root+"/runtime/"+source);plan.sourceFlags.push(noFlags);plan.archived.push(true);}
+ const noFlags:string[]=[];for(const source of precompiledRuntimeSources(result)){plan.sources.push(root+"/runtime/"+source);plan.sourceFlags.push(noFlags);plan.archived.push(true);}
  if(result.runtimeBackends.libuv){const uv=root+"/build/libs/libuv";const none:string[]=[];if(exists(uv+"/include/uv.h"))plan.flags.push("-I"+uv+"/include");plan.sources.push(root+"/runtime/runtime_ets_libuv.cpp");plan.sourceFlags.push(none);plan.archived.push(false);plan.sources.push(root+"/runtime/runtime_ets_net_libuv.cpp");plan.sourceFlags.push(none);plan.archived.push(false);plan.libraries.push(exists(uv+"/lib/libuv.a")?uv+"/lib/libuv.a":"-luv");plan.libraries.push("-ldl");plan.libraries.push("-lrt");}
  if(result.headers.includes("runtime/ets_http_httplib.hpp")){plan.programFlags.push("-DCPPHTTPLIB_NO_EXCEPTIONS");plan.sources.push(root+"/runtime/external/httplib/httplib.cc");plan.sourceFlags.push(["-DCPPHTTPLIB_NO_EXCEPTIONS"]);plan.archived.push(false);}
  if(result.headers.includes("runtime/ets_regex.hpp")){plan.sources.push(root+"/runtime/ets_regex_compile.cpp");plan.sourceFlags.push(["-fexceptions"]);plan.archived.push(false);plan.programFlags.push("-fexceptions");}
