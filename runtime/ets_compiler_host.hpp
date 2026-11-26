@@ -1,6 +1,6 @@
 #pragma once
 // OS primitives only. Compiler policy, code emission, flags and progress live in ETS.
-#include <chrono>
+#include "runtime/ets_clock.hpp"
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>

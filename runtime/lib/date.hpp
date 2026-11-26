@@ -1,7 +1,7 @@
 // Soporte en C++ de estatic:date: el reloj del sistema y la zona horaria local.
 // El calendario (días, meses, formato y análisis) está en runtime/lib/date.ts.
 #pragma once
-#include <chrono>
+#include "runtime/ets_clock.hpp"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>

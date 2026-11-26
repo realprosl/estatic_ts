@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include <chrono>
+#include "runtime/ets_clock.hpp"
 #include <coroutine>
 #include <list>
 #include <memory>
