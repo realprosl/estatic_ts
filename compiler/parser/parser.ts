@@ -98,12 +98,15 @@ export class Parser {
   scopeNames: string[]; scopeTypes: string[]; pendingNames: string[]; pendingTypes: string[];
   // keyof T: el operando no se lleva el `| U` de detrás (keyof A | B es (keyof A) | B).
   typeOperand: boolean;
+  // #227/#228: parámetros del alias que se está leyendo (un `T extends …` sobre uno
+  // de ellos se distribuye sobre uniones) y nombres de `infer` visibles.
+  aliasParams: string[]; inferCollecting: boolean; inferNames: string[]; inferVisible: string[];
   jsonAt: number;
   // Nombres locales importados de "estatic:json": la clase (JSON) y parse.
   jsonClasses: string[]; jsonParsers: string[];
   constructor(tokens: ParserToken[]) {
     this.tokens = tokens; this.current = 0; this.nodes = []; this.diagnostics = [];
-    this.nesting = 0; this.exhausted = false; this.constMemory = false; this.objectTypes = []; this.objectTypeNames = []; this.patternOwners = []; this.patternDeclarations = []; this.extraOwners = []; this.extraNodes = []; this.extraBefore = []; this.restOwners = []; this.restNames = []; this.restIndexes = []; this.typeOperand = false; this.scopeNames = []; this.scopeTypes = []; this.pendingNames = []; this.pendingTypes = []; this.jsonAt = 0; this.jsonClasses = []; this.jsonParsers = [];
+    this.nesting = 0; this.exhausted = false; this.constMemory = false; this.objectTypes = []; this.objectTypeNames = []; this.patternOwners = []; this.patternDeclarations = []; this.extraOwners = []; this.extraNodes = []; this.extraBefore = []; this.restOwners = []; this.restNames = []; this.restIndexes = []; this.typeOperand = false; this.aliasParams = []; this.inferCollecting = false; this.inferNames = []; this.inferVisible = []; this.scopeNames = []; this.scopeTypes = []; this.pendingNames = []; this.pendingTypes = []; this.jsonAt = 0; this.jsonClasses = []; this.jsonParsers = [];
     if (tokens.length == 0) {
       this.tokens.push(new ParserToken("eof", "", 0, 1, 1, 0, 1, 1));
       this.report("La entrada de tokens necesita un eof final");
@@ -330,7 +333,9 @@ export class Parser {
       const name: ParserToken = this.expect("identifier");
       result = this.add(NodeKind.TypeAliasDeclaration, keyword, name); this.attr(result, AttributeKind.Name, name.lexeme);
       this.typeParameters(result, false); this.expect("=");
-      this.attr(result, AttributeKind.Type, this.typeName()); this.setEnd(result, this.terminator());
+      let params: string[] = []; for (const edge of this.node(result).edges) if (edge.role == EdgeRole.TypeParameters) params.push(this.get(edge.node, AttributeKind.Name));
+      const outerParams: string[] = this.aliasParams; this.aliasParams = params;
+      this.attr(result, AttributeKind.Type, this.typeName()); this.aliasParams = outerParams; this.setEnd(result, this.terminator());
     } else if (this.accept("if")) {
       const keyword: ParserToken = this.previous();
       this.expect("("); const condition: number = this.expression(); this.expect(")");
@@ -1281,7 +1286,20 @@ export class Parser {
   typeName(): string {
     if (!this.enter()) return "<error>";
     const outerConst: boolean = this.constMemory; this.constMemory = false; const outerOperand: boolean = this.typeOperand; this.typeOperand = false;
-    const result: string = this.typeInner(); this.constMemory = outerConst; this.typeOperand = outerOperand; this.leave(); return result;
+    let result: string = this.typeInner(); this.constMemory = outerConst; this.typeOperand = outerOperand;
+    // #227: C extends P ? X : Y. Con C un parámetro del alias, se distribuye sobre uniones.
+    if (this.check("extends") && !outerOperand) {
+      this.take(); const check: string = result;
+      const outerCollecting: boolean = this.inferCollecting; const outerNames: string[] = this.inferNames; this.inferCollecting = true; this.inferNames = [];
+      const pattern: string = this.typeInner(); const bound: string[] = this.inferNames;
+      this.inferCollecting = outerCollecting; this.inferNames = outerNames;
+      this.expect("?");
+      const outerVisible: string[] = this.inferVisible; this.inferVisible = outerVisible.concat(bound);
+      const yes: string = this.typeName(); this.inferVisible = outerVisible;
+      this.expect(":"); const no: string = this.typeName();
+      result = (this.aliasParams.includes(check.trim()) ? "$dcond<" : "$cond<") + check + "," + pattern + "," + yes + "," + no + ">";
+    }
+    this.leave(); return result;
   }
   // Un literal usado como tipo se codifica con el prefijo `$lit:` seguido
   // del tipo y el valor separados por `=`. El prefijo no puede colisionar con
@@ -1311,6 +1329,14 @@ export class Parser {
       const operand: string = this.typeInner(); this.typeOperand = outer;
       return this.typeSuffix("keyof<" + operand + ">");
     }
+    // #228: infer U dentro de la condición de un tipo condicional.
+    if (this.check("identifier") && this.peek(0).lexeme == "infer" && this.peek(1).kind == "identifier") {
+      const keyword: ParserToken = this.take(); const name: ParserToken = this.take();
+      if (!this.inferCollecting) this.reportAt(keyword, "'infer' solo puede ir en la condición de un tipo condicional (T extends … infer U … ? X : Y)");
+      else if (!this.inferNames.includes(name.lexeme)) this.inferNames.push(name.lexeme);
+      return this.typeSuffix("$infer$" + name.lexeme + "$");
+    }
+    if (this.check("identifier") && this.inferVisible.includes(this.peek(0).lexeme) && this.peek(1).kind != "." && this.peek(1).kind != "<") return this.typeSuffix("$infer$" + this.take().lexeme + "$");
     if (this.accept("typeof")) {
       let query: string = "$typeof$" + this.expect("identifier").lexeme;
       while (this.accept(".")) query = query + "." + (this.check("default") ? this.take().lexeme : this.expect("identifier").lexeme);

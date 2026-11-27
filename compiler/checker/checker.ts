@@ -29,6 +29,8 @@ export class NativeChecker {
   literalShapeKeys: string[]; literalShapeTypes: string[];
   // #273: comprobación en compilación de JSON.parse<T>("texto constante").
   jsonText: string; jsonAt: number;
+  // #227: argumentos ("@sid" → tipo) del alias condicional que se está instanciando.
+  conditionFrom: string[]; conditionTo: string[];
   // Índices para no recorrer todos los símbolos/referencias en cada consulta:
   // miembros por ámbito ("módulo:nodo" → símbolos en orden de sid), referencias
   // por nodo (vértice = offset del módulo + nodo) y campos aún sin tipo.
@@ -37,7 +39,7 @@ export class NativeChecker {
   constructor(graph: ModuleGraph, binding: BindingResult) {
     this.graph = graph; this.binding = binding; this.result = new CheckResult(); this.symbolStates = []; this.depth = 0; this.switches = 0; this.compatibilityDepth = 0;
     this.narrowedSymbols = []; this.narrowedTypes = []; this.trace = false; this.narrowedPaths = [];
-    this.mutationCache = new Map<string,number>(); this.literalShapeKeys = []; this.literalShapeTypes = []; this.jsonText = ""; this.jsonAt = 0;
+    this.mutationCache = new Map<string,number>(); this.literalShapeKeys = []; this.literalShapeTypes = []; this.jsonText = ""; this.jsonAt = 0; this.conditionFrom = []; this.conditionTo = [];
     this.indexed = false; this.memberGroups = new Map<string,number>(); this.memberStart = []; this.memberList = [];
     this.offsets = []; this.referenceStart = []; this.referenceList = []; this.pendingFields = []; this.transferMemo = new Map<string,boolean>(); this.resourceIndex = new ResourceFields();
   }
@@ -651,6 +653,16 @@ export class NativeChecker {
       }
     }
     if (s.kind == "TypeAliasDeclaration") {
+      // #227: un alias con un tipo condicional se evalúa con los argumentos ya puestos.
+      const raw: string = this.node(s.module,s.node).get(AttributeKind.Type);
+      if (raw.indexOf("$cond<",0) >= 0 || raw.indexOf("$dcond<",0) >= 0) {
+        const mark: number = this.conditionFrom.length;
+        for (let i: number = 0; i < parameters.length; i = i + 1) { this.conditionFrom.push("@" + numberToString(this.binding.files[s.module].declarations[parameters[i]])); this.conditionTo.push(values[i]); }
+        let evaluated: string = this.annotation(s.module,s.node,raw);
+        this.conditionFrom = this.conditionFrom.slice(0,mark); this.conditionTo = this.conditionTo.slice(0,mark);
+        for (let i: number = 0; i < parameters.length; i = i + 1) evaluated = replaceType(evaluated,"@" + numberToString(this.binding.files[s.module].declarations[parameters[i]]),values[i]);
+        return evaluated;
+      }
       let result: string = this.symbolType(sid,module,id);
       for (let i: number = 0; i < parameters.length; i = i + 1) result = replaceType(result,"@" + numberToString(this.binding.files[s.module].declarations[parameters[i]]),values[i]);
       return result;
@@ -660,6 +672,82 @@ export class NativeChecker {
   annotation(module: number, id: number, input: string): string {
     if ((this.depth) > 128) { this.report(module,id,"Límite de resolución de tipos excedido"); return "!error"; }
     this.depth = this.depth + 1; const result: string = this.annotationInner(module, id, input.trim()); this.depth = this.depth - 1; return result;
+  }
+  // #227: C extends P ? X : Y. Distributivo (C era un parámetro del alias): se evalúa
+  // por cada miembro de la unión (T | undefined incluye undefined) y se juntan los
+  // resultados; una rama `never` no aporta nada.
+  conditionalType(module: number, id: number, distributive: boolean, args: string[]): string {
+    const check: string = this.bound(this.annotation(module,id,args[0])); if (check.startsWith("!")) return check;
+    // Con un parámetro de tipo sin argumento (la declaración del alias) se deja sin evaluar.
+    if (this.unboundParameter(check)) return (distributive ? "$dcond<" : "$cond<") + args.join(",") + ">";
+    let members: string[] = [check];
+    if (distributive) {
+      members = []; let inner: string = check; let absent: boolean = false;
+      if (genericBase(check) == "Optional") { inner = genericArguments(check)[0]; absent = true; }
+      for (const member of splitTypes(inner,"|")) members.push(member);
+      if (absent) members.push("undefined");
+    }
+    let out: string[] = []; let absent: boolean = false;
+    for (const member of members) {
+      let names: string[] = []; let values: string[] = [];
+      let branch: string = this.matchPattern(module,id,args[1],member,names,values) ? args[2] : args[3];
+      for (let at: number = 0; at < names.length; at = at + 1) branch = replaceType(branch,names[at],values[at]);
+      if (branch.trim() == "never") continue;
+      if (branch.trim() == "undefined") { absent = true; continue; }
+      const value: string = this.bound(this.annotation(module,id,branch)); if (value.startsWith("!")) return value;
+      for (const part of splitTypes(genericBase(value) == "Optional" ? genericArguments(value)[0] : value,"|")) if (!out.includes(part)) out.push(part);
+      if (genericBase(value) == "Optional") absent = true;
+    }
+    if (out.length == 0) { this.report(module,id,"El tipo condicional da never (ninguna rama deja un tipo)"); return "!error"; }
+    return absent ? "Optional<" + joinTypes(out,"|") + ">" : joinTypes(out,"|");
+  }
+  // Los argumentos del alias condicional que se está instanciando.
+  bound(text: string): string { let result: string = text; for (let at: number = this.conditionFrom.length - 1; at >= 0; at = at - 1) result = replaceType(result,this.conditionFrom[at],this.conditionTo[at]); return result; }
+  unboundParameter(text: string): boolean {
+    for (let at: number = 0; at + 1 < text.length; at = at + 1) if (text.charCodeAt(at) == 64) { const next: number = text.charCodeAt(at + 1); if (next >= 48 && next <= 57) return true; }
+    return false;
+  }
+  // #228: ¿encaja `actual` (ya resuelto) en el patrón sin resolver? Cada `infer U`
+  // ($infer$U$) captura la parte correspondiente en names/values.
+  matchPattern(module: number, id: number, input: string, actual: string, names: ref<string[]>, values: ref<string[]>): boolean {
+    const pattern: string = ungroupElement(input.trim());
+    if (pattern.startsWith("$infer$") && pattern.endsWith("$") && pattern.indexOf("$",7) == pattern.length - 1) {
+      for (let at: number = 0; at < names.length; at = at + 1) if (names[at] == pattern) return values[at] == actual;
+      names.push(pattern); values.push(actual); return true;
+    }
+    if (pattern.indexOf("$infer$",0) < 0) {
+      if (pattern == "undefined" || pattern == "null") return actual == "undefined";
+      if (actual == "undefined") return false;
+      const expected: string = this.bound(this.annotation(module,id,pattern)); if (expected.startsWith("!")) return false;
+      return this.compatible(actual,expected);
+    }
+    if (actual == "undefined") return false;
+    const value: string = memoryValue(actual);
+    if (functionClose(pattern) >= 0) {
+      if (functionClose(value) < 0) return false;
+      const want: string[] = functionParams(pattern); const have: string[] = functionParams(value);
+      if (want.length != have.length) return false;
+      for (let at: number = 0; at < want.length; at = at + 1) if (!this.matchPattern(module,id,want[at],have[at],names,values)) return false;
+      return this.matchPattern(module,id,functionReturn(pattern),functionReturn(value),names,values);
+    }
+    if (pattern.endsWith("[]")) return value.endsWith("[]") && this.matchPattern(module,id,semanticElement(pattern),semanticElement(value),names,values);
+    if (semanticTuple(pattern)) {
+      if (!semanticTuple(value)) return false;
+      const want: string[] = splitTypes(pattern.slice(1,pattern.length-1),","); const have: string[] = splitTypes(value.slice(1,value.length-1),",");
+      if (want.length != have.length) return false;
+      for (let at: number = 0; at < want.length; at = at + 1) if (!this.matchPattern(module,id,want[at],have[at],names,values)) return false;
+      return true;
+    }
+    if (genericBase(pattern) != "") {
+      let base: string = genericBase(pattern); if (base == "Array") base = "";
+      const want: string[] = genericArguments(pattern);
+      if (base == "" ) return want.length == 1 && value.endsWith("[]") && this.matchPattern(module,id,want[0],semanticElement(value),names,values);
+      if (genericBase(value) != base) return false;
+      const have: string[] = genericArguments(value); if (want.length != have.length) return false;
+      for (let at: number = 0; at < want.length; at = at + 1) if (!this.matchPattern(module,id,want[at],have[at],names,values)) return false;
+      return true;
+    }
+    return false;
   }
   // #229: Exclude/Extract filtran una unión, NonNullable quita el undefined,
   // ReturnType/Parameters miran una firma y Awaited desenvuelve Promise.
@@ -782,6 +870,8 @@ export class NativeChecker {
     if (text.startsWith("Array<") && text.endsWith(">")) return semanticArray(this.annotation(module,id,text.slice(6,text.length-1)));
     if (genericBase(text) == "keyof" && genericArguments(text).length == 1) return this.keyofType(module,id,this.annotation(module,id,genericArguments(text)[0]));
     if (["Exclude","Extract","NonNullable","ReturnType","Parameters","Awaited"].includes(genericBase(text))) return this.utilityType(module,id,genericBase(text),genericArguments(text));
+    if ((genericBase(text) == "$cond" || genericBase(text) == "$dcond") && genericArguments(text).length == 4) return this.conditionalType(module,id,genericBase(text) == "$dcond",genericArguments(text));
+    if (text == "never") { this.report(module,id,"never solo se admite como rama de un tipo condicional (por ahora)"); return "!error"; }
     if (text.endsWith("]") && text.lastIndexOf("[") > 0) {
       const open: number = this.indexOpen(text); const raw: string = text.slice(open+1,text.length-1);
       if (this.indexedKey(module,id,raw)) return this.indexedType(module,id,this.annotation(module,id,text.slice(0,open)),this.annotation(module,id,raw));

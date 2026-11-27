@@ -368,6 +368,8 @@ export class Binder {
         if (name.startsWith("$fieldof$") || name.startsWith("$fieldreq$")) { const tail: string = name.slice(name.startsWith("$fieldof$") ? 9 : 10, name.length); name = tail.slice(tail.indexOf("$", 0) + 1, tail.length); }
         // #223: el tipo del valor de un campo de literal se resuelve en el checker.
         if (name.startsWith("$valueof$")) { previous = ""; continue; }
+        // #227/#228: tipos condicionales, infer y never se resuelven en el checker.
+        if (name == "$cond" || name == "$dcond" || name.startsWith("$infer$") || name == "never") { previous = ""; continue; }
         if (previous == "[" && start >= 2) {
           const before: string = text.charAt(start - 2);
           // T[N] con N una constante es un array fijo; T[number], T[K] con K un tipo y

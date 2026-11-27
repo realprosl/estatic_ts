@@ -352,6 +352,12 @@ for (const source of [
   const result = native(source + " print(999);");
   assert.ok(result.diagnostics.length > 0 && result.diagnostics.length <= 100);
 });
+test("bootstrap parser: tipos condicionales e infer (#227, #228)", () => {
+  const result = native("type A<T> = T extends string ? number : boolean; type B<T> = T extends (infer U)[] ? U : never; type C = string extends string ? 1 : 2;");
+  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.nodes.filter(n => n.kind === "TypeAliasDeclaration").map(n => n.attributes.find(a => a.name === "type")?.value), ["$dcond<T,string,number,boolean>", "$dcond<T,($infer$U$)[],$infer$U$,never>", "$cond<string,string,$lit:number=1,$lit:number=2>"]);
+  assert.ok(native("type X<T> = T extends string ? infer U : never;").diagnostics.some((d: any) => d.message.includes("'infer' solo puede ir")));
+});
 test("bootstrap parser: ** asocia por la derecha y rechaza un unario sin paréntesis (#249)", () => {
   assert.deepEqual(native("let a=2 ** 3 ** 2; let b=(-2) ** 2; let c=-(2 ** 2); a **= 2;").diagnostics, []);
   assert.ok(native("let d=-2 ** 2;").diagnostics.some((d: any) => d.message.includes("**")));

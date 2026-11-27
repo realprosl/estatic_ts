@@ -539,6 +539,11 @@ for(const [name,source,pattern] of [
  ['excludeValor','type L="a"|"b";const x:Exclude<L,"a">="a";',/no pertenece/],
  ['returnNoFuncion','const x:ReturnType<number>=1;',/requiere el tipo de una función/],
 ] as const)test(`checker: tipos de utilidad (#229) rechaza ${name}`,()=>error(source,pattern));
+for(const [name,source,pattern] of [
+ ['rama','type E<T>=T extends string?"si":"no";const x:E<number>="si";',/no pertenece/],
+ ['soloNever','type N<T>=T extends string?never:never;const x:N<string>="a";',/da never/],
+ ['neverSuelto','const x:never=1;',/never solo se admite/],
+] as const)test(`checker: tipos condicionales e infer (#227, #228) rechaza ${name}`,()=>error(source,pattern));
 test('native exact64 arithmetic and mixed comparisons preserve types',()=>{
  const g=check('let a:i64=9007199254740993;let b:u64=2;const x=a+b;const y=1+a;const z=a<9007199254740994;');
  assert.deepEqual(types(g,'BinaryExpression'),['u64','i64','boolean']);
