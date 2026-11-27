@@ -68,6 +68,12 @@ hello, e2e!
 `print` es el builtin de salida a stdout. Existe también `printError`
 para stderr y `console.log/info/debug/trace/warn/error` estilo TS.
 
+Con varios argumentos, `print`, `printError`, `write` y `writeError`
+los escriben seguidos, sin separador: `print("total: ", 3)` imprime
+`total: 3` y `print("hola", 1 + 2)` imprime `hola3`. `console.log` y
+sus variantes los separan con un espacio, como en JavaScript:
+`console.log("hola", 1 + 2)` imprime `hola 3`.
+
 ---
 
 ## 2. Tipos básicos
