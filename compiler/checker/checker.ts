@@ -660,6 +660,60 @@ export class NativeChecker {
     if ((this.depth) > 128) { this.report(module,id,"Límite de resolución de tipos excedido"); return "!error"; }
     this.depth = this.depth + 1; const result: string = this.annotationInner(module, id, input.trim()); this.depth = this.depth - 1; return result;
   }
+  // #224: keyof T es la unión de los nombres (literales de string) de los miembros de T.
+  keyofType(module: number, id: number, input: string): string {
+    if (input.startsWith("!")) return input;
+    const value: string = memoryValue(input);
+    if (genericBase(value) == "Map") return genericArguments(value)[0];
+    const sid: number = this.nominalSymbol(value);
+    if (sid < 0 || !["ClassDeclaration","InterfaceDeclaration"].includes(this.binding.symbols[sid].kind)) { this.report(module,id,"keyof requiere una clase, una interfaz, un tipo objeto o un Record, no '" + this.displayType(value) + "'"); return "!error"; }
+    const s: BindingSymbol = this.binding.symbols[sid]; let keys: string[] = [];
+    for (const member of this.scopeMembers(s.module,s.node)) {
+      const m: BindingSymbol = this.binding.symbols[member];
+      if (!["ClassField","InterfaceField","ClassMethod","InterfaceMethod"].includes(m.kind) || m.name == "constructor") continue;
+      if (this.node(m.module,m.node).get(AttributeKind.IsStatic) == "true") continue;
+      const key: string = literalTypeText("string",m.name); if (!keys.includes(key)) keys.push(key);
+    }
+    if (keys.length == 0) { this.report(module,id,"keyof de un tipo sin miembros: '" + this.displayType(value) + "'"); return "!error"; }
+    return joinTypes(keys,"|");
+  }
+  // El "[" del último acceso X[...] (respetando corchetes anidados dentro de la clave).
+  indexOpen(text: string): number {
+    let depth: number = 0;
+    for (let at: number = text.length - 1; at >= 0; at = at - 1) {
+      const code: number = text.charCodeAt(at);
+      if (code == 93) depth = depth + 1;
+      else if (code == 91) { depth = depth - 1; if (depth == 0) return at; }
+    }
+    return text.lastIndexOf("[");
+  }
+  // X[clave] es un acceso por índice (no un array fijo X[3] / X[N]) si la clave es un tipo.
+  indexedKey(module: number, id: number, raw: string): boolean {
+    if (raw == "" || nativeIntegerText(raw) != "") return false;
+    if (literalType(raw) || genericBase(raw) == "keyof" || splitTypes(raw,"|").length > 1 || raw == "number" || raw == "string") return true;
+    const sid: number = this.lookup(this.binding.files[module].nodeScopes[id],raw,true);
+    return sid >= 0 && ["TypeAliasDeclaration","TypeParameter"].includes(this.binding.symbols[sid].kind);
+  }
+  // #225: T["campo"], T[keyof T], T[number]: el tipo del campo o del elemento; con una unión de claves, la unión.
+  indexedType(module: number, id: number, base: string, key: string): string {
+    if (base.startsWith("!")) return base; if (key.startsWith("!")) return key;
+    const value: string = memoryValue(base); let parts: string[] = [];
+    for (const raw of splitTypes(key,"|")) {
+      const part: string = raw.trim(); let found: string = "";
+      if (part == "number" && value.endsWith("[]")) found = semanticElement(value);
+      else if (part == "number" && fixedArraySize(value) >= 0) found = fixedArrayElement(value);
+      else if (part == "number" && semanticTuple(value)) found = joinTypes(splitTypes(value.slice(1,value.length-1),","),"|");
+      else if (genericBase(value) == "Map" && this.compatible(part,genericArguments(value)[0])) found = genericArguments(value)[1];
+      else if (literalType(part) && literalKind(part) == "string") {
+        const member: number = this.memberSymbol(value,literalValue(part));
+        if (member >= 0 && ["ClassField","InterfaceField","ClassMethod","InterfaceMethod"].includes(this.binding.symbols[member].kind)) found = this.instantiateMember(value,this.symbolType(member,module,id));
+        if (found != "" && this.binding.symbols[member].kind.endsWith("Field") && this.node(this.binding.symbols[member].module,this.binding.symbols[member].node).get(AttributeKind.Optional) == "true" && genericBase(found) != "Optional") found = "Optional<" + found + ">";
+      }
+      if (found == "") { this.report(module,id,"'" + this.displayType(value) + "' no tiene la clave '" + this.displayType(part) + "'"); return "!error"; }
+      if (!parts.includes(found)) parts.push(found);
+    }
+    return joinTypes(parts,"|");
+  }
   annotationInner(module: number, id: number, text: string): string {
     if (text == "") return "";
     const grouped: string = ungroupElement(text); if (grouped != text) return this.annotation(module,id,grouped);
@@ -705,8 +759,10 @@ export class NativeChecker {
       let parts: string[] = []; for (const p of splitTypes(text.slice(1,text.length-1),",")) parts.push(this.annotation(module,id,p)); return "[" + parts.join(",") + "]";
     }
     if (text.startsWith("Array<") && text.endsWith(">")) return semanticArray(this.annotation(module,id,text.slice(6,text.length-1)));
+    if (genericBase(text) == "keyof" && genericArguments(text).length == 1) return this.keyofType(module,id,this.annotation(module,id,genericArguments(text)[0]));
     if (text.endsWith("]") && text.lastIndexOf("[") > 0) {
-      const open: number = text.lastIndexOf("["); const raw: string = text.slice(open+1,text.length-1);
+      const open: number = this.indexOpen(text); const raw: string = text.slice(open+1,text.length-1);
+      if (this.indexedKey(module,id,raw)) return this.indexedType(module,id,this.annotation(module,id,text.slice(0,open)),this.annotation(module,id,raw));
       let extent: string = nativeIntegerText(raw);
       if (extent == "") {
         let sid: number = this.lookup(this.binding.files[module].nodeScopes[id],raw,false); let seen: number[] = [];

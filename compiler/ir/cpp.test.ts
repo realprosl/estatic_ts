@@ -142,6 +142,7 @@ for(const [name,source,expected] of [
  ["optional callback",'const x=optionalSome(3);const y=optionalMap(x,(n:number):number=>n+1);print(optionalValueOr(y,0));',"4\n"],
  ["optional owner",'class C{x:number=5;}const p=optionalSome<ptr<C>>(new C());const q=move(p).value();print(q.x);',"5\n"],
  ["string runtime",'const s=" hello ";print(s.trim().toUpperCase());print(Math.floor(3.8));',"HELLO\n3\n"],
+ ["keyof T y acceso por índice T[\"campo\"], T[keyof T], T[number] (#224, #225)","interface U { nombre: string; edad: number; email?: string }\ntype K = keyof U;\nconst k: K = \"edad\";\ntype E = U[\"edad\"];\nconst e: E = 3;\ninterface P { a: number; b: string }\ntype V = P[keyof P];\nconst v1: V = 1; const v2: V = \"x\";\ntype El = string[][number];\nconst el: El = \"z\";\ntype Correo = U[\"email\"];\nconst sin: Correo = undefined;\nfunction clave(p: P, key: keyof P): string { return key; }\nconsole.log(k, e + 1, el, clave({ a: 1, b: \"q\" }, \"b\"), typeof v1, typeof v2, sin ?? \"-\");\n","edad 4 z b number string -\n"],
  ["json runtime",'import { jsonIsBool } from "estatic:json";const value=JSON.parseValue("true");print(jsonIsBool(value));',"true\n"],
  ["boolean places",'function yes(n:ref<boolean>):void{n=true;}let a:boolean[]=[false];yes(a[0]);print(a[0]);const b=a.map((x:boolean):boolean=>!x);print(b[0]);',"true\nfalse\n"],
  ["variadic pack",'function f<...T>(...values:T):void{print(values);}f(1,"s");',"1s\n"],

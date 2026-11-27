@@ -325,6 +325,12 @@ const fixtures: [string, string][] = [
 ];
 for (const [name, source] of fixtures) test(`bootstrap parser native parity: ${name}`, () => { parity(source); });
 
+test("bootstrap parser: keyof T y T[clave] en tipos (#224, #225)", () => {
+  const result = native('interface U { a: number } type K = keyof U | string; type A = U["a"]; type B = U[keyof U]; type C = number[][number]; type D = number[3];');
+  assert.deepEqual(result.diagnostics, []);
+  const types = result.nodes.filter(n => n.kind === "TypeAliasDeclaration").map(n => n.attributes.find(a => a.name === "type")?.value);
+  assert.deepEqual(types, ["keyof<U> | string", "U[$lit:string=a]", "U[keyof<U>]", "number[][number]", "number[3]"]);
+});
 test("bootstrap parser: newlines do not replace object property commas", () => {
   const source = 'const x={\n first:1\n second:2\n};';
   assert.throws(() => new Parser(new Lexer(source).tokenize()).parseProgram(), DiagnosticError);
