@@ -241,11 +241,22 @@ test("IR C++ errores de Record y Object.values",()=>{
  assert.throws(()=>ir('const xs: number[] = [1];print("a" in xs);'),/'in' solo se admite/);
  assert.throws(()=>ir('interface P { a: number; b: string }const p: P = { a: 1, b: "x" };print(Object.values(p).length);'),/mismo tipo/);
 });
+test("IR C++ executes deducción de enteros: parámetros enteros sin cambiar resultados (#285)",()=>{
+ const [source,expected,files]=["import { triple } from \"./m\";\nfunction mitad(x: number): number { return x / 2; }\nfunction fib(n: number): number { if (n < 2) return n; return fib(n - 1) + fib(n - 2); }\nfunction mezcla(a: number, b: number): number { a = a + 1; return a * b; }\nfunction cambia(x: number): number { x = x / 4; return x; }\nfunction usada(x: number): number { return x - 1; }\nconst f = usada;\nconsole.log(mitad(3), fib(20), mezcla(2, 3), mezcla(1, 0.5), cambia(2), f(0.5), triple(2), mitad(-0) === 0);\n","1.5 6765 9 1 0.5 -0.5 6 true\n",{"m.ets":"export function triple(x: number): number { return x * 3; }\n"}] as const;
+ assert.equal(execute(source,files),expected);
+});
 test("IR C++ deducción de enteros (#285): qué variables pasan a i64",()=>{
  const p:any=ir('function f(xs: number[]): number { let s: number = 0; for (let i = 0; i < xs.length; i++) s = s + xs[i]; let m: number = 1; m = m / 2; let n: number = 0; n = n + s; return s + m + n; }print(f([1,2]));');
  const fn=p.functions.find((f:any)=>f.name==="f"); const typeOf=(place:any)=>p.types[place.typeId];
  const locals=fn.places.filter((x:any)=>x.kind==="local"&&!x.parameter).map((x:any)=>typeOf(x));
  assert.deepEqual(locals,["number","i64","number","number"]);
+ const q:any=ir('import { triple } from "./m";function fib(n: number): number { if (n < 2) return n; return fib(n - 1) + fib(n - 2); }function mitad(x: number): number { return x / 2; }function cambia(x: number): number { x = x / 4; return x; }function usada(x: number): number { return x; }const g = usada;print(fib(10), mitad(1.5), mitad(2), cambia(8), g(1), triple(2));',{"m.ets":"export function triple(x: number): number { return x * 3; }\n"});
+ const parameters=(name:string)=>q.functions.find((f:any)=>f.name===name).parameterTypes.map((t:number)=>q.types[t]);
+ assert.deepEqual(parameters("fib"),["i64"]);
+ assert.deepEqual(parameters("mitad"),["number"],"una llamada pasa 1.5");
+ assert.deepEqual(parameters("cambia"),["number"],"se le asigna una fracción");
+ assert.deepEqual(parameters("usada"),["number"],"se usa como valor");
+ assert.deepEqual(parameters("triple"),["number"],"se llama desde otro módulo");
 });
 test("IR C++ JSON.parse constante se construye al compilar, sin parsear al ejecutar (#273)",()=>{
  const p:any=ir('import JSON from "estatic:json";interface U { a: number; b?: string; xs: number[] }const r = JSON.parse<U>(\'{"a":1,"xs":[2,3],"z":{"q":[1]}}\');print(r.isOk());');
