@@ -22,7 +22,7 @@ public:
  S types(const V<int>& ids){V<S> out;for(int t:ids)out.push_back(type(t));return join(out);}
  S type(int id){const auto& s=shape(id);const auto& a=s.arguments;const S& k=s.kind;
   if(record(id)||sum(id))return "ir_t"+n(id);
-  if(k=="scalar"){auto it=nativeTypes.find(p.types.at(id));if(it==nativeTypes.end())return fail("Tipo escalar inválido");return it->second;}
+  if(k=="scalar"){if(p.types.at(id)=="symbol")result.headers.insert("runtime/ets_symbol.hpp");auto it=nativeTypes.find(p.types.at(id));if(it==nativeTypes.end())return fail("Tipo escalar inválido");return it->second;}
   // Un literal de tipo se materializa como su primitivo: en C++ el valor
   // concreto ya lo garantiza el checker.
   if(k=="literal")return type(s.discriminatorType);
@@ -178,7 +178,7 @@ S Generator::instruction(const Function& f,const Instruction& i,int block){
  else if(op=="unwrap")v="("+deref(a(0),f.values.at(i.operands.at(0)))+").value()";
  else if(op=="property"){int id=inner(f.values.at(i.operands.at(0)));S input=deref(a(0,false),f.values.at(i.operands.at(0)));const auto& s=shape(id);if(in(i.text,{"length","size"}))v=in(s.kind,{"tuple","pack"})?"double("+n(s.arguments.size())+")":"double(("+input+").size())";else if(i.text=="ok")v="("+input+").isOk()";else if(i.text=="kind")v=s.kind=="Optional"?"std::string(("+input+").isPresent()?\"Some\":\"None\")":"std::string(("+input+").isOk()?\"Ok\":\"Err\")";}
  else if(op=="extractIndex")v=in(shape(f.values.at(i.operands.at(0))).kind,{"tuple","pack"})?"std::get<"+n(constantIndex(f,i.operands.at(1)))+">("+a(0)+")":"("+a(0)+").at(static_cast<std::size_t>("+a(1)+"))";
- else if(op=="typeTag"){int id=inner(i.signature);S name=p.types.at(id);v=literal(numeric(id)?"number":in(name,{"string","boolean"})?name:name=="void"?"undefined":"object",i.typeId);}
+ else if(op=="typeTag"){int id=inner(i.signature);S name=p.types.at(id);v=literal(numeric(id)?"number":in(name,{"string","boolean","symbol"})?name:name=="void"?"undefined":"object",i.typeId);}
  else if(op=="typeTest"){int id=inner(f.values.at(i.operands.at(0)));v=sum(id)?"("+deref(a(0,false),f.values.at(i.operands.at(0)))+".data.index()=="+n(index(choices(id),i.signature))+")":id==i.signature?"true":"false";}
  else if(op=="closure"){const auto& target=p.functions.at(i.callee);V<S> args,captures,params;for(int k=0;k<int(target.parameterTypes.size());k++){args.push_back(parameterType(target.parameterTypes[k])+" x"+n(k));const bool borrowed=in(shape(target.parameterTypes[k]).kind,{"ref","constRef"});params.push_back(borrowed?"x"+n(k):"std::move(x"+n(k)+")");}for(int k=0;k<int(i.operands.size());k++)captures.push_back("c"+n(k)+"="+a(k));V<S> call;for(int k=0;k<int(target.captureTypes.size());k++)call.push_back("c"+n(k));call.insert(call.end(),params.begin(),params.end());v="["+join(captures)+"]("+join(args)+")mutable->"+type(target.returns)+"{"+(p.types.at(target.returns)=="void"?S{}:S("return "))+"ir_f"+n(i.callee)+"("+join(call)+");}";}
  else if(op=="call"||op=="taskCreate"){const auto& target=p.functions.at(i.callee);V<S> args;for(int k=0;k<int(i.operands.size());k++)args.push_back(borrowArgument(f,i,k,k<int(target.parameterTypes.size())?target.parameterTypes[k]:-1));v="ir_f"+n(i.callee)+"("+join(args)+")";}
@@ -282,6 +282,7 @@ S Generator::runtimeCall(const Function& f,const Instruction& i){const auto& c=p
   if(name=="optionalIsPresent")return "("+a(0)+").isPresent()";
   if(name=="optionalValueOr")return "("+a(0)+").valueOr("+a(1)+")";
   if(name=="String")return "ets::stringify_any("+a(0)+")";
+  if(name=="Symbol"){result.headers.insert("runtime/ets_symbol.hpp");return "ets::symbol_create("+args()+")";}
   if(name=="booleanToString")return "std::string("+a(0)+"?\"true\":\"false\")";
   if(name=="optionalOrElse")return "("+a(0)+").orElse("+a(1)+")";
   if(name=="resultIsOk")return "("+a(0)+").isOk()";
@@ -307,6 +308,7 @@ S Generator::runtimeCall(const Function& f,const Instruction& i){const auto& c=p
   if(method=="allSettled")return "ets::task_all_settled<"+type(shape(shape(i.typeId).arguments.at(0)).arguments.at(0))+">("+a(0)+")";
   return S("ets::")+(method=="all"?"task_all":"task_race")+"("+a(0)+")";
  }
+ if((base=="!Symbol"&&in(method,{"for","keyFor"}))||(base=="symbol"&&in(method,{"description","toString"}))){result.headers.insert("runtime/ets_symbol.hpp");return "ets::symbol_"+method+"("+args()+")";}
  if(base=="!Object"&&in(method,{"keys","values","entries"})){result.headers.insert("runtime/ets_object.hpp");return "ets::object_"+method+"<"+type(i.typeId)+">("+a(0)+")";}
  if(base=="!Array"&&in(method,{"isArray","of","from"})){S R=type(i.typeId);
   if(method=="isArray")return "ets_is_array("+a(0)+")";
@@ -416,7 +418,7 @@ S Generator::cppEscape(const Function& f,const Instruction& i){
 }
 void Generator::validate(){
  if(p.types.size()!=p.shapes.size())throw Error("Tablas de tipos incompletas");auto valid=[&](int t){return t>=0&&t<int(p.types.size());};
- for(int id=0;id<int(p.shapes.size());id++){auto& s=shape(id);if(s.names.size()!=s.fields.size()||s.methods.size()!=s.methodTypes.size())throw Error("Tabla de campos/métodos incompatible");for(auto& list:{s.arguments,s.fields,s.variants,s.methodTypes})for(int t:list)if(!valid(t))throw Error("Referencia de tipo inexistente");for(int t:s.methodTypes)if(shape(t).kind!="function")throw Error("Tabla de métodos incompatible");if(s.kind=="scalar"&&!in(p.types[id],{"number","string","boolean","void","i8","u8","i16","u16","i32","u32","i64","u64","f32","f64"}))throw Error("Tipo escalar inválido");}
+ for(int id=0;id<int(p.shapes.size());id++){auto& s=shape(id);if(s.names.size()!=s.fields.size()||s.methods.size()!=s.methodTypes.size())throw Error("Tabla de campos/métodos incompatible");for(auto& list:{s.arguments,s.fields,s.variants,s.methodTypes})for(int t:list)if(!valid(t))throw Error("Referencia de tipo inexistente");for(int t:s.methodTypes)if(shape(t).kind!="function")throw Error("Tabla de métodos incompatible");if(s.kind=="scalar"&&!in(p.types[id],{"number","string","boolean","void","symbol","i8","u8","i16","u16","i32","u32","i64","u64","f32","f64"}))throw Error("Tipo escalar inválido");}
  std::set<S> dispatchKeys;for(auto& d:p.dispatches){S key=n(d.interfaceType)+":"+n(d.concreteType)+":"+d.name+":"+n(d.signature);if(!valid(d.interfaceType)||!valid(d.concreteType)||!valid(d.signature)||d.callee<0||d.callee>=int(p.functions.size())||!interface(d.interfaceType)||!has(shape(d.interfaceType).variants,d.concreteType)||shape(d.signature).kind!="function"||dispatchKeys.contains(key))throw Error("Contrato de dispatch de interfaz inválido");const auto& target=p.functions[d.callee];if(target.parameterTypes.size()!=shape(d.signature).arguments.size()||target.parameterTypes.empty()||shape(target.parameterTypes[0]).kind!="ref"||shape(target.parameterTypes[0]).arguments.at(0)!=d.concreteType)throw Error("Contrato de dispatch de interfaz inválido");dispatchKeys.insert(key);}
  for(const auto& f:p.functions){V<int> ids=f.parameterTypes;ids.insert(ids.end(),f.values.begin(),f.values.end());ids.push_back(f.returns);ids.push_back(f.bodyReturns);for(auto& place:f.places)ids.push_back(place.typeId);for(int id:ids){if(!valid(id))throw Error("Tipo de función/place/valor inexistente",f.source);if(shape(id).kind=="parameter")throw Error("Parámetro genérico sin especializar",f.source);}
  }
