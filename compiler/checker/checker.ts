@@ -1,7 +1,7 @@
 import { catalogArg, catalogVariant, closestName, diagnosticAt, SourceDiagnostic } from "../diag/index";
 import {progressDetail} from "../platform/index";
 import {profileBegin,profileEnd} from "../analysis/index";
-import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind, nodeKindName, AstNode } from "../parser/index";
+import { AttributeKind, EdgeRole, NodeKind, isCallableNodeKind, isExpressionNodeKind, nodeKindName, operatorMethodNames, AstNode } from "../parser/index";
 import { nativeBuiltinSignatures, BindingResult, BindingSymbol, bindingChild, callableBinding } from "../binder/index";
 import { ModuleGraph } from "../modules/index";
 import { joinTypes, ungroupElement, splitTypes, functionClose, functionParams, functionReturn, restPosition, argumentType, numericType, primitiveType, typeCompatible, replaceType, memoryMode, memoryInner, memoryValue, ownedType, borrowedType, readonlyType, semanticArray, semanticTuple, semanticElement, containsMemory, fixedArraySize, fixedArrayElement, semanticFixedArray, genericBase, genericArguments, canonicalSymbol, literalType, literalKind, literalValue, literalTypeText, literalTypePrefix } from "./types";
@@ -10,6 +10,7 @@ import { TypedFile, CheckResult, NativeDecorator, NativeTypeQuery } from "./mode
 export { TypedFile, CheckResult } from "./model";
 import { attachModuleRecords } from "./module-records";
 import { evaluateNativeComptime } from "./comptime";
+import { rewriteOperatorCall } from "./operators";
 import { validateSafety } from "./safety";
 import { resourceType, resourceSubstitution, resourceFields, ResourceFields } from "./ownership";
 import { nativeNumericLiteral, nativeUnaryPromotion, nativeBinaryPromotion, nativeIntegerText, nativeInteger64 } from "./numeric";
@@ -778,6 +779,20 @@ export class NativeChecker {
     if (symbol.node < 0) return false;
     const declaration: AstNode = this.node(symbol.module,symbol.node);
     return declaration.kind == NodeKind.ClassMethod && declaration.get(AttributeKind.Async) == "true" && declaration.get(AttributeKind.IsStatic) != "true";
+  }
+  // #200: la clase de `valueType` define el operador `op` como método.
+  operatorMethod(valueType: string, op: string): boolean {
+    if (!operatorMethodNames().includes(op)) return false;
+    const sid: number = this.nominalSymbol(valueType.startsWith("class:") ? valueType.slice(6,valueType.length) : valueType);
+    if (sid < 0 || this.binding.symbols[sid].kind != "ClassDeclaration") return false;
+    return this.memberSymbol(valueType,op) >= 0;
+  }
+  // Convierte el nodo `id` (binario, unario, índice o asignación por índice) en la
+  // llamada object."op"(args) y la tipa como tal: el resto del compilador (efectos,
+  // préstamos, IR) ve una llamada a método normal.
+  operatorCall(module: number, id: number, op: string, object: number, args: number[], expected: string): string {
+    rewriteOperatorCall(this.graph,module,id,op,object,args);
+    return this.expressionInner(module,id,expected);
   }
   asynchronous(module: number, id: number): boolean {
     const n: AstNode = this.node(module,id); return n.get(AttributeKind.Async) == "true" || n.get(AttributeKind.IsAsync) == "true";
@@ -2233,6 +2248,8 @@ export class NativeChecker {
         return "boolean";
       }
       let left: string = memoryValue(this.expression(module,leftId,expected == "i64" || expected == "u64" ? expected : ""));
+      if (this.operatorMethod(left,n.get(AttributeKind.Operator))) return this.operatorCall(module,id,n.get(AttributeKind.Operator),leftId,[rightId],expected);
+      if (n.get(AttributeKind.Operator) == "!=" && this.operatorMethod(left,"==")) { this.report(module,id,"La clase define '==' pero no '!='\nayuda: añade el método \"!=\"(o): boolean, o escribe !(a == b)"); return "!error"; }
       const right: string = memoryValue(this.expression(module,rightId,(left == "i64" || left == "u64") && this.integerLiteral(module,rightId) ? left : "")); const op: string = n.get(AttributeKind.Operator);
       if ((right == "i64" || right == "u64") && this.integerLiteral(module,leftId)) left = this.expression(module,leftId,right);
       if (op == "+" && (left == "string" || right == "string")) {
@@ -2268,6 +2285,7 @@ export class NativeChecker {
         this.expression(module,bindingChild(n,EdgeRole.Operand),""); this.literalRange(module,id,expected); return expected;
       }
       const operand: string = memoryValue(this.expression(module,bindingChild(n,EdgeRole.Operand),"")); const op: string = n.get(AttributeKind.Operator);
+      if ((op == "-" || op == "!") && this.operatorMethod(operand,op)) return this.operatorCall(module,id,op,bindingChild(n,EdgeRole.Operand),[],expected);
       if (op == "typeof") return "string";
       if (op == "!") {
         if (!this.compatible(operand,"boolean")) this.report(module,id,"El operador '!' requiere un operando boolean, pero recibió '" + this.displayType(operand) + "'. Compara el valor explícitamente (por ejemplo, texto.length == 0).");
@@ -2285,7 +2303,21 @@ export class NativeChecker {
       return valueType;
     }
     if (kind == NodeKind.AssignmentExpression || kind == NodeKind.CompoundAssignmentExpression) {
-      const target: number = bindingChild(n,EdgeRole.Target); this.forgetPaths(); let valueType: string = this.expression(module,target,"");
+      const target: number = bindingChild(n,EdgeRole.Target);
+      if (this.kindOf(module,target) == NodeKind.IndexExpression) {
+        // #200: o[i] = v con "[]=" en la clase de o es la llamada o."[]="(i, v).
+        const holder: number = this.childOf(module,target,EdgeRole.Object); const owner: string = memoryValue(this.expression(module,holder,""));
+        if (this.operatorMethod(owner,"[]=")) {
+          if (kind == NodeKind.CompoundAssignmentExpression) { this.report(module,id,"Una asignación compuesta sobre \"[]=\" no se deriva\nayuda: escribe o[i] = o[i] " + n.get(AttributeKind.Operator).slice(0,n.get(AttributeKind.Operator).length-1) + " v"); return "!error"; }
+          return this.operatorCall(module,id,"[]=",holder,[this.childOf(module,target,EdgeRole.Index),bindingChild(n,EdgeRole.Value)],expected);
+        }
+        if (this.operatorMethod(owner,"[]")) { this.report(module,id,"La clase define \"[]\" pero no \"[]=\": no se puede asignar por índice"); return "!error"; }
+      }
+      this.forgetPaths(); let valueType: string = this.expression(module,target,"");
+      if (kind == NodeKind.CompoundAssignmentExpression && this.operatorMethod(memoryValue(valueType),n.get(AttributeKind.Operator).slice(0,n.get(AttributeKind.Operator).length-1))) {
+        const op: string = n.get(AttributeKind.Operator); const base: string = op.slice(0,op.length-1);
+        this.report(module,id,"'" + op + "' no se deriva de \"" + base + "\"\nayuda: escribe a = a " + base + " b"); return "!error";
+      }
       if (this.kindOf(module,target) == NodeKind.IdentifierExpression) { const sid: number = this.reference(module,target); valueType = this.symbolType(sid,module,target); this.narrowedSymbols.push(sid); this.narrowedTypes.push(valueType); this.result.files[module].types[target] = valueType; }
       // Asignar a un ref<T> escribe un T a través de la referencia.
       let assigned: string = memoryMode(valueType) == "ref" ? memoryInner(valueType) : valueType;
@@ -2336,6 +2368,7 @@ export class NativeChecker {
     if (kind == NodeKind.IndexExpression) {
       const object: string = memoryValue(this.expression(module,bindingChild(n,EdgeRole.Object),""));
       const indexId: number = bindingChild(n,EdgeRole.Index);
+      if (this.operatorMethod(object,"[]")) return this.operatorCall(module,id,"[]",bindingChild(n,EdgeRole.Object),[indexId],expected);
       // Record<K, V> (un Map ordenado): r[k] es V | undefined.
       if (genericBase(object) == "Map") { const parts: string[] = genericArguments(object); this.requireType(module,indexId,this.expression(module,indexId,parts[0]),parts[0]); return "Optional<" + parts[1] + ">"; }
       this.requireType(module,indexId,this.expression(module,indexId,""),"number");
@@ -2550,6 +2583,13 @@ export class NativeChecker {
         }
       }
       if (this.asynchronous(module,id)) for (const edge of n.edges) if (edge.role == EdgeRole.Params && borrowedType(this.parameterType(module,edge.node))) this.report(module,edge.node,"E4204: una tarea async no puede almacenar un parámetro prestado sin duración demostrada");
+      if (n.kind == NodeKind.ClassMethod && operatorMethodNames().includes(n.get(AttributeKind.Name))) {
+        const op: string = n.get(AttributeKind.Name); let count: number = 0; for (const edge of n.edges) if (edge.role == EdgeRole.Params) count = count + 1;
+        const arity: string = op == "!" ? "0" : op == "-" ? "0 (unario) o 1" : op == "[]=" ? "2 (índice y valor)" : "1";
+        if (!(op == "!" ? count == 0 : op == "-" ? count <= 1 : op == "[]=" ? count == 2 : count == 1)) this.report(module,id,"El operador \"" + op + "\" recibe " + arity + " parámetro(s), no " + numberToString(count));
+        if (this.asynchronous(module,id)) this.report(module,id,"Un operador no puede ser async");
+        if (["==","!=","<","<=",">",">=","!"].includes(op) && functionReturn(valueType) != "boolean") this.report(module,id,"El operador \"" + op + "\" tiene que devolver boolean");
+      }
       const bodyReturns: string = this.asynchronous(module,id) && genericBase(functionReturn(valueType)) == "Promise" ? genericArguments(functionReturn(valueType))[0] : functionReturn(valueType);
       const body: number = bindingChild(n,EdgeRole.Body);
       if (body >= 0) {
