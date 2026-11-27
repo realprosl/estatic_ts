@@ -137,6 +137,7 @@ for(const [name,source,expected] of [
  ["async",'async function f():Promise<number>{return 3;}print(await f());',"3\n"],
  ["async frame",'class C{x:number=2;}async function one():Promise<number>{return 3;}async function f():Promise<number>{const p:ptr<C> = new C();return p.x+await one();}print(await f());',"5\n"],
  ["for await",'async function one(n:number):Promise<number>{return n;}const tasks=[one(1),one(2)];let n=0;for await(const x of tasks)n+=x;print(n);',"3\n"],
+ ["métodos async y static async en clases (#297)","class Contador {\n  n: number = 0;\n  async sumar(k: number): Promise<number> { await sleep(1); this.n = this.n + k; return this.n; }\n  static async doble(x: number): Promise<number> { await sleep(1); return x * 2; }\n  async dos(): Promise<void> { await this.sumar(1); await this.sumar(2); }\n}\nasync function main(): Promise<void> {\n  const c: ptr<Contador> = new Contador();\n  console.log(await c.sumar(5), await Contador.doble(4));\n  await c.dos();\n  console.log(c.n);\n}\nawait main();\n","5 8\n8\n"],
  ["async sleep",'async function f():Promise<number>{await sleep(1);return 7;}print(await f());',"7\n"],
  ["optional callback",'const x=optionalSome(3);const y=optionalMap(x,(n:number):number=>n+1);print(optionalValueOr(y,0));',"4\n"],
  ["optional owner",'class C{x:number=5;}const p=optionalSome<ptr<C>>(new C());const q=move(p).value();print(q.x);',"5\n"],

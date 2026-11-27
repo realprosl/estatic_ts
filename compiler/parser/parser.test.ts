@@ -350,6 +350,13 @@ test("bootstrap parser: ** asocia por la derecha y rechaza un unario sin parént
   assert.deepEqual(native("let a=2 ** 3 ** 2; let b=(-2) ** 2; let c=-(2 ** 2); a **= 2;").diagnostics, []);
   assert.ok(native("let d=-2 ** 2;").diagnostics.some((d: any) => d.message.includes("**")));
 });
+test("bootstrap parser: async y static async delante de métodos (#297)", () => {
+  const result = native("class C { async m(): Promise<void> {} static async s(): Promise<number> { return 1; } }");
+  assert.deepEqual(result.diagnostics, []);
+  const methods = result.nodes.filter(n => n.kind === "ClassMethod");
+  assert.deepEqual(methods.map(n => n.attributes.find(a => a.name === "async")?.value), ["true", "true"]);
+  assert.ok(native("class C { async n: number = 1; }").diagnostics.some((d: any) => d.message.includes("'async' solo puede ir delante de un método")));
+});
 test("bootstrap parser destructuring recovery preserves the next statement", () => {
   for (const source of ["const [a];", "const {x}=;", "const [a,[b=values;"]) {
     const result = native(source + " print(999);");
