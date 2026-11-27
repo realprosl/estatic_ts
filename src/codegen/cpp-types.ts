@@ -28,6 +28,7 @@ export function clearExternalTypes(): void {
 const PRIMITIVE_CPP: Record<string, string> = {
   number: "double",
   string: "std::string",
+  symbol: "ets::Symbol",
   boolean: "bool",
   void: "void",
   i8: "int8_t",

@@ -65,7 +65,9 @@ Lista no exhaustiva — ver `README.md`, `examples/` y los nodos AST en
 
 ### Sistema de tipos
 
-- Tipos primitivos: `number`, `string`, `boolean`, `void`.
+- Tipos primitivos: `number`, `string`, `boolean`, `void` y `symbol` (#221:
+  `Symbol(desc)`, `Symbol.for`, `Symbol.keyFor`, `description`, `toString()`, como
+  clave de `Map`/`Record`; no se convierte solo a string).
 - Genéricos con constraints (`<T extends X>`) y parameter packs (`<...T>`).
 - Sobrecargas de funciones libres resueltas estáticamente por firma.
 - Type aliases (`type X = …`).

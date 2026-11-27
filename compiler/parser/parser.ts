@@ -1272,6 +1272,12 @@ export class Parser {
     this.edge(result, EdgeRole.Body, body);
     this.setEnd(result, this.node(body).end); return result;
   }
+  // Una palabra clave (for, delete, default, new…) usada como nombre tras un punto.
+  keywordWord(token: ParserToken): boolean {
+    if (token.kind == "string" || token.kind == "number" || token.kind == "identifier" || token.lexeme.length == 0) return false;
+    for (let at: number = 0; at < token.lexeme.length; at = at + 1) { const code: number = token.lexeme.charCodeAt(at); if (!((code >= 97 && code <= 122) || (code >= 65 && code <= 90))) return false; }
+    return true;
+  }
   typeName(): string {
     if (!this.enter()) return "<error>";
     const outerConst: boolean = this.constMemory; this.constMemory = false; const outerOperand: boolean = this.typeOperand; this.typeOperand = false;
@@ -1575,7 +1581,7 @@ export class Parser {
         const optional: boolean = this.take().kind == "?.";
         let member: ParserToken = this.peek(0);
         // Como en TypeScript, tras el punto vale una palabra clave (map.delete, Array.of).
-        if (this.check("delete") || this.check("default") || this.check("of")) member = this.take(); else member = this.expect("identifier");
+        if (!this.check("identifier") && this.keywordWord(this.peek(0))) member = this.take(); else member = this.expect("identifier");
         const parent: number = this.add(NodeKind.MemberExpression, this.node(result).start, member);
         this.edge(parent, EdgeRole.Object, result); this.attr(parent, AttributeKind.Optional, optional ? "true" : "false");
         if (this.check("<") && this.genericMethodFollower() == "(") this.typeArguments(parent);

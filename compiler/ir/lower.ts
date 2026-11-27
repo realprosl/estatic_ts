@@ -1172,6 +1172,7 @@ export class IrLowering {
     // #334: con un receptor constRef<string> / ref<T[]> el tipo llega sin
     // desenvolver; se mira el tipo del valor, como en las llamadas a métodos.
     const valueReceiver: string = memoryValue(receiver);
+    if (valueReceiver == "symbol" && name == "description") return this.runtime("symbol.description",typeId,[this.expression(bindingChild(n,EdgeRole.Object))],id,["runtime","read"]);
     if (["length","size","kind","ok"].includes(name) && (valueReceiver == "string" || valueReceiver.endsWith("[]") || fixedArraySize(valueReceiver) >= 0 || semanticTuple(valueReceiver) || ["Map","Set","Optional","Result"].includes(genericBase(valueReceiver)))) { const input: number = bindingChild(n,EdgeRole.Object); const actual: number = this.typeId(this.checked.files[this.module].types[input],input); let value: number = -1;
       // #289: si el receptor es un place se lee prestado (sin copiar el array o el string).
       if (this.result.typeDefinitions[actual].resource || (this.purePlace(input) && (["array","Map","Set"].includes(this.result.typeDefinitions[actual].kind) || this.result.types[actual] == "string"))) value = this.emit("borrow",this.typeId("constRef<"+this.result.types[actual]+">",id),[],this.rootPlace(input),-1,"constRef",id); else value = this.expression(input); return this.emit("property",typeId,[value],-1,-1,name,id); }
