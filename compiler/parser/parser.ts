@@ -92,12 +92,16 @@ export class Parser {
   extraOwners: number[]; extraNodes: number[]; extraBefore: boolean[];
   // Resto de array pendiente de la fuente: patrón, nombre del resto y posición.
   restOwners: number[]; restNames: ParserToken[]; restIndexes: number[];
+  // Variables visibles con su tipo anotado ("" si no lo tiene), para el resto de
+  // objeto sin anotar (const { a, ...resto } = p con p: P). pendingNames/Types son
+  // los parámetros que entran en el próximo bloque (el cuerpo de la función).
+  scopeNames: string[]; scopeTypes: string[]; pendingNames: string[]; pendingTypes: string[];
   jsonAt: number;
   // Nombres locales importados de "estatic:json": la clase (JSON) y parse.
   jsonClasses: string[]; jsonParsers: string[];
   constructor(tokens: ParserToken[]) {
     this.tokens = tokens; this.current = 0; this.nodes = []; this.diagnostics = [];
-    this.nesting = 0; this.exhausted = false; this.constMemory = false; this.objectTypes = []; this.objectTypeNames = []; this.patternOwners = []; this.patternDeclarations = []; this.extraOwners = []; this.extraNodes = []; this.extraBefore = []; this.restOwners = []; this.restNames = []; this.restIndexes = []; this.jsonAt = 0; this.jsonClasses = []; this.jsonParsers = [];
+    this.nesting = 0; this.exhausted = false; this.constMemory = false; this.objectTypes = []; this.objectTypeNames = []; this.patternOwners = []; this.patternDeclarations = []; this.extraOwners = []; this.extraNodes = []; this.extraBefore = []; this.restOwners = []; this.restNames = []; this.restIndexes = []; this.scopeNames = []; this.scopeTypes = []; this.pendingNames = []; this.pendingTypes = []; this.jsonAt = 0; this.jsonClasses = []; this.jsonParsers = [];
     if (tokens.length == 0) {
       this.tokens.push(new ParserToken("eof", "", 0, 1, 1, 0, 1, 1));
       this.report("La entrada de tokens necesita un eof final");
@@ -721,7 +725,8 @@ export class Parser {
       if (initializer < 0) return;
       const token: ParserToken = this.restNames[at]; let sourceName: string = "";
       const objectRest: boolean = this.restIndexes[at] < 0;
-      if (objectRest && sourceType == "") { this.reportAt(token, "El resto de un patrón de objeto necesita el tipo de la fuente: anótalo (const { a, ...resto }: T = …)"); return; }
+      if (objectRest && sourceType == "" && this.node(initializer).kind == NodeKind.IdentifierExpression) sourceType = this.visibleType(this.get(initializer, AttributeKind.Name));
+      if (objectRest && sourceType == "") { this.reportAt(token, "El resto de un patrón de objeto necesita el tipo de la fuente: usa una variable o un parámetro con el tipo anotado, o anota el patrón (const { a, ...resto }: T = …)"); return; }
       if (this.node(initializer).kind == NodeKind.IdentifierExpression) sourceName = this.get(initializer, AttributeKind.Name);
       else {
         sourceName = "__src" + numberToString(owner);
@@ -842,6 +847,7 @@ export class Parser {
     const result: number = this.add(kind, keyword, name); this.attr(result, AttributeKind.Name, name.lexeme);
     if (kind == NodeKind.VariableDeclaration) this.attr(result, AttributeKind.Mutable, keyword.kind == "let" ? "true" : "false");
     const typed: boolean = this.accept(":"); if (typed) this.attr(result, AttributeKind.DeclaredType, this.typeName());
+    this.scopeNames.push(name.lexeme); this.scopeTypes.push(typed ? this.get(result, AttributeKind.DeclaredType) : "");
     // `let x: T | undefined;` empieza sin valor (el checker exige que T admita undefined).
     if (typed && kind == NodeKind.VariableDeclaration && keyword.kind == "let" && !this.check("=")) { this.setEnd(result, terminated ? this.terminator() : this.previous()); return result; }
     this.expect("="); this.edge(result, EdgeRole.Initializer, this.expression());
@@ -849,6 +855,9 @@ export class Parser {
   }
   block(open: ParserToken): number {
     const result: number = this.add(NodeKind.BlockStatement, open, open);
+    const mark: number = this.scopeNames.length;
+    for (let at: number = 0; at < this.pendingNames.length; at = at + 1) { this.scopeNames.push(this.pendingNames[at]); this.scopeTypes.push(this.pendingTypes[at]); }
+    this.pendingNames = []; this.pendingTypes = [];
     while (!this.check("}") && !this.check("eof")) {
       this.skipNewlines();
       if (this.check("}") || this.check("eof")) break;
@@ -857,10 +866,16 @@ export class Parser {
         if (this.current == before && !this.check("eof")) { this.report("E1006: No se esperaba " + this.found() + " dentro del bloque" + this.foundArg() + catalogVariant("bloque")); this.take(); }
       }
     }
+    this.scopeNames = this.scopeNames.slice(0, mark); this.scopeTypes = this.scopeTypes.slice(0, mark);
     this.setEnd(result, this.expect("}")); return result;
   }
+  // Tipo anotado de la variable visible con ese nombre ("" si no hay o no lo tiene).
+  visibleType(name: string): string {
+    for (let at: number = this.scopeNames.length - 1; at >= 0; at = at - 1) if (this.scopeNames[at] == name) return this.scopeTypes[at];
+    return "";
+  }
   parametersInto(owner: number, arrow: boolean, properties: boolean): void {
-    this.expect("(");
+    this.expect("("); this.pendingNames = []; this.pendingTypes = [];
     while (!this.check(")") && !this.check("eof")) {
       const before: number = this.current;
       const start: ParserToken = this.peek(0);
@@ -893,6 +908,7 @@ export class Parser {
       else { this.expect(":"); annotation = this.typeName(); }
       const param: number = this.add(NodeKind.Parameter, start, this.previous());
       this.attr(param, AttributeKind.Name, parameterName); this.attr(param, AttributeKind.Type, annotation);
+      this.pendingNames.push(parameterName); this.pendingTypes.push(optional || variadic ? "" : annotation);
       if (pattern >= 0) {
         const source: number = this.add(NodeKind.IdentifierExpression, start, start); this.attr(source, AttributeKind.Name, parameterName);
         this.edge(pattern, EdgeRole.Initializer, source); this.finishPattern(pattern, annotation); this.patternOwners.push(owner); this.patternDeclarations.push(pattern);
@@ -1381,7 +1397,7 @@ export class Parser {
     this.attr(result, AttributeKind.IsAsync, isAsync ? "true" : "false"); this.parametersInto(result, true, false);
     if (this.accept(":")) this.attr(result, AttributeKind.ReturnType, this.typeName());
     this.expect("=>"); let body: number = -1;
-    if (this.accept("{")) body = this.block(this.previous()); else body = this.expression();
+    if (this.accept("{")) body = this.block(this.previous()); else { body = this.expression(); this.pendingNames = []; this.pendingTypes = []; }
     body = this.withPatterns(result, body);
     this.edge(result, EdgeRole.Body, body); this.setEnd(result, this.node(body).end); return result;
   }
