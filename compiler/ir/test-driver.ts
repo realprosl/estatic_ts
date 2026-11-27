@@ -67,7 +67,7 @@ function testIr(): void {
     if (mode == "result") ir.functions[0].blocks[0].instructions[0].result = 999;
     if (mode == "use") ir.functions[0].blocks[0].instructions[1].operands = [999];
     if (mode == "duplicate") ir.functions[0].blocks[0].instructions[1].result = ir.functions[0].blocks[0].instructions[0].result;
-    if (mode == "operator") ir.functions[0].blocks[0].instructions[1].text = "unknown";
+    if (mode == "operator") { let done: boolean = false; for (let at: number = 0; at < ir.functions[0].blocks[0].instructions.length; at = at+1) if (!done && ir.functions[0].blocks[0].instructions[at].op == "unary") { ir.functions[0].blocks[0].instructions[at].text = "unknown"; done = true; } }
     if (mode == "place") ir.functions[0].blocks[0].instructions[0].place = 999;
     if (mode == "return") ir.functions[0].blocks[0].value = -1;
     if (mode == "callee") for (let f: number = 0; f < ir.functions.length; f = f+1) for (let b: number = 0; b < ir.functions[f].blocks.length; b = b+1) for (let i: number = 0; i < ir.functions[f].blocks[b].instructions.length; i = i+1) if (ir.functions[f].blocks[b].instructions[i].op == "call") ir.functions[f].blocks[b].instructions[i].callee = 999;
