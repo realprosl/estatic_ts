@@ -356,6 +356,7 @@ test("bootstrap parser: async y static async delante de métodos (#297)", () => 
   const methods = result.nodes.filter(n => n.kind === "ClassMethod");
   assert.deepEqual(methods.map(n => n.attributes.find(a => a.name === "async")?.value), ["true", "true"]);
   assert.ok(native("class C { async n: number = 1; }").diagnostics.some((d: any) => d.message.includes("'async' solo puede ir delante de un método")));
+});
 test("bootstrap parser: resto de objeto con la fuente sin tipo anotado da error (#223)", () => {
   assert.deepEqual(native("interface P { a: number; b: number } const p: P = { a: 1, b: 2 }; const { a, ...r } = p;").diagnostics, []);
   assert.deepEqual(native("interface P { a: number; b: number } function f(p: P): void { const { a, ...r } = p; }").diagnostics, []);
