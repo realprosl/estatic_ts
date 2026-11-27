@@ -694,6 +694,24 @@ got: 10
 got: 20
 ```
 
+**Métodos `async`**: un método de clase puede ser `async` o `static async`.
+
+```ts
+class Contador {
+  n: number = 0;
+  async sumar(k: number): Promise<number> { await sleep(1); this.n = this.n + k; return this.n; }
+  static async doble(x: number): Promise<number> { await sleep(1); return x * 2; }
+}
+const c: ptr<Contador> = new Contador();
+console.log(await c.sumar(5), await Contador.doble(4)); // 5 8
+```
+
+Un método `async` de instancia guarda `this` prestado, así que hay que
+esperarlo en la misma expresión (`await c.sumar(5)`). Guardar la promesa
+para más tarde, devolverla o pasar el método como valor es el error E4204.
+Si la tarea tiene que vivir por su cuenta, usa un `static async` (o una
+función `async`) que reciba por valor lo que necesita.
+
 ---
 
 ## 12. Red: TCP, DNS, HTTP, TLS

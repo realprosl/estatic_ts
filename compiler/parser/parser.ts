@@ -1074,6 +1074,9 @@ export class Parser {
         if (this.check("public") || this.check("private") || this.check("protected")) access = this.take().lexeme;
         let isReadonly: boolean = this.accept("readonly"); const isStatic: boolean = this.accept("static");
         if (!isReadonly) isReadonly = this.accept("readonly");
+        // `async metodo()`: `async` solo es modificador si le sigue el nombre del método.
+        let isAsync: boolean = false;
+        if (this.check("async") && this.peek(1).kind == "identifier") { this.take(); isAsync = true; }
         const member: ParserToken = this.expect("identifier");
         const item: number = this.add(NodeKind.ClassField, member, member); this.attr(item, AttributeKind.Name, member.lexeme);
         this.prependDecorators(item, memberDecorators);
@@ -1081,7 +1084,7 @@ export class Parser {
         if (isStatic) this.attr(item, AttributeKind.IsStatic, "true");
         if (isReadonly) this.attr(item, AttributeKind.Readonly, "true");
         if (this.check("(") || this.check("<")) {
-          this.setKind(item, NodeKind.ClassMethod); this.typeParameters(item, false); this.parametersInto(item, false, member.lexeme == "constructor" && !isStatic);
+          this.setKind(item, NodeKind.ClassMethod); if (isAsync) this.attr(item, AttributeKind.Async, "true"); this.typeParameters(item, false); this.parametersInto(item, false, member.lexeme == "constructor" && !isStatic);
           let returnType: string = "void";
           if (this.accept(":")) returnType = this.typeName();
           else if (member.lexeme != "constructor") this.report(this.missingReturnType("El método '" + member.lexeme + "'"));
@@ -1090,6 +1093,7 @@ export class Parser {
           this.edge(item, EdgeRole.Body, body); this.setEnd(item, this.node(body).end);
           this.edge(result, EdgeRole.Methods, item);
         } else {
+          if (isAsync) this.report("'async' solo puede ir delante de un método");
           this.expect(":"); this.attr(item, AttributeKind.Type, this.typeName());
           if (this.accept("=")) this.edge(item, EdgeRole.DefaultValue, this.expression());
           this.setEnd(item, this.terminator()); this.edge(result, EdgeRole.Fields, item);

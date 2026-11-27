@@ -770,6 +770,15 @@ export class NativeChecker {
     if (s.kind == "builtin-type" && ["JsonValue","FileReader","TcpListener","TcpConnection","TlsContext","TlsConnection","CancellationSource","CancellationToken","Request","Response","Server","HttpClientResponse","Timer","FsWatcher","FsEvent","Console","ProcessReadable","ProcessWritable","ChildProcess"].includes(s.name)) return s.name;
     return this.unsupported(module,id,"tipo " + text);
   }
+  // El miembro resuelto en `id` es un método `async` que no es `static`.
+  asyncInstanceMethod(module: number, id: number): boolean {
+    const sid: number = this.result.files[module].members[id];
+    if (sid < 0 || sid >= this.binding.symbols.length) return false;
+    const symbol: BindingSymbol = this.binding.symbols[sid];
+    if (symbol.node < 0) return false;
+    const declaration: AstNode = this.node(symbol.module,symbol.node);
+    return declaration.kind == NodeKind.ClassMethod && declaration.get(AttributeKind.Async) == "true" && declaration.get(AttributeKind.IsStatic) != "true";
+  }
   asynchronous(module: number, id: number): boolean {
     const n: AstNode = this.node(module,id); return n.get(AttributeKind.Async) == "true" || n.get(AttributeKind.IsAsync) == "true";
   }
@@ -2116,6 +2125,11 @@ export class NativeChecker {
       }
       this.result.files[module].receivers[id] = receiver;
       const valueType: string = this.member(module,id,receiver,kind == NodeKind.MemberExpression ? n.get(AttributeKind.Member) : n.get(AttributeKind.Method));
+      if (this.asyncInstanceMethod(module,id)) {
+        // #297: la tarea guarda `this` prestado, así que solo puede vivir mientras quien llama espera.
+        const parent: number = this.binding.files[module].parents[id];
+        if (kind == NodeKind.MemberExpression || parent < 0 || this.kindOf(module,parent) != NodeKind.AwaitExpression) this.report(module,id,"E4204: un método async de instancia guarda 'this' prestado y hay que esperarlo en la misma expresión\nayuda: escribe 'await objeto." + (kind == NodeKind.MemberExpression ? n.get(AttributeKind.Member) : n.get(AttributeKind.Method)) + "(...)', o usa un método 'static async' que reciba lo que necesita");
+      }
       if (kind == NodeKind.MemberExpression) {
         if (n.get(AttributeKind.Optional) == "true") {
           if (this.transferType(valueType)) this.report(module,id,"E4101: el acceso opcional no puede copiar un campo con ownership");
