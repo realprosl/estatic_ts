@@ -661,6 +661,26 @@ export class NativeChecker {
     if ((this.depth) > 128) { this.report(module,id,"Límite de resolución de tipos excedido"); return "!error"; }
     this.depth = this.depth + 1; const result: string = this.annotationInner(module, id, input.trim()); this.depth = this.depth - 1; return result;
   }
+  // #229: Exclude/Extract filtran una unión, NonNullable quita el undefined,
+  // ReturnType/Parameters miran una firma y Awaited desenvuelve Promise.
+  utilityType(module: number, id: number, name: string, args: string[]): string {
+    const count: number = name == "Exclude" || name == "Extract" ? 2 : 1;
+    if (args.length != count) { this.report(module,id,name + " recibe " + numberToString(count) + " argumento(s) de tipo"); return "!error"; }
+    const input: string = this.annotation(module,id,args[0]); if (input.startsWith("!")) return input;
+    if (name == "Exclude" || name == "Extract") {
+      const filter: string = this.annotation(module,id,args[1]); if (filter.startsWith("!")) return filter;
+      let kept: string[] = [];
+      for (const member of splitTypes(input,"|")) if (this.compatible(member,filter) == (name == "Extract")) kept.push(member);
+      if (kept.length == 0) { this.report(module,id,name + "<" + this.displayType(input) + ", " + this.displayType(filter) + "> no deja ningún tipo (sería never)"); return "!error"; }
+      return joinTypes(kept,"|");
+    }
+    if (name == "NonNullable") return genericBase(input) == "Optional" ? genericArguments(input)[0] : input;
+    if (name == "Awaited") { let value: string = input; while (genericBase(value) == "Promise") value = genericArguments(value)[0]; return value; }
+    const signature: string = memoryValue(input);
+    if (functionClose(signature) < 0) { this.report(module,id,name + " requiere el tipo de una función, no '" + this.displayType(input) + "'\nayuda: con una función declarada, usa " + name + "<typeof f>"); return "!error"; }
+    if (name == "ReturnType") return functionReturn(signature);
+    return "[" + functionParams(signature).join(",") + "]";
+  }
   // #224: keyof T es la unión de los nombres (literales de string) de los miembros de T.
   keyofType(module: number, id: number, input: string): string {
     if (input.startsWith("!")) return input;
@@ -761,6 +781,7 @@ export class NativeChecker {
     }
     if (text.startsWith("Array<") && text.endsWith(">")) return semanticArray(this.annotation(module,id,text.slice(6,text.length-1)));
     if (genericBase(text) == "keyof" && genericArguments(text).length == 1) return this.keyofType(module,id,this.annotation(module,id,genericArguments(text)[0]));
+    if (["Exclude","Extract","NonNullable","ReturnType","Parameters","Awaited"].includes(genericBase(text))) return this.utilityType(module,id,genericBase(text),genericArguments(text));
     if (text.endsWith("]") && text.lastIndexOf("[") > 0) {
       const open: number = this.indexOpen(text); const raw: string = text.slice(open+1,text.length-1);
       if (this.indexedKey(module,id,raw)) return this.indexedType(module,id,this.annotation(module,id,text.slice(0,open)),this.annotation(module,id,raw));

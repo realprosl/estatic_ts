@@ -533,6 +533,12 @@ for(const [name,source,pattern] of [
  ['indiceSinCampo','interface U{a:number}type X=U["z"];const x:X=1;',/no tiene la clave/],
  ['indiceArray','type X=number[][string];const x:X=1;',/no tiene la clave/],
 ] as const)test(`checker: keyof y acceso por índice (#224, #225) rechaza ${name}`,()=>error(source,pattern));
+for(const [name,source,pattern] of [
+ ['readonly','interface U{a:number}let r:Readonly<U>={a:1};r.a=2;',/es inmutable \(readonly\)/],
+ ['excludeTodo','type L="a"|"b";const x:Exclude<L,string>="a";',/no deja ningún tipo/],
+ ['excludeValor','type L="a"|"b";const x:Exclude<L,"a">="a";',/no pertenece/],
+ ['returnNoFuncion','const x:ReturnType<number>=1;',/requiere el tipo de una función/],
+] as const)test(`checker: tipos de utilidad (#229) rechaza ${name}`,()=>error(source,pattern));
 test('native exact64 arithmetic and mixed comparisons preserve types',()=>{
  const g=check('let a:i64=9007199254740993;let b:u64=2;const x=a+b;const y=1+a;const z=a<9007199254740994;');
  assert.deepEqual(types(g,'BinaryExpression'),['u64','i64','boolean']);

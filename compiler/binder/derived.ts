@@ -1,4 +1,4 @@
-// Tipos derivados (Partial, Required, Pick, Omit) y resto de objeto ({ a, ...resto }).
+// Tipos derivados (Partial, Required, Readonly, Pick, Omit) y resto de objeto ({ a, ...resto }).
 // El parser deja una interfaz sintética sin campos con Underlying = "Tipo#X#claves";
 // antes de enlazar se le copian los campos de X (local o importado). El tipo de cada
 // campo es una consulta ($fieldof$campo$X) que resuelve el checker en ese módulo,
@@ -68,6 +68,7 @@ export class DerivedExpander {
       item.attributes.push(new AstAttribute(AttributeKind.Name, name));
       item.attributes.push(new AstAttribute(AttributeKind.Type, (kind == "Required" ? "$fieldreq$" : "$fieldof$") + name + "$" + source));
       item.attributes.push(new AstAttribute(AttributeKind.Optional, optional));
+      if (kind == "Readonly" || field.get(AttributeKind.Readonly) == "true") item.attributes.push(new AstAttribute(AttributeKind.Readonly, "true"));
       this.graph.modules[module].cached.result.ast.nodes.push(item);
       this.graph.modules[module].cached.result.ast.nodes[id].edges.push(new AstEdge(EdgeRole.Fields, this.graph.modules[module].cached.result.ast.nodes.length - 1));
     }

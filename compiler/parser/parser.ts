@@ -1342,7 +1342,7 @@ export class Parser {
       while (!this.check(">") && !this.check("eof")) { args.push(this.typeName()); if (!this.accept(",")) break; }
       this.closeAngle();
       if (result == "Array" && args.length == 1) result = args[0] + "[]";
-      else if ((result == "Partial" || result == "Required") && args.length == 1) { let none: string[] = []; result = this.derivedType(result, args[0], none, this.previous()); }
+      else if ((result == "Partial" || result == "Required" || result == "Readonly") && args.length == 1) { let none: string[] = []; result = this.derivedType(result, args[0], none, this.previous()); }
       // Record<"a" | "b", V> es un struct con esos campos; Record<K, V> con K abierto, un Map ordenado.
       else if (result == "Record" && args.length == 2 && args[0].startsWith("$lit:string=")) result = this.derivedType("Record", args[1], this.literalKeys(args[0]), this.previous());
       else if (result == "Record" && args.length == 2) result = "Map<" + args[0] + "," + args[1] + ">";

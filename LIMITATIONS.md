@@ -79,6 +79,10 @@ Lista no exhaustiva — ver `README.md`, `examples/` y los nodos AST en
 - **Satisfies operator** (`expr satisfies T`, TS 4.9).
 - **`keyof T`** (#224): la unión de los nombres de los miembros de una clase,
   interfaz o tipo objeto; con un `Record<K, V>` abierto, `K`.
+- **Tipos de utilidad** (#229): `Partial`, `Required`, `Readonly`, `Pick`, `Omit`,
+  `Record`, `Exclude`, `Extract`, `NonNullable`, `ReturnType`, `Parameters` y
+  `Awaited` (con una función declarada: `ReturnType<typeof f>`). `Partial`,
+  `Required`, `Readonly`, `Pick` y `Omit` necesitan un tipo con nombre.
 - **Acceso por índice** (#225): `T["campo"]`, `T[keyof T]`, `T["a" | "b"]`,
   `T[number]` sobre arrays y tuplas. Solo en el checker.
 - `typeof` valor y `typeof` tipo (`T typeof expr`).
@@ -292,9 +296,6 @@ que el dialecto aún no implementa. **Se aceptan contribuciones** en estas
   pipeline.
 - Conditional types (`T extends U ? X : Y`) en tipos.
 - Mapped types (`{ [K in keyof T]: V }`).
-- Utility types que faltan: `Readonly`, `Exclude`, `Extract`, `NonNullable`,
-  `ReturnType`, `Parameters` y `Awaited` (`Partial`, `Required`, `Pick`, `Omit` y
-  `Record` ya están).
 - Template literal types (`` `prefix_${T}` ``).
 - `infer U` en conditional types.
 - Variadic tuple types (`[...T, ...U]`).
