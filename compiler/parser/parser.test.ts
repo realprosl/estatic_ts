@@ -371,6 +371,12 @@ test("bootstrap parser: index signatures (#232)", () => {
   assert.ok(native("interface C { a: number; [k: string]: number }").diagnostics.some((d: any) => d.message.includes("campos fijos y una index signature")));
   assert.ok(native("interface C { [k: boolean]: number }").diagnostics.some((d: any) => d.message.includes("tiene que ser string o number")));
 });
+test("bootstrap parser: as const (#234)", () => {
+  const result = native('const a = ["x", 1, true] as const;');
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.nodes.find(n => n.kind === "AsExpression")?.attributes.find(a => a.name === "targetType")?.value, "[$lit:string=x,$lit:number=1,$lit:boolean=true]");
+  assert.ok(native("const v = 1; const a = [v] as const;").diagnostics.some((d: any) => d.message.includes("'as const' solo admite literales")));
+});
 test("bootstrap parser: ** asocia por la derecha y rechaza un unario sin paréntesis (#249)", () => {
   assert.deepEqual(native("let a=2 ** 3 ** 2; let b=(-2) ** 2; let c=-(2 ** 2); a **= 2;").diagnostics, []);
   assert.ok(native("let d=-2 ** 2;").diagnostics.some((d: any) => d.message.includes("**")));

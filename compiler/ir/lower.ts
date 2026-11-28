@@ -618,7 +618,7 @@ export class IrLowering {
         return op == "!=" ? present : this.emit("unary",typeId,[present],-1,-1,"!",id);
       }
       if (op == "instanceof") { const value: number = this.expression(left); const target: string = this.resolved(this.checked.files[this.module].types[right]); const result: number = this.emit("typeTest",typeId,[value],-1,-1,"",id); this.result.functions[this.currentFunction].blocks[this.block].instructions[this.result.functions[this.currentFunction].blocks[this.block].instructions.length-1].signature = this.typeId(target.slice(6,target.length),id); return result; }
-      const a: number = this.readValue(this.expression(left),left); const b: number = this.readValue(this.expression(right),right);
+      const a: number = this.widenLiteral(this.readValue(this.expression(left),left),id); const b: number = this.widenLiteral(this.readValue(this.expression(right),right),id);
       return this.binary(op,a,b,typeId,id);
     }
     if (kind == NodeKind.AssignmentExpression || kind == NodeKind.CompoundAssignmentExpression) {
@@ -1284,6 +1284,12 @@ export class IrLowering {
       for (let m: number = 0; m < this.graph.modules.length; m = m+1) if (this.graph.modules[m].file == request.dependency) this.order(m);
     }
     this.orderState[module] = 2; this.result.initializationOrder.push(this.result.modules[module].initializer);
+  }
+  // #234: un valor de tipo literal ("dev", 2) opera como su tipo base.
+  widenLiteral(value: number, id: number): number {
+    const current: number = this.result.functions[this.currentFunction].values[value];
+    if (current < 0 || this.result.typeDefinitions[current].kind != "literal") return value;
+    return this.convert(value,this.result.typeDefinitions[current].discriminatorType,id);
   }
   // #200: los nodos de operador que el checker resolvió a un método de operador
   // (members[id]) se convierten aquí en la misma llamada object."op"(args).

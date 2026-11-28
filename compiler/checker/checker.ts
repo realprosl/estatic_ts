@@ -2499,8 +2499,10 @@ export class NativeChecker {
       let left: string = memoryValue(this.expression(module,leftId,expected == "i64" || expected == "u64" ? expected : ""));
       if (this.operatorMethod(left,n.get(AttributeKind.Operator))) return this.operatorCall(module,id,n.get(AttributeKind.Operator),leftId,[rightId],expected);
       if (n.get(AttributeKind.Operator) == "!=" && this.operatorMethod(left,"==")) { this.report(module,id,"La clase define '==' pero no '!='\nayuda: añade el método \"!=\"(o): boolean, o escribe !(a == b)"); return "!error"; }
-      const right: string = memoryValue(this.expression(module,rightId,(left == "i64" || left == "u64") && this.integerLiteral(module,rightId) ? left : "")); const op: string = n.get(AttributeKind.Operator);
+      let right: string = memoryValue(this.expression(module,rightId,(left == "i64" || left == "u64") && this.integerLiteral(module,rightId) ? left : "")); const op: string = n.get(AttributeKind.Operator);
       if ((right == "i64" || right == "u64") && this.integerLiteral(module,leftId)) left = this.expression(module,leftId,right);
+      // #234: un tipo literal ("dev", 2) opera como su tipo base.
+      if (literalType(left)) left = literalKind(left); if (literalType(right)) right = literalKind(right);
       if (op == "+" && (left == "string" || right == "string")) {
         // #171: solo se concatenan a un string valores primitivos o enums; el
         // resto (Optional, arrays, colecciones, clases) no tiene conversión.

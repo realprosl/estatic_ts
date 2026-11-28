@@ -1189,11 +1189,11 @@ export class Parser {
     return this.objectTypeFrom(names, types, optionals, tokens, open, close);
   }
   // La interfaz sintética de una forma; la misma forma da el mismo nombre.
-  objectTypeFrom(names: string[], types: string[], optionals: boolean[], tokens: ParserToken[], open: ParserToken, close: ParserToken): string {
+  objectTypeFrom(names: string[], types: string[], optionals: boolean[], tokens: ParserToken[], open: ParserToken, close: ParserToken, fixed: boolean = false): string {
     let order: number[] = []; for (let at: number = 0; at < names.length; at = at + 1) order.push(at);
     order.sort((a: number, b: number): number => compareText(names[a], names[b]));
     let key: string = ""; let label: string = "";
-    for (const at of order) { key = key + names[at] + (optionals[at] ? "?:" : ":") + types[at] + ";"; label = label + "_" + names[at]; }
+    for (const at of order) { key = key + (fixed ? "readonly " : "") + names[at] + (optionals[at] ? "?:" : ":") + types[at] + ";"; label = label + "_" + names[at]; }
     let hash: number = 0;
     for (let at: number = 0; at < key.length; at = at + 1) hash = (hash * 31 + key.charCodeAt(at)) % 4294967296;
     const name: string = "__Obj" + label + "_" + numberToString(hash);
@@ -1202,6 +1202,7 @@ export class Parser {
       for (let at: number = 0; at < names.length; at = at + 1) {
         const item: number = this.add(NodeKind.InterfaceField, tokens[at], tokens[at]); this.attr(item, AttributeKind.Name, names[at]);
         this.attr(item, AttributeKind.Type, types[at]); this.attr(item, AttributeKind.Optional, optionals[at] ? "true" : "false"); this.edge(declaration, EdgeRole.Fields, item);
+        if (fixed) this.attr(item, AttributeKind.Readonly, "true");
       }
       this.objectTypes.push(declaration); this.objectTypeNames.push(name);
     }
@@ -1599,7 +1600,9 @@ export class Parser {
     let operand: number = this.postfix();
     if ((this.check("++") || this.check("--")) && this.peek(0).line == this.node(operand).end.endLine) operand = this.update(operand,this.take(),false);
     if (this.check("as") || this.check("satisfies")) {
-      const op: ParserToken = this.take(); const annotation: string = this.typeName();
+      const op: ParserToken = this.take();
+      // #234: `x as const` es `x as <su tipo exacto>`: literales, tuplas y campos readonly.
+      const annotation: string = op.kind == "as" && this.accept("const") ? this.constType(operand) : this.typeName();
       const next: ParserToken = this.peek(0);
       const end: ParserToken = new ParserToken("", "", next.offset, next.line, next.column, next.offset, next.line, next.column);
       const result: number = this.add(op.kind == "as" ? NodeKind.AsExpression : NodeKind.SatisfiesExpression, this.node(operand).start, end);
@@ -1607,6 +1610,33 @@ export class Parser {
       this.edge(result, op.kind == "as" ? EdgeRole.Expression : EdgeRole.Operand, operand); return result;
     }
     return operand;
+  }
+  // El tipo de `literal as const`: un literal, una tupla de esos tipos o un tipo
+  // objeto con los campos readonly. Solo con literales (no variables ni llamadas).
+  constType(id: number): string {
+    const n: AstNode = this.node(id);
+    if (n.kind == NodeKind.LiteralExpression) {
+      const kind: string = this.get(id, AttributeKind.LiteralType);
+      if (kind == "string") return "$lit:string=" + escapeLiteralValue(this.get(id, AttributeKind.Value));
+      if (kind == "number") return "$lit:number=" + escapeLiteralValue(this.numericText(n.start));
+      if (kind == "boolean") return "$lit:boolean=" + this.get(id, AttributeKind.Value);
+    }
+    if (n.kind == NodeKind.ArrayLiteralExpression) {
+      let parts: string[] = []; for (const edge of n.edges) if (edge.role == EdgeRole.Elements) parts.push(this.constType(edge.node));
+      if (parts.length == 0) { this.reportAt(n.start, "'as const' sobre un array vacío no tiene tipo"); return "<error>"; }
+      return "[" + parts.join(",") + "]";
+    }
+    if (n.kind == NodeKind.ObjectLiteralExpression) {
+      let names: string[] = []; let types: string[] = []; let optionals: boolean[] = []; let tokens: ParserToken[] = [];
+      for (const edge of n.edges) if (edge.role == EdgeRole.Properties) {
+        names.push(this.get(edge.node, AttributeKind.Key)); optionals.push(false); tokens.push(this.node(edge.node).start);
+        let value: number = -1; for (const inner of this.node(edge.node).edges) if (inner.role == EdgeRole.Value) value = inner.node;
+        types.push(value >= 0 ? this.constType(value) : "<error>");
+      }
+      return this.objectTypeFrom(names, types, optionals, tokens, n.start, n.end, true);
+    }
+    this.reportAt(n.start, "'as const' solo admite literales, arrays y objetos de literales");
+    return "<error>";
   }
   update(target: number, op: ParserToken, prefix: boolean): number {
     const kind: NodeKind = this.node(target).kind;
