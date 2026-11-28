@@ -43,7 +43,7 @@ export function argumentType(text: string, spread: boolean): string {
   return spread ? array : semanticElement(array);
 }
 export function numericType(text: string): boolean { return ["number","i8","u8","i16","u16","i32","u32","i64","u64","f32","f64"].includes(text); }
-export function primitiveType(text: string): boolean { return numericType(text) || ["string","boolean","void"].includes(text); }
+export function primitiveType(text: string): boolean { return numericType(text) || ["string","boolean","void","symbol"].includes(text); }
 
 // Un literal usado como tipo se codifica como `$lit:<tipo>=<valor>`. El
 // prefijo no puede colisionar con un identificador porque el lexer solo

@@ -20,7 +20,7 @@ export class IrCppGenerator {
     const s=this.shape(id), a=s.arguments, t=(n:number)=>this.type(n);
     if(recordKinds.has(s.kind)||sumKinds.has(s.kind))return `ir_t${id}`;
     switch(s.kind) {
-      case "scalar": return cppType(this.project.types[id]);
+      case "scalar": if(this.project.types[id]==="symbol")this.headers.add("runtime/ets_symbol.hpp");return cppType(this.project.types[id]);
       // Un literal de tipo se materializa como su primitivo: en C++ el valor
       // concreto ya lo garantiza el checker.
       case "literal": return this.type(s.discriminatorType);
@@ -281,7 +281,7 @@ export class IrCppGenerator {
         break;
       }
       case "extractIndex": value=["tuple","pack"].includes(s(f.values[i.operands[0]]).kind)?`std::get<${this.constantIndex(f,i.operands[1])}>(${a(0)})`:`(${a(0)}).at(static_cast<std::size_t>(${a(1)}))`;break;
-      case "typeTag": {const id=this.inner(i.signature), name=this.project.types[id];value=this.literal(this.numeric(id)?"number":["string","boolean"].includes(name)?name:name==="void"?"undefined":"object",i.typeId);break;}
+      case "typeTag": {const id=this.inner(i.signature), name=this.project.types[id];value=this.literal(this.numeric(id)?"number":["string","boolean","symbol"].includes(name)?name:name==="void"?"undefined":"object",i.typeId);break;}
       case "typeTest": {const id=this.inner(f.values[i.operands[0]]);value=sumKinds.has(s(id).kind)?`(${this.deref(a(0,false),f.values[i.operands[0]])}.data.index()==${this.choices(id).indexOf(i.signature)})`:id===i.signature?"true":"false";break;}
       case "closure": {
         const target=this.project.functions[i.callee];const args=target.parameterTypes.map((t,k)=>`${this.parameterType(t)} x${k}`).join(",");
@@ -429,7 +429,7 @@ export class IrCppGenerator {
     if(p.format!=="ets-ir-2"||p.success!==true||!Array.isArray(p.diagnostics)||p.diagnostics.length)this.fail("Se requiere ets-ir-2 verificado con success:true");
     if(!Array.isArray(p.types)||!Array.isArray(p.typeDefinitions)||p.types.length!==p.typeDefinitions.length)this.fail("Tablas de tipos incompletas");
     const type=(id:number)=>Number.isSafeInteger(id)&&id>=0&&id<p.types.length;
-    const scalar=new Set(["number","string","boolean","void","i8","u8","i16","u16","i32","u32","i64","u64","f32","f64"]);
+    const scalar=new Set(["number","string","boolean","void","symbol","i8","u8","i16","u16","i32","u32","i64","u64","f32","f64"]);
     for(let id=0;id<p.types.length;id++) {
       const s=this.shape(id);if(s.kind==="scalar"&&!scalar.has(p.types[id]))this.fail("Tipo escalar inválido");
       if(![...s.arguments,...s.fields,...s.variants].every(type))this.fail("Referencia de tipo inexistente");

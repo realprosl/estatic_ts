@@ -47,6 +47,7 @@ export function emitRuntimeCall(g:IrCppGenerator,f:IrFunction,i:IrInstruction):s
     if(name==="optionalIsPresent")return `(${a(0)}).isPresent()`;
     if(name==="optionalValueOr")return `(${a(0)}).valueOr(${a(1)})`;
     if(name==="String")return `ets::stringify_any(${a(0)})`;
+    if(name==="Symbol"){g.headers.add("runtime/ets_symbol.hpp");return `ets::symbol_create(${args()})`;}
     if(name==="booleanToString")return `std::string(${a(0)}?"true":"false")`;
     if(name==="optionalOrElse")return `(${a(0)}).orElse(${a(1)})`;
     if(name==="resultIsOk")return `(${a(0)}).isOk()`;
@@ -100,6 +101,7 @@ export function emitRuntimeCall(g:IrCppGenerator,f:IrFunction,i:IrInstruction):s
     if(method==="of")return `ets_array_of<${R}>(${args()})`;
     return i.operands.length>1?`ets_array_from<${R}>(${a(0)},${g.callback(f,i,1)})`:`ets_array_from<${R}>(${a(0)})`;
   }
+  if((base==="!Symbol"&&["for","keyFor"].includes(method))||(base==="symbol"&&["description","toString"].includes(method))){g.headers.add("runtime/ets_symbol.hpp");return `ets::symbol_${method}(${args()})`;}
   if(objectMethods[base]?.has(method)) {
     if(["!fs","!path","!process"].includes(base)){g.headers.add("runtime/ets_runtime_full.hpp");g.backends.libuv=true;}
     const object=base==="Console"?"console":base.slice(1);

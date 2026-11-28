@@ -172,6 +172,12 @@ for(const [name,source,pattern] of [
  ['operatorBoolean','class V{x:number=1;"<"(o:constRef<V>):number{return 1;}}',/tiene que devolver boolean/],
  ['operatorIndexWrite','class L{"[]"(i:number):number{return i;}}let l:L=new L();l[0]=1;',/no se puede asignar por índice/],
 ] as const)test(`checker: operadores en clases (#200) rechaza ${name}`,()=>error(source,pattern));
+for(const [name,source,pattern] of [
+ ['symbolConcat','const s=Symbol("a");print("x"+s);',/E3001: No se puede concatenar/],
+ ['symbolTemplate','const s=Symbol("a");print(`${s}`);',/no se convierte solo a string/],
+ ['symbolOrder','print(Symbol()<Symbol());',/solo se comparan con == y !=/],
+ ['symbolArgs','const s=Symbol("a","b");',/como mucho una descripción/],
+] as const)test(`checker: symbol (#221) rechaza ${name}`,()=>error(source,pattern));
 test('checker: array pop returns T | undefined as in TypeScript',()=>{const g=check('let a=[1]; const n=a.pop(); const m:number=a.shift()??0; print(n??m);');assert.ok(types(g,'MemberCallExpression').includes('Optional<number>'));});
 // El offset de `includes` es opcional, igual que en JavaScript y TypeScript:
 // `includes("b")` y `includes("b",0)` son ambos validos.

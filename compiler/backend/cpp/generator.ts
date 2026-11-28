@@ -119,7 +119,7 @@ export class IrCppGenerator {
     const s=this.shape(id);const  a=s.arguments;
     if(recordKinds.includes(s.kind)||sumKinds.includes(s.kind))return `${this.typeName(id)}`;
     switch(s.kind) {
-      case "scalar": return cppType(this.project.types[id]);
+      case "scalar": if(this.project.types[id]=="symbol")this.headers.add("runtime/ets_symbol.hpp");return cppType(this.project.types[id]);
       // Un literal de tipo se materializa como su primitivo: en C++ el valor
       // concreto ya lo garantiza el checker.
       case "literal": return this.cppTypeId(s.discriminatorType);
@@ -540,7 +540,7 @@ let  fields=_cppLoop30Result;
         break;
       }
       case "extractIndex": value=(["tuple","pack"].includes(this.shape(f.values[i.operands[0]]).kind)?`std::get<${this.constantIndex(f,i.operands[1])}>(${this.operand(f,i,0)})`:`(${this.operand(f,i,0)}).at(static_cast<std::size_t>(${this.operand(f,i,1)}))`);break;
-      case "typeTag": {const id=this.inner(i.signature);const  name=this.project.types[id];value=this.literal(this.numeric(id)?"number":["string","boolean"].includes(name)?name:name=="void"?"undefined":"object",i.typeId);break;}
+      case "typeTag": {const id=this.inner(i.signature);const  name=this.project.types[id];value=this.literal(this.numeric(id)?"number":["string","boolean","symbol"].includes(name)?name:name=="void"?"undefined":"object",i.typeId);break;}
       case "typeTest": {const id=this.inner(f.values[i.operands[0]]);value=(sumKinds.includes(this.shape(id).kind)?`(${this.deref(this.operand(f,i,0,false),f.values[i.operands[0]])}.data.index()==${arrayIndex(this.choices(id),i.signature)})`:id==i.signature?"true":"false");break;}
       case "closure": {
         const target=this.project.functions[i.callee];
@@ -946,7 +946,7 @@ const text=`struct ${this.typeName(id)}{std::variant<${_cppLoop65Result.join(","
     if(p.success!=true||p.diagnostics.length!=0)this.fail("Se requiere ets-ir-2 verificado con success:true");
     if(p.types.length!=p.typeDefinitions.length)this.fail("Tablas de tipos incompletas");
     
-    const scalar=["number","string","boolean","void","i8","u8","i16","u16","i32","u32","i64","u64","f32","f64"];
+    const scalar=["number","string","boolean","void","symbol","i8","u8","i16","u16","i32","u32","i64","u64","f32","f64"];
     for(let id=0;id<p.types.length;id=id+1) {
       const s=this.shape(id);if(s.kind=="scalar"&&!scalar.includes(p.types[id]))this.fail("Tipo escalar inválido");
       {
@@ -1049,6 +1049,7 @@ let  T=this.cppTypeId(i.typeId);
     if(name=="optionalIsPresent")return `(${this.operand(f,i,0)}).isPresent()`;
     if(name=="optionalValueOr")return `(${this.operand(f,i,0)}).valueOr(${this.operand(f,i,1)})`;
     if(name=="String")return `ets::stringify_any(${this.operand(f,i,0)})`;
+    if(name=="Symbol"){this.headers.add("runtime/ets_symbol.hpp");return `ets::symbol_create(${this.runtimeArguments(f,i)})`;}
     if(name=="booleanToString")return `std::string(${this.operand(f,i,0)}?"true":"false")`;
     if(name=="optionalOrElse")return `(${this.operand(f,i,0)}).orElse(${this.operand(f,i,1)})`;
     if(name=="resultIsOk")return `(${this.operand(f,i,0)}).isOk()`;
@@ -1145,6 +1146,8 @@ return `(${this.deref(this.operand(f,i,0,false),f.values[i.operands[0]])}).${met
     if(method=="of")return `ets_array_of<${R}>(${this.operandList(f,i,0).slice(1)})`;
     return i.operands.length>1?`ets_array_from<${R}>(${this.operand(f,i,0)},${this.callback(f,i,1)})`:`ets_array_from<${R}>(${this.operand(f,i,0)})`;
   }
+  // #221: Symbol.for/keyFor y s.description/s.toString().
+  if((base=="!Symbol"&&["for","keyFor"].includes(method))||(base=="symbol"&&["description","toString"].includes(method))){this.headers.add("runtime/ets_symbol.hpp");return `ets::symbol_${method}(${this.runtimeArguments(f,i)})`;}
   if(objectMethod(base,method)) {
     if(["!path","!process"].includes(base)){this.headers.add("runtime/ets_runtime_full.hpp");this.backends.libuv=true;}
     const object=base=="Console"?"console":base.slice(1,base.length);

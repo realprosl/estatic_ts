@@ -2,6 +2,7 @@
 export function cppType(name:string):string {
 if(name=="number")return "double";
 if(name=="string")return "std::string";
+if(name=="symbol")return "ets::Symbol";
 if(name=="boolean")return "bool";
 if(name=="void")return "void";
 if(name=="i8")return "int8_t";

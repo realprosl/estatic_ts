@@ -1083,7 +1083,7 @@ export class NativeChecker {
     if (["all","race","promiseAll","promiseRace"].includes(name)) return "!tasks:" + name;
     if (name == "spawn") return "(Promise<void>)=>void";
     if (name == "move" || name == "ref" || name == "constRef") return "!" + name;
-    if (["Math","JSON","Date","String","Array","Object","Promise"].includes(name)) return "!" + name;
+    if (["Math","JSON","Date","String","Array","Object","Promise","Symbol"].includes(name)) return "!" + name;
     if (name == "console") return "Console";
     if (nativeBuiltinSignatures(name).length > 0) return "!builtin:"+name;
 
@@ -1317,6 +1317,11 @@ export class NativeChecker {
       if (name == "replace" || name == "replaceAll") return "(string,string)=>string";
     }
     if (valueType == "!String" && (name == "fromCharCode" || name == "fromCodePoint")) return "(...number[])=>string";
+    // #221: Symbol.for(clave) / Symbol.keyFor(s); s.description y s.toString().
+    if (valueType == "!Symbol" && name == "for") return "(string)=>symbol";
+    if (valueType == "!Symbol" && name == "keyFor") return "(symbol)=>Optional<string>";
+    if (valueType == "symbol" && name == "description") return "Optional<string>";
+    if (valueType == "symbol" && name == "toString") return "()=>string";
     if (valueType == "!Array" && ["isArray","from","of"].includes(name)) return "!arrayStatic." + name;
     if (valueType == "!Object" && ["keys","values","entries"].includes(name)) return "!objectStatic." + name;
     if (valueType == "!Promise" && ["all","race","any","allSettled","resolve"].includes(name)) return "!promiseStatic." + name;
@@ -1953,11 +1958,18 @@ export class NativeChecker {
       this.result.files[module].signatures[id] = "(" + actual.join(",") + ")=>void"; return "void";
     }
     if (callable == "!error") return callable;
+    if (callable == "!Symbol") {
+      // Symbol() / Symbol(descripción): un valor único en cada llamada (#221).
+      if (args.length > 1) { this.report(module,id,"Symbol acepta como mucho una descripción"); return "!error"; }
+      if (args.length == 1) { this.requireType(module,args[0],memoryValue(actual[0]),"string"); this.result.files[module].signatures[id] = "(string)=>symbol"; }
+      else this.result.files[module].signatures[id] = "()=>symbol";
+      return "symbol";
+    }
     if (callable == "!String") {
       // String(x): texto de un string, number, entero o boolean, como en JavaScript.
       if (args.length != 1) { this.report(module,id,"String requiere un argumento"); return "!error"; }
       const value: string = memoryValue(actual[0]); const input: string = literalType(value) ? literalKind(value) : value;
-      if (input != "string" && input != "boolean" && input != "number" && !numericType(input)) { this.report(module,id,"String(x) acepta string, number o boolean, no " + this.displayType(actual[0])); return "!error"; }
+      if (input != "string" && input != "boolean" && input != "number" && input != "symbol" && !numericType(input)) { this.report(module,id,"String(x) acepta string, number o boolean, no " + this.displayType(actual[0])); return "!error"; }
       this.result.files[module].signatures[id] = "(" + input + ")=>string"; return "string";
     }
     if (callable.startsWith("!builtin:")) {
@@ -2313,7 +2325,7 @@ export class NativeChecker {
         // resto (Optional, arrays, colecciones, clases) no tiene conversión.
         const other: string = left == "string" ? right : left; const otherId: number = left == "string" ? rightId : leftId;
         const otherSymbol: number = this.nominalSymbol(other);
-        if (other != "!error" && (!primitiveType(other) || other == "void") && !(otherSymbol >= 0 && this.binding.symbols[otherSymbol].kind == "EnumDeclaration"))
+        if (other != "!error" && (!primitiveType(other) || other == "void" || other == "symbol") && !(otherSymbol >= 0 && this.binding.symbols[otherSymbol].kind == "EnumDeclaration"))
           this.report(module,otherId,"E3001: No se puede concatenar un valor de tipo '" + this.displayType(other) + "' con un string" + (genericBase(other) == "Optional" ? "\nayuda: el valor puede no existir: usa 'valor ?? \"por defecto\"' o comprueba antes que existe" + catalogVariant("concatenacion-opcional") : "\nayuda: conviértelo antes a string (por ejemplo, con un método que devuelva su texto)" + catalogVariant("concatenacion")) + catalogArg("tipo", this.displayType(other)));
         return "string";
       }
@@ -2323,6 +2335,7 @@ export class NativeChecker {
         return "boolean";
       }
       if (["==","!=","===","!==","<",">","<=",">="].includes(op)) {
+        if ((left == "symbol" || right == "symbol") && ["<",">","<=",">="].includes(op)) { this.report(module,id,"Los symbols solo se comparan con == y !="); return "boolean"; }
         if (numericType(left) && numericType(right)) {
           const promoted: string = nativeBinaryPromotion(left,right,op);
           this.requireType(module,leftId,left,promoted); this.requireType(module,rightId,right,promoted);
@@ -2491,7 +2504,10 @@ export class NativeChecker {
       } return expected;
     }
     if (kind == NodeKind.ArrowFunctionExpression) return this.signature(module,id);
-    if (kind == NodeKind.TemplateLiteralExpression) { for (const edge of n.edges) if (edge.role == EdgeRole.Expressions) this.expression(module,edge.node,""); return "string"; }
+    if (kind == NodeKind.TemplateLiteralExpression) {
+      for (const edge of n.edges) if (edge.role == EdgeRole.Expressions && memoryValue(this.expression(module,edge.node,"")) == "symbol") this.report(module,edge.node,"Un symbol no se convierte solo a string (en JavaScript lanza TypeError)\nayuda: usa s.toString() o s.description ?? \"\"");
+      return "string";
+    }
     if (kind == NodeKind.AsExpression || kind == NodeKind.SatisfiesExpression) {
       const valueType: string = this.annotation(module,id,n.get(kind == NodeKind.AsExpression ? AttributeKind.TargetType : AttributeKind.DeclaredType));
       const actual: string = this.expression(module,bindingChild(n,kind == NodeKind.AsExpression ? EdgeRole.Expression : EdgeRole.Operand),valueType);
