@@ -1,0 +1,10 @@
+# Precompilados de etsc
+
+Rama generada por `seed-prebuilt.yml` desde main@faa6801.
+No se fusiona con main: se sobrescribe con un único commit en cada actualización.
+`native-cpp/fetch-prebuilt.sh` (llamado por `install.sh`) la descarga.
+
+- `darwin-arm64`: compiler etsc inputs.sha256 
+- `linux-x86_64`: compiler etsc inputs.sha256 
+
+`by-inputs/<plataforma>/<huella>/`: las últimas compilaciones por huella de fuentes (más reciente primero en index.txt).
