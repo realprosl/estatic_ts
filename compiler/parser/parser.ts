@@ -1166,6 +1166,13 @@ export class Parser {
   objectType(): string {
     const open: ParserToken = this.take();
     if (this.mappedStart()) return this.mappedType(open);
+    this.skipNewlines();
+    if (this.indexSignatureStart()) {
+      const signature: string = this.indexSignature(); if (!this.accept(";")) this.accept(","); this.skipNewlines();
+      if (!this.check("}")) this.report("Un tipo objeto con campos fijos y una index signature todavía no está soportado");
+      while (!this.check("}") && !this.check("eof")) this.take();
+      this.expect("}"); return signature;
+    }
     let names: string[] = []; let types: string[] = []; let optionals: boolean[] = []; let tokens: ParserToken[] = [];
     this.skipNewlines();
     while (!this.check("}") && !this.check("eof")) {
@@ -1224,8 +1231,12 @@ export class Parser {
     const name: ParserToken = this.expect("identifier"); const result: number = this.add(NodeKind.InterfaceDeclaration, keyword, name);
     this.prependDecorators(result, decorators);
     this.attr(result, AttributeKind.Name, name.lexeme); this.expect("{");
+    let indexType: string = ""; let members: number = 0;
     while (!this.check("}") && !this.check("eof")) {
       this.skipNewlines(); if (this.check("}") || this.check("eof")) break;
+      // #232: [clave: string]: T (index signature).
+      if (this.indexSignatureStart()) { const signature: string = this.indexSignature(); if (indexType != "") this.report("Una interfaz solo puede tener una index signature"); indexType = signature; this.terminator(); continue; }
+      members = members + 1;
       const before: number = this.current; const memberDecorators: number[] = this.decorators();
       if (this.check("}") || this.check("eof")) { this.report("El decorador necesita un miembro de interface"); break; }
       const member: ParserToken = this.expect("identifier");
@@ -1241,7 +1252,24 @@ export class Parser {
       this.setEnd(item, this.terminator());
       if (this.current == before) { this.report("Miembro de interface no reconocido"); this.take(); }
     }
-    this.setEnd(result, this.expect("}")); return result;
+    this.setEnd(result, this.expect("}"));
+    // #232: una interfaz que solo es una index signature es un Record (diccionario).
+    if (indexType != "") {
+      if (members > 0) this.report("Una interfaz con campos fijos y una index signature todavía no está soportada: pon el diccionario en un campo (extra: Record<string, T>)");
+      else { this.setKind(result, NodeKind.TypeAliasDeclaration); this.attr(result, AttributeKind.Type, indexType); }
+    }
+    return result;
+  }
+  indexSignatureStart(): boolean {
+    let at: number = 0; if (this.peek(0).kind == "readonly") at = 1;
+    return this.peek(at).kind == "[" && this.peek(at + 1).kind == "identifier" && this.peek(at + 2).kind == ":";
+  }
+  // [clave: string | number]: T → Map<clave, T> (lo mismo que Record<clave, T>).
+  indexSignature(): string {
+    if (this.accept("readonly")) this.report("Una index signature readonly todavía no está soportada");
+    this.expect("["); this.expect("identifier"); this.expect(":"); const key: string = this.typeName(); this.expect("]");
+    if (key != "string" && key != "number") this.report("La clave de una index signature tiene que ser string o number");
+    this.expect(":"); return "Map<" + key + "," + this.typeName() + ">";
   }
   forStatement(keyword: ParserToken): number {
     const awaited: boolean = this.accept("await"); this.expect("(");
