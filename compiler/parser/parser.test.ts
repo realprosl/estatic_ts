@@ -358,6 +358,12 @@ test("bootstrap parser: tipos condicionales e infer (#227, #228)", () => {
   assert.deepEqual(result.nodes.filter(n => n.kind === "TypeAliasDeclaration").map(n => n.attributes.find(a => a.name === "type")?.value), ["$dcond<T,string,number,boolean>", "$dcond<T,($infer$U$)[],$infer$U$,never>", "$cond<string,string,$lit:number=1,$lit:number=2>"]);
   assert.ok(native("type X<T> = T extends string ? infer U : never;").diagnostics.some((d: any) => d.message.includes("'infer' solo puede ir")));
 });
+test("bootstrap parser: mapped types (#226)", () => {
+  const result = native("interface U { a: number } type O<T> = { [K in keyof T]?: T[K] }; type R = { -readonly [K in keyof U]-?: U[K] };");
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.nodes.filter(n => n.kind === "TypeAliasDeclaration").map(n => n.attributes.find(a => a.name === "type")?.value)[0], "$mapped<keyof<T>~01~T[$key$]>");
+  assert.ok(native("type O<T> = { [K in keyof T as `x${K}`]: T[K] };").diagnostics.some((d: any) => d.message.includes("remapeo")));
+});
 test("bootstrap parser: ** asocia por la derecha y rechaza un unario sin paréntesis (#249)", () => {
   assert.deepEqual(native("let a=2 ** 3 ** 2; let b=(-2) ** 2; let c=-(2 ** 2); a **= 2;").diagnostics, []);
   assert.ok(native("let d=-2 ** 2;").diagnostics.some((d: any) => d.message.includes("**")));

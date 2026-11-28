@@ -655,6 +655,7 @@ export class NativeChecker {
     if (s.kind == "TypeAliasDeclaration") {
       // #227: un alias con un tipo condicional se evalúa con los argumentos ya puestos.
       const raw: string = this.node(s.module,s.node).get(AttributeKind.Type);
+      if (raw.startsWith("$mapped<")) { this.report(module,id,"Este uso del mapped type '" + s.name + "' no se pudo expandir: el argumento tiene que ser un tipo con nombre"); return "!error"; }
       if (raw.indexOf("$cond<",0) >= 0 || raw.indexOf("$dcond<",0) >= 0) {
         const mark: number = this.conditionFrom.length;
         for (let i: number = 0; i < parameters.length; i = i + 1) { this.conditionFrom.push("@" + numberToString(this.binding.files[s.module].declarations[parameters[i]])); this.conditionTo.push(values[i]); }
@@ -872,6 +873,8 @@ export class NativeChecker {
     if (["Exclude","Extract","NonNullable","ReturnType","Parameters","Awaited"].includes(genericBase(text))) return this.utilityType(module,id,genericBase(text),genericArguments(text));
     if ((genericBase(text) == "$cond" || genericBase(text) == "$dcond") && genericArguments(text).length == 4) return this.conditionalType(module,id,genericBase(text) == "$dcond",genericArguments(text));
     if (text == "never") { this.report(module,id,"never solo se admite como rama de un tipo condicional (por ahora)"); return "!error"; }
+    // #226: el cuerpo de un alias genérico con mapped type; cada uso lo expande antes de enlazar.
+    if (genericBase(text) == "$mapped") return text;
     if (text.endsWith("]") && text.lastIndexOf("[") > 0) {
       const open: number = this.indexOpen(text); const raw: string = text.slice(open+1,text.length-1);
       if (this.indexedKey(module,id,raw)) return this.indexedType(module,id,this.annotation(module,id,text.slice(0,open)),this.annotation(module,id,raw));

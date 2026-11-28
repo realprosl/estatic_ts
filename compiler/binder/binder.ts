@@ -369,7 +369,7 @@ export class Binder {
         // #223: el tipo del valor de un campo de literal se resuelve en el checker.
         if (name.startsWith("$valueof$")) { previous = ""; continue; }
         // #227/#228: tipos condicionales, infer y never se resuelven en el checker.
-        if (name == "$cond" || name == "$dcond" || name.startsWith("$infer$") || name == "never") { previous = ""; continue; }
+        if (name == "$cond" || name == "$dcond" || name.startsWith("$infer$") || name == "never" || name == "$mapped" || name == "$key$") { previous = ""; continue; }
         if (previous == "[" && start >= 2) {
           const before: string = text.charAt(start - 2);
           // T[N] con N una constante es un array fijo; T[number], T[K] con K un tipo y

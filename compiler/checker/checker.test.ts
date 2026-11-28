@@ -544,6 +544,11 @@ for(const [name,source,pattern] of [
  ['soloNever','type N<T>=T extends string?never:never;const x:N<string>="a";',/da never/],
  ['neverSuelto','const x:never=1;',/never solo se admite/],
 ] as const)test(`checker: tipos condicionales e infer (#227, #228) rechaza ${name}`,()=>error(source,pattern));
+for(const [name,source,pattern] of [
+ ['readonly','interface U{a:number}type R<T>={readonly [K in keyof T]:T[K]};let r:R<U>={a:1};r.a=2;',/es inmutable \(readonly\)/],
+ ['campoQueFalta','interface U{a:number;b:string}type B<T>={[K in keyof T]:boolean};const x:B<U>={a:true};',/falta|Falta/],
+ ['tipoCampo','interface U{a:number}type B<T>={[K in keyof T]:boolean};const x:B<U>={a:1};',/E3001|incompatible|no pertenece/],
+] as const)test(`checker: mapped types (#226) rechaza ${name}`,()=>error(source,pattern));
 test('native exact64 arithmetic and mixed comparisons preserve types',()=>{
  const g=check('let a:i64=9007199254740993;let b:u64=2;const x=a+b;const y=1+a;const z=a<9007199254740994;');
  assert.deepEqual(types(g,'BinaryExpression'),['u64','i64','boolean']);
