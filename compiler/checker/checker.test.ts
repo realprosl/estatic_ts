@@ -521,6 +521,12 @@ for(const [target,raw] of [
  ['i64','-9223372036854775809'],['u64','-1'],['i64','0xffffffffffffffff'],
  ['u64','0x10000000000000000'],['u64','1.5'],
 ] as const)test(`native exact64 rejects ${target} ${raw}`,()=>error(`const x:${target}=${raw};`,/rango/));
+for(const [name,source,pattern] of [
+ ['keyofValor','interface U{a:number;b:string}const k:keyof U="c";',/no pertenece/],
+ ['keyofPrimitivo','type K=keyof number;const k:K="a";',/keyof requiere/],
+ ['indiceSinCampo','interface U{a:number}type X=U["z"];const x:X=1;',/no tiene la clave/],
+ ['indiceArray','type X=number[][string];const x:X=1;',/no tiene la clave/],
+] as const)test(`checker: keyof y acceso por índice (#224, #225) rechaza ${name}`,()=>error(source,pattern));
 test('native exact64 arithmetic and mixed comparisons preserve types',()=>{
  const g=check('let a:i64=9007199254740993;let b:u64=2;const x=a+b;const y=1+a;const z=a<9007199254740994;');
  assert.deepEqual(types(g,'BinaryExpression'),['u64','i64','boolean']);

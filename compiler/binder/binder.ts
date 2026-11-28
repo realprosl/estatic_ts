@@ -370,9 +370,11 @@ export class Binder {
         if (name.startsWith("$valueof$")) { previous = ""; continue; }
         if (previous == "[" && start >= 2) {
           const before: string = text.charAt(start - 2);
-          if (before != "" && before != "(" && before != "," && before != "[" && before != " ") space = "value";
+          // T[N] con N una constante es un array fijo; T[number], T[K] con K un tipo y
+          // T[keyof U] son accesos por índice (#225) y se enlazan como tipos.
+          if (before != "" && before != "(" && before != "," && before != "[" && before != " " && name != "number" && name != "string" && name != "keyof" && this.lookup(this.result.files[module].nodeScopes[node], name, "value") >= 0) space = "value";
         }
-        if (name == "readonly") { previous = ""; continue; }
+        if (name == "readonly" || name == "keyof") { previous = ""; continue; }
         // `new Error(…)` construye el BaseError del prelude (Error es una interfaz).
         if (name == "Error" && space == "value" && firstName && this.lookup(this.result.files[module].nodeScopes[node], "Error", "value") < 0 && this.lookup(this.result.files[module].nodeScopes[node], "BaseError", "value") >= 0) name = "BaseError";
         // T | undefined (o null) se resuelve en el checker como Optional<T>.

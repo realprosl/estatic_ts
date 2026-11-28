@@ -96,12 +96,14 @@ export class Parser {
   // objeto sin anotar (const { a, ...resto } = p con p: P). pendingNames/Types son
   // los parámetros que entran en el próximo bloque (el cuerpo de la función).
   scopeNames: string[]; scopeTypes: string[]; pendingNames: string[]; pendingTypes: string[];
+  // keyof T: el operando no se lleva el `| U` de detrás (keyof A | B es (keyof A) | B).
+  typeOperand: boolean;
   jsonAt: number;
   // Nombres locales importados de "estatic:json": la clase (JSON) y parse.
   jsonClasses: string[]; jsonParsers: string[];
   constructor(tokens: ParserToken[]) {
     this.tokens = tokens; this.current = 0; this.nodes = []; this.diagnostics = [];
-    this.nesting = 0; this.exhausted = false; this.constMemory = false; this.objectTypes = []; this.objectTypeNames = []; this.patternOwners = []; this.patternDeclarations = []; this.extraOwners = []; this.extraNodes = []; this.extraBefore = []; this.restOwners = []; this.restNames = []; this.restIndexes = []; this.scopeNames = []; this.scopeTypes = []; this.pendingNames = []; this.pendingTypes = []; this.jsonAt = 0; this.jsonClasses = []; this.jsonParsers = [];
+    this.nesting = 0; this.exhausted = false; this.constMemory = false; this.objectTypes = []; this.objectTypeNames = []; this.patternOwners = []; this.patternDeclarations = []; this.extraOwners = []; this.extraNodes = []; this.extraBefore = []; this.restOwners = []; this.restNames = []; this.restIndexes = []; this.typeOperand = false; this.scopeNames = []; this.scopeTypes = []; this.pendingNames = []; this.pendingTypes = []; this.jsonAt = 0; this.jsonClasses = []; this.jsonParsers = [];
     if (tokens.length == 0) {
       this.tokens.push(new ParserToken("eof", "", 0, 1, 1, 0, 1, 1));
       this.report("La entrada de tokens necesita un eof final");
@@ -1272,8 +1274,8 @@ export class Parser {
   }
   typeName(): string {
     if (!this.enter()) return "<error>";
-    const outerConst: boolean = this.constMemory; this.constMemory = false;
-    const result: string = this.typeInner(); this.constMemory = outerConst; this.leave(); return result;
+    const outerConst: boolean = this.constMemory; this.constMemory = false; const outerOperand: boolean = this.typeOperand; this.typeOperand = false;
+    const result: string = this.typeInner(); this.constMemory = outerConst; this.typeOperand = outerOperand; this.leave(); return result;
   }
   // Un literal usado como tipo se codifica con el prefijo `$lit:` seguido
   // del tipo y el valor separados por `=`. El prefijo no puede colisionar con
@@ -1297,6 +1299,12 @@ export class Parser {
       return constant;
     }
     if (this.check("{")) return this.typeSuffix(this.objectType());
+    // #224: keyof T → keyof<T> (lo resuelve el checker).
+    if (this.check("identifier") && this.peek(0).lexeme == "keyof" && ["identifier","type","typeof","{","(","["].includes(this.peek(1).kind)) {
+      this.take(); const outer: boolean = this.typeOperand; this.typeOperand = true;
+      const operand: string = this.typeInner(); this.typeOperand = outer;
+      return this.typeSuffix("keyof<" + operand + ">");
+    }
     if (this.accept("typeof")) {
       let query: string = "$typeof$" + this.expect("identifier").lexeme;
       while (this.accept(".")) query = query + "." + (this.check("default") ? this.take().lexeme : this.expect("identifier").lexeme);
@@ -1341,7 +1349,12 @@ export class Parser {
     let result: string = input;
     while (this.accept("[")) {
       let size: string = "";
-      if (!this.check("]")) { if (this.check("number") || this.check("identifier")) size = this.take().lexeme; else this.report("Tamaño de array no válido"); }
+      // T[3] / T[N]: array fijo; T["campo"], T[number], T[keyof U], T["a" | "b"]: acceso por índice (#225).
+      if (!this.check("]")) {
+        if ((this.check("number") || this.check("identifier")) && this.peek(1).kind == "]" && this.peek(0).lexeme != "keyof") size = this.take().lexeme;
+        else if (this.check("string") || this.check("type") || this.check("identifier") || this.check("(")) size = this.typeName();
+        else this.report("Tamaño de array no válido");
+      }
       this.expect("]"); result = result + "[" + size + "]";
     }
     //   T& -> ref<T>   T* -> ptr<T>   (con const delante: constRef / constPtr)
@@ -1352,6 +1365,7 @@ export class Parser {
       if (this.constMemory) { this.constMemory = false; result = (pointer ? "constPtr<" : "constRef<") + result + ">"; }
       else result = (pointer ? "ptr<" : "ref<") + result + ">";
     }
+    if (this.typeOperand) return result;
     while (this.accept("|")) result = result + " | " + this.typeName();
     while (this.accept("&")) result = result + " & " + this.typeName();
     return result;
