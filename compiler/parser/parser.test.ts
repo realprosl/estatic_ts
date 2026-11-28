@@ -362,6 +362,13 @@ test("bootstrap parser: resto de objeto con la fuente sin tipo anotado da error 
   assert.deepEqual(native("interface P { a: number; b: number } function f(p: P): void { const { a, ...r } = p; }").diagnostics, []);
   assert.ok(native("interface P { a: number; b: number } function f(p: P): void {} { const p = 1; const { a, ...r } = p; }").diagnostics.some((d: any) => d.message.includes("resto de un patrón de objeto")));
 });
+test("bootstrap parser: operadores como métodos con el nombre entre comillas (#200)", () => {
+  const result = native('class V { "+"(o: V): V { return o; } "[]="(i: number, v: number): void {} }');
+  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.nodes.filter(n => n.kind === "ClassMethod").map(n => n.attributes.find(a => a.name === "name")?.value), ["+", "[]="]);
+  assert.ok(native('class V { "foo"(): void {} }').diagnostics.some((d: any) => d.message.includes("no es un operador")));
+  assert.ok(native('class V { static "+"(o: V): V { return o; } }').diagnostics.some((d: any) => d.message.includes("no puede ser static")));
+});
 test("bootstrap parser destructuring recovery preserves the next statement", () => {
   for (const source of ["const [a];", "const {x}=;", "const [a,[b=values;"]) {
     const result = native(source + " print(999);");

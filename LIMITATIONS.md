@@ -178,6 +178,10 @@ Lista no exhaustiva — ver `README.md`, `examples/` y los nodos AST en
 - **Nullish coalescing `??`** sobre `Optional<T>`.
 - **Optional chaining `?.`** sobre `Optional<T>`.
 - Ternario `cond ? a : b`.
+- **Operadores en clases** (#200): métodos con el nombre entre comillas
+  (`"+"(o: T): T`, `"=="`, `"<"`, `"-"()`, `"!"()`, `"[]"(i)`, `"[]="(i, v)`).
+  Se buscan en la clase del operando izquierdo; no se derivan `!=`, `+=` ni
+  `o[i] = v`.
 
 ### Módulos
 

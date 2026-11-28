@@ -6,6 +6,7 @@ export { constantIntegerText } from "./constant";
 export { analyzeProject } from "./expansion";
 export { formatModuleInterface } from "./format";
 export { CheckResult, readonlyMethodReceiver } from "./model";
+export { rewriteOperatorCall } from "./operators";
 export { nativeBinaryPromotion, nativeInteger64, nativeNumericLiteral, nativeUnaryPromotion } from "./numeric";
 export { resourceSubstitution, resourceType, resourceFields, ResourceFields } from "./ownership";
 export { canonicalSymbol, fixedArrayElement, fixedArraySize, functionClose, functionParams, functionReturn, genericArguments, genericBase, joinTypes, literalKind, literalType, literalValue, numericType, primitiveType, replaceType, semanticElement, semanticTuple, splitTypes } from "./types";

@@ -2,8 +2,8 @@ import {profileBegin,profileEnd} from "../analysis/index";
 import { IrDispatch, IrCleanupScope, IrRuntimeContract, IrType, IrSource, IrPlace, IrInstruction, IrBlock, IrFunction, IrModule, IrIssue, IrProject, IrAnnotation } from "./model";
 import { ModuleGraph } from "../modules/index";
 import { BindingResult, bindingChild } from "../binder/index";
-import { CheckResult, resourceFields, ResourceFields, readonlyMethodReceiver, functionParams, functionReturn, primitiveType, functionClose, numericType, semanticElement, semanticTuple, splitTypes, joinTypes, fixedArraySize, fixedArrayElement, canonicalSymbol, genericBase, genericArguments, replaceType, literalType, literalKind, literalValue, nativeNumericLiteral, nativeBinaryPromotion, nativeUnaryPromotion, NativeComptime, constantIntegerText, resourceType, resourceSubstitution } from "../checker/index";
-import { AstNode, NodeKind, EdgeRole, AttributeKind, nodeKindName } from "../parser/index";
+import { CheckResult, resourceFields, ResourceFields, readonlyMethodReceiver, functionParams, functionReturn, primitiveType, functionClose, numericType, semanticElement, semanticTuple, splitTypes, joinTypes, fixedArraySize, fixedArrayElement, canonicalSymbol, genericBase, genericArguments, replaceType, literalType, literalKind, literalValue, nativeNumericLiteral, nativeBinaryPromotion, nativeUnaryPromotion, NativeComptime, constantIntegerText, resourceType, resourceSubstitution, rewriteOperatorCall } from "../checker/index";
+import { AstNode, NodeKind, EdgeRole, AttributeKind, nodeKindName, operatorMethodNames } from "../parser/index";
 import { irNumericWidth, irNumericKind, irNumericSigned } from "./type-traits";
 import { finishBorrows } from "./borrows";
 import { preserveContracts } from "./contracts";
@@ -1284,6 +1284,27 @@ export class IrLowering {
     }
     this.orderState[module] = 2; this.result.initializationOrder.push(this.result.modules[module].initializer);
   }
+  // #200: los nodos de operador que el checker resolvió a un método de operador
+  // (members[id]) se convierten aquí en la misma llamada object."op"(args).
+  operatorCalls(): void {
+    for (let m: number = 0; m < this.graph.modules.length && m < this.checked.files.length; m = m + 1) {
+      const count: number = this.graph.modules[m].cached.result.ast.nodes.length;
+      for (let id: number = 0; id < count && id < this.checked.files[m].members.length; id = id + 1) {
+        const kind: NodeKind = this.graph.modules[m].cached.result.ast.nodes[id].kind;
+        if (kind != NodeKind.BinaryExpression && kind != NodeKind.UnaryExpression && kind != NodeKind.IndexExpression && kind != NodeKind.AssignmentExpression) continue;
+        const sid: number = this.checked.files[m].members[id];
+        if (sid < 0 || sid >= this.binding.symbols.length || !operatorMethodNames().includes(this.binding.symbols[sid].name)) continue;
+        const n: AstNode = this.graph.modules[m].cached.result.ast.nodes[id];
+        if (kind == NodeKind.BinaryExpression) rewriteOperatorCall(this.graph,m,id,n.get(AttributeKind.Operator),bindingChild(n,EdgeRole.Left),[bindingChild(n,EdgeRole.Right)]);
+        else if (kind == NodeKind.UnaryExpression) rewriteOperatorCall(this.graph,m,id,n.get(AttributeKind.Operator),bindingChild(n,EdgeRole.Operand),[]);
+        else if (kind == NodeKind.IndexExpression) rewriteOperatorCall(this.graph,m,id,"[]",bindingChild(n,EdgeRole.Object),[bindingChild(n,EdgeRole.Index)]);
+        else {
+          const target: AstNode = this.graph.modules[m].cached.result.ast.nodes[bindingChild(n,EdgeRole.Target)];
+          rewriteOperatorCall(this.graph,m,id,"[]=",bindingChild(target,EdgeRole.Object),[bindingChild(target,EdgeRole.Index),bindingChild(n,EdgeRole.Value)]);
+        }
+      }
+    }
+  }
   run(trace: boolean = false): IrProject {
     const loweringProfile=profileBegin();
     const started: number = Date.now();
@@ -1293,6 +1314,8 @@ export class IrLowering {
     if (!this.graph.success || !this.binding.success || !this.checked.success || this.graph.diagnostics.length > 0 || this.binding.diagnostics.length > 0 || this.checked.diagnostics.length > 0 || this.checked.files.length != this.graph.modules.length || this.binding.files.length != this.graph.modules.length || this.checked.moduleRecords.length != this.graph.modules.length || this.checked.symbolIds.length != this.binding.symbols.length || this.checked.symbolTypes.length != this.binding.symbols.length) {
       const source = new IrSource("","",this.graph.entry,-1,0,0); this.result.diagnostics.push(new IrIssue("IR_INPUT","Se requiere un proyecto comprobado sin diagnósticos de una misma carga",source)); return this.result;
     }
+    // #200: los operadores de clase se bajan como la llamada al método que resolvió el checker.
+    this.operatorCalls();
     for (let m: number = 0; m < this.graph.modules.length; m = m+1) {
       this.module = m; const ast = this.graph.modules[m].cached.result.ast;
       if (this.checked.moduleRecords[m].file != this.graph.modules[m].file || this.checked.moduleRecords[m].sourceHash != this.graph.modules[m].cached.record.hash ||

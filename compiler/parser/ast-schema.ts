@@ -352,3 +352,6 @@ export function isCallableNodeKind(kind: NodeKind): boolean {
 export function isExpressionNodeKind(kind: NodeKind): boolean {
   return [NodeKind.ArrayLiteralExpression,NodeKind.ArrowFunctionExpression,NodeKind.AsExpression,NodeKind.AssignmentExpression,NodeKind.AwaitExpression,NodeKind.BinaryExpression,NodeKind.CallExpression,NodeKind.CompoundAssignmentExpression,NodeKind.GenericIdentifierExpression,NodeKind.IdentifierExpression,NodeKind.IndexExpression,NodeKind.LiteralExpression,NodeKind.MemberCallExpression,NodeKind.MemberExpression,NodeKind.NamedArgumentExpression,NodeKind.NewExpression,NodeKind.ObjectLiteralExpression,NodeKind.RawCppExpression,NodeKind.SatisfiesExpression,NodeKind.TemplateLiteralExpression,NodeKind.TernaryExpression,NodeKind.UnaryExpression].includes(kind);
 }
+
+// #200: operadores que una clase puede definir como métodos ("+"(o: T): T).
+export function operatorMethodNames(): string[] { return ["+","-","*","/","%","==","!=","<","<=",">",">=","!","[]","[]="]; }

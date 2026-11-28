@@ -191,6 +191,29 @@ counter = 13
 `new` se desazucara a un constructor C++20; no hay `extends` ni
 `implements` (el polimorfismo es por interface estructural, ver §5).
 
+**Operadores**: una clase puede definir operadores como métodos con el
+nombre entre comillas. `a + b` es la llamada `a."+"(b)` y se busca en la
+clase del operando izquierdo (`v * 2` sí; `2 * v` no).
+
+```ts
+class V {
+  x: number; y: number;
+  constructor(x: number, y: number) { this.x = x; this.y = y; }
+  "+"(o: constRef<V>): V { return new V(this.x + o.x, this.y + o.y); }
+  "*"(k: number): V { return new V(this.x * k, this.y * k); }
+  "-"(): V { return new V(-this.x, -this.y); }          // unario
+  "=="(o: constRef<V>): boolean { return this.x == o.x && this.y == o.y; }
+  "!="(o: constRef<V>): boolean { return !(this == o); }
+}
+const c = new V(1, 2) + new V(3, 4) * 2;               // V(7, 10)
+```
+
+Se admiten `+ - * / % == != < <= > >=`, los unarios `-` y `!`, y la
+lectura y escritura por índice: `"[]"(i)` para `o[i]` y `"[]="(i, v)`
+para `o[i] = v`. No se deriva nada a escondidas: `!=` no sale de `==`,
+`a += b` no sale de `+` (escribe `a = a + b`) y `o[i] = v` necesita
+`"[]="`. Las comparaciones y `!` devuelven `boolean`.
+
 ---
 
 ## 5. Interfaces

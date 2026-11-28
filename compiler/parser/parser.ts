@@ -1,4 +1,4 @@
-import { AttributeKind, EdgeRole, NodeKind, attributeKindName, edgeRoleName, nodeKindName } from "./ast-schema";
+import { AttributeKind, EdgeRole, NodeKind, attributeKindName, edgeRoleName, nodeKindName, operatorMethodNames } from "./ast-schema";
 // Bootstrap parser. Tokens are supplied by the caller; no lexer/checker imports.
 // An arena owns all nodes. Edges are indices, so recursive ASTs need no cycles.
 
@@ -1093,7 +1093,12 @@ export class Parser {
         // `async metodo()`: `async` solo es modificador si le sigue el nombre del método.
         let isAsync: boolean = false;
         if (this.check("async") && this.peek(1).kind == "identifier") { this.take(); isAsync = true; }
-        const member: ParserToken = this.expect("identifier");
+        // #200: un operador se declara como método con el nombre entre comillas ("+"(o: T): T).
+        const quoted: boolean = this.check("string");
+        const member: ParserToken = quoted ? this.take() : this.expect("identifier");
+        if (quoted && !operatorMethodNames().includes(member.lexeme)) this.reportAt(member, "'" + member.lexeme + "' no es un operador que se pueda definir; se admiten: " + operatorMethodNames().join(" "));
+        if (quoted && !(this.check("(") || this.check("<"))) this.reportAt(member, "Un operador se define como método: \"" + member.lexeme + "\"(...): T { ... }");
+        if (quoted && isStatic) this.reportAt(member, "Un operador no puede ser static: se busca en la clase del operando izquierdo");
         const item: number = this.add(NodeKind.ClassField, member, member); this.attr(item, AttributeKind.Name, member.lexeme);
         this.prependDecorators(item, memberDecorators);
         if (access != "") this.attr(item, AttributeKind.Access, access);

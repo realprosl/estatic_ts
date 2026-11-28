@@ -165,6 +165,13 @@ for(const [name,source,pattern] of [
   ['sharedLoan','const xs:number[]=[1];const r=constRef(xs);xs.push(2);print(r);',/E42/],
   ['readonlyType','function f(xs:constRef<number[]>):void{xs.push(1);}',/readonly|inmutable/],
 ] as const)test(`checker: const sigue impidiendo reasignar (#212): ${name}`,()=>error(source,pattern));
+for(const [name,source,pattern] of [
+ ['operatorCompound','class V{x:number=1;"+"(o:constRef<V>):V{return new V();}}let a:V=new V();a+=a;',/no se deriva/],
+ ['operatorNotEqual','class V{x:number=1;"=="(o:constRef<V>):boolean{return true;}}const a:V=new V();print(a!=a);',/define '==' pero no '!='/],
+ ['operatorArity','class V{x:number=1;"+"():V{return new V();}}',/recibe 1 parámetro/],
+ ['operatorBoolean','class V{x:number=1;"<"(o:constRef<V>):number{return 1;}}',/tiene que devolver boolean/],
+ ['operatorIndexWrite','class L{"[]"(i:number):number{return i;}}let l:L=new L();l[0]=1;',/no se puede asignar por índice/],
+] as const)test(`checker: operadores en clases (#200) rechaza ${name}`,()=>error(source,pattern));
 test('checker: array pop returns T | undefined as in TypeScript',()=>{const g=check('let a=[1]; const n=a.pop(); const m:number=a.shift()??0; print(n??m);');assert.ok(types(g,'MemberCallExpression').includes('Optional<number>'));});
 // El offset de `includes` es opcional, igual que en JavaScript y TypeScript:
 // `includes("b")` y `includes("b",0)` son ambos validos.
