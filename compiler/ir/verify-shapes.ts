@@ -1,5 +1,5 @@
 import { IrProject, IrFunction, IrInstruction } from "./model";
-import { numericType, primitiveType } from "../checker/index";
+import { numericType, primitiveType, splitTypes } from "../checker/index";
 export function irAssignable(project: constRef<IrProject>, from: number, to: number, depth: number): boolean {
   if (from < 0 || to < 0 || from >= project.types.length || to >= project.types.length || depth > 64) return false;
   if (from == to) return true;
@@ -11,7 +11,7 @@ export function irAssignable(project: constRef<IrProject>, from: number, to: num
   // Un literal de tipo se ensancha a su primitivo; dos literales solo son
   // compatibles si comparten kind y valor exacto.
   if (a.kind == "literal") {
-    if (b.kind == "literal") return a.discriminatorType == b.discriminatorType && a.discriminatorValue == b.discriminatorValue;
+    if (b.kind == "literal") return a.discriminatorType == b.discriminatorType && (a.discriminatorValue == b.discriminatorValue || literalUnionIncludes(project.types[to],project.types[from]));
     if (b.kind == "scalar") return irAssignable(project,a.discriminatorType,to,depth+1);
   }
   // El checker ya verifico que el valor concreto pertenece a la union de
@@ -129,4 +129,9 @@ export function verifyShapeInstruction(project: constRef<IrProject>, f: constRef
     return "";
   }
   return "Opcode de shape desconocido";
+}
+// #234: "a" encaja en la unión de literales "a" | "b" (el IR la guarda como un literal).
+function literalUnionIncludes(choices: string, member: string): boolean {
+  for (const part of splitTypes(choices,"|")) if (part.trim() == member.trim()) return true;
+  return false;
 }

@@ -352,6 +352,31 @@ for (const source of [
   const result = native(source + " print(999);");
   assert.ok(result.diagnostics.length > 0 && result.diagnostics.length <= 100);
 });
+test("bootstrap parser: tipos condicionales e infer (#227, #228)", () => {
+  const result = native("type A<T> = T extends string ? number : boolean; type B<T> = T extends (infer U)[] ? U : never; type C = string extends string ? 1 : 2;");
+  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.nodes.filter(n => n.kind === "TypeAliasDeclaration").map(n => n.attributes.find(a => a.name === "type")?.value), ["$dcond<T,string,number,boolean>", "$dcond<T,($infer$U$)[],$infer$U$,never>", "$cond<string,string,$lit:number=1,$lit:number=2>"]);
+  assert.ok(native("type X<T> = T extends string ? infer U : never;").diagnostics.some((d: any) => d.message.includes("'infer' solo puede ir")));
+});
+test("bootstrap parser: mapped types (#226)", () => {
+  const result = native("interface U { a: number } type O<T> = { [K in keyof T]?: T[K] }; type R = { -readonly [K in keyof U]-?: U[K] };");
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.nodes.filter(n => n.kind === "TypeAliasDeclaration").map(n => n.attributes.find(a => a.name === "type")?.value)[0], "$mapped<keyof<T>~01~T[$key$]>");
+  assert.ok(native("type O<T> = { [K in keyof T as `x${K}`]: T[K] };").diagnostics.some((d: any) => d.message.includes("remapeo")));
+});
+test("bootstrap parser: index signatures (#232)", () => {
+  const result = native("interface C { [k: string]: number } type D = { [i: number]: string };");
+  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.nodes.filter(n => n.kind === "TypeAliasDeclaration").map(n => n.attributes.find(a => a.name === "type")?.value), ["Map<string,number>", "Map<number,string>"]);
+  assert.ok(native("interface C { a: number; [k: string]: number }").diagnostics.some((d: any) => d.message.includes("campos fijos y una index signature")));
+  assert.ok(native("interface C { [k: boolean]: number }").diagnostics.some((d: any) => d.message.includes("tiene que ser string o number")));
+});
+test("bootstrap parser: as const (#234)", () => {
+  const result = native('const a = ["x", 1, true] as const;');
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.nodes.find(n => n.kind === "AsExpression")?.attributes.find(a => a.name === "targetType")?.value, "[$lit:string=x,$lit:number=1,$lit:boolean=true]");
+  assert.ok(native("const v = 1; const a = [v] as const;").diagnostics.some((d: any) => d.message.includes("'as const' solo admite literales")));
+});
 test("bootstrap parser: ** asocia por la derecha y rechaza un unario sin paréntesis (#249)", () => {
   assert.deepEqual(native("let a=2 ** 3 ** 2; let b=(-2) ** 2; let c=-(2 ** 2); a **= 2;").diagnostics, []);
   assert.ok(native("let d=-2 ** 2;").diagnostics.some((d: any) => d.message.includes("**")));

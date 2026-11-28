@@ -533,6 +533,36 @@ for(const [name,source,pattern] of [
  ['indiceSinCampo','interface U{a:number}type X=U["z"];const x:X=1;',/no tiene la clave/],
  ['indiceArray','type X=number[][string];const x:X=1;',/no tiene la clave/],
 ] as const)test(`checker: keyof y acceso por índice (#224, #225) rechaza ${name}`,()=>error(source,pattern));
+for(const [name,source,pattern] of [
+ ['readonly','interface U{a:number}let r:Readonly<U>={a:1};r.a=2;',/es inmutable \(readonly\)/],
+ ['excludeTodo','type L="a"|"b";const x:Exclude<L,string>="a";',/no deja ningún tipo/],
+ ['excludeValor','type L="a"|"b";const x:Exclude<L,"a">="a";',/no pertenece/],
+ ['returnNoFuncion','const x:ReturnType<number>=1;',/requiere el tipo de una función/],
+] as const)test(`checker: tipos de utilidad (#229) rechaza ${name}`,()=>error(source,pattern));
+for(const [name,source,pattern] of [
+ ['rama','type E<T> =T extends string?"si":"no";const x:E<number>="si";',/no pertenece/],
+ ['soloNever','type N<T> =T extends string?never:never;const x:N<string>="a";',/da never/],
+ ['neverSuelto','const x:never=1;',/never solo se admite/],
+] as const)test(`checker: tipos condicionales e infer (#227, #228) rechaza ${name}`,()=>error(source,pattern));
+for(const [name,source,pattern] of [
+ ['readonly','interface U{a:number}type R<T> ={readonly [K in keyof T]:T[K]};let r:R<U> ={a:1};r.a=2;',/es inmutable \(readonly\)/],
+ ['campoQueFalta','interface U{a:number;b:string}type B<T> ={[K in keyof T]:boolean};const x:B<U> ={a:true};',/falta|Falta/],
+ ['tipoCampo','interface U{a:number}type B<T> ={[K in keyof T]:boolean};const x:B<U> ={a:1};',/E3001|incompatible|no pertenece/],
+] as const)test(`checker: mapped types (#226) rechaza ${name}`,()=>error(source,pattern));
+for(const [name,source,pattern] of [
+ ['valor','type E=`on${"a"|"b"}`;const e:E="onc";',/no pertenece/],
+ ['getter','type G<K extends string> =`get${Capitalize<K>}`;const g:G<"x">="getx";',/no pertenece/],
+ ['parte','interface U{a:number}type T=`x${U}`;const t:T="x";',/solo admite string, number, boolean/],
+ ['muchas','type D=0|1|2|3|4|5|6|7|8|9;type T=`${D}${D}${D}`;const t:T="1";',/más de 256/],
+] as const)test(`checker: template literal types (#230) rechaza ${name}`,()=>error(source,pattern));
+for(const [name,source,pattern] of [
+ ['sinEstrechar','function e(x:string|number):x is string{return typeof x=="string";}function f(v:string|number):number{return v.length;}',/length|no existe|no tiene/],
+ ['retorno','function e(x:string|number):x is string{return 1;}',/boolean|E3001|incompatible/],
+] as const)test(`checker: type predicates (#231) rechaza ${name}`,()=>error(source,pattern));
+for(const [name,source,pattern] of [
+ ['readonly','const cfg={modo:"dev"} as const;cfg.modo="dev";',/es inmutable \(readonly\)/],
+ ['literal','const cfg={modo:"dev"} as const;const m:"prod"=cfg.modo;',/no pertenece|E3001|incompatible/],
+] as const)test(`checker: as const (#234) rechaza ${name}`,()=>error(source,pattern));
 test('native exact64 arithmetic and mixed comparisons preserve types',()=>{
  const g=check('let a:i64=9007199254740993;let b:u64=2;const x=a+b;const y=1+a;const z=a<9007199254740994;');
  assert.deepEqual(types(g,'BinaryExpression'),['u64','i64','boolean']);

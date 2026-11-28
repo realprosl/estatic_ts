@@ -98,12 +98,17 @@ export class Parser {
   scopeNames: string[]; scopeTypes: string[]; pendingNames: string[]; pendingTypes: string[];
   // keyof T: el operando no se lleva el `| U` de detrás (keyof A | B es (keyof A) | B).
   typeOperand: boolean;
+  // #227/#228: parámetros del alias que se está leyendo (un `T extends …` sobre uno
+  // de ellos se distribuye sobre uniones) y nombres de `infer` visibles.
+  aliasParams: string[]; inferCollecting: boolean; inferNames: string[]; inferVisible: string[];
+  // #226: la variable de clave de un mapped type ({ [K in …]: … }) se escribe $key$.
+  mappedKey: string;
   jsonAt: number;
   // Nombres locales importados de "estatic:json": la clase (JSON) y parse.
   jsonClasses: string[]; jsonParsers: string[];
   constructor(tokens: ParserToken[]) {
     this.tokens = tokens; this.current = 0; this.nodes = []; this.diagnostics = [];
-    this.nesting = 0; this.exhausted = false; this.constMemory = false; this.objectTypes = []; this.objectTypeNames = []; this.patternOwners = []; this.patternDeclarations = []; this.extraOwners = []; this.extraNodes = []; this.extraBefore = []; this.restOwners = []; this.restNames = []; this.restIndexes = []; this.typeOperand = false; this.scopeNames = []; this.scopeTypes = []; this.pendingNames = []; this.pendingTypes = []; this.jsonAt = 0; this.jsonClasses = []; this.jsonParsers = [];
+    this.nesting = 0; this.exhausted = false; this.constMemory = false; this.objectTypes = []; this.objectTypeNames = []; this.patternOwners = []; this.patternDeclarations = []; this.extraOwners = []; this.extraNodes = []; this.extraBefore = []; this.restOwners = []; this.restNames = []; this.restIndexes = []; this.typeOperand = false; this.aliasParams = []; this.inferCollecting = false; this.inferNames = []; this.inferVisible = []; this.mappedKey = ""; this.scopeNames = []; this.scopeTypes = []; this.pendingNames = []; this.pendingTypes = []; this.jsonAt = 0; this.jsonClasses = []; this.jsonParsers = [];
     if (tokens.length == 0) {
       this.tokens.push(new ParserToken("eof", "", 0, 1, 1, 0, 1, 1));
       this.report("La entrada de tokens necesita un eof final");
@@ -330,7 +335,9 @@ export class Parser {
       const name: ParserToken = this.expect("identifier");
       result = this.add(NodeKind.TypeAliasDeclaration, keyword, name); this.attr(result, AttributeKind.Name, name.lexeme);
       this.typeParameters(result, false); this.expect("=");
-      this.attr(result, AttributeKind.Type, this.typeName()); this.setEnd(result, this.terminator());
+      let params: string[] = []; for (const edge of this.node(result).edges) if (edge.role == EdgeRole.TypeParameters) params.push(this.get(edge.node, AttributeKind.Name));
+      const outerParams: string[] = this.aliasParams; this.aliasParams = params;
+      this.attr(result, AttributeKind.Type, this.typeName()); this.aliasParams = outerParams; this.setEnd(result, this.terminator());
     } else if (this.accept("if")) {
       const keyword: ParserToken = this.previous();
       this.expect("("); const condition: number = this.expression(); this.expect(")");
@@ -1128,8 +1135,44 @@ export class Parser {
   }
   // { a: T; b?: U } en un tipo: una interfaz sintética con nombre estable por
   // forma (campos y tipos, sin importar el orden). La misma forma se reutiliza.
+  // #226: { [K in …] …: … } (con readonly/+readonly/-readonly delante).
+  mappedStart(): boolean {
+    let at: number = 0; while (this.peek(at).kind == "newline") at = at + 1;
+    if (this.peek(at).kind == "-" || this.peek(at).kind == "+") at = at + 1;
+    if (this.peek(at).kind == "readonly") at = at + 1;
+    return this.peek(at).kind == "[" && this.peek(at + 1).kind == "identifier" && this.peek(at + 2).kind == "in";
+  }
+  // { [K in Claves]?: V }: una interfaz derivada "Mapped" con la especificación
+  // claves~modificadores~valor (K en el valor es $key$). Dentro de un alias genérico
+  // que la usa con sus parámetros queda como $mapped<…> y se expande en cada uso.
+  mappedType(open: ParserToken): string {
+    this.skipNewlines(); let readonlyMod: string = "";
+    if (this.check("-") || this.check("+")) { readonlyMod = this.take().kind; this.expect("readonly"); } else if (this.accept("readonly")) readonlyMod = "+";
+    this.expect("["); const key: ParserToken = this.expect("identifier"); this.expect("in");
+    const keys: string = this.typeName();
+    if (this.check("as")) { this.report("El remapeo de claves con 'as' en un mapped type todavía no está soportado"); while (!this.check("]") && !this.check("eof")) this.take(); }
+    this.expect("]"); let optionalMod: string = "";
+    if (this.check("-") || this.check("+")) { optionalMod = this.take().kind; this.expect("?"); } else if (this.accept("?")) optionalMod = "+";
+    this.expect(":"); const outerKey: string = this.mappedKey; this.mappedKey = key.lexeme;
+    const value: string = this.typeName(); this.mappedKey = outerKey;
+    if (!this.accept(";")) this.accept(","); this.skipNewlines(); this.expect("}");
+    // Modificadores como dígitos (0 sin cambio, 1 añade, 2 quita): sin letras que el binder lea como nombres.
+    const spec: string = keys + "~" + (readonlyMod == "+" ? "1" : readonlyMod == "-" ? "2" : "0") + (optionalMod == "+" ? "1" : optionalMod == "-" ? "2" : "0") + "~" + value;
+    let generic: boolean = false;
+    for (const param of this.aliasParams) if (containsWord(spec, param)) generic = true;
+    if (generic) return "$mapped<" + spec + ">";
+    let none: string[] = []; return this.derivedType("Mapped", spec, none, open);
+  }
   objectType(): string {
     const open: ParserToken = this.take();
+    if (this.mappedStart()) return this.mappedType(open);
+    this.skipNewlines();
+    if (this.indexSignatureStart()) {
+      const signature: string = this.indexSignature(); if (!this.accept(";")) this.accept(","); this.skipNewlines();
+      if (!this.check("}")) this.report("Un tipo objeto con campos fijos y una index signature todavía no está soportado");
+      while (!this.check("}") && !this.check("eof")) this.take();
+      this.expect("}"); return signature;
+    }
     let names: string[] = []; let types: string[] = []; let optionals: boolean[] = []; let tokens: ParserToken[] = [];
     this.skipNewlines();
     while (!this.check("}") && !this.check("eof")) {
@@ -1146,11 +1189,11 @@ export class Parser {
     return this.objectTypeFrom(names, types, optionals, tokens, open, close);
   }
   // La interfaz sintética de una forma; la misma forma da el mismo nombre.
-  objectTypeFrom(names: string[], types: string[], optionals: boolean[], tokens: ParserToken[], open: ParserToken, close: ParserToken): string {
+  objectTypeFrom(names: string[], types: string[], optionals: boolean[], tokens: ParserToken[], open: ParserToken, close: ParserToken, fixed: boolean = false): string {
     let order: number[] = []; for (let at: number = 0; at < names.length; at = at + 1) order.push(at);
     order.sort((a: number, b: number): number => compareText(names[a], names[b]));
     let key: string = ""; let label: string = "";
-    for (const at of order) { key = key + names[at] + (optionals[at] ? "?:" : ":") + types[at] + ";"; label = label + "_" + names[at]; }
+    for (const at of order) { key = key + (fixed ? "readonly " : "") + names[at] + (optionals[at] ? "?:" : ":") + types[at] + ";"; label = label + "_" + names[at]; }
     let hash: number = 0;
     for (let at: number = 0; at < key.length; at = at + 1) hash = (hash * 31 + key.charCodeAt(at)) % 4294967296;
     const name: string = "__Obj" + label + "_" + numberToString(hash);
@@ -1159,6 +1202,7 @@ export class Parser {
       for (let at: number = 0; at < names.length; at = at + 1) {
         const item: number = this.add(NodeKind.InterfaceField, tokens[at], tokens[at]); this.attr(item, AttributeKind.Name, names[at]);
         this.attr(item, AttributeKind.Type, types[at]); this.attr(item, AttributeKind.Optional, optionals[at] ? "true" : "false"); this.edge(declaration, EdgeRole.Fields, item);
+        if (fixed) this.attr(item, AttributeKind.Readonly, "true");
       }
       this.objectTypes.push(declaration); this.objectTypeNames.push(name);
     }
@@ -1188,8 +1232,12 @@ export class Parser {
     const name: ParserToken = this.expect("identifier"); const result: number = this.add(NodeKind.InterfaceDeclaration, keyword, name);
     this.prependDecorators(result, decorators);
     this.attr(result, AttributeKind.Name, name.lexeme); this.expect("{");
+    let indexType: string = ""; let members: number = 0;
     while (!this.check("}") && !this.check("eof")) {
       this.skipNewlines(); if (this.check("}") || this.check("eof")) break;
+      // #232: [clave: string]: T (index signature).
+      if (this.indexSignatureStart()) { const signature: string = this.indexSignature(); if (indexType != "") this.report("Una interfaz solo puede tener una index signature"); indexType = signature; this.terminator(); continue; }
+      members = members + 1;
       const before: number = this.current; const memberDecorators: number[] = this.decorators();
       if (this.check("}") || this.check("eof")) { this.report("El decorador necesita un miembro de interface"); break; }
       const member: ParserToken = this.expect("identifier");
@@ -1205,7 +1253,24 @@ export class Parser {
       this.setEnd(item, this.terminator());
       if (this.current == before) { this.report("Miembro de interface no reconocido"); this.take(); }
     }
-    this.setEnd(result, this.expect("}")); return result;
+    this.setEnd(result, this.expect("}"));
+    // #232: una interfaz que solo es una index signature es un Record (diccionario).
+    if (indexType != "") {
+      if (members > 0) this.report("Una interfaz con campos fijos y una index signature todavía no está soportada: pon el diccionario en un campo (extra: Record<string, T>)");
+      else { this.setKind(result, NodeKind.TypeAliasDeclaration); this.attr(result, AttributeKind.Type, indexType); }
+    }
+    return result;
+  }
+  indexSignatureStart(): boolean {
+    let at: number = 0; if (this.peek(0).kind == "readonly") at = 1;
+    return this.peek(at).kind == "[" && this.peek(at + 1).kind == "identifier" && this.peek(at + 2).kind == ":";
+  }
+  // [clave: string | number]: T → Map<clave, T> (lo mismo que Record<clave, T>).
+  indexSignature(): string {
+    if (this.accept("readonly")) this.report("Una index signature readonly todavía no está soportada");
+    this.expect("["); this.expect("identifier"); this.expect(":"); const key: string = this.typeName(); this.expect("]");
+    if (key != "string" && key != "number") this.report("La clave de una index signature tiene que ser string o number");
+    this.expect(":"); return "Map<" + key + "," + this.typeName() + ">";
   }
   forStatement(keyword: ParserToken): number {
     const awaited: boolean = this.accept("await"); this.expect("(");
@@ -1281,7 +1346,22 @@ export class Parser {
   typeName(): string {
     if (!this.enter()) return "<error>";
     const outerConst: boolean = this.constMemory; this.constMemory = false; const outerOperand: boolean = this.typeOperand; this.typeOperand = false;
-    const result: string = this.typeInner(); this.constMemory = outerConst; this.typeOperand = outerOperand; this.leave(); return result;
+    let result: string = this.typeInner(); this.constMemory = outerConst; this.typeOperand = outerOperand;
+    // #231: `x is T` como tipo de retorno (type predicate) → $pred<$param$x$,T>.
+    if (this.check("identifier") && this.peek(0).lexeme == "is" && simpleTypeName(result)) { this.take(); result = "$pred<$param$" + result + "$," + this.typeName() + ">"; this.leave(); return result; }
+    // #227: C extends P ? X : Y. Con C un parámetro del alias, se distribuye sobre uniones.
+    if (this.check("extends") && !outerOperand) {
+      this.take(); const check: string = result;
+      const outerCollecting: boolean = this.inferCollecting; const outerNames: string[] = this.inferNames; this.inferCollecting = true; this.inferNames = [];
+      const pattern: string = this.typeInner(); const bound: string[] = this.inferNames;
+      this.inferCollecting = outerCollecting; this.inferNames = outerNames;
+      this.expect("?");
+      const outerVisible: string[] = this.inferVisible; this.inferVisible = outerVisible.concat(bound);
+      const yes: string = this.typeName(); this.inferVisible = outerVisible;
+      this.expect(":"); const no: string = this.typeName();
+      result = (this.aliasParams.includes(check.trim()) ? "$dcond<" : "$cond<") + check + "," + pattern + "," + yes + "," + no + ">";
+    }
+    this.leave(); return result;
   }
   // Un literal usado como tipo se codifica con el prefijo `$lit:` seguido
   // del tipo y el valor separados por `=`. El prefijo no puede colisionar con
@@ -1305,12 +1385,37 @@ export class Parser {
       return constant;
     }
     if (this.check("{")) return this.typeSuffix(this.objectType());
+    // #230: `texto${T}texto` como tipo → $tpl<partes> (lo combina el checker).
+    if (this.accept("template-start")) {
+      let parts: string[] = [];
+      while (!this.check("template-end") && !this.check("eof")) {
+        if (this.check("template-text")) { const text: string = this.take().lexeme; if (text != "") parts.push("$lit:string=" + escapeLiteralValue(text)); }
+        else if (this.accept("interpolation-start")) { parts.push(this.typeName()); this.expect("interpolation-end"); }
+        else { this.report("Se esperaba texto o ${tipo} en un template literal type"); break; }
+      }
+      this.expect("template-end");
+      if (parts.length == 0) parts.push("$lit:string=");
+      return this.typeSuffix("$tpl<" + parts.join(",") + ">");
+    }
+    // #231: `asserts x is T` como tipo de retorno → $assert<$param$x$,T>.
+    if (this.check("identifier") && this.peek(0).lexeme == "asserts" && this.peek(1).kind == "identifier" && this.peek(2).kind == "identifier" && this.peek(2).lexeme == "is") {
+      this.take(); const name: string = this.take().lexeme; this.take(); return "$assert<$param$" + name + "$," + this.typeName() + ">";
+    }
     // #224: keyof T → keyof<T> (lo resuelve el checker).
     if (this.check("identifier") && this.peek(0).lexeme == "keyof" && ["identifier","type","typeof","{","(","["].includes(this.peek(1).kind)) {
       this.take(); const outer: boolean = this.typeOperand; this.typeOperand = true;
       const operand: string = this.typeInner(); this.typeOperand = outer;
       return this.typeSuffix("keyof<" + operand + ">");
     }
+    // #228: infer U dentro de la condición de un tipo condicional.
+    if (this.check("identifier") && this.peek(0).lexeme == "infer" && this.peek(1).kind == "identifier") {
+      const keyword: ParserToken = this.take(); const name: ParserToken = this.take();
+      if (!this.inferCollecting) this.reportAt(keyword, "'infer' solo puede ir en la condición de un tipo condicional (T extends … infer U … ? X : Y)");
+      else if (!this.inferNames.includes(name.lexeme)) this.inferNames.push(name.lexeme);
+      return this.typeSuffix("$infer$" + name.lexeme + "$");
+    }
+    if (this.check("identifier") && this.inferVisible.includes(this.peek(0).lexeme) && this.peek(1).kind != "." && this.peek(1).kind != "<") return this.typeSuffix("$infer$" + this.take().lexeme + "$");
+    if (this.check("identifier") && this.mappedKey != "" && this.peek(0).lexeme == this.mappedKey && this.peek(1).kind != "." && this.peek(1).kind != "<") { this.take(); return this.typeSuffix("$key$"); }
     if (this.accept("typeof")) {
       let query: string = "$typeof$" + this.expect("identifier").lexeme;
       while (this.accept(".")) query = query + "." + (this.check("default") ? this.take().lexeme : this.expect("identifier").lexeme);
@@ -1342,7 +1447,7 @@ export class Parser {
       while (!this.check(">") && !this.check("eof")) { args.push(this.typeName()); if (!this.accept(",")) break; }
       this.closeAngle();
       if (result == "Array" && args.length == 1) result = args[0] + "[]";
-      else if ((result == "Partial" || result == "Required") && args.length == 1) { let none: string[] = []; result = this.derivedType(result, args[0], none, this.previous()); }
+      else if ((result == "Partial" || result == "Required" || result == "Readonly") && args.length == 1) { let none: string[] = []; result = this.derivedType(result, args[0], none, this.previous()); }
       // Record<"a" | "b", V> es un struct con esos campos; Record<K, V> con K abierto, un Map ordenado.
       else if (result == "Record" && args.length == 2 && args[0].startsWith("$lit:string=")) result = this.derivedType("Record", args[1], this.literalKeys(args[0]), this.previous());
       else if (result == "Record" && args.length == 2) result = "Map<" + args[0] + "," + args[1] + ">";
@@ -1357,7 +1462,9 @@ export class Parser {
       let size: string = "";
       // T[3] / T[N]: array fijo; T["campo"], T[number], T[keyof U], T["a" | "b"]: acceso por índice (#225).
       if (!this.check("]")) {
-        if ((this.check("number") || this.check("identifier")) && this.peek(1).kind == "]" && this.peek(0).lexeme != "keyof") size = this.take().lexeme;
+        if (this.check("identifier") && this.peek(1).kind == "]" && this.mappedKey != "" && this.peek(0).lexeme == this.mappedKey) { this.take(); size = "$key$"; }
+        else if (this.check("identifier") && this.peek(1).kind == "]" && this.inferVisible.includes(this.peek(0).lexeme)) size = "$infer$" + this.take().lexeme + "$";
+        else if ((this.check("number") || this.check("identifier")) && this.peek(1).kind == "]" && this.peek(0).lexeme != "keyof") size = this.take().lexeme;
         else if (this.check("string") || this.check("type") || this.check("identifier") || this.check("(")) size = this.typeName();
         else this.report("Tamaño de array no válido");
       }
@@ -1493,7 +1600,9 @@ export class Parser {
     let operand: number = this.postfix();
     if ((this.check("++") || this.check("--")) && this.peek(0).line == this.node(operand).end.endLine) operand = this.update(operand,this.take(),false);
     if (this.check("as") || this.check("satisfies")) {
-      const op: ParserToken = this.take(); const annotation: string = this.typeName();
+      const op: ParserToken = this.take();
+      // #234: `x as const` es `x as <su tipo exacto>`: literales, tuplas y campos readonly.
+      const annotation: string = op.kind == "as" && this.accept("const") ? this.constType(operand) : this.typeName();
       const next: ParserToken = this.peek(0);
       const end: ParserToken = new ParserToken("", "", next.offset, next.line, next.column, next.offset, next.line, next.column);
       const result: number = this.add(op.kind == "as" ? NodeKind.AsExpression : NodeKind.SatisfiesExpression, this.node(operand).start, end);
@@ -1501,6 +1610,33 @@ export class Parser {
       this.edge(result, op.kind == "as" ? EdgeRole.Expression : EdgeRole.Operand, operand); return result;
     }
     return operand;
+  }
+  // El tipo de `literal as const`: un literal, una tupla de esos tipos o un tipo
+  // objeto con los campos readonly. Solo con literales (no variables ni llamadas).
+  constType(id: number): string {
+    const n: AstNode = this.node(id);
+    if (n.kind == NodeKind.LiteralExpression) {
+      const kind: string = this.get(id, AttributeKind.LiteralType);
+      if (kind == "string") return "$lit:string=" + escapeLiteralValue(this.get(id, AttributeKind.Value));
+      if (kind == "number") return "$lit:number=" + escapeLiteralValue(this.numericText(n.start));
+      if (kind == "boolean") return "$lit:boolean=" + this.get(id, AttributeKind.Value);
+    }
+    if (n.kind == NodeKind.ArrayLiteralExpression) {
+      let parts: string[] = []; for (const edge of n.edges) if (edge.role == EdgeRole.Elements) parts.push(this.constType(edge.node));
+      if (parts.length == 0) { this.reportAt(n.start, "'as const' sobre un array vacío no tiene tipo"); return "<error>"; }
+      return "[" + parts.join(",") + "]";
+    }
+    if (n.kind == NodeKind.ObjectLiteralExpression) {
+      let names: string[] = []; let types: string[] = []; let optionals: boolean[] = []; let tokens: ParserToken[] = [];
+      for (const edge of n.edges) if (edge.role == EdgeRole.Properties) {
+        names.push(this.get(edge.node, AttributeKind.Key)); optionals.push(false); tokens.push(this.node(edge.node).start);
+        let value: number = -1; for (const inner of this.node(edge.node).edges) if (inner.role == EdgeRole.Value) value = inner.node;
+        types.push(value >= 0 ? this.constType(value) : "<error>");
+      }
+      return this.objectTypeFrom(names, types, optionals, tokens, n.start, n.end, true);
+    }
+    this.reportAt(n.start, "'as const' solo admite literales, arrays y objetos de literales");
+    return "<error>";
   }
   update(target: number, op: ParserToken, prefix: boolean): number {
     const kind: NodeKind = this.node(target).kind;
@@ -1730,3 +1866,17 @@ export function formatAst(result: ParseResult): string {
 }
 export function parseTokens(tokens: ParserToken[]): ParseResult { let parser: Parser = new Parser(tokens); return parser.parseProgram(); }
 export function inspectAst(tokens: ParserToken[]): string { let parser: Parser = new Parser(tokens); return parser.inspect(); }
+
+// `word` aparece en `text` como identificador completo (no dentro de otro nombre).
+export function containsWord(text: string, word: string): boolean {
+  let from: number = 0;
+  while (true) {
+    const at: number = text.indexOf(word, from); if (at < 0) return false;
+    const before: number = at > 0 ? text.charCodeAt(at - 1) : 32; const after: number = at + word.length < text.length ? text.charCodeAt(at + word.length) : 32;
+    if (!wordCode(before) && !wordCode(after)) return true;
+    from = at + 1;
+  }
+  return false;
+}
+function wordCode(code: number): boolean { return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code == 95 || code == 36; }
+function simpleTypeName(text: string): boolean { if (text.length == 0) return false; for (let at: number = 0; at < text.length; at = at + 1) if (!wordCode(text.charCodeAt(at)) || text.charCodeAt(at) == 36) return false; return true; }
