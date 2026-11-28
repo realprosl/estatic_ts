@@ -555,6 +555,10 @@ for(const [name,source,pattern] of [
  ['parte','interface U{a:number}type T=`x${U}`;const t:T="x";',/solo admite string, number, boolean/],
  ['muchas','type D=0|1|2|3|4|5|6|7|8|9;type T=`${D}${D}${D}`;const t:T="1";',/más de 256/],
 ] as const)test(`checker: template literal types (#230) rechaza ${name}`,()=>error(source,pattern));
+for(const [name,source,pattern] of [
+ ['sinEstrechar','function e(x:string|number):x is string{return typeof x=="string";}function f(v:string|number):number{return v.length;}',/length|no existe|no tiene/],
+ ['retorno','function e(x:string|number):x is string{return 1;}',/boolean|E3001|incompatible/],
+] as const)test(`checker: type predicates (#231) rechaza ${name}`,()=>error(source,pattern));
 test('native exact64 arithmetic and mixed comparisons preserve types',()=>{
  const g=check('let a:i64=9007199254740993;let b:u64=2;const x=a+b;const y=1+a;const z=a<9007199254740994;');
  assert.deepEqual(types(g,'BinaryExpression'),['u64','i64','boolean']);

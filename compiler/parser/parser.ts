@@ -1318,6 +1318,8 @@ export class Parser {
     if (!this.enter()) return "<error>";
     const outerConst: boolean = this.constMemory; this.constMemory = false; const outerOperand: boolean = this.typeOperand; this.typeOperand = false;
     let result: string = this.typeInner(); this.constMemory = outerConst; this.typeOperand = outerOperand;
+    // #231: `x is T` como tipo de retorno (type predicate) → $pred<$param$x$,T>.
+    if (this.check("identifier") && this.peek(0).lexeme == "is" && simpleTypeName(result)) { this.take(); result = "$pred<$param$" + result + "$," + this.typeName() + ">"; this.leave(); return result; }
     // #227: C extends P ? X : Y. Con C un parámetro del alias, se distribuye sobre uniones.
     if (this.check("extends") && !outerOperand) {
       this.take(); const check: string = result;
@@ -1365,6 +1367,10 @@ export class Parser {
       this.expect("template-end");
       if (parts.length == 0) parts.push("$lit:string=");
       return this.typeSuffix("$tpl<" + parts.join(",") + ">");
+    }
+    // #231: `asserts x is T` como tipo de retorno → $assert<$param$x$,T>.
+    if (this.check("identifier") && this.peek(0).lexeme == "asserts" && this.peek(1).kind == "identifier" && this.peek(2).kind == "identifier" && this.peek(2).lexeme == "is") {
+      this.take(); const name: string = this.take().lexeme; this.take(); return "$assert<$param$" + name + "$," + this.typeName() + ">";
     }
     // #224: keyof T → keyof<T> (lo resuelve el checker).
     if (this.check("identifier") && this.peek(0).lexeme == "keyof" && ["identifier","type","typeof","{","(","["].includes(this.peek(1).kind)) {
@@ -1815,3 +1821,4 @@ export function containsWord(text: string, word: string): boolean {
   return false;
 }
 function wordCode(code: number): boolean { return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code == 95 || code == 36; }
+function simpleTypeName(text: string): boolean { if (text.length == 0) return false; for (let at: number = 0; at < text.length; at = at + 1) if (!wordCode(text.charCodeAt(at)) || text.charCodeAt(at) == 36) return false; return true; }

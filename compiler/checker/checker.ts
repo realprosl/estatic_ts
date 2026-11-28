@@ -543,8 +543,33 @@ export class NativeChecker {
     if (n.kind != NodeKind.IdentifierExpression || n.get(AttributeKind.Name) != "undefined") return false;
     const sid: number = this.reference(module,id); return sid >= 0 && (this.binding.symbols[sid].module) < 0;
   }
+  // #231: f(v) con `function f(x: …): x is T` estrecha v a T (o a lo que no es T en la rama falsa).
+  narrowPredicate(module: number, id: number, truth: boolean, assertion: boolean = false): void {
+    const n: AstNode = this.node(module,id);
+    const fsid: number = this.reference(module,id); if (fsid < 0 || fsid >= this.binding.symbols.length) return;
+    const fs: BindingSymbol = this.binding.symbols[fsid]; if (fs.node < 0 || fs.kind != "FunctionDeclaration") return;
+    const declaration: AstNode = this.node(fs.module,fs.node); const predicate: string = declaration.get(AttributeKind.ReturnType);
+    if (genericBase(predicate) != (assertion ? "$assert" : "$pred") || genericArguments(predicate).length != 2) return;
+    const param: string = genericArguments(predicate)[0]; const name: string = param.slice(7,param.length-1);
+    let index: number = -1; let at: number = 0;
+    for (const edge of declaration.edges) if (edge.role == EdgeRole.Params) { if (this.node(fs.module,edge.node).get(AttributeKind.Name) == name) index = at; at = at + 1; }
+    if (index < 0) return;
+    let args: number[] = []; for (const edge of n.edges) if (edge.role == EdgeRole.Args) args.push(edge.node);
+    if (index >= args.length || this.kindOf(module,args[index]) != NodeKind.IdentifierExpression) return;
+    const sid: number = this.reference(module,args[index]); if (sid < 0) return;
+    const target: string = this.annotation(fs.module,fs.node,genericArguments(predicate)[1]); if (target.startsWith("!")) return;
+    let current: string = this.flowType(sid,module,id); let absent: boolean = false;
+    if (genericBase(memoryValue(current)) == "Optional") { current = genericArguments(memoryValue(current))[0]; absent = true; }
+    let parts: string[] = [];
+    for (const alternative of splitTypes(current,"|")) if (this.compatible(memoryValue(alternative),target) == truth) parts.push(alternative);
+    if (truth && parts.length == 0) parts.push(target);
+    let narrowed: string = parts.length == 0 ? "!never" : joinTypes(parts,"|");
+    if (!truth && absent && parts.length > 0) narrowed = "Optional<" + narrowed + ">";
+    this.narrowedSymbols.push(sid); this.narrowedTypes.push(narrowed);
+  }
   narrowCondition(module: number, id: number, truth: boolean): void {
     if (id < 0) return; const n: AstNode = this.node(module,id);
+    if (n.kind == NodeKind.CallExpression) { this.narrowPredicate(module,id,truth); return; }
     if (n.kind == NodeKind.UnaryExpression && n.get(AttributeKind.Operator) == "!") { this.narrowCondition(module,bindingChild(n,EdgeRole.Operand),!truth); return; }
     if (n.kind == NodeKind.BinaryExpression && ((n.get(AttributeKind.Operator) == "&&" && truth) || (n.get(AttributeKind.Operator) == "||" && !truth))) { this.narrowCondition(module,bindingChild(n,EdgeRole.Left),truth); this.narrowCondition(module,bindingChild(n,EdgeRole.Right),truth); return; }
     if (n.kind == NodeKind.BinaryExpression && n.get(AttributeKind.Operator) == "instanceof") {
@@ -910,6 +935,8 @@ export class NativeChecker {
     if (genericBase(text) == "keyof" && genericArguments(text).length == 1) return this.keyofType(module,id,this.annotation(module,id,genericArguments(text)[0]));
     if (["Exclude","Extract","NonNullable","ReturnType","Parameters","Awaited"].includes(genericBase(text))) return this.utilityType(module,id,genericBase(text),genericArguments(text));
     if (genericBase(text) == "$tpl") return this.templateType(module,id,genericArguments(text));
+    // #231: una función con `x is T` devuelve boolean; el estrechamiento lo hace narrowCondition.
+    if ((genericBase(text) == "$pred" || genericBase(text) == "$assert") && genericArguments(text).length == 2) { const target: string = this.annotation(module,id,genericArguments(text)[1]); return target.startsWith("!") ? target : genericBase(text) == "$pred" ? "boolean" : "void"; }
     if (["Uppercase","Lowercase","Capitalize","Uncapitalize"].includes(genericBase(text))) return this.casedType(module,id,genericBase(text),genericArguments(text));
     if ((genericBase(text) == "$cond" || genericBase(text) == "$dcond") && genericArguments(text).length == 4) return this.conditionalType(module,id,genericBase(text) == "$dcond",genericArguments(text));
     if (text == "never") { this.report(module,id,"never solo se admite como rama de un tipo condicional (por ahora)"); return "!error"; }
@@ -2839,7 +2866,12 @@ export class NativeChecker {
       else this.report(module,id,"delete requiere Map, Set o array dinámico");
       this.requireType(module,key,this.expression(module,key,keyType),keyType); this.writableTarget(module,object,true); return;
     }
-    if (kind == NodeKind.ExpressionStatement) { this.expression(module,bindingChild(n,EdgeRole.Expression),""); return; }
+    if (kind == NodeKind.ExpressionStatement) {
+      const expression: number = bindingChild(n,EdgeRole.Expression); this.expression(module,expression,"");
+      // #231: tras f(v) con `asserts x is T`, v es T en el resto del bloque.
+      if (this.kindOf(module,expression) == NodeKind.CallExpression) this.narrowPredicate(module,expression,true,true);
+      return;
+    }
     if (kind == NodeKind.ForOfStatement || kind == NodeKind.ForInStatement) {
       const source: number = bindingChild(n,kind == NodeKind.ForOfStatement ? EdgeRole.Iterable : EdgeRole.Target);
       const container: string = memoryValue(this.expression(module,source,"")); let element: string = "!error";
