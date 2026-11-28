@@ -656,7 +656,7 @@ export class NativeChecker {
       // #227: un alias con un tipo condicional se evalúa con los argumentos ya puestos.
       const raw: string = this.node(s.module,s.node).get(AttributeKind.Type);
       if (raw.startsWith("$mapped<")) { this.report(module,id,"Este uso del mapped type '" + s.name + "' no se pudo expandir: el argumento tiene que ser un tipo con nombre"); return "!error"; }
-      if (raw.indexOf("$cond<",0) >= 0 || raw.indexOf("$dcond<",0) >= 0) {
+      if (raw.indexOf("$cond<",0) >= 0 || raw.indexOf("$dcond<",0) >= 0 || raw.indexOf("$tpl<",0) >= 0 || raw.indexOf("Uppercase<",0) >= 0 || raw.indexOf("Lowercase<",0) >= 0 || raw.indexOf("Capitalize<",0) >= 0 || raw.indexOf("Uncapitalize<",0) >= 0) {
         const mark: number = this.conditionFrom.length;
         for (let i: number = 0; i < parameters.length; i = i + 1) { this.conditionFrom.push("@" + numberToString(this.binding.files[s.module].declarations[parameters[i]])); this.conditionTo.push(values[i]); }
         let evaluated: string = this.annotation(s.module,s.node,raw);
@@ -749,6 +749,44 @@ export class NativeChecker {
       return true;
     }
     return false;
+  }
+  // #230: `a${T}b`: con todas las partes literales, la unión de las combinaciones
+  // (como mucho 256); si alguna parte es string o number sin literal, es string.
+  templateType(module: number, id: number, parts: string[]): string {
+    let combos: string[] = [""];
+    for (const part of parts) {
+      const value: string = this.bound(this.annotation(module,id,part)); if (value.startsWith("!")) return value;
+      if (this.unboundParameter(value)) return "string";
+      let options: string[] = [];
+      for (const member of splitTypes(value,"|")) {
+        const piece: string = member.trim();
+        if (literalType(piece)) options.push(literalValue(piece));
+        else if (piece == "string" || piece == "boolean" || numericType(piece)) return "string";
+        else { this.report(module,id,"Un template literal type solo admite string, number, boolean y sus literales, no '" + this.displayType(piece) + "'"); return "!error"; }
+      }
+      let next: string[] = [];
+      for (const prefix of combos) for (const option of options) next.push(prefix + option);
+      if (next.length > 256) { this.report(module,id,"El template literal type da más de 256 combinaciones"); return "!error"; }
+      combos = next;
+    }
+    let result: string[] = []; for (const combo of combos) { const literal: string = literalTypeText("string",combo); if (!result.includes(literal)) result.push(literal); }
+    return joinTypes(result,"|");
+  }
+  // #230: Uppercase/Lowercase/Capitalize/Uncapitalize sobre literales de string.
+  casedType(module: number, id: number, name: string, args: string[]): string {
+    if (args.length != 1) { this.report(module,id,name + " recibe 1 argumento de tipo"); return "!error"; }
+    const value: string = this.bound(this.annotation(module,id,args[0])); if (value.startsWith("!")) return value;
+    if (value == "string" || this.unboundParameter(value)) return "string";
+    let result: string[] = [];
+    for (const member of splitTypes(value,"|")) {
+      const piece: string = member.trim();
+      if (!literalType(piece) || literalKind(piece) != "string") { this.report(module,id,name + " requiere string o literales de string, no '" + this.displayType(piece) + "'"); return "!error"; }
+      const text: string = literalValue(piece); let cased: string = text;
+      if (name == "Uppercase") cased = text.toUpperCase(); else if (name == "Lowercase") cased = text.toLowerCase();
+      else if (text.length > 0) cased = (name == "Capitalize" ? text.slice(0,1).toUpperCase() : text.slice(0,1).toLowerCase()) + text.slice(1,text.length);
+      const literal: string = literalTypeText("string",cased); if (!result.includes(literal)) result.push(literal);
+    }
+    return joinTypes(result,"|");
   }
   // #229: Exclude/Extract filtran una unión, NonNullable quita el undefined,
   // ReturnType/Parameters miran una firma y Awaited desenvuelve Promise.
@@ -871,6 +909,8 @@ export class NativeChecker {
     if (text.startsWith("Array<") && text.endsWith(">")) return semanticArray(this.annotation(module,id,text.slice(6,text.length-1)));
     if (genericBase(text) == "keyof" && genericArguments(text).length == 1) return this.keyofType(module,id,this.annotation(module,id,genericArguments(text)[0]));
     if (["Exclude","Extract","NonNullable","ReturnType","Parameters","Awaited"].includes(genericBase(text))) return this.utilityType(module,id,genericBase(text),genericArguments(text));
+    if (genericBase(text) == "$tpl") return this.templateType(module,id,genericArguments(text));
+    if (["Uppercase","Lowercase","Capitalize","Uncapitalize"].includes(genericBase(text))) return this.casedType(module,id,genericBase(text),genericArguments(text));
     if ((genericBase(text) == "$cond" || genericBase(text) == "$dcond") && genericArguments(text).length == 4) return this.conditionalType(module,id,genericBase(text) == "$dcond",genericArguments(text));
     if (text == "never") { this.report(module,id,"never solo se admite como rama de un tipo condicional (por ahora)"); return "!error"; }
     // #226: el cuerpo de un alias genérico con mapped type; cada uso lo expande antes de enlazar.

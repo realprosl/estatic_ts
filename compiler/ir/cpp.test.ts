@@ -95,6 +95,7 @@ for(const [name,source,expected] of [
  ["short circuit",'let n=0;function f():boolean{n+=1;return true;}const x=false&&f();const y=true||f();print(n);',"0\n"],
  ["named arguments",'let n=0;function next():number{n+=1;return n;}function f(a:number,b:number):number{return a*10+b;}print(f(b:next(),a:next()));',"21\n"],
  ["arrays",'let a=[1,2];a[1]=3;print(a[0]+a[1]);',"4\n"],
+ ["template literal types y Uppercase/Lowercase/Capitalize/Uncapitalize (#230)","type Evento = `on${\"click\" | \"hover\"}`;\nconst e1: Evento = \"onclick\"; const e2: Evento = \"onhover\";\ntype Getter<K extends string> = `get${Capitalize<K>}`;\nconst g: Getter<\"nombre\"> = \"getNombre\";\ntype Id = `user-${number}`;\nconst id: Id = \"user-7\";\ntype Grito = Uppercase<\"hola\" | \"adios\">;\nconst gr: Grito = \"ADIOS\";\ntype Par = `${\"a\" | \"b\"}${1 | 2}`;\nconst par: Par = \"b2\";\nfunction Lower(x: Lowercase<\"X\" | \"Y\">): string { return x; }\nconsole.log(e1, e2, g, id, gr, par, Lower(\"x\"));\n","onclick onhover getNombre user-7 ADIOS b2 x\n"],
  ["tuples",'const a:[number,string]=[2,"s"];print(a[0]);print(a[1]);',"2\ns\n"],
  ["fixed spread",'const a:number[2]=[1,2];const b:number[3]=[0,...a];print(b[2]);',"2\n"],
  ["class",'class C{x:number;constructor(n:number){this.x=n;}inc():void{this.x+=1;}}let c=new C(2);c.inc();print(c.x);',"3\n"],

@@ -1354,6 +1354,18 @@ export class Parser {
       return constant;
     }
     if (this.check("{")) return this.typeSuffix(this.objectType());
+    // #230: `texto${T}texto` como tipo → $tpl<partes> (lo combina el checker).
+    if (this.accept("template-start")) {
+      let parts: string[] = [];
+      while (!this.check("template-end") && !this.check("eof")) {
+        if (this.check("template-text")) { const text: string = this.take().lexeme; if (text != "") parts.push("$lit:string=" + escapeLiteralValue(text)); }
+        else if (this.accept("interpolation-start")) { parts.push(this.typeName()); this.expect("interpolation-end"); }
+        else { this.report("Se esperaba texto o ${tipo} en un template literal type"); break; }
+      }
+      this.expect("template-end");
+      if (parts.length == 0) parts.push("$lit:string=");
+      return this.typeSuffix("$tpl<" + parts.join(",") + ">");
+    }
     // #224: keyof T → keyof<T> (lo resuelve el checker).
     if (this.check("identifier") && this.peek(0).lexeme == "keyof" && ["identifier","type","typeof","{","(","["].includes(this.peek(1).kind)) {
       this.take(); const outer: boolean = this.typeOperand; this.typeOperand = true;
